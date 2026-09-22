@@ -1,6 +1,7 @@
 {
     "$schema": "node_modules/wrangler/config-schema.json",
     "name": "tacocat-gallery-cloudflare",
+    "account_id": "ed3ca575118099486baeb129959697c8",
     "main": "src/index.ts",
     "compatibility_date": "2026-09-01",
     "compatibility_flags": ["nodejs_compat"],
@@ -9,7 +10,7 @@
         {
             "binding": "DB",
             "database_name": "tacocat-proto",
-            "database_id": "REPLACE_AFTER_d1_create",
+            "database_id": "e833562b-4758-41e9-b545-d1aa250bb6c5",
             "migrations_dir": "migrations",
         },
     ],

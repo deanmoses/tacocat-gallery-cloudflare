@@ -10,7 +10,7 @@ One Worker holds every spike, with one D1 database, one R2 bucket, one Queue and
 | --- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------- |
 | 1   | Worker plus D1 replica read is not under 100 ms from California, Louisiana and France | `GET /api/album/<path>`, `scripts/probe.sh`, Grafana probes from Paris        | n/a                                                                                     | pending       |
 | 2   | Read-your-writes after an admin save is slow or wrong                                 | `POST /api/item` returns `x-d1-bookmark`; pass it to the next `GET`           | n/a                                                                                     | pending       |
-| 3   | FTS5 triggers do not keep the search index in sync on D1                              | `migrations/0001_init.sql`; insert, upsert, update, delete, then compare      | ✅ in sync through insert, upsert, update and delete                                    | pending       |
+| 3   | FTS5 triggers do not keep the search index in sync on D1                              | `migrations/0001_init.sql`; insert, upsert, update, delete, then compare      | ✅ in sync through insert, upsert, update and delete                                    | ✅ migration with FTS5 and triggers applies; insert, update and delete keep the index in sync |
 | 4   | Time Travel restore leaves the FTS5 table inconsistent                                | `wrangler d1 time-travel restore`, then compare `item` and `item_fts` counts | n/a                                                                                     | pending       |
 | 5   | No workable D1 backup, because `wrangler d1 export` refuses FTS5                      | `POST /api/backup` and the nightly cron dump `item` to R2 as JSON              | not run                                                                                 | pending       |
 | 6   | Images binding cannot reproduce the crop-then-cover thumbnails                        | `GET /i/<path>/<versionId>?size=200x200&crop=x,y,w,h`                          | ✅ 200x200 generated, stored in R2, served from R2 the second time                      | pending       |
@@ -33,8 +33,16 @@ npm run dev
 
 `cloudflared` is the Tunnel client; everything here uses `wrangler`, installed as a dev dependency.
 
+The prototype lives in its own Cloudflare account, "Tacocat" (`account_id` in `wrangler.jsonc`), so its free-tier quotas and billing are separate from other projects. A wrangler auth profile bound to this directory keeps commands here from reaching any other account:
+
 ```bash
-npx wrangler login
+npx wrangler auth create tacocat        # choose only the Tacocat account
+npx wrangler auth activate tacocat .
+```
+
+R2 has to be enabled once in the dashboard before a bucket can be created.
+
+```bash
 npx wrangler d1 create tacocat-proto --location wnam   # paste the database_id into wrangler.jsonc
 npx wrangler r2 bucket create tacocat-proto-media --location wnam
 npx wrangler queues create tacocat-proto-uploads
@@ -43,4 +51,10 @@ npm run db:migrate
 npm run deploy
 ```
 
-Read replication is off by default and has to be turned on through the REST API (see the D1 read replication docs).
+Read replication is off by default and there is no wrangler command for it:
+
+```bash
+curl -X PUT "https://api.cloudflare.com/client/v4/accounts/ed3ca575118099486baeb129959697c8/d1/database/<database_id>" \
+    -H "Authorization: Bearer $(npx wrangler auth token | tail -1)" -H "Content-Type: application/json" \
+    -d '{"read_replication":{"mode":"auto"}}'
+```
