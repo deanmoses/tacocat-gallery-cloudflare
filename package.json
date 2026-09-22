@@ -1,0 +1,26 @@
+{
+    "name": "tacocat-gallery-cloudflare",
+    "version": "1.0.0",
+    "description": "Throwaway prototype to de-risk moving pix.tacocat.com to Cloudflare",
+    "scripts": {
+        "dev": "wrangler dev",
+        "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
+        "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",
+        "deploy": "wrangler deploy",
+        "check": "tsc",
+        "logs": "wrangler tail"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "module",
+    "devDependencies": {
+        "@cloudflare/workers-types": "^5.20260922.1",
+        "typescript": "^5.9.3",
+        "wrangler": "^4.136.3"
+    },
+    "dependencies": {
+        "exifreader": "^4.45.2"
+    },
+    "private": true
+}

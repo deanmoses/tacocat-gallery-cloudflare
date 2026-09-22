@@ -1,0 +1,22 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "tacocat-gallery-cloudflare",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-09-01",
+    "compatibility_flags": ["nodejs_compat"],
+    "observability": { "enabled": true },
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "tacocat-proto",
+            "database_id": "REPLACE_AFTER_d1_create",
+            "migrations_dir": "migrations",
+        },
+    ],
+    "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tacocat-proto-media" }],
+    "images": { "binding": "IMAGES" },
+    "queues": {
+        "consumers": [{ "queue": "tacocat-proto-uploads", "max_batch_size": 10, "max_batch_timeout": 1 }],
+    },
+    "triggers": { "crons": ["17 9 * * *"] },
+}
