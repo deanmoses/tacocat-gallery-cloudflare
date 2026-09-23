@@ -15,11 +15,40 @@ import ts from 'typescript-eslint';
 import svelteConfig from './web/svelte.config.js';
 
 // Every rule of every plugin is on, via each one's `all` preset, so a rule added upstream is enforced as soon as the
-// dependency is upgraded. Rules come off only in the "reconfigured" and "turned off" blocks, each with the reason.
+// dependency is upgraded, except unicorn (see UNICORN_BUG_RULES). Rules come off only in the "reconfigured" and
+// "turned off" blocks, each with the reason.
 
 const CODE = ['**/*.ts', '**/*.mjs', '**/*.js', '**/*.svelte'];
 // Components, and modules whose `.svelte.` infix lets them use runes.
 const SVELTE = ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'];
+
+/**
+ * unicorn's rules that catch bugs but sit outside its `unopinionated` preset, which the code uses. Its other presets
+ * add house-style rules, many of which fight Svelte and SvelteKit conventions.
+ */
+const UNICORN_BUG_RULES: Record<string, 'error'> = Object.fromEntries(
+    [
+        'no-computed-property-existence-check',
+        'no-duplicate-if-branches',
+        'no-duplicate-set-values',
+        'no-incorrect-query-selector',
+        'no-incorrect-template-string-interpolation',
+        'no-late-current-target-access',
+        'no-late-event-control',
+        'no-loop-iterable-mutation',
+        'no-mismatched-map-key',
+        'no-object-methods-with-collections',
+        'no-optional-chaining-on-undeclared-variable',
+        'no-return-array-push',
+        'no-selector-as-dom-name',
+        'no-this-outside-of-class',
+        'no-uncalled-method',
+        'no-undeclared-class-members',
+        'no-unsafe-property-key',
+        'no-unsafe-string-replacement',
+        'prefer-https',
+    ].map((rule) => [`unicorn/${rule}`, 'error']),
+);
 
 /** Every rule a plugin exports, for plugins with no `all` preset, minus the ones named in `except`. */
 function allRules(
@@ -70,10 +99,13 @@ export default defineConfig(
     {
         name: 'code',
         files: CODE,
-        extends: asErrors(js.configs.all, ts.configs.all, unicorn.configs.all, regexp.configs.all),
+        extends: asErrors(js.configs.all, ts.configs.all, unicorn.configs.unopinionated, regexp.configs.all),
         plugins: { '@eslint-community/eslint-comments': comments },
-        // No `all` preset for eslint-comments; no-use and no-restricted-disable are lists to fill in, not checks.
-        rules: allRules('@eslint-community/eslint-comments', comments, ['no-use', 'no-restricted-disable']),
+        rules: {
+            // No `all` preset for eslint-comments; no-use and no-restricted-disable are lists to fill in, not checks.
+            ...allRules('@eslint-community/eslint-comments', comments, ['no-use', 'no-restricted-disable']),
+            ...UNICORN_BUG_RULES,
+        },
         languageOptions: {
             parserOptions: {
                 // Each file is checked against its nearest tsconfig.json: the Worker, its tests, or the Node side.
@@ -99,28 +131,6 @@ export default defineConfig(
         rules: {
             // The preset's default wants no `lang` at all; every script here is TypeScript.
             'svelte/block-lang': ['error', { script: 'ts' }],
-            // A component's top-level `let` is its state, and its event handlers are how that state changes.
-            'unicorn/no-top-level-assignment-in-function': 'off',
-        },
-    },
-    {
-        name: 'svelte components',
-        files: ['**/*.svelte'],
-        rules: {
-            // Components are PascalCase, as they are when imported; SvelteKit's route files (`+page.svelte`) are
-            // named by SvelteKit. Directories stay kebab-case, which the rule checks on every other file.
-            'unicorn/filename-case': [
-                'error',
-                { case: 'pascalCase', ignore: [String.raw`^\+`], checkDirectories: false },
-            ],
-        },
-    },
-    {
-        name: 'sveltekit routes',
-        files: ['web/src/routes/**/+*.ts'],
-        rules: {
-            // Page options such as `ssr` and `prerender` are names SvelteKit reads.
-            'unicorn/consistent-boolean-name': 'off',
         },
     },
 
@@ -138,10 +148,6 @@ export default defineConfig(
         ],
         extends: asErrors(node.configs['flat/all']),
         languageOptions: { globals: globals.node },
-        rules: {
-            // Uint8Array#toBase64 and fromBase64 arrived in Node 25; .nvmrc pins 24, so Node code uses Buffer.
-            'unicorn/prefer-uint8array-base64': 'off',
-        },
     },
     {
         name: 'worker',
@@ -200,12 +206,6 @@ export default defineConfig(
                 'error',
                 { functions: false, classes: true, variables: false, enums: true, typedefs: false },
             ],
-            // `Env`, `env` and `ctx` are what Cloudflare's docs and types call the bindings and execution context, and
-            // `props` and `Props` are what Svelte calls a component's inputs.
-            'unicorn/name-replacements': [
-                'error',
-                { allowList: Object.fromEntries(['Env', 'env', 'ctx', 'Props', 'props'].map((name) => [name, true])) },
-            ],
             // `void promise;` marks a promise deliberately left running, which is how no-floating-promises is
             // satisfied; every other use of void stays an error.
             'no-void': ['error', { allowAsStatement: true }],
@@ -241,8 +241,6 @@ export default defineConfig(
             'sort-keys': 'off',
             // Request, Env, D1Database and the rest of the platform types are mutable, so nearly every parameter fails.
             '@typescript-eslint/prefer-readonly-parameter-types': 'off',
-            // SQL NULL and JSON null are part of the data model; D1 and Drizzle return them.
-            'unicorn/no-null': 'off',
             // `undefined` is how TypeScript spells "absent", and exactOptionalPropertyTypes makes it deliberate.
             'no-undefined': 'off',
             // No-nested-ternary still applies; a single conditional expression is fine.
@@ -253,29 +251,13 @@ export default defineConfig(
             'n/no-top-level-await': 'off',
             // Complexity and max-lines-per-function already bound a function's size.
             'max-statements': 'off',
-            // Temporal is not in workerd (checked 2026-09-22 with compatibility_date 2026-09-01) or Node 24.
-            'unicorn/prefer-temporal': 'off',
             // With promise-function-async, every function that returns a promise is async, so one with nothing to
             // await is deliberate.
             '@typescript-eslint/require-await': 'off',
             // Superseded by @typescript-eslint/naming-convention, which is configured above.
             camelcase: 'off',
-            // House style is a one-line /** doc */ for one-sentence docs and the usual ` * ` prefix when longer;
-            // These two rules each forbid one of those.
-            'unicorn/single-line-block-comment-style': 'off',
-            'unicorn/no-asterisk-prefix-in-documentation-comments': 'off',
-            // Wants each multi-line // comment joined into one line of any length. House style wraps comments at 120
-            // columns like the code, and Prettier never re-wraps them.
-            'unicorn/no-manually-wrapped-comments': 'off',
-            // Contradicts arrow-body-style whenever Prettier breaks a returned object over several lines;
-            // arrow-body-style stays.
-            'unicorn/consistent-arrow-return-style': 'off',
             // Forces "Ffmpeg" for a tool spelled ffmpeg; a comment that starts with a name keeps the name's case.
             'capitalized-comments': 'off',
-            // Splits `new Date().toISOString()` into two statements for nothing.
-            'unicorn/no-unreadable-new-expression': 'off',
-            // Fires on every Drizzle query: `where(and(inArray(...), gt(...)))` is the query builder's idiom.
-            'unicorn/max-nested-calls': 'off',
         },
     },
 
