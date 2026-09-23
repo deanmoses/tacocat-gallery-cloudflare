@@ -83,16 +83,30 @@ describe('rows read on a gallery-sized table', () => {
         expect(meta.rows_read).toBeLessThanOrEqual(rows.length + OVERHEAD);
     });
 
-    it('searching for a rare word reads only its matches', async () => {
+    it.each([
+        { who: 'a guest', admin: false },
+        { who: 'an admin', admin: true },
+    ])('searching for a rare word as $who reads only its matches', async ({ admin }) => {
         await upsertItem(database, {
             parentPath: dayPath(9),
             itemName: 'q.jpg',
             itemType: 'image',
             title: 'Quesadilla',
         }).run();
-        const found = await searchItems(database, 'quesadilla');
+        const found = await searchItems(database, 'quesadilla', admin);
 
         expect(found.results).toHaveLength(1);
         expect(found.meta.rows_read).toBeLessThanOrEqual(found.results.length + OVERHEAD);
+    });
+
+    // Every image in the gallery matches, and the best 50 come back.
+    it.each([
+        { who: 'a guest', admin: false },
+        { who: 'an admin', admin: true },
+    ])('searching for a common word as $who reads a few rows per result', async ({ admin }) => {
+        const found = await searchItems(database, 'taco', admin);
+
+        expect(found.results).toHaveLength(50);
+        expect(found.meta.rows_read).toBeLessThanOrEqual(found.results.length * 3 + OVERHEAD);
     });
 });

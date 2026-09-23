@@ -1,5 +1,6 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
+import { currentAdmin } from './auth';
 import { type ItemUpsert, type Orm, orm, schema, upsertItem } from './db';
 import { d1Header, pickMeta, round } from './db/timing';
 import { BOOKMARK_HEADER, json } from './http';
@@ -65,9 +66,10 @@ export async function readYourWrites(env: Env): Promise<Response> {
 export async function search(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const query = url.searchParams.get('q') ?? '';
+    const admin = (await currentAdmin(request, env)) !== null;
     const session = env.DB.withSession('first-unconstrained');
     const started = performance.now();
-    const rows = await searchItems(orm(session), query);
+    const rows = await searchItems(orm(session), query, admin);
     const searchMs = performance.now() - started;
     return json(
         {
@@ -81,15 +83,30 @@ export async function search(request: Request, env: Env): Promise<Response> {
     );
 }
 
-/** The best 50 items for an FTS5 query, each with a snippet of its description. */
-export async function searchItems(database: Orm, query: string): Promise<D1Result> {
+/**
+ * The best 50 items for an FTS5 query, each with a snippet of its description. Unless `admin`, only what the album
+ * pages show a guest: published albums, and media whose album is published.
+ */
+export async function searchItems(database: Orm, query: string, admin: boolean): Promise<D1Result> {
     // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
     return database.run(
         sql`SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
             FROM item_fts JOIN item i ON i.id = item_fts.rowid
-            WHERE item_fts MATCH ${query} ORDER BY rank LIMIT 50`,
+            ${admin ? sql`` : GUEST_VISIBLE_JOIN}
+            WHERE item_fts MATCH ${query}
+            ${admin ? sql`` : GUEST_VISIBLE_FILTER}
+            ORDER BY rank LIMIT 50`,
     );
 }
+
+// The album an item is in, found from its parent path: of '/2001/06-15/' without its trailing slash, rtrim() strips
+// every character but '/' from the end, leaving the album's parent path '/2001/', and the rest is its name '06-15'.
+// The key is computed from the matched item alone, so finding the album is a lookup on the (parent_path, item_name) index.
+const PARENT = sql.raw(`rtrim(i.parent_path, '/')`);
+const ALBUM_PARENT_PATH = sql`rtrim(${PARENT}, replace(${PARENT}, '/', ''))`;
+const GUEST_VISIBLE_JOIN = sql`LEFT JOIN item album
+    ON album.parent_path = ${ALBUM_PARENT_PATH} AND album.item_name = substr(${PARENT}, length(${ALBUM_PARENT_PATH}) + 1)`;
+const GUEST_VISIBLE_FILTER = sql`AND CASE WHEN i.item_type = 'album' THEN i.published = 1 ELSE album.published = 1 END`;
 
 const SEED_WORDS = ['beach', 'birthday', 'snow', 'cat', 'taco', 'paris', 'marseille', 'hike', 'garden', 'soccer'];
 

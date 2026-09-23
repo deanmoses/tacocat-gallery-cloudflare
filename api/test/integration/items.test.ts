@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { type Column, getTableColumns, like } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { callAsAdmin, callForJson, putItem, storedItem } from '../helpers';
+import { call, callAsAdmin, callForJson, putItem, storedItem } from '../helpers';
 
 interface SearchResponse {
     count: number;
@@ -58,8 +58,16 @@ describe('saving an item', () => {
     });
 });
 
+/** Searches for `word`, as a guest or as an admin, and names what was found, in name order. */
+async function searchNames(word: string, asAdmin = false): Promise<string[]> {
+    const response = await (asAdmin ? callAsAdmin : call)(`/api/search?q=${word}`);
+    const { results } = await response.json<SearchResponse>();
+    return results.map((result) => String(result['item_name'])).toSorted();
+}
+
 describe('search', () => {
     it('finds an item by a word in its title, with a snippet from its description', async () => {
+        await putItem({ parentPath: '/2024/', itemName: '07-01', itemType: 'album', published: true });
         await putItem({
             parentPath: '/2024/07-01/',
             itemName: 'quesadilla.jpg',
@@ -79,6 +87,7 @@ describe('search', () => {
 
     it('follows an update to the title', async () => {
         const item: schema.NewItem = { parentPath: '/2024/07-02/', itemName: 'meal.jpg', itemType: 'image' };
+        await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
         const old = await callForJson<SearchResponse>('/api/search?q=enchilada');
@@ -86,6 +95,44 @@ describe('search', () => {
 
         expect(old.count).toBe(0);
         expect(current.count).toBe(1);
+    });
+
+    describe('as the album pages decide what a guest sees', () => {
+        beforeEach(async () => {
+            await Promise.all([
+                putItem({
+                    parentPath: '/2024/',
+                    itemName: '07-10',
+                    itemType: 'album',
+                    title: 'Fajita',
+                    published: true,
+                }),
+                putItem({
+                    parentPath: '/2024/',
+                    itemName: '07-11',
+                    itemType: 'album',
+                    title: 'Fajita',
+                    published: false,
+                }),
+                putItem({ parentPath: '/2024/07-10/', itemName: 'shown.jpg', itemType: 'image', title: 'Fajita' }),
+                putItem({ parentPath: '/2024/07-11/', itemName: 'hidden.jpg', itemType: 'image', title: 'Fajita' }),
+                putItem({ parentPath: '/2024/07-12/', itemName: 'no-album.jpg', itemType: 'image', title: 'Fajita' }),
+            ]);
+        });
+
+        it('shows a guest published albums and the media in them', async () => {
+            await expect(searchNames('fajita')).resolves.toStrictEqual(['07-10', 'shown.jpg']);
+        });
+
+        it('shows an admin everything', async () => {
+            await expect(searchNames('fajita', true)).resolves.toStrictEqual([
+                '07-10',
+                '07-11',
+                'hidden.jpg',
+                'no-album.jpg',
+                'shown.jpg',
+            ]);
+        });
     });
 
     it('keeps the FTS index consistent through writes and deletes', async () => {
