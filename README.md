@@ -2,7 +2,7 @@
 
 Prototype to find out whether moving pix.tacocat.com to Cloudflare works. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo.
 
-One Worker holds every spike, with one D1 database, one R2 bucket, one Queue and the Images binding. It is deployed to `workers.dev`, so the tacocat.com DNS move is not needed yet.
+One Worker holds every spike: one D1 database, two R2 buckets (originals and derived images), an upload Queue with a dead-letter queue, the Images binding, and a Container for video transcoding. It serves `pix.deanmoses.com`, a custom domain on a Cloudflare zone standing in for tacocat.com, as well as `workers.dev`, so the tacocat.com DNS move is not needed yet.
 
 ## Risk register
 
@@ -47,7 +47,12 @@ The container is parked on `lite` (1/16 vCPU, 256 MiB), one instance at most, st
 
 ## Running it
 
+Node 24 LTS, the version in `.nvmrc`. `.npmrc` sets `engine-strict`, so `npm install` refuses any other major. [fnm](https://github.com/Schniz/fnm) with `eval "$(fnm env --use-on-cd)"` in the shell profile switches to it on `cd`.
+
+`npm run dev` reads the Worker's secrets from `.dev.vars` (gitignored, one `NAME=value` per line): `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` to sign uploads, `GLOBALPING_TOKEN` for the idle probes, `SESSION_SECRET` for admin sessions, and `CLOUDFLARE_TERRAFORM_API_TOKEN` for `infra/`. Tests do not need it: `vitest.config.ts` supplies stand-ins.
+
 ```bash
+fnm use  # or nvm use
 npm install
 npm run db:migrate:local
 npm run dev
@@ -61,14 +66,23 @@ The FTS5 search table and its triggers are raw SQL (`migrations/0002_fts_by_rowi
 
 ## Development
 
-`npm run quality` formats, lints, type-checks and tests. Every lint check is in `scripts/lint.sh` (`npm run lint`) and the tests are run by `scripts/test.sh` (`npm test`). CI runs both over the whole repo, plus `npm run check`. The pre-commit hook runs the same scripts with `--staged`: the per-file lint checks see only staged files, and only the tests whose imports reach a staged file run, or all of them when the staged change is to config, migrations or dependencies. Types are always checked across the whole project. Typed ESLint rules look across files, so a staged change can break an unstaged file in a way only CI's full run sees. The hook also scans for secrets with gitleaks and formats staged files with Prettier; it fixes nothing else. Run `npm run format` for shell and OpenTofu, and `npm run lint:fix` for ESLint and review the diff, because some ESLint fixers change what code means (two vitest ones turn `toBeTruthy()` into `toBe(true)` and `toHaveBeenCalled()` into `toHaveBeenCalledWith()`). A missing system tool is skipped with a warning locally and fails in CI.
+`npm run quality` formats, lints, type-checks and tests. Every lint check is in `scripts/lint.sh` (`npm run lint`) and the tests are run by `scripts/test.sh` (`npm test`). There is no CI workflow yet. When there is, it runs both over the whole repo plus `npm run check`, with `CI` set so that a missing system tool fails instead of being skipped with a warning as it is locally. The pre-commit hook runs the same scripts with `--staged`: the per-file lint checks see only staged files, and only the tests whose imports reach a staged file run, or all of them when the staged change is to config, migrations or dependencies. Types are always checked across the whole project. Typed ESLint rules look across files, so a staged change can break an unstaged file in a way only a full `npm run lint` sees. The hook also scans for secrets with gitleaks and formats staged files with Prettier; it fixes nothing else. Run `npm run format` for shell and OpenTofu, and `npm run lint:fix` for ESLint and review the diff, because some ESLint fixers change what code means (two vitest ones turn `toBeTruthy()` into `toBe(true)` and `toHaveBeenCalled()` into `toHaveBeenCalledWith()`).
 
 - **TypeScript 6**, every strictness flag on (`tsconfig.base.json`). Three projects: `src/` (the Worker, typed by `worker-configuration.d.ts`, which `npm run types` regenerates from `wrangler.jsonc`), `test/` (the Worker plus `cloudflare:test`), and the root (Node: configs, `scripts/`, `transcoder/`).
 - **ESLint**: the `all` preset of every plugin (core, typescript-eslint, unicorn, regexp, n, vitest, eslint-comments), so new upstream rules apply on upgrade. Rules are removed or reconfigured only in `eslint.config.ts`, each with its reason. There are no `eslint-disable` comments; fix the code instead.
 - **Prettier**, the same settings as `tacocat-gallery-sveltekit`, for code, JSON and Markdown. JSON is also linted by `@eslint/json` (every rule but key sorting), Markdown by markdownlint, shell scripts by shellcheck and formatted by shfmt, `infra/` by `tofu fmt` and `tofu validate`, the Dockerfile by hadolint, and unused files, exports and dependencies by knip.
+- **Node 24 LTS** everywhere: `.nvmrc`, `engines` (`>=24.2.0 <25`, enforced by `engine-strict` in `.npmrc`), `@types/node` 24, and the transcoder's `node:24-alpine` image. eslint-plugin-n reads `engines`, so it flags a Node API newer than 24.2.
 - **System tools** the checks need: `brew install gitleaks shellcheck shfmt hadolint opentofu`.
 - **Tests** run inside workerd through `@cloudflare/vitest-plugin`, with the D1 migrations applied and local D1, R2 and Queue bindings; `remoteBindings` is off, so a test never reaches the account.
 - **Untrusted JSON** is validated with Valibot (`transcoder/` has no dependencies, so it uses small typed accessors instead).
+
+## VS Code
+
+`.vscode/` recommends one extension per check in `scripts/lint.sh`, so the editor flags what the hook would reject, and formats on save with the same tools as `npm run format`: Prettier, shfmt for shell and OpenTofu's formatter for `infra/`. The editor uses TypeScript from `node_modules`. `worker-configuration.d.ts` and `migrations/meta/` are read-only because they are generated.
+
+- **Cmd+Shift+B** runs `npm run check` and puts every type error in the Problems panel. `Quality` and `Regenerate Worker types` are under Run Task.
+- **Debugging** (Run and Debug): `Worker: npm run dev` starts the dev server in a debug terminal, or `Worker: attach to npm run dev` attaches to one already running. `Debug Worker tests` runs Vitest one file at a time and attaches to workerd, so breakpoints stop in tests and in the Worker code they call. `Script: passkey self-test` asks for an invite link and runs `scripts/passkey-selftest.ts`. The Worker and the tests share inspector port 9229, so debug one at a time.
+- **Tests** also show in the Testing panel through the Vitest extension.
 
 ## Admin login
 

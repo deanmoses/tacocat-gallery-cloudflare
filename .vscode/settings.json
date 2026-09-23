@@ -1,0 +1,32 @@
+{
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[markdown]": {
+        "editor.wordWrap": "on",
+        "editor.wrappingIndent": "same"
+    },
+    // Prettier does not format these; the same tools `npm run format` uses do.
+    "[shellscript]": { "editor.defaultFormatter": "mkhl.shfmt" },
+    "[opentofu]": { "editor.defaultFormatter": "opentofu.vscode-opentofu" },
+    // The hook has no extension or shebang, only a `# shellcheck shell=sh` directive.
+    "files.associations": { ".husky/pre-commit": "shellscript" },
+
+    // TypeScript 6 from node_modules, not whatever version VS Code bundles, so the editor and `npm run check` agree.
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+
+    // eslint.config.ts lints JSON too, and the extension only asks ESLint about the languages listed here.
+    "eslint.validate": ["javascript", "typescript", "json", "jsonc"],
+
+    // Generated: `npm run types` rewrites the first from wrangler.jsonc, drizzle-kit the snapshots.
+    "files.readonlyInclude": {
+        "worker-configuration.d.ts": true,
+        "migrations/meta/**": true
+    },
+    // worker-configuration.d.ts is 600 KB of runtime types, and .wrangler holds local D1, R2 and build output.
+    "search.exclude": {
+        "worker-configuration.d.ts": true,
+        ".wrangler": true,
+        "infra/.terraform": true
+    }
+}

@@ -94,9 +94,9 @@ export default defineConfig(
         },
     },
     {
-        // JSON with comments and trailing commas: tsconfigs, wrangler.jsonc and the linters' own configs.
+        // JSON with comments and trailing commas: tsconfigs, wrangler.jsonc, the linters' own configs and VS Code's.
         name: 'jsonc',
-        files: ['**/*.jsonc', '**/tsconfig*.json'],
+        files: ['**/*.jsonc', '**/tsconfig*.json', '.vscode/*.json'],
         language: 'json/jsonc',
         languageOptions: { allowTrailingCommas: true },
     },

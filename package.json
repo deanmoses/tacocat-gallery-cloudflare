@@ -60,7 +60,7 @@
     },
     "private": true,
     "engines": {
-        "node": ">=24.2.0"
+        "node": ">=24.2.0 <25"
     },
     "lint-staged": {
         "*.{ts,mjs,js,json,jsonc,md,yml,yaml}": [

@@ -1,0 +1,67 @@
+{
+    // Breakpoints in the Worker and its tests, as Cloudflare documents: both run inside workerd, which exposes an
+    // inspector on port 9229 for VS Code to attach to. Only one of these can hold the port at a time.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Worker: npm run dev",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "npm run dev",
+            "sourceMaps": true
+        },
+        {
+            "name": "Worker: attach to npm run dev",
+            "type": "node",
+            "request": "attach",
+            "port": 9229,
+            "cwd": "/",
+            "resolveSourceMapLocations": null,
+            "attachExistingChildren": false,
+            "autoAttachChildProcesses": false,
+            "sourceMaps": true
+        },
+        {
+            "name": "Tests: run Vitest with the inspector open",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+            // One test file at a time, so a breakpoint stops the only run in progress.
+            "args": ["run", "--inspect=9229", "--no-file-parallelism"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Tests: attach to workerd",
+            "type": "node",
+            "request": "attach",
+            "port": 9229,
+            "cwd": "/",
+            "resolveSourceMapLocations": null,
+            "attachExistingChildren": false,
+            "autoAttachChildProcesses": false
+        },
+        {
+            // Run the passkey self-test against `npm run dev`, with the invite link it needs pasted in when asked.
+            "name": "Script: passkey self-test",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/passkey-selftest.ts",
+            "args": ["${input:inviteUrl}"],
+            "console": "integratedTerminal"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug Worker tests",
+            "configurations": ["Tests: run Vitest with the inspector open", "Tests: attach to workerd"],
+            "stopAll": true
+        }
+    ],
+    "inputs": [
+        {
+            "id": "inviteUrl",
+            "type": "promptString",
+            "description": "Invite link from `scripts/invite.sh Selftest --local`"
+        }
+    ]
+}

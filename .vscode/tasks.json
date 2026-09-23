@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // Cmd+Shift+B: every type error in the Worker, the tests and the Node side lands in the Problems panel.
+            "label": "Type-check",
+            "type": "npm",
+            "script": "check",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$tsc",
+            "presentation": { "reveal": "silent", "panel": "shared" }
+        },
+        {
+            "label": "Quality: format, lint, type-check, test",
+            "type": "npm",
+            "script": "quality",
+            "group": "test",
+            "problemMatcher": ["$tsc", "$eslint-stylish"],
+            "presentation": { "reveal": "always", "panel": "shared" }
+        },
+        {
+            "label": "Regenerate Worker types from wrangler.jsonc",
+            "type": "npm",
+            "script": "types",
+            "problemMatcher": [],
+            "presentation": { "reveal": "silent", "panel": "shared" }
+        }
+    ]
+}

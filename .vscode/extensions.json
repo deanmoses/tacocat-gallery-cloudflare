@@ -1,0 +1,15 @@
+{
+    // One extension per check in scripts/lint.sh, so the editor shows what the hook and CI would reject.
+    "recommendations": [
+        "anthropic.claude-code",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "davidanson.vscode-markdownlint",
+        "editorconfig.editorconfig",
+        "vitest.explorer",
+        "timonwong.shellcheck",
+        "mkhl.shfmt",
+        "exiasr.hadolint",
+        "opentofu.vscode-opentofu"
+    ]
+}
