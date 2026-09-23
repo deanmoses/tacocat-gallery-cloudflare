@@ -102,6 +102,19 @@ check() {
     report "$?" "$output"
 }
 
+# Migrations changed since the last commit, by git's --diff-filter letters: in the index for a staged run, anywhere in
+# the working tree for a full run. A CI run has nothing uncommitted, so it will need a base branch to diff against.
+changed_migrations() {
+    if [ "$STAGED" = "1" ]; then
+        git diff --cached --name-only --diff-filter="$1" -- 'migrations/*.sql'
+    else
+        git diff HEAD --name-only --diff-filter="$1" -- 'migrations/*.sql'
+        if [ "$1" = "A" ]; then
+            git ls-files --others --exclude-standard -- 'migrations/*.sql'
+        fi
+    fi
+}
+
 if [ "$STAGED" = "1" ]; then
     echo "Running lint checks on staged files"
 else
@@ -118,6 +131,33 @@ over_files eslint --max-warnings 0 --no-warn-ignored -- '*.ts' '*.mjs' '*.js' '*
 echo -n "Lint: Markdown (markdownlint)... "
 over_files markdownlint-cli2 --no-globs -- '*.md'
 
+# Wrangler records applied migrations by filename, so an edit to one never reaches a database that already has it, and
+# a renamed one would run twice.
+echo -n "Migrations: committed ones are unchanged... "
+frozen=$(changed_migrations MDR)
+if [ -z "$frozen" ]; then
+    report 0
+else
+    report 1 "Add a new migration instead of changing, renaming or deleting a committed one:
+$frozen"
+fi
+
+# During a deploy the old Worker version still runs against the new schema, so a migration must not take away a table
+# or column it uses. A migration that has to, such as the later release removing a column the code no longer reads,
+# says why on a `-- non-additive: <reason>` line.
+echo -n "Migrations: new ones only add... "
+removals=""
+for migration in $(changed_migrations A); do
+    grep -qiE '^--[[:space:]]*non-additive:[[:space:]]*[^[:space:]]' "$migration" && continue
+    found=$(grep -niE '\b(drop[[:space:]]+(table|column)|rename)\b' "$migration")
+    [ -n "$found" ] && removals+="$migration:"$'\n'"$found"$'\n'
+done
+if [ -z "$removals" ]; then
+    report 0
+else
+    report 1 "${removals}Split the removal into a later release, or add a \`-- non-additive: <reason>\` line."
+fi
+
 # Whole file either way, since a hand edit to a generated file has to be caught whatever else is staged.
 echo -n "Docs: CLAUDE.md and AGENTS.md match docs/AGENTS.src.md... "
 check node scripts/build-agent-instructions.ts --check
@@ -128,12 +168,12 @@ check knip --no-progress
 
 echo -n "Lint: shell scripts (shellcheck)... "
 if require shellcheck; then
-    over_files shellcheck -- '*.sh' .husky/pre-commit
+    over_files shellcheck -- '*.sh' .husky/pre-commit .husky/commit-msg
 fi
 
 echo -n "Format: shell scripts (shfmt)... "
 if require shfmt; then
-    over_files shfmt --diff -- '*.sh' .husky/pre-commit
+    over_files shfmt --diff -- '*.sh' .husky/pre-commit .husky/commit-msg
 fi
 
 echo -n "Lint: Dockerfiles (hadolint)... "

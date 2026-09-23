@@ -42,21 +42,23 @@ describe('albums', () => {
 });
 
 describe('search', () => {
+    // Storage is shared by the tests in a file, and /api/seed titles items with words like "taco", so this searches
+    // for one the seed never writes.
     it('finds an item by a word in its title, with a snippet from its description', async () => {
         await putItem({
             parentPath: '/2024/07-01/',
-            itemName: 'taco.jpg',
+            itemName: 'quesadilla.jpg',
             itemType: 'image',
-            title: 'Taco night',
-            description: 'Tacos at home',
+            title: 'Quesadilla night',
+            description: 'Quesadillas at home',
         });
-        const found = await callForJson<SearchResponse>('/api/search?q=taco');
+        const found = await callForJson<SearchResponse>('/api/search?q=quesadilla');
 
         expect(found.count).toBe(1);
         expect(found.results.at(0)).toMatchObject({
-            item_name: 'taco.jpg',
-            title: 'Taco night',
-            snippet: 'Tacos at home',
+            item_name: 'quesadilla.jpg',
+            title: 'Quesadilla night',
+            snippet: 'Quesadillas at home',
         });
     });
 

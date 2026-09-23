@@ -8,8 +8,8 @@
     // Prettier does not format these; the same tools `npm run format` uses do.
     "[shellscript]": { "editor.defaultFormatter": "mkhl.shfmt" },
     "[opentofu]": { "editor.defaultFormatter": "opentofu.vscode-opentofu" },
-    // The hook has no extension or shebang, only a `# shellcheck shell=sh` directive.
-    "files.associations": { ".husky/pre-commit": "shellscript" },
+    // The hooks have no extension or shebang, only a `# shellcheck shell=sh` directive.
+    "files.associations": { ".husky/pre-commit": "shellscript", ".husky/commit-msg": "shellscript" },
 
     // TypeScript 6 from node_modules, not whatever version VS Code bundles, so the editor and `npm run check` agree.
     "typescript.tsdk": "node_modules/typescript/lib",

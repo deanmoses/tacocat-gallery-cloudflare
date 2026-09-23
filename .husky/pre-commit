@@ -24,5 +24,16 @@ fi
 # The same checks CI runs, scoped to what is staged: per-file lint checks see only staged files, and only the tests
 # that import them run. CI runs all of it over the whole repo. Types are always checked across the whole project.
 scripts/lint.sh --staged
-npm run check
-scripts/test.sh --staged
+
+# The type check and the tests are independent, so they run side by side. The type check's output is held until both
+# finish, so the two never interleave.
+check_log=$(mktemp)
+npm run --silent check >"$check_log" 2>&1 &
+check_pid=$!
+tests_status=0
+scripts/test.sh --staged || tests_status=$?
+check_status=0
+wait "$check_pid" || check_status=$?
+cat "$check_log"
+rm -f "$check_log"
+[ "$check_status" -eq 0 ] && [ "$tests_status" -eq 0 ]

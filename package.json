@@ -10,7 +10,7 @@
         "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test",
         "lint": "scripts/lint.sh",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write --log-level warn . && shfmt --write scripts/*.sh .husky/pre-commit && tofu -chdir=infra fmt -recursive",
+        "format": "prettier --write --log-level warn . && shfmt --write scripts .claude/hooks .husky/pre-commit .husky/commit-msg && tofu -chdir=infra fmt -recursive",
         "quality": "npm run format && npm run lint && npm run check && npm test",
         "prepare": "husky",
         "agent-docs": "node scripts/build-agent-instructions.ts",
