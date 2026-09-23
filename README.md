@@ -53,6 +53,12 @@ npm run db:migrate:local
 npm run dev
 ```
 
+## Database schema
+
+`src/db/schema.ts` is the source of truth for the tables, in [Drizzle](https://orm.drizzle.team). To change one, edit the schema, run `npm run db:generate` to write the migration into `migrations/`, review the SQL, then `npm run db:migrate:local` and, once it works, `npm run db:migrate`. drizzle-kit only writes migrations; Wrangler runs them and records which have been applied.
+
+The FTS5 search table and its triggers are raw SQL (`migrations/0002_fts_by_rowid.sql`), because Drizzle does not model virtual tables or triggers, and search queries go through Drizzle's `sql` template. `0001` to `0004` predate Drizzle; the `drizzle_baseline` migration only gives drizzle-kit a snapshot of what they created.
+
 ## Admin login
 
 `scripts/invite.sh "<name>"` prints a one-time invite link for the deployed Worker; add `--local` for `npm run dev`. Send it to the admin however you like. To check the whole flow without a browser, run `node scripts/passkey-selftest.mjs "$(scripts/invite.sh Selftest --local)"` against `npm run dev`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `.dev.vars`.

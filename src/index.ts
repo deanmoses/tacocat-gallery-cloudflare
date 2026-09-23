@@ -1,6 +1,9 @@
 import { Container } from '@cloudflare/containers';
 import { AwsClient } from 'aws4fetch';
 import ExifReader from 'exifreader';
+import { and, asc, eq, max, sql } from 'drizzle-orm';
+import { currentAdmin, routeAuth } from './auth';
+import { db, schema, upsertItem, type Db } from './db';
 
 interface Env {
     DB: D1Database;
@@ -10,6 +13,7 @@ interface Env {
     R2_ACCESS_KEY_ID: string;
     R2_SECRET_ACCESS_KEY: string;
     GLOBALPING_TOKEN?: string;
+    SESSION_SECRET: string;
     TRANSCODER: DurableObjectNamespace<Transcoder>;
 }
 
@@ -29,20 +33,6 @@ interface R2EventMessage {
     eventTime: string;
 }
 
-type ItemInput = {
-    parentPath: string;
-    itemName: string;
-    itemType: 'album' | 'image' | 'video';
-    title?: string;
-    description?: string;
-    tags?: string;
-    versionId?: string;
-    published?: boolean;
-    width?: number;
-    height?: number;
-    durationSeconds?: number;
-};
-
 const BOOKMARK_HEADER = 'x-d1-bookmark';
 const BACKUP_CRON = '17 9 * * *';
 
@@ -58,6 +48,9 @@ export default {
             res = json({ error: String(e) }, 500);
         }
         res = new Response(res.body, res);
+        if (url.pathname.startsWith('/api/')) {
+            res.headers.set('x-auth-status', (await currentAdmin(request, env)) ? 'admin' : 'guest');
+        }
         res.headers.set('x-worker-colo', String(request.cf?.colo ?? 'local'));
         res.headers.set('server-timing', `worker;dur=${(performance.now() - started).toFixed(1)}`);
         return res;
@@ -78,18 +71,23 @@ export default {
 
 async function route(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = url;
+    const auth = await routeAuth(request, env, url);
+    if (auth) return auth;
     if (pathname === '/') return json({ colo: request.cf?.colo, country: request.cf?.country });
     if (pathname.startsWith('/api/album/') && request.method === 'GET') return getAlbum(request, env, url);
-    if (pathname === '/api/item' && request.method === 'POST') return putItem(request, env);
     if (pathname === '/api/ryw' && request.method === 'GET') return readYourWrites(env);
     if (pathname === '/api/search' && request.method === 'GET') return search(env, url);
-    if (pathname === '/api/seed' && request.method === 'POST') return seed(env, url);
-    if (pathname === '/api/backup' && request.method === 'POST') return json(await backupDatabase(env));
-    if (pathname === '/api/upload-url' && request.method === 'POST') return uploadUrl(request, env);
     if (pathname === '/upload-test') return new Response(UPLOAD_TEST_PAGE, { headers: { 'content-type': 'text/html' } });
     if (pathname.startsWith('/raw/')) return raw(env, url);
     if (pathname.startsWith('/v/')) return media(request, env, url);
-    if (pathname.startsWith('/upload/') && request.method === 'PUT') return upload(request, env, url);
+    if (request.method === 'POST' || request.method === 'PUT') {
+        if (!(await currentAdmin(request, env))) return json({ error: 'admin login required' }, 401);
+        if (pathname === '/api/item') return putItem(request, env);
+        if (pathname === '/api/seed') return seed(env, url);
+        if (pathname === '/api/backup') return json(await backupDatabase(env));
+        if (pathname === '/api/upload-url') return uploadUrl(request, env);
+        if (pathname.startsWith('/upload/')) return upload(request, env, url);
+    }
     if (pathname.startsWith('/debug/image/')) return debugImage(env, url);
     if (pathname.startsWith('/i/') && request.method === 'GET') return derivedViaCacheApi(request, env, url, ctx);
     if (pathname.startsWith('/i2/') && request.method === 'GET') return derivedViaCdn(env, url);
@@ -107,10 +105,8 @@ async function getAlbum(request: Request, env: Env, url: URL): Promise<Response>
         (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
     const session = env.DB.withSession(constraint);
     const t0 = performance.now();
-    const children = await session
-        .prepare('SELECT * FROM item WHERE parent_path = ? ORDER BY item_name')
-        .bind(albumPath)
-        .run();
+    const { item } = schema;
+    const children = await db(session).select().from(item).where(eq(item.parentPath, albumPath)).orderBy(item.itemName).run();
     const d1Ms = performance.now() - t0;
     return json(
         {
@@ -125,43 +121,16 @@ async function getAlbum(request: Request, env: Env, url: URL): Promise<Response>
 }
 
 async function putItem(request: Request, env: Env): Promise<Response> {
-    const item = (await request.json()) as ItemInput;
+    const item = (await request.json()) as schema.NewItem;
     const session = env.DB.withSession('first-primary');
     const t0 = performance.now();
-    const write = await upsertItem(session, item).run();
+    const write = await upsertItem(db(session), item).run();
     const writeMs = performance.now() - t0;
     return json(
         { written: item, d1: { ...pickMeta(write.meta), roundTripMs: round(writeMs) } },
         200,
         { [BOOKMARK_HEADER]: session.getBookmark() ?? '' },
     );
-}
-
-function upsertItem(db: D1Database | D1DatabaseSession, item: ItemInput): D1PreparedStatement {
-    return db
-        .prepare(
-            `INSERT INTO item (parent_path, item_name, item_type, title, description, tags, version_id, published,
-                width, height, duration_seconds)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-             ON CONFLICT (parent_path, item_name) DO UPDATE SET
-                title = excluded.title, description = excluded.description, tags = excluded.tags,
-                version_id = excluded.version_id, published = excluded.published,
-                width = excluded.width, height = excluded.height, duration_seconds = excluded.duration_seconds,
-                updated_on = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
-        )
-        .bind(
-            item.parentPath,
-            item.itemName,
-            item.itemType,
-            item.title ?? null,
-            item.description ?? null,
-            item.tags ?? null,
-            item.versionId ?? null,
-            item.published ? 1 : 0,
-            item.width ?? null,
-            item.height ?? null,
-            item.durationSeconds ?? null,
-        );
 }
 
 /**
@@ -174,18 +143,25 @@ async function readYourWrites(env: Env): Promise<Response> {
     const key = { parentPath: '/ryw/', itemName: crypto.randomUUID() };
     const writer = env.DB.withSession('first-primary');
     let t0 = performance.now();
-    const w = await upsertItem(writer, { ...key, itemType: 'image', title, published: true }).run();
+    const w = await upsertItem(db(writer), { ...key, itemType: 'image', title, published: true }).run();
     const writeMs = performance.now() - t0;
-    const select = 'SELECT title FROM item WHERE parent_path = ? AND item_name = ?';
+    const { item } = schema;
+    const select = (d: Db) =>
+        d
+            .select({ title: item.title })
+            .from(item)
+            .where(and(eq(item.parentPath, key.parentPath), eq(item.itemName, key.itemName)))
+            // run() rather than get() for the D1 meta (which replica answered); its rows are untyped.
+            .run() as Promise<D1Result<{ title: string | null }>>;
 
     const reader = env.DB.withSession(writer.getBookmark() ?? 'first-primary');
     t0 = performance.now();
-    const own = await reader.prepare(select).bind(key.parentPath, key.itemName).run<{ title: string }>();
+    const own = await select(db(reader));
     const ownMs = performance.now() - t0;
 
     const stranger = env.DB.withSession('first-unconstrained');
     t0 = performance.now();
-    const other = await stranger.prepare(select).bind(key.parentPath, key.itemName).run<{ title: string }>();
+    const other = await select(db(stranger));
     const otherMs = performance.now() - t0;
 
     const summary = [
@@ -200,14 +176,12 @@ async function search(env: Env, url: URL): Promise<Response> {
     const q = url.searchParams.get('q') ?? '';
     const session = env.DB.withSession('first-unconstrained');
     const t0 = performance.now();
-    const rows = await session
-        .prepare(
-            `SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
-             FROM item_fts JOIN item i ON i.id = item_fts.rowid
-             WHERE item_fts MATCH ?1 ORDER BY rank LIMIT 50`,
-        )
-        .bind(q)
-        .run();
+    // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
+    const rows = await db(session).run(
+        sql`SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
+            FROM item_fts JOIN item i ON i.id = item_fts.rowid
+            WHERE item_fts MATCH ${q} ORDER BY rank LIMIT 50`,
+    );
     const searchMs = performance.now() - t0;
     return json({
         q,
@@ -224,14 +198,15 @@ async function seed(env: Env, url: URL): Promise<Response> {
     let written = 0;
     for (let y = 0; y < years; y++) {
         const year = String(2000 + y);
-        const stmts: D1PreparedStatement[] = [];
+        const database = db(env.DB);
+        const stmts: ReturnType<typeof upsertItem>[] = [];
         for (let d = 0; d < 60; d++) {
             const day = `${String((d % 12) + 1).padStart(2, '0')}-${String((d % 28) + 1).padStart(2, '0')}`;
-            stmts.push(upsertItem(env.DB, { parentPath: `/${year}/`, itemName: day, itemType: 'album', published: true }));
+            stmts.push(upsertItem(database, { parentPath: `/${year}/`, itemName: day, itemType: 'album', published: true }));
             for (let i = 0; i < 20; i++) {
                 const w = words[(y + d + i) % words.length];
                 stmts.push(
-                    upsertItem(env.DB, {
+                    upsertItem(database, {
                         parentPath: `/${year}/${day}/`,
                         itemName: `img_${i}.jpg`,
                         itemType: 'image',
@@ -246,7 +221,8 @@ async function seed(env: Env, url: URL): Promise<Response> {
         }
         // D1 caps statements per batch; keep each batch well under it.
         for (let i = 0; i < stmts.length; i += 400) {
-            await env.DB.batch(stmts.slice(i, i + 400));
+            const [first, ...rest] = stmts.slice(i, i + 400);
+            await database.batch([first, ...rest]);
         }
         written += stmts.length;
     }
@@ -336,7 +312,7 @@ async function processUploadEvent(event: R2EventMessage, env: Env): Promise<void
     await env.MEDIA.put(originalKey, bytes, { httpMetadata: obj.httpMetadata });
     const isVideo = /\.(mp4|mov|m4v|avi)$/i.test(itemName);
     const video = isVideo ? await transcodeVideo(env, originalKey, `derived${galleryPath}/${versionId}`) : undefined;
-    await upsertItem(env.DB, {
+    await upsertItem(db(env.DB), {
         parentPath,
         itemName,
         itemType: isVideo ? 'video' : 'image',
@@ -522,12 +498,13 @@ interface GlobalpingMeasurement {
 /** Times reads through Globalping from each reader region, recording how long the Worker had been left alone. */
 async function probeIdleLatency(env: Env): Promise<void> {
     const runAt = new Date().toISOString();
-    const prev = await env.DB.prepare('SELECT max(run_at) AS run_at FROM probe_result').first<{ run_at: string | null }>();
-    const idleHours = prev?.run_at ? round((Date.parse(runAt) - Date.parse(prev.run_at)) / 3_600_000) : null;
+    const d = db(env.DB);
+    const prev = await d.select({ runAt: max(schema.probeResult.runAt) }).from(schema.probeResult).get();
+    const idleHours = prev?.runAt ? round((Date.parse(runAt) - Date.parse(prev.runAt)) / 3_600_000) : null;
 
     const rows = await Promise.all(
         PROBE_LOCATIONS.map(async (loc) => {
-            const out: D1PreparedStatement[] = [];
+            const out: ReturnType<typeof probeRow>[] = [];
             let probeFrom: string | Record<string, string>[] | undefined;
             for (const [seq, step] of PROBE_SEQUENCE.entries()) {
                 let m: GlobalpingMeasurement | undefined;
@@ -542,12 +519,13 @@ async function probeIdleLatency(env: Env): Promise<void> {
                     }
                 }
                 probeFrom = m?.id ?? probeFrom;
-                out.push(probeRow(env, { runAt, idleHours, location: loc.name, seq, path: step.path, m, error }));
+                out.push(probeRow(d, { runAt, idleHours, location: loc.name, seq, path: step.path, m, error }));
             }
             return out;
         }),
     );
-    await env.DB.batch(rows.flat());
+    const [first, ...rest] = rows.flat();
+    await d.batch([first, ...rest]);
     console.info({ event: 'idle_probe_done', runAt, idleHours });
 }
 
@@ -581,9 +559,9 @@ async function globalping(
 }
 
 function probeRow(
-    env: Env,
+    d: Db,
     r: { runAt: string; idleHours: number | null; location: string; seq: number; path: string; m?: GlobalpingMeasurement; error?: string },
-): D1PreparedStatement {
+) {
     const res = r.m?.results[0];
     const header = (name: string) => {
         const v = res?.result.headers?.[name];
@@ -593,51 +571,48 @@ function probeRow(
     const workerMs = header('server-timing')?.match(/dur=([\d.]+)/)?.[1];
     const t = res?.result.timings;
     const failed = res && res.result.status !== 'finished' ? res.result.rawOutput?.slice(0, 300) : undefined;
-    return env.DB.prepare(
-        `INSERT INTO probe_result (run_at, idle_hours, location, seq, path, probe_city, probe_network, status, total_ms,
-            dns_ms, tcp_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_region, d1_colo, d1_primary, d1_rtt_ms,
-            measurement_id, error)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`,
-    ).bind(
-        r.runAt,
-        r.idleHours,
-        r.location,
-        r.seq,
-        r.path,
-        res?.probe.city ?? null,
-        res?.probe.network ?? null,
-        res?.result.statusCode ?? null,
-        t?.total ?? null,
-        t?.dns ?? null,
-        t?.tcp ?? null,
-        t?.tls ?? null,
-        t?.firstByte ?? null,
-        header('x-worker-colo') ?? null,
-        workerMs ? Number(workerMs) : null,
-        d1.region ?? null,
-        d1.colo ?? null,
-        d1.primary ?? null,
-        d1.rtt ? Number(d1.rtt) : null,
-        r.m?.id ?? null,
-        r.error ?? failed ?? null,
-    );
+    return d.insert(schema.probeResult).values({
+        runAt: r.runAt,
+        idleHours: r.idleHours,
+        location: r.location,
+        seq: r.seq,
+        path: r.path,
+        probeCity: res?.probe.city,
+        probeNetwork: res?.probe.network,
+        status: res?.result.statusCode,
+        totalMs: t?.total,
+        dnsMs: t?.dns,
+        tcpMs: t?.tcp,
+        tlsMs: t?.tls,
+        firstByteMs: t?.firstByte,
+        workerColo: header('x-worker-colo'),
+        workerMs: workerMs ? Number(workerMs) : null,
+        d1Region: d1.region,
+        d1Colo: d1.colo,
+        d1Primary: d1.primary,
+        d1RttMs: d1.rtt ? Number(d1.rtt) : null,
+        measurementId: r.m?.id,
+        error: r.error ?? failed,
+    });
 }
 
 /** Nightly dump of the canonical table to R2; the FTS index is derived data and is rebuilt on restore. */
 async function backupDatabase(env: Env): Promise<{ key: string; rows: number }> {
-    const rows: Record<string, unknown>[] = [];
-    let cursor: [string, string] = ['', ''];
+    const { item } = schema;
+    const rows: schema.Item[] = [];
+    let cursor = ['', ''];
     for (;;) {
-        const page = await env.DB.prepare(
-            `SELECT * FROM item WHERE (parent_path, item_name) > (?1, ?2)
-             ORDER BY parent_path, item_name LIMIT 5000`,
-        )
-            .bind(...cursor)
-            .run();
-        rows.push(...page.results);
-        if (page.results.length < 5000) break;
-        const last = page.results.at(-1)!;
-        cursor = [String(last.parent_path), String(last.item_name)];
+        const page = await db(env.DB)
+            .select()
+            .from(item)
+            .where(sql`(${item.parentPath}, ${item.itemName}) > (${cursor[0]}, ${cursor[1]})`)
+            .orderBy(asc(item.parentPath), asc(item.itemName))
+            .limit(5000)
+            .all();
+        rows.push(...page);
+        if (page.length < 5000) break;
+        const last = page.at(-1)!;
+        cursor = [last.parentPath, last.itemName];
     }
     const key = `backups/d1/${new Date().toISOString()}.json`;
     await env.MEDIA.put(key, JSON.stringify({ table: 'item', rows }), {
