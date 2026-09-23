@@ -1,3 +1,4 @@
+import { type ImageRequest, cropText, derivedPrefix, parseImageRequest, sizeText } from 'tacocat-gallery-shared';
 import { json, notFound, pathAfter } from './http';
 import { isVideoName } from './media';
 
@@ -57,9 +58,12 @@ export async function derivedViaCacheApi(request: Request, env: Env, ctx: Execut
  */
 export async function derivedViaCdn(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const { key } = derivedKey(url, '/i2');
+    const wanted = derivedKey(url, '/i2');
+    if (wanted === null) {
+        return badImageUrl();
+    }
     // Only successes are cached: a 404 from before the derivative was generated would otherwise stick for a year.
-    const upstream = await fetch(`${DERIVED_ORIGIN}/${key}`, {
+    const upstream = await fetch(`${DERIVED_ORIGIN}/${wanted.key}`, {
         cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31_536_000, '400-599': -1 } },
     });
     if (upstream.ok) {
@@ -82,7 +86,11 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
  * bucket, served from it afterwards. Mirrors generateDerivedImage's crop-then-cover semantics.
  */
 async function derivedImage(env: Env, url: URL, prefix: string): Promise<Derivative | Response> {
-    const { rest, size, crop, format, key } = derivedKey(url, prefix);
+    const wanted = derivedKey(url, prefix);
+    if (wanted === null) {
+        return badImageUrl();
+    }
+    const { request, format, key } = wanted;
 
     const stored = await env.DERIVED.get(key);
     if (stored) {
@@ -90,23 +98,25 @@ async function derivedImage(env: Env, url: URL, prefix: string): Promise<Derivat
     }
 
     // A video's stills come from the poster the transcoder wrote beside its MP4.
-    const itemName = rest.split('/').at(-2) ?? '';
-    const sourceKey = isVideoName(itemName) ? `derived${rest}/poster.jpg` : `originals${rest}`;
+    const itemName = request.path.slice(request.path.lastIndexOf('/') + 1);
+    const sourceKey = isVideoName(itemName)
+        ? `${derivedPrefix(request.path, request.versionId)}/poster.jpg`
+        : `originals${request.path}/${request.versionId}`;
     const original = await env.MEDIA.get(sourceKey);
     if (!original) {
         return json({ error: 'source not found', key: sourceKey }, 404);
     }
 
-    const [width, height] = size.split('x', 2).map((part) => (part === '' ? undefined : Number(part)));
+    const { width, height } = request.size;
     let transformer = env.IMAGES.input(byteStream(original.body));
-    if (crop !== null) {
-        const [left = 0, top = 0, cropWidth = 0, cropHeight = 0] = crop.split(',', 4).map(Number);
+    if (request.crop !== null) {
+        const { x: left, y: top, width: cropWidth, height: cropHeight } = request.crop;
         transformer = transformer.transform({ trim: { left, top, width: cropWidth, height: cropHeight } });
     }
     transformer = transformer.transform({
-        ...(width !== undefined && { width }),
-        ...(height !== undefined && { height }),
-        fit: width !== undefined && height !== undefined ? 'cover' : 'scale-down',
+        ...(width !== null && { width }),
+        ...(height !== null && { height }),
+        fit: width !== null && height !== null ? 'cover' : 'scale-down',
     });
     const output = await transformer.output({ format, quality: 85 });
     const bytes = await output.response().arrayBuffer();
@@ -114,18 +124,24 @@ async function derivedImage(env: Env, url: URL, prefix: string): Promise<Derivat
     return { body: bytes, format, how: 'generated' };
 }
 
+/** What the URL asks for and the key its derivative is stored under, or null for a URL imageUrl would not write. */
 function derivedKey(
     url: URL,
     prefix: string,
-): { rest: string; size: string; crop: string | null; format: ImageOutputOptions['format']; key: string } {
-    // For example "/2024/06-15/photo.jpg/<versionId>".
-    const rest = url.pathname.slice(prefix.length);
-    const size = url.searchParams.get('size') ?? '1024';
-    const crop = url.searchParams.get('crop');
+): { request: ImageRequest; format: ImageOutputOptions['format']; key: string } | null {
+    const request = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);
+    if (request === null) {
+        return null;
+    }
     const requested = url.searchParams.get('format') ?? 'image/jpeg';
     const format = OUTPUT_FORMATS.find((known) => known === requested) ?? 'image/jpeg';
-    const suffix = `${size}${crop === null ? '' : `-${crop}`}-${format.split('/', 2)[1] ?? ''}`;
-    return { rest, size, crop, format, key: `derived${rest}/${suffix}` };
+    const cropped = request.crop === null ? '' : `-${cropText(request.crop)}`;
+    const suffix = `${sizeText(request.size)}${cropped}-${format.split('/', 2)[1] ?? ''}`;
+    return { request, format, key: `${derivedPrefix(request.path, request.versionId)}/${suffix}` };
+}
+
+function badImageUrl(): Response {
+    return json({ error: 'expected /i/<media path>/<versionId>?size=200x200&crop=x,y,width,height' }, 400);
 }
 
 /** Isolates Images binding failures from how the bytes reach it: R2 stream, buffered stream, and each step. */

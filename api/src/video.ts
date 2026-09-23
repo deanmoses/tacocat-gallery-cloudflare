@@ -1,5 +1,6 @@
 import { Container } from '@cloudflare/containers';
 import * as valibot from 'valibot';
+import { VIDEO_FILE } from 'tacocat-gallery-shared';
 import { notFound, pathAfter } from './http';
 import { presign } from './s3';
 
@@ -46,7 +47,7 @@ export async function transcodeVideo(
 ): Promise<TranscodeOutcome> {
     const body = JSON.stringify({
         src: await presign(env, { method: 'GET', key: sourceKey }),
-        mp4Put: await presign(env, { method: 'PUT', key: `${derivedPrefix}/video.mp4`, contentType: 'video/mp4' }),
+        mp4Put: await presign(env, { method: 'PUT', key: `${derivedPrefix}/${VIDEO_FILE}`, contentType: 'video/mp4' }),
         posterPut: await presign(env, {
             method: 'PUT',
             key: `${derivedPrefix}/poster.jpg`,

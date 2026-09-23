@@ -1,5 +1,5 @@
 import ExifReader from 'exifreader';
-import { albumsEnclosing } from 'tacocat-gallery-shared';
+import { albumsEnclosing, derivedPrefix } from 'tacocat-gallery-shared';
 import { setThumbnail } from './albums';
 import { insertAlbumIfMissing, orm, upsertItem } from './db';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
@@ -85,7 +85,7 @@ export async function processUploadEvent(event: R2EventMessage, env: UploadEnv):
         await store(env, { placement, object, body: bytes, caption: readCaption(bytes, key), video: undefined });
         return;
     }
-    const outcome = await transcodeVideo(env, key, `derived${placement.galleryPath}/${placement.versionId}`);
+    const outcome = await transcodeVideo(env, key, derivedPrefix(placement.galleryPath, placement.versionId));
     if (!outcome.ok) {
         await uploadErrorUpsert(orm(env.DB), placement.galleryPath, outcome.error).run();
         await env.MEDIA.delete(key);

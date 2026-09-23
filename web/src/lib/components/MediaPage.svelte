@@ -1,12 +1,12 @@
 <script lang="ts">
     import type { MediaInAlbum } from '$lib/album';
     import { albumTitle, mediaTitle } from '$lib/album';
-    import { albumHref, detailImageUrl, mediaHref, videoUrl } from '$lib/urls';
+    import { albumHref, detailImageUrl, mediaHref, mediaVideoUrl } from '$lib/urls';
 
     let { album, media, prev, next }: MediaInAlbum = $props();
     const title = $derived(mediaTitle(media));
     const detail = $derived(detailImageUrl(media));
-    const video = $derived(media.itemType === 'video' ? videoUrl(media) : null);
+    const video = $derived(media.itemType === 'video' ? mediaVideoUrl(media) : null);
 </script>
 
 <svelte:head>

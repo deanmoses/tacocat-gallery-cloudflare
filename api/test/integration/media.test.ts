@@ -2,6 +2,7 @@ import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecu
 import { env } from 'cloudflare:workers';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import { and, asc, eq, or } from 'drizzle-orm';
+import { imageUrl } from 'tacocat-gallery-shared';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import worker from '../../src/index';
@@ -288,5 +289,33 @@ describe('serving media', () => {
         expect(first.headers.get('content-type')).toBe('image/jpeg');
         expect(stored).not.toBeNull();
         expect(second.headers.get('x-derived')).toBe('cache-api-hit');
+    });
+
+    it('stores a cropped thumbnail under the size and crop the web app asks for', async () => {
+        await env.MEDIA.put('originals/2024/06-15/d.jpg/v1', jpg);
+        const url = imageUrl({
+            path: '/2024/06-15/d.jpg',
+            versionId: 'v1',
+            size: { width: 20, height: 20 },
+            crop: { x: 1, y: 2, width: 30, height: 30 },
+        });
+        const response = await call(url);
+        const stored = await env.DERIVED.head('derived/2024/06-15/d.jpg/v1/20x20-1,2,30,30-jpeg');
+
+        expect(response.status).toBe(200);
+        expect(stored).not.toBeNull();
+    });
+
+    it.each([
+        { name: 'a size the web app would not write', url: '/i/2024/06-15/d.jpg/v1?size=0200x200' },
+        { name: 'a crop of three numbers', url: '/i/2024/06-15/d.jpg/v1?crop=1,2,3' },
+    ])('refuses $name, and stores nothing', async ({ url }) => {
+        await env.MEDIA.put('originals/2024/06-15/d.jpg/v1', jpg);
+        const response = await call(url);
+        await response.body?.cancel();
+        const stored = await env.DERIVED.list({ prefix: 'derived/' });
+
+        expect(response.status).toBe(400);
+        expect(stored.objects).toStrictEqual([]);
     });
 });
