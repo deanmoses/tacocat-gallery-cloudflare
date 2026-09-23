@@ -1,10 +1,9 @@
 import ExifReader from 'exifreader';
-import { albumsEnclosing, derivedPrefix } from 'tacocat-gallery-shared';
+import { albumsEnclosing, derivedPrefix, isVideoName } from 'tacocat-gallery-shared';
 import { setThumbnail } from './albums';
 import { insertAlbumIfMissing, orm, upsertItem } from './db';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 import { json, pathAfter } from './http';
-import { isVideoName } from './media';
 import { presign } from './s3';
 import { type TranscodeEnv, transcodeVideo } from './video';
 

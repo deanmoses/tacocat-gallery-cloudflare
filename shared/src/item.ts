@@ -1,7 +1,10 @@
 import * as valibot from 'valibot';
 import { rectangleSchema } from './album';
+import { type ItemKey, albumKey, albumPath, isAlbumPath, isVideoName, mediaKey, mediaPath } from './paths';
 
 export const itemTypeSchema = valibot.picklist(['album', 'image', 'video']);
+
+type ItemType = valibot.InferOutput<typeof itemTypeSchema>;
 
 function clearable<T extends valibot.GenericSchema>(
     schema: T,
@@ -13,20 +16,43 @@ function clearable<T extends valibot.GenericSchema>(
  * The body of `PUT /api/item`, which saves every field of the item at that key: a field left out is cleared. Strict,
  * so that a misspelled field is refused rather than clearing the one it meant.
  */
-export const itemWriteSchema = valibot.strictObject({
-    parentPath: valibot.string(),
-    itemName: valibot.string(),
-    itemType: itemTypeSchema,
-    title: clearable(valibot.string()),
-    description: clearable(valibot.string()),
-    tags: clearable(valibot.string()),
-    versionId: clearable(valibot.string()),
-    published: valibot.optional(valibot.boolean()),
-    width: clearable(valibot.pipe(valibot.number(), valibot.integer())),
-    height: clearable(valibot.pipe(valibot.number(), valibot.integer())),
-    durationSeconds: clearable(valibot.number()),
-    thumbnailCrop: clearable(rectangleSchema),
-});
+export const itemWriteSchema = valibot.pipe(
+    valibot.strictObject({
+        parentPath: valibot.string(),
+        itemName: valibot.string(),
+        itemType: itemTypeSchema,
+        title: clearable(valibot.string()),
+        description: clearable(valibot.string()),
+        tags: clearable(valibot.string()),
+        versionId: clearable(valibot.string()),
+        published: valibot.optional(valibot.boolean()),
+        width: clearable(valibot.pipe(valibot.number(), valibot.integer())),
+        height: clearable(valibot.pipe(valibot.number(), valibot.integer())),
+        durationSeconds: clearable(valibot.number()),
+        thumbnailCrop: clearable(rectangleSchema),
+    }),
+    valibot.forward(
+        valibot.partialCheck(
+            [['parentPath'], ['itemName'], ['itemType']],
+            isGalleryKey,
+            'an album is a year in / or a day in a year, and media a file in a day album, a video by its extension',
+        ),
+        ['itemName'],
+    ),
+);
+
+/** Whether an item of `itemType` can live at this key, so the album pages can show it. */
+function isGalleryKey({ parentPath, itemName, itemType }: ItemKey & { itemType: ItemType }): boolean {
+    if (itemType === 'album') {
+        const path = albumPath(parentPath, itemName);
+        const key = albumKey(path);
+        return isAlbumPath(path) && key?.parentPath === parentPath && key.itemName === itemName;
+    }
+    const key = mediaKey(mediaPath(parentPath, itemName));
+    return (
+        key?.parentPath === parentPath && key.itemName === itemName && isVideoName(itemName) === (itemType === 'video')
+    );
+}
 
 export type ItemWrite = valibot.InferOutput<typeof itemWriteSchema>;
 

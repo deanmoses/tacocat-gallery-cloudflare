@@ -88,6 +88,37 @@ describe('saving an item through the API', () => {
         await expect(response.json()).resolves.toStrictEqual({ error: expect.any(String) });
         await expect(storedItem(ITEM.parentPath, ITEM.itemName)).resolves.toBeUndefined();
     });
+
+    it.each([
+        { name: 'an album that is not a year', body: { parentPath: '/', itemName: 'tacos', itemType: 'album' } },
+        { name: 'a day album at the top', body: { parentPath: '/', itemName: '09-01', itemType: 'album' } },
+        { name: 'an album inside a day', body: { parentPath: '/2024/09-01/', itemName: '10-02', itemType: 'album' } },
+        { name: 'the root album', body: { parentPath: '', itemName: '', itemType: 'album' } },
+        { name: 'an album name holding a path', body: { parentPath: '/', itemName: '2024/09-01', itemType: 'album' } },
+        { name: 'media in a year album', body: { parentPath: '/2024/', itemName: 'a.jpg', itemType: 'image' } },
+        {
+            name: 'a parent path with no slash',
+            body: { parentPath: '/2024/09-01', itemName: 'a.jpg', itemType: 'image' },
+        },
+        {
+            name: 'a media name holding a path',
+            body: { parentPath: '/2024/', itemName: '09-01/a.jpg', itemType: 'image' },
+        },
+        {
+            name: 'an image named as a video',
+            body: { parentPath: '/2024/09-01/', itemName: 'a.mov', itemType: 'image' },
+        },
+        {
+            name: 'a video named as an image',
+            body: { parentPath: '/2024/09-01/', itemName: 'a.jpg', itemType: 'video' },
+        },
+    ])('is refused for $name, which no album page could show', async ({ body }) => {
+        const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toStrictEqual({ error: expect.stringContaining('day album') });
+        await expect(storedItem(body.parentPath, body.itemName)).resolves.toBeUndefined();
+    });
 });
 
 /** Searches for `word`, as a guest or as an admin, and names what was found, in name order. */

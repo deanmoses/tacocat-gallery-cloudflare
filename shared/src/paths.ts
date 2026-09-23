@@ -4,6 +4,7 @@
 const YEAR_NAME = /^\d{4}$/v;
 const DAY_NAME = /^\d{2}-\d{2}$/v;
 const MEDIA_NAME = /^[^.\/]+\.[^.\/]+$/v;
+const VIDEO_NAME = /\.(?:avi|m4v|mov|mp4)$/iv;
 
 export function isYearName(name: string): boolean {
     return YEAR_NAME.test(name);
@@ -16,6 +17,11 @@ export function isDayName(name: string): boolean {
 /** A file name with one extension: `felix.jpg`. */
 export function isMediaName(name: string): boolean {
     return MEDIA_NAME.test(name);
+}
+
+/** Videos are told apart by extension; these four are every kind the gallery has ever held. */
+export function isVideoName(name: string): boolean {
+    return VIDEO_NAME.test(name);
 }
 
 /** Whether `path` is the root, a year album or a day album. */

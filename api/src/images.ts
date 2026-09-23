@@ -1,6 +1,12 @@
-import { type ImageRequest, cropText, derivedPrefix, parseImageRequest, sizeText } from 'tacocat-gallery-shared';
+import {
+    type ImageRequest,
+    cropText,
+    derivedPrefix,
+    isVideoName,
+    parseImageRequest,
+    sizeText,
+} from 'tacocat-gallery-shared';
 import { json, notFound, pathAfter } from './http';
-import { isVideoName } from './media';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const DERIVED_ORIGIN = 'https://img.deanmoses.com';
