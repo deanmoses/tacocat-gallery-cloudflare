@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { getTableColumns, sql } from 'drizzle-orm';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
 import * as schema from './schema';
@@ -40,20 +40,19 @@ export function upsertItem(database: Orm, values: schema.NewItem): ItemUpsert {
     return database
         .insert(item)
         .values(values)
-        .onConflictDoUpdate({
-            target: [item.parentPath, item.itemName],
-            set: {
-                title: sql`excluded.title`,
-                description: sql`excluded.description`,
-                tags: sql`excluded.tags`,
-                versionId: sql`excluded.version_id`,
-                published: sql`excluded.published`,
-                width: sql`excluded.width`,
-                height: sql`excluded.height`,
-                durationSeconds: sql`excluded.duration_seconds`,
-                updatedOn: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
-            },
-        });
+        .onConflictDoUpdate({ target: [item.parentPath, item.itemName], set: ITEM_UPSERT_SET });
 }
+
+// Built from the table so a column added to `item` is overwritten by an upsert without anyone remembering to list it.
+// The id and path identify the row, so they stay.
+const KEPT_ON_UPSERT = new Set(['id', 'parentPath', 'itemName', 'updatedOn']);
+const ITEM_UPSERT_SET = {
+    ...Object.fromEntries(
+        Object.entries(getTableColumns(schema.item))
+            .filter(([key]) => !KEPT_ON_UPSERT.has(key))
+            .map(([key, column]) => [key, sql`excluded.${sql.identifier(column.name)}`]),
+    ),
+    updatedOn: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+};
 
 export * as schema from './schema';

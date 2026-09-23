@@ -1,5 +1,7 @@
 import { env } from 'cloudflare:workers';
+import { type Column, and, eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { orm, schema, upsertItem } from '../src/db';
 import { callAsAdmin, callForJson } from './helpers';
 
 interface SearchResponse {
@@ -38,6 +40,51 @@ describe('albums', () => {
         const { summary } = await callForJson<{ summary: string }>('/api/ryw');
 
         expect(summary).toMatch(/own true/v);
+    });
+});
+
+describe('saving an item', () => {
+    const { item } = schema;
+    const UNCOMPARED = new Set(['id', 'parentPath', 'updatedOn']);
+    const STALE_BY_TYPE = new Map<Column['dataType'], unknown>([
+        ['string', 'stale'],
+        ['number', 7],
+        ['boolean', true],
+        ['json', ['stale']],
+    ]);
+
+    // Every column is filled, including ones added after this test, so a column the upsert fails to overwrite shows up.
+    function stale(column: Column): unknown {
+        if (column.enumValues) return column.enumValues.at(-1);
+        if (!STALE_BY_TYPE.has(column.dataType)) {
+            throw new Error(`No test value for ${column.name}, a ${column.dataType} column`);
+        }
+        return STALE_BY_TYPE.get(column.dataType);
+    }
+
+    async function read(parentPath: string, itemName: string): Promise<Record<string, unknown>> {
+        const row = await orm(env.DB)
+            .select()
+            .from(item)
+            .where(and(eq(item.parentPath, parentPath), eq(item.itemName, itemName)))
+            .get();
+        return Object.fromEntries(Object.entries(row ?? {}).filter(([key]) => !UNCOMPARED.has(key)));
+    }
+
+    it('leaves an item as a fresh insert of the same values would, clearing every field left out', async () => {
+        const database = orm(env.DB);
+        const saved = { itemName: 'upsert.jpg', itemType: 'album' } as const;
+        const everyField = Object.fromEntries(
+            Object.entries(getTableColumns(item))
+                .filter(([key]) => key !== 'id' && key !== 'updatedOn')
+                .map(([key, column]) => [key, stale(column)]),
+        );
+        await upsertItem(database, { ...everyField, ...saved, parentPath: '/upsert/' }).run();
+        await upsertItem(database, { ...saved, parentPath: '/upsert/' }).run();
+        await upsertItem(database, { ...saved, parentPath: '/fresh/' }).run();
+        const fresh = await read('/fresh/', saved.itemName);
+
+        await expect(read('/upsert/', saved.itemName)).resolves.toStrictEqual(fresh);
     });
 });
 

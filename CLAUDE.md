@@ -22,6 +22,7 @@ An FTS trigger that scanned the whole index on every write once read 37.7M D1 ro
 
 - Originals are never overwritten. Each upload gets a new time-sortable `versionId` in its R2 key, and the database says which one is current.
 - The FTS5 table and its triggers are raw SQL in `api/migrations/`; Drizzle cannot see them. Every other table change starts in `api/src/db/schema.ts`, then `npm run db:generate --workspace api`.
+- Start a raw SQL migration with `npm run db:generate --workspace api -- --custom --name <what_it_does>` and fill in the empty file it creates. That keeps it in drizzle-kit's journal, in order with the generated ones. Never hand-create a migration file or edit a generated one or its snapshot; lint fails when the migrations and `schema.ts` disagree.
 - After editing `api/wrangler.jsonc`, run `npm run types --workspace api`.
 
 ## Rules

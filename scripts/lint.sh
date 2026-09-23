@@ -169,6 +169,26 @@ else
     report 1 "${removals}Split the removal into a later release, or add a \`-- non-additive: <reason>\` line."
 fi
 
+# The migrations are what a database gets and schema.ts is what the code's types promise, so a schema change without
+# `npm run db:generate` compiles and passes tests against a database that lacks it. Generating into a copy of the
+# migrations shows whether anything is missing without writing to the working tree. drizzle-kit exits 0 even when it
+# fails, so only its all-clear messages count as a pass. Whole schema either way, like the migrations it is diffed with.
+echo -n "Migrations: match api/src/db/schema.ts (drizzle-kit)... "
+scratch=$(mktemp -d)
+cp -R api/migrations "$scratch/migrations"
+drift=$(
+    cd "$scratch" &&
+        drizzle-kit check --dialect sqlite --out migrations 2>&1 &&
+        drizzle-kit generate --dialect sqlite --schema "$DIR/api/src/db/schema.ts" --out migrations </dev/null 2>&1
+)
+rm -rf "$scratch"
+if grep -q "Everything's fine" <<<"$drift" && grep -q 'nothing to migrate' <<<"$drift"; then
+    report 0
+else
+    report 1 "$drift
+Run \`npm run db:generate --workspace api\` after changing the schema, and never edit a generated migration or snapshot."
+fi
+
 # Whole file either way, since a hand edit to a generated file has to be caught whatever else is staged.
 echo -n "Docs: CLAUDE.md and AGENTS.md match docs/AGENTS.src.md... "
 check node scripts/build-agent-instructions.ts --check
