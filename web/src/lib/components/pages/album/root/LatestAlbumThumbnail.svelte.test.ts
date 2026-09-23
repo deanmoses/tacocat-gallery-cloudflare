@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
+import { render } from '$lib/test-support/render.svelte';
 import LatestAlbumThumbnail from './LatestAlbumThumbnail.svelte';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord } from '$lib/test-support/records';
@@ -38,25 +39,25 @@ describe(LatestAlbumThumbnail, () => {
     it('shows the newest published album of the current year', async () => {
         seedLoadedAlbum(year(false));
 
-        const screen = await render(LatestAlbumThumbnail);
+        render(LatestAlbumThumbnail, {});
 
         await expect
-            .element(screen.getByRole('link', { name: title(older) }))
+            .element(page.getByRole('link', { name: title(older) }))
             .toHaveAttribute('href', older.slice(0, -1));
     });
 
     it('shows nothing until the year arrives, then follows it as it changes', async () => {
-        const screen = await render(LatestAlbumThumbnail);
+        render(LatestAlbumThumbnail, {});
 
-        await expect.element(screen.getByRole('heading', { name: 'Latest Album' })).not.toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: 'Latest Album' })).not.toBeInTheDocument();
 
         seedLoadedAlbum(year(false));
 
-        await expect.element(screen.getByRole('link', { name: title(older) })).toBeVisible();
+        await expect.element(page.getByRole('link', { name: title(older) })).toBeVisible();
 
         seedLoadedAlbum(year(true));
 
-        await expect.element(screen.getByRole('link', { name: title(newer) })).toBeVisible();
-        await expect.element(screen.getByRole('link', { name: title(older) })).not.toBeInTheDocument();
+        await expect.element(page.getByRole('link', { name: title(newer) })).toBeVisible();
+        await expect.element(page.getByRole('link', { name: title(older) })).not.toBeInTheDocument();
     });
 });

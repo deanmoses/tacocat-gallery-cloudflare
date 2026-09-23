@@ -169,6 +169,55 @@ function raise(entry: Linter.RuleEntry | undefined): Linter.RuleEntry | undefine
     return ['error', ...options];
 }
 
+/** A group of imports a layer of the web app may not make, for `no-restricted-imports`. */
+interface Forbidden {
+    group: string[];
+    message: string;
+}
+
+const WORKER_CODE: Forbidden[] = [
+    {
+        group: ['tacocat-gallery-api', 'tacocat-gallery-api/*', '**/api/src', '**/api/src/**'],
+        message: 'Put the shape in shared/ and have the Worker map to it.',
+    },
+    {
+        group: ['drizzle-orm', 'drizzle-orm/*'],
+        message: 'Database types stay in the Worker; put the response shape in shared/.',
+    },
+];
+const STORES: Forbidden = {
+    group: ['$lib/stores', '$lib/stores/*', '**/stores/*'],
+    message: 'Read state in a page or an admin component and pass it down as props.',
+};
+const COMPONENTS: Forbidden = {
+    group: ['$lib/components/*', '**/components/*'],
+    message: 'Components are composed by pages; nothing beneath them imports one.',
+};
+const SVELTEKIT_RUNTIME: Forbidden = {
+    group: ['$app/*'],
+    message: 'Models are plain data, usable outside the app.',
+};
+const TEST_SUPPORT: Forbidden = {
+    group: ['$lib/test-support/*', '**/test-support/*'],
+    message: 'Test support is for tests.',
+};
+
+const WEB_TESTS = ['web/src/**/*.test.ts', 'web/src/lib/test-support/**'];
+
+/**
+ * The imports `files` may not make: the Worker's code, which no part of the app sees, test support, and what the
+ * layer forbids. Tests are exempt from the layers and get a block of their own. ESLint takes the last block that
+ * matches a file for a rule's whole setting, so each file has to land in exactly one of these.
+ */
+function webLayer(name: string, files: string[], forbidden: Forbidden[], ignores: string[] = []): Linter.Config {
+    return {
+        name,
+        files,
+        ignores: [...WEB_TESTS, ...ignores],
+        rules: { 'no-restricted-imports': ['error', { patterns: [...WORKER_CODE, TEST_SUPPORT, ...forbidden] }] },
+    };
+}
+
 export default defineConfig(
     includeIgnoreFile(path.resolve(import.meta.dirname, '.gitignore')),
     // Generated: Wrangler's types and drizzle-kit's migration snapshots.
@@ -253,28 +302,25 @@ export default defineConfig(
         files: ['web/src/**/*'],
         languageOptions: { globals: globals.browser },
     },
+    // The web app sees the Worker only through its HTTP responses, whose shapes live in shared/. A table's row type
+    // reaching it would tie the pages to column names the Worker is free to change.
+    webLayer('web imports no worker code', ['web/src/**/*'], []),
+    // The app's layers, which its docs describe and this holds to. Models are data with no fetching or persistence;
+    // components under site/ are composed by pages and know nothing of state, apart from the admin ones; utils sit
+    // under everything; and stores know nothing of components.
+    webLayer('web models are pure data', ['web/src/lib/models/**/*'], [STORES, COMPONENTS, SVELTEKIT_RUNTIME]),
+    webLayer(
+        'web site components are data-agnostic',
+        ['web/src/lib/components/site/**/*'],
+        [STORES],
+        ['web/src/lib/components/site/admin/**'],
+    ),
+    webLayer('web utils sit under the rest', ['web/src/lib/utils/**/*'], [STORES, COMPONENTS]),
+    webLayer('web stores know no components', ['web/src/lib/stores/**/*'], [COMPONENTS]),
     {
-        // The web app sees the Worker only through its HTTP responses, whose shapes live in shared/. A table's row type
-        // reaching it would tie the pages to column names the Worker is free to change.
-        name: 'web imports no worker code',
-        files: ['web/src/**/*'],
-        rules: {
-            'no-restricted-imports': [
-                'error',
-                {
-                    patterns: [
-                        {
-                            group: ['tacocat-gallery-api', 'tacocat-gallery-api/*', '**/api/src', '**/api/src/**'],
-                            message: 'Put the shape in shared/ and have the Worker map to it.',
-                        },
-                        {
-                            group: ['drizzle-orm', 'drizzle-orm/*'],
-                            message: 'Database types stay in the Worker; put the response shape in shared/.',
-                        },
-                    ],
-                },
-            ],
-        },
+        name: 'web tests import what they test',
+        files: WEB_TESTS,
+        rules: { 'no-restricted-imports': ['error', { patterns: WORKER_CODE }] },
     },
     {
         name: 'worker imports no web code',

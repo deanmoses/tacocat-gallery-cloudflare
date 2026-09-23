@@ -1,140 +1,97 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { playwright } from '@vitest/browser-playwright';
-import type { ProxyOptions } from 'vite';
+import type { Plugin, ProxyOptions } from 'vite';
 import { defaultExclude, defineConfig } from 'vitest/config';
-import { emulateProdOnLocalhost } from './src/lib/utils/settings.js';
 
-// Shared proxy config for both dev server and preview server
-const apiProxy: Record<string, ProxyOptions> = {
-    '/api': {
-        target: emulateProdOnLocalhost ? 'https://api.pix.tacocat.com/' : 'https://api.staging-pix.tacocat.com/',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-        configure: (proxy, _options) => {
-            proxy.on('error', (err, _req, _res) => {
-                console.log('proxy error', err);
-            });
-            proxy.on('proxyRes', (proxyRes, req, _res) => {
-                if (200 !== proxyRes.statusCode) {
-                    console.log(
-                        'Response from AWS:',
-                        proxyRes.statusCode,
-                        req.url,
-                        JSON.stringify(proxyRes.headers, null, 2),
-                    );
-                }
-            });
+// The Worker, which `npm run dev --workspace api` serves with the app's build. `vite dev` serves the app itself, with
+// hot reloading, and passes the Worker's own routes through to it.
+const WORKER = 'http://localhost:8787';
+const workerProxy: Record<string, ProxyOptions> = Object.fromEntries(
+    ['/api', '/i', '/v', '/raw', '/login', '/invite'].map((path) => [path, { target: WORKER }]),
+);
+
+/**
+ * The media URLs a rendered <img> or <video> asks for are the Worker's, so nothing serves them under test. SvelteKit's
+ * dev fallback would render them on the server instead, loading its SSR runtime as Vitest shuts down and printing
+ * "transport was disconnected". Listed before sveltekit() so this runs ahead of that fallback.
+ */
+function notFoundUnderTest(): Plugin {
+    return {
+        name: 'not-found-under-test',
+        apply: (_config, { mode }) => mode === 'test',
+        configureServer(server) {
+            return () => {
+                server.middlewares.use((_request, response) => {
+                    response.statusCode = 404;
+                    response.end();
+                });
+            };
         },
-    },
-};
+    };
+}
 
 export default defineConfig({
-    plugins: [sveltekit()],
+    plugins: [notFoundUnderTest(), sveltekit()],
     test: {
-        // Undo spies and stubbed globals between tests, so a test that mocks
-        // a browser API the runtime does not provide cannot change what a
-        // later one sees. Configured here rather than as an afterEach in each
-        // spec, so a new spec inherits the cleanup instead of remembering it.
+        // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
         restoreMocks: true,
+        // Undoes vi.stubGlobal() after each test in the same way.
         unstubGlobals: true,
-
-        // Run files and tests in a random order. The suite drives module
-        // singletons and stubs globals, so an order dependency is possible to
-        // write without noticing; shuffling makes one show up as a failure
-        // instead of waiting for an unrelated change to reorder the run.
+        // Files and the tests in them run in a random order, so a test that passes only because of what ran before it
+        // fails. Each run prints its seed; rerun a failure in the same order with --sequence.seed=<seed>.
         sequence: { shuffle: true },
-
-        expect: {
-            // Fail a test that asserts nothing. eslint's expect-expect cannot
-            // see through a helper holding the assertions, and with vitest's
-            // typecheck setting on it accepts expectTypeOf as an assertion even
-            // though it is a runtime no-op here.
-            requireAssertions: true,
-        },
-
-        // Which runtime a spec gets is decided by its name: `.svelte.spec.ts`
-        // compiles runes in the spec itself and needs the client build, where
-        // $effect actually runs. Everything else stays in node, which is three
-        // orders of magnitude cheaper to start.
+        // A test that asserts nothing fails.
+        expect: { requireAssertions: true },
+        // Which runtime a test gets is decided by its name: `.svelte.test.ts` compiles runes in the test itself and
+        // needs the client build, where $effect runs. Everything else stays in Node, which starts far faster.
         projects: [
             {
                 extends: true,
                 test: {
                     name: 'node',
-                    // scripts/ and production_logs/ hold developer tooling rather than shipped code,
-                    // so they stay out of src/ and out of coverage; their pure logic is still worth
-                    // covering, since a wrong number there is invisible in a way a wrong page is not.
-                    include: ['src/**/*.spec.ts', 'scripts/**/*.spec.ts', 'production_logs/**/*.spec.ts'],
-                    // Setting exclude replaces vitest's default rather than adding
-                    // to it, so the default has to be carried along
-                    exclude: [...defaultExclude, 'src/**/*.svelte.spec.ts'],
-                    // An IndexedDB implementation, which node has none of.
-                    // Standing one up rather than stubbing idb-keyval means the
-                    // library itself runs, so a spec covers the code a version
-                    // bump would change -- and the structured-clone rules that
-                    // decide what the cache can hold in the first place.
-                    setupFiles: ['fake-indexeddb/auto'],
+                    include: ['src/**/*.test.ts'],
+                    // Setting exclude replaces Vitest's default rather than adding to it.
+                    exclude: [...defaultExclude, 'src/**/*.svelte.test.ts'],
+                    // An IndexedDB, which Node has none of, so idb-keyval itself runs and a test covers what a version
+                    // bump would change, and the structured-clone rules that decide what the cache can hold.
+                    setupFiles: ['fake-indexeddb/auto', 'src/lib/test-support/setup.ts'],
                 },
             },
             {
                 extends: true,
                 test: {
                     name: 'browser',
-                    include: ['src/**/*.svelte.spec.ts'],
-                    // The site's stylesheet, so toBeVisible() means what it says
-                    setupFiles: ['./src/lib/test-support/globalStyles.ts'],
-                    // expect.element and locator actions retry until the test's
-                    // own deadline rather than a poll timeout of their own, and
-                    // the browser default deadline is 15s: a wrong assertion sits
-                    // for 15s before it reports. Nothing here loads slower than a
-                    // data URI, so 3s is room for a slow runner, not a real wait.
+                    include: ['src/**/*.svelte.test.ts'],
+                    // The site's stylesheet, so toBeVisible() means what it says.
+                    setupFiles: ['src/lib/test-support/globalStyles.ts', 'src/lib/test-support/setup.ts'],
+                    // expect.element retries until the test's own deadline, which in browser mode defaults to 15s, so
+                    // a wrong assertion would sit for 15s before failing. Nothing here loads from anywhere slower
+                    // than memory.
                     testTimeout: 3000,
                     browser: {
                         enabled: true,
                         headless: true,
                         provider: playwright(),
                         instances: [{ browser: 'chromium' }],
-                        // The default is a phone width, at which the site hides
-                        // headers and navigation. A spec about what a phone
-                        // reader gets sets its own viewport and says so.
+                        // The default is a phone's width, at which the site hides headers and navigation. A test
+                        // about what a phone shows sets its own viewport and says so.
                         viewport: { width: 1280, height: 800 },
                     },
                 },
             },
         ],
-
-        // A gap-finder, not a gate: no thresholds.
+        // For finding what no test reaches, not a gate, so no thresholds. Istanbul rather than V8 to match api/, whose
+        // tests run in workerd, where V8 coverage is not supported.
         coverage: {
-            // Globbed from the source tree, so a module with no spec at all
-            // shows up at 0% rather than not showing up
-            include: ['src/**/*.ts'],
-            exclude: [
-                'src/**/*.spec.ts',
-                'src/**/*.e2e.ts', // Playwright specs, which vitest never runs
-                'src/lib/test-support/**',
-                'src/**/*.d.ts',
-                'src/**/$types.ts', // generated by `svelte-kit sync`
-            ],
-
-            // .svelte files are out even though the browser project can now test
-            // them: 123 of them at 0% would bury the modules that could be
-            // covered today. Worth revisiting once components are tested in bulk.
-
-            // Options are explicit because vitest rewrites them when it detects
-            // an AI agent is running it, giving an agent and a human different
-            // tables. skipFull makes the table read as the work list; maxCols
-            // stops nine `*Machine.svelte.ts` all eliding to `...ine.svelte.ts`.
-            reporter: [
-                ['text', { maxCols: 140, skipFull: true }],
-                ['text-summary', {}],
-                ['html', {}],
-            ],
+            provider: 'istanbul',
+            // Globbed from the source tree, so a file no test imports shows at 0% instead of not at all.
+            include: ['src/**/*.{ts,svelte}'],
+            exclude: ['src/**/*.test.ts', 'src/lib/test-support/**', 'src/**/*.d.ts'],
+            // Set explicitly because Vitest changes its defaults when it detects an AI agent running it. skipFull lists
+            // only the files with something uncovered.
+            reporter: [['text', { skipFull: true }], 'text-summary', 'html'],
         },
     },
-    server: {
-        proxy: apiProxy,
-    },
-    preview: {
-        proxy: apiProxy,
-    },
+    server: { proxy: workerProxy },
+    preview: { proxy: workerProxy },
 });

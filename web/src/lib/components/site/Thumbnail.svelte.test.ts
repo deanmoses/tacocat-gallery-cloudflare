@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
+import { render } from '$lib/test-support/render.svelte';
 import type { Locator } from 'vitest/browser';
 import Thumbnail from './Thumbnail.svelte';
 
@@ -20,17 +21,17 @@ async function settles(image: Locator): Promise<void> {
 
 describe(Thumbnail, () => {
     it('shows a play overlay once a video thumbnail has loaded', async () => {
-        const screen = await render(Thumbnail, { src: LOADABLE_IMAGE, isVideo: true });
+        render(Thumbnail, { src: LOADABLE_IMAGE, isVideo: true });
 
-        await expect.element(screen.getByTestId('play-overlay')).toBeVisible();
+        await expect.element(page.getByTestId('play-overlay')).toBeVisible();
     });
 
     it('leaves the play overlay off a video whose thumbnail fails to load', async () => {
-        const screen = await render(Thumbnail, { src: BROKEN_IMAGE, isVideo: true });
+        render(Thumbnail, { src: BROKEN_IMAGE, isVideo: true });
 
-        await settles(screen.getByTestId('thumbnail-image'));
+        await settles(page.getByTestId('thumbnail-image'));
 
-        await expect.element(screen.getByTestId('play-overlay')).not.toBeInTheDocument();
+        await expect.element(page.getByTestId('play-overlay')).not.toBeInTheDocument();
     });
 
     /**
@@ -41,13 +42,13 @@ describe(Thumbnail, () => {
      * prove nothing.
      */
     it('takes the play overlay down when the thumbnail stops being a video', async () => {
-        const screen = await render(Thumbnail, { src: LOADABLE_IMAGE, isVideo: true });
+        const screen = render(Thumbnail, { src: LOADABLE_IMAGE, isVideo: true });
 
-        await expect.element(screen.getByTestId('play-overlay')).toBeVisible();
+        await expect.element(page.getByTestId('play-overlay')).toBeVisible();
 
         await screen.rerender({ src: LOADABLE_IMAGE, isVideo: false });
 
-        await expect.element(screen.getByTestId('play-overlay')).not.toBeInTheDocument();
+        await expect.element(page.getByTestId('play-overlay')).not.toBeInTheDocument();
     });
 
     /**
@@ -57,12 +58,12 @@ describe(Thumbnail, () => {
      * only thing that can take the overlay down is the reset.
      */
     it('takes the play overlay back down when the thumbnail is replaced', async () => {
-        const screen = await render(Thumbnail, { src: LOADABLE_IMAGE, isVideo: true });
+        const screen = render(Thumbnail, { src: LOADABLE_IMAGE, isVideo: true });
 
-        await expect.element(screen.getByTestId('play-overlay')).toBeVisible();
+        await expect.element(page.getByTestId('play-overlay')).toBeVisible();
 
         await screen.rerender({ src: BROKEN_IMAGE, isVideo: true });
 
-        await expect.element(screen.getByTestId('play-overlay')).not.toBeInTheDocument();
+        await expect.element(page.getByTestId('play-overlay')).not.toBeInTheDocument();
     });
 });

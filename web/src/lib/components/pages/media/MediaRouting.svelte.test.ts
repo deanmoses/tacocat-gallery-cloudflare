@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
+import { render } from '$lib/test-support/render.svelte';
 import { createRawSnippet } from 'svelte';
 import MediaRouting from './MediaRouting.svelte';
 import { albumState } from '$lib/stores/AlbumState.svelte';
@@ -120,56 +121,56 @@ describe(MediaRouting, () => {
      * any layout and so offers no title and no way back.
      */
     it('waits on an album absent from memory', async () => {
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe(NO_TITLE);
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
     });
 
     it.each(WORDLESS)('an album $state shows $title', async ({ seed, title }) => {
         seed(THIS);
 
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe(title);
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
     });
 
     it.each(PROCESSING)('an album $state shows $title', async ({ seed, title }) => {
         seed(THIS);
 
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe(title);
-        await expect.element(screen.getByRole('heading', { name: title })).toBeVisible();
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: title })).toBeVisible();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
     });
 
     it.each(WITH_MESSAGE)('an album $state shows $message', async ({ seed, title, message }) => {
         seed(THIS);
 
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe(title);
-        await expect.element(screen.getByText(message)).toBeVisible();
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByText(message)).toBeVisible();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
     });
 
     // The icon carries the link's only word: unlabelled, it reads "Go back ?"
     it('an album ERROR_LOADING offers a labelled way home', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.ERROR_LOADING });
 
-        const screen = await show();
+        await show();
 
-        await expect.element(screen.getByRole('link', { name: 'Go back Home?' })).toBeVisible();
+        await expect.element(page.getByRole('link', { name: 'Go back Home?' })).toBeVisible();
     });
 
     it('shows the media once the album is loaded', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-        const screen = await show();
+        await show();
 
-        await expect.element(screen.getByText(MEDIA_CONTENT)).toBeVisible();
+        await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
     });
 
     /**
@@ -180,13 +181,13 @@ describe(MediaRouting, () => {
      */
     it('follows the album from loading to loaded under the page', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADING });
-        const screen = await show();
+        await show();
 
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
 
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-        await expect.element(screen.getByText(MEDIA_CONTENT)).toBeVisible();
+        await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
     });
 
     /**
@@ -196,14 +197,14 @@ describe(MediaRouting, () => {
      */
     it.each(PROCESSING)('an album $state after the media is on screen shows $title', async ({ seed, title }) => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
-        const screen = await show();
+        await show();
 
-        await expect.element(screen.getByText(MEDIA_CONTENT)).toBeVisible();
+        await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
 
         seed(THIS);
 
-        await expect.element(screen.getByRole('heading', { name: title })).toBeVisible();
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: title })).toBeVisible();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
     });
 
     // The neighbour goes into the store first, so a lookup that lands on the
@@ -214,9 +215,9 @@ describe(MediaRouting, () => {
             seed(OTHER);
             albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-            const screen = await show();
+            await show();
 
-            await expect.element(screen.getByText(MEDIA_CONTENT)).toBeVisible();
+            await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
         },
     );
 
@@ -238,10 +239,10 @@ describe(MediaRouting, () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
         albumState.mediaDeletes.set(MEDIA_PATH, { status: DeleteStatus.IN_PROGRESS });
 
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe('Delete In Progress');
-        await expect.element(screen.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
+        await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
     });
 
     /**
@@ -255,18 +256,18 @@ describe(MediaRouting, () => {
     it('an unrecognized status shows the status on a titled page', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: 'WAT' as AlbumLoadStatus });
 
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe('Error');
-        await expect.element(screen.getByText('Unknown status: [WAT]')).toBeVisible();
+        await expect.element(page.getByText('Unknown status: [WAT]')).toBeVisible();
     });
 
     it('an unrecognized upload status shows the status on a titled page', async () => {
         albumState.uploads.push(uploadEntry({ mediaPath: MEDIA_PATH, status: 'WAT' as UploadState }));
 
-        const screen = await show();
+        await show();
 
         expect(document.title).toBe('Error');
-        await expect.element(screen.getByText('Unknown upload status: [WAT]')).toBeVisible();
+        await expect.element(page.getByText('Unknown upload status: [WAT]')).toBeVisible();
     });
 });

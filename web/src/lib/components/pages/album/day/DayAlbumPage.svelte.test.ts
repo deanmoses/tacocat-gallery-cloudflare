@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
+import { render } from '$lib/test-support/render.svelte';
 import DayAlbumPage from './DayAlbumPage.svelte';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, dayAlbum } from '$lib/test-support/records';
@@ -27,27 +28,27 @@ describe(DayAlbumPage, () => {
     it('links next to the older sibling, and has nothing newer to link prev to', async () => {
         seedLoadedAlbum(PARENT);
 
-        const screen = await render(DayAlbumPage, { album: ALBUM });
+        render(DayAlbumPage, { album: ALBUM });
 
         await expect
-            .element(screen.getByRole('link', { name: OLDER, exact: true }))
+            .element(page.getByRole('link', { name: OLDER, exact: true }))
             .toHaveAttribute('href', '/2001/12-30');
         await expect
-            .element(screen.getByRole('link', { name: 'Previous', exact: true }))
+            .element(page.getByRole('link', { name: 'Previous', exact: true }))
             .toHaveAttribute('aria-disabled', 'true');
     });
 
     it('disables the buttons until the parent arrives, then links them', async () => {
-        const screen = await render(DayAlbumPage, { album: ALBUM });
+        render(DayAlbumPage, { album: ALBUM });
 
         await expect
-            .element(screen.getByRole('link', { name: 'Next', exact: true }))
+            .element(page.getByRole('link', { name: 'Next', exact: true }))
             .toHaveAttribute('aria-disabled', 'true');
 
         seedLoadedAlbum(PARENT);
 
         await expect
-            .element(screen.getByRole('link', { name: OLDER, exact: true }))
+            .element(page.getByRole('link', { name: OLDER, exact: true }))
             .toHaveAttribute('href', '/2001/12-30');
     });
 });

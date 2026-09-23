@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
+import { render } from '$lib/test-support/render.svelte';
 import YearAlbumPage from './YearAlbumPage.svelte';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
@@ -26,21 +27,21 @@ describe(YearAlbumPage, () => {
     it('links prev to the later year and next to the earlier one', async () => {
         seedLoadedAlbum(ROOT);
 
-        const screen = await render(YearAlbumPage, { album: ALBUM });
+        render(YearAlbumPage, { album: ALBUM });
 
-        await expect.element(screen.getByRole('link', { name: '2002', exact: true })).toHaveAttribute('href', '/2002');
-        await expect.element(screen.getByRole('link', { name: '2000', exact: true })).toHaveAttribute('href', '/2000');
+        await expect.element(page.getByRole('link', { name: '2002', exact: true })).toHaveAttribute('href', '/2002');
+        await expect.element(page.getByRole('link', { name: '2000', exact: true })).toHaveAttribute('href', '/2000');
     });
 
     it('disables the buttons until the root arrives, then links them', async () => {
-        const screen = await render(YearAlbumPage, { album: ALBUM });
+        render(YearAlbumPage, { album: ALBUM });
 
         await expect
-            .element(screen.getByRole('link', { name: 'Next', exact: true }))
+            .element(page.getByRole('link', { name: 'Next', exact: true }))
             .toHaveAttribute('aria-disabled', 'true');
 
         seedLoadedAlbum(ROOT);
 
-        await expect.element(screen.getByRole('link', { name: '2000', exact: true })).toHaveAttribute('href', '/2000');
+        await expect.element(page.getByRole('link', { name: '2000', exact: true })).toHaveAttribute('href', '/2000');
     });
 });
