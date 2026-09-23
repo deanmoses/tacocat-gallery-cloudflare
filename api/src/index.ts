@@ -4,8 +4,7 @@ import { orm } from './db';
 import { purgeUploadErrors, uploadErrors } from './errors';
 import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { backupDatabase, putItem, readYourWrites, search, seed } from './items';
-import { html, json, notFound } from './http';
-import { UPLOAD_TEST_PAGE } from './pages/upload-test';
+import { json, notFound } from './http';
 import { probeIdleLatency } from './probes';
 import { inSequence } from './sequence';
 import { type R2EventMessage, processUploadEvent, upload, uploadUrl } from './upload';
@@ -104,9 +103,6 @@ async function routeRead(request: Request, env: Env, ctx: ExecutionContext): Pro
     }
     if (pathname === '/api/search') {
         return search(request, env);
-    }
-    if (pathname === '/upload-test') {
-        return html(UPLOAD_TEST_PAGE);
     }
     if (pathname.startsWith('/raw/')) {
         return raw(request, env);

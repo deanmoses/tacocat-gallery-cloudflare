@@ -22,7 +22,6 @@
             "/api/*",
             "/login",
             "/invite/*",
-            "/upload-test",
             "/upload/*",
             "/raw/*",
             "/v/*",

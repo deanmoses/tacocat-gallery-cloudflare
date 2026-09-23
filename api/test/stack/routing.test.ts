@@ -14,7 +14,6 @@ describe('the asset router', () => {
         ['GET', '/api/auth/status'],
         ['GET', '/login'],
         ['GET', '/invite/abc'],
-        ['GET', '/upload-test'],
         ['PUT', '/upload/2001/01-01/a.jpg'],
         ['GET', '/raw/2001/01-01/a.jpg'],
         ['GET', '/v/2001/01-01/a.mp4'],
@@ -28,7 +27,7 @@ describe('the asset router', () => {
         expect(response.headers.has('x-worker-colo')).toBe(true);
     });
 
-    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix.jpg', '/search/tacos'])(
+    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix.jpg', '/search/tacos', '/upload-test'])(
         'serves the web app for %s',
         async (path) => {
             const response = await navigate(path);
