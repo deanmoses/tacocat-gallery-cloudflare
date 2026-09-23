@@ -1,6 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
+import type { ItemWrite } from 'tacocat-gallery-shared';
 import { expect } from 'vitest';
 import { orm, schema } from '../src/db';
 import worker from '../src/index';
@@ -52,7 +53,7 @@ export async function callAsAdmin(path: string, init: Init = {}): Promise<Respon
 }
 
 /** Saves an item as an admin through the write API. */
-export async function putItem(item: schema.NewItem): Promise<Response> {
+export async function putItem(item: ItemWrite): Promise<Response> {
     return callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(item) });
 }
 

@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { type Column, getTableColumns, like } from 'drizzle-orm';
+import { type ItemWrite, type SearchResponse, parseSearch } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { call, callAsAdmin, callForJson, putItem, storedItem } from '../helpers';
+import { call, callAsAdmin, callForJson, parseExactly, putItem, storedItem } from '../helpers';
 
-interface SearchResponse {
-    count: number;
-    results: Record<string, unknown>[];
+async function search(query: string, asAdmin = false): Promise<SearchResponse> {
+    return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/search?q=${query}`), parseSearch);
 }
 
 describe('read-your-writes', () => {
@@ -58,11 +58,42 @@ describe('saving an item', () => {
     });
 });
 
+describe('saving an item through the API', () => {
+    const ITEM = { parentPath: '/2024/09-01/', itemName: 'a.jpg', itemType: 'image' } as const;
+
+    it('answers with a bookmark to read the write back with, and no body', async () => {
+        const response = await putItem({ ...ITEM, title: 'Saved', thumbnailCrop: { x: 1, y: 2, width: 3, height: 4 } });
+
+        expect(response.status).toBe(204);
+        await expect(response.text()).resolves.toBe('');
+        expect(response.headers.get('set-cookie')).toMatch(/^d1_bookmark=\S+;/v);
+        await expect(storedItem(ITEM.parentPath, ITEM.itemName)).resolves.toMatchObject({
+            title: 'Saved',
+            thumbnailCrop: { x: 1, y: 2, width: 3, height: 4 },
+        });
+    });
+
+    // A field left out is cleared, so a misspelled one would silently wipe the field it meant.
+    it.each([
+        { name: 'a misspelled field', body: { ...ITEM, desription: 'Beach' } },
+        { name: 'the row id', body: { ...ITEM, id: 99 } },
+        { name: 'the thumbnail row id', body: { ...ITEM, thumbnailId: 1 } },
+        { name: 'a field of the wrong type', body: { ...ITEM, title: 5 } },
+        { name: 'an unknown item type', body: { ...ITEM, itemType: 'gif' } },
+        { name: 'no item type', body: { parentPath: ITEM.parentPath, itemName: ITEM.itemName } },
+    ])('is refused with $name, and writes nothing', async ({ body }) => {
+        const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toStrictEqual({ error: expect.any(String) });
+        await expect(storedItem(ITEM.parentPath, ITEM.itemName)).resolves.toBeUndefined();
+    });
+});
+
 /** Searches for `word`, as a guest or as an admin, and names what was found, in name order. */
 async function searchNames(word: string, asAdmin = false): Promise<string[]> {
-    const response = await (asAdmin ? callAsAdmin : call)(`/api/search?q=${word}`);
-    const { results } = await response.json<SearchResponse>();
-    return results.map((result) => String(result['item_name'])).toSorted();
+    const { results } = await search(word, asAdmin);
+    return results.map((result) => result.itemName).toSorted();
 }
 
 describe('search', () => {
@@ -75,23 +106,44 @@ describe('search', () => {
             title: 'Quesadilla night',
             description: 'Quesadillas at home',
         });
-        const found = await callForJson<SearchResponse>('/api/search?q=quesadilla');
+        const found = await search('quesadilla');
 
-        expect(found.count).toBe(1);
-        expect(found.results.at(0)).toMatchObject({
-            item_name: 'quesadilla.jpg',
-            title: 'Quesadilla night',
-            snippet: 'Quesadillas at home',
+        expect(found).toStrictEqual({
+            q: 'quesadilla',
+            count: 1,
+            results: [
+                {
+                    itemType: 'image',
+                    path: '/2024/07-01/quesadilla.jpg',
+                    itemName: 'quesadilla.jpg',
+                    title: 'Quesadilla night',
+                    snippet: 'Quesadillas at home',
+                },
+            ],
         });
     });
 
+    it('links an album by its album path', async () => {
+        await putItem({
+            parentPath: '/2024/',
+            itemName: '07-03',
+            itemType: 'album',
+            title: 'Tostada',
+            published: true,
+        });
+        const found = await search('tostada');
+
+        expect(found.results).toStrictEqual([
+            { itemType: 'album', path: '/2024/07-03/', itemName: '07-03', title: 'Tostada', snippet: null },
+        ]);
+    });
+
     it('follows an update to the title', async () => {
-        const item: schema.NewItem = { parentPath: '/2024/07-02/', itemName: 'meal.jpg', itemType: 'image' };
+        const item: ItemWrite = { parentPath: '/2024/07-02/', itemName: 'meal.jpg', itemType: 'image' };
         await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
-        const old = await callForJson<SearchResponse>('/api/search?q=enchilada');
-        const current = await callForJson<SearchResponse>('/api/search?q=burrito');
+        const [old, current] = await Promise.all([search('enchilada'), search('burrito')]);
 
         expect(old.count).toBe(0);
         expect(current.count).toBe(1);

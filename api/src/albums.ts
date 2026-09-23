@@ -8,6 +8,7 @@ import {
     albumKey,
     albumPath,
     isAlbumPath,
+    itemTypeSchema,
     mediaKey,
     mediaPath,
     rectangleSchema,
@@ -32,7 +33,7 @@ const CROP = valibot.pipe(
 const ROW = valibot.object({
     parent_path: valibot.string(),
     item_name: valibot.string(),
-    item_type: valibot.picklist(['album', 'image', 'video']),
+    item_type: itemTypeSchema,
     title: valibot.nullable(valibot.string()),
     description: valibot.nullable(valibot.string()),
     tags: valibot.nullable(valibot.string()),

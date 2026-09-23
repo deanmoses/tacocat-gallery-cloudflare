@@ -45,7 +45,8 @@ async function call(
             cookies.set(name, value);
         }
     }
-    const json = valibot.parse(API_BODY, await response.json());
+    // A write answers 204 with no body.
+    const json = valibot.parse(API_BODY, response.status === 204 ? {} : await response.json());
     return { status: response.status, body: json, authStatus: response.headers.get('x-auth-status') };
 }
 
@@ -87,7 +88,7 @@ check('login', login.status === 200 && login.body.admin === admin, login);
 const status = await call('/api/auth/status', undefined, 'GET');
 check('status reports admin', status.body.admin === admin && status.authStatus === 'admin', status);
 const write = await call('/api/item', { parentPath: '/selftest/', itemName: 'x', itemType: 'image' });
-check('write allowed as admin', write.status === 200);
+check('write allowed as admin', write.status === 204);
 
 // Login needs the challenge cookie from its own options call, which login clears.
 const replay = await call('/api/auth/login/verify', assertion);

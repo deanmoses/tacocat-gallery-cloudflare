@@ -1,22 +1,31 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
+import {
+    type SearchResponse,
+    type SearchResult,
+    albumPath,
+    itemTypeSchema,
+    itemWriteSchema,
+    mediaPath,
+} from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
 import { currentAdmin } from './auth';
 import { type ItemUpsert, type Orm, orm, schema, upsertItem } from './db';
-import { d1Header, pickMeta, round } from './db/timing';
-import { BOOKMARK_HEADER, json } from './http';
+import { d1Header } from './db/timing';
+import { json, written } from './http';
 import { inSequence } from './sequence';
 
 const TITLE_ROW = valibot.object({ title: valibot.nullable(valibot.string()) });
 
+/** `PUT /api/item` with an `ItemWrite` saves every field of that item, clearing any left out. */
 export async function putItem(request: Request, env: Env): Promise<Response> {
-    const item = await request.json<schema.NewItem>();
+    const body = valibot.safeParse(itemWriteSchema, await request.json());
+    if (!body.success) {
+        return json({ error: valibot.summarize(body.issues) }, 400);
+    }
     const session = env.DB.withSession('first-primary');
     const started = performance.now();
-    const write = await upsertItem(orm(session), item).run();
-    const writeMs = performance.now() - started;
-    return json({ written: item, d1: { ...pickMeta(write.meta), roundTripMs: round(writeMs) } }, 200, {
-        [BOOKMARK_HEADER]: session.getBookmark() ?? '',
-    });
+    const write = await upsertItem(orm(session), body.output).run();
+    return written(session, { 'x-d1': d1Header(write.meta, performance.now() - started) });
 }
 
 /**
@@ -29,7 +38,7 @@ export async function readYourWrites(env: Env): Promise<Response> {
     const key = { parentPath: '/ryw/', itemName: crypto.randomUUID() };
     const writer = env.DB.withSession('first-primary');
     let started = performance.now();
-    const written = await upsertItem(orm(writer), { ...key, itemType: 'image', title, published: true }).run();
+    const saved = await upsertItem(orm(writer), { ...key, itemType: 'image', title, published: true }).run();
     const writeMs = performance.now() - started;
     const { item } = schema;
     // Not get(), because only run() returns the D1 meta that says which replica answered.
@@ -56,7 +65,7 @@ export async function readYourWrites(env: Env): Promise<Response> {
     const otherMs = performance.now() - started;
 
     const summary = [
-        `write ${d1Header(written.meta, writeMs)}`,
+        `write ${d1Header(saved.meta, writeMs)}`,
         `own ${String(didSeeWrite(own))} ${d1Header(own.meta, ownMs)}`,
         `fresh ${String(didSeeWrite(other))} ${d1Header(other.meta, otherMs)}`,
     ].join('; ');
@@ -69,34 +78,53 @@ export async function search(request: Request, env: Env): Promise<Response> {
     const admin = (await currentAdmin(request, env)) !== null;
     const session = env.DB.withSession('first-unconstrained');
     const started = performance.now();
-    const rows = await searchItems(orm(session), query, admin);
+    const found = await searchItems(orm(session), query, admin);
     const searchMs = performance.now() - started;
-    return json(
-        {
-            q: query,
-            count: rows.results.length,
-            results: rows.results,
-            d1: { ...pickMeta(rows.meta), roundTripMs: round(searchMs) },
-        },
-        200,
-        { 'x-d1': d1Header(rows.meta, searchMs) },
-    );
+    const body: SearchResponse = { q: query, count: found.results.length, results: found.results };
+    return json(body, 200, { 'x-d1': d1Header(found.meta, searchMs) });
+}
+
+// A search match as D1 returns it, under SQL column names.
+const SEARCH_ROWS = valibot.array(
+    valibot.object({
+        parent_path: valibot.string(),
+        item_name: valibot.string(),
+        item_type: itemTypeSchema,
+        title: valibot.nullable(valibot.string()),
+        snippet: valibot.nullable(valibot.string()),
+    }),
+);
+
+interface Found {
+    results: SearchResult[];
+    meta: D1Meta;
 }
 
 /**
  * The best 50 items for an FTS5 query, each with a snippet of its description. Unless `admin`, only what the album
  * pages show a guest: published albums, and media whose album is published.
  */
-export async function searchItems(database: Orm, query: string, admin: boolean): Promise<D1Result> {
+export async function searchItems(database: Orm, query: string, admin: boolean): Promise<Found> {
     // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
-    return database.run(
-        sql`SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
+    const found = await database.run(
+        sql`SELECT i.parent_path, i.item_name, i.item_type, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
             FROM item_fts JOIN item i ON i.id = item_fts.rowid
             ${admin ? sql`` : GUEST_VISIBLE_JOIN}
             WHERE item_fts MATCH ${query}
             ${admin ? sql`` : GUEST_VISIBLE_FILTER}
             ORDER BY rank LIMIT 50`,
     );
+    const results = valibot.parse(SEARCH_ROWS, found.results).map((row): SearchResult => ({
+        itemType: row.item_type,
+        path:
+            row.item_type === 'album'
+                ? albumPath(row.parent_path, row.item_name)
+                : mediaPath(row.parent_path, row.item_name),
+        itemName: row.item_name,
+        title: row.title,
+        snippet: row.snippet,
+    }));
+    return { results, meta: found.meta };
 }
 
 // The album an item is in, found from its parent path: of '/2001/06-15/' without its trailing slash, rtrim() strips
