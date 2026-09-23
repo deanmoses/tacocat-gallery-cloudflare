@@ -5,7 +5,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "npm run --silent build --workspace web && wrangler dev --local-upstream localhost:8787",
+        "dev": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler dev --local-upstream localhost:8787",
         "test": "vitest run",
         "test:watch": "vitest",
         "types": "wrangler types",
@@ -13,11 +13,12 @@
         "db:generate": "drizzle-kit generate",
         "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
         "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",
-        "deploy": "npm run --silent build --workspace web && wrangler deploy",
+        "deploy": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler deploy",
         "logs": "wrangler tail",
         "probes": "wrangler d1 execute tacocat-proto --remote --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
     },
     "dependencies": {
+        "tacocat-gallery-shared": "0.0.1",
         "@cloudflare/containers": "^0.3.7",
         "@simplewebauthn/server": "^14.0.2",
         "aws4fetch": "^1.0.20",
