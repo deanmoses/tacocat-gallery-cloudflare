@@ -1,11 +1,12 @@
 import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
+import { and, asc, eq, or } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
-import { orm, upsertItem } from '../../src/db';
+import { orm, schema, upsertItem } from '../../src/db';
 import worker from '../../src/index';
 import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/upload';
-import { call, callAsAdmin } from '../helpers';
+import { call, callAsAdmin, storedItem } from '../helpers';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
 const handler: ExportedHandler<Env, R2EventMessage> = worker;
@@ -84,20 +85,19 @@ describe('upload pipeline', () => {
         await env.MEDIA.put('inbox/2024/06-15/FullMetadata.jpg', jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const acks = await deliverUpload('inbox/2024/06-15/FullMetadata.jpg');
         const inbox = await env.MEDIA.head('inbox/2024/06-15/FullMetadata.jpg');
-        const item = await env.DB.prepare('SELECT * FROM item WHERE item_name = ?').bind('FullMetadata.jpg').first();
+        const item = await storedItem('/2024/06-15/', 'FullMetadata.jpg');
         const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/FullMetadata.jpg/' });
 
         expect(acks).toStrictEqual(['1']);
         expect(inbox).toBeNull();
         expect(item).toMatchObject({
-            parent_path: '/2024/06-15/',
-            item_type: 'image',
-            published: 0,
+            itemType: 'image',
+            published: false,
             title: 'My Image Title',
             description: 'My image description',
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([
-            `originals/2024/06-15/FullMetadata.jpg/${String(item?.['version_id'])}`,
+            `originals/2024/06-15/FullMetadata.jpg/${String(item?.versionId)}`,
         ]);
     });
 
@@ -111,13 +111,22 @@ describe('upload pipeline', () => {
         }).run();
         await env.MEDIA.put('inbox/1999/03-03/kept.jpg', jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         await deliverUpload('inbox/1999/03-03/kept.jpg');
-        const albums = await env.DB.prepare(
-            "SELECT parent_path, item_name, title, published FROM item WHERE item_type = 'album' AND (item_name = '1999' OR parent_path = '/1999/') ORDER BY parent_path",
-        ).all();
+        const { item } = schema;
+        const albums = await orm(env.DB)
+            .select({
+                parentPath: item.parentPath,
+                itemName: item.itemName,
+                title: item.title,
+                published: item.published,
+            })
+            .from(item)
+            .where(and(eq(item.itemType, 'album'), or(eq(item.itemName, '1999'), eq(item.parentPath, '/1999/'))))
+            .orderBy(asc(item.parentPath))
+            .all();
 
-        expect(albums.results).toStrictEqual([
-            { parent_path: '/', item_name: '1999', title: null, published: 0 },
-            { parent_path: '/1999/', item_name: '03-03', title: 'Kept', published: 1 },
+        expect(albums).toStrictEqual([
+            { parentPath: '/', itemName: '1999', title: null, published: false },
+            { parentPath: '/1999/', itemName: '03-03', title: 'Kept', published: true },
         ]);
     });
 });
@@ -146,7 +155,7 @@ describe('video uploads', () => {
     it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
         await env.MEDIA.put('inbox/2024/06-15/broken.mov', new Uint8Array(10));
         await processUploadEvent(uploadEvent('inbox/2024/06-15/broken.mov'), withTranscoder(rejecting));
-        const item = await env.DB.prepare('SELECT * FROM item WHERE item_name = ?').bind('broken.mov').first();
+        const item = await storedItem('/2024/06-15/', 'broken.mov');
         const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/broken.mov/' });
         const inbox = await env.MEDIA.head('inbox/2024/06-15/broken.mov');
         const listed = await callAsAdmin('/api/errors', {
@@ -155,7 +164,7 @@ describe('video uploads', () => {
         });
         const { errors } = await listed.json<{ errors: Record<string, { message: string }> }>();
 
-        expect(item).toBeNull();
+        expect(item).toBeUndefined();
         expect(originals.objects).toHaveLength(0);
         expect(inbox).toBeNull();
         expect(Object.keys(errors)).toStrictEqual(['/2024/06-15/broken.mov']);
@@ -167,11 +176,14 @@ describe('video uploads', () => {
         await processUploadEvent(uploadEvent('inbox/2024/06-15/again.mov'), withTranscoder(rejecting));
         await env.MEDIA.put('inbox/2024/06-15/again.mov', new Uint8Array(10));
         await processUploadEvent(uploadEvent('inbox/2024/06-15/again.mov'), withTranscoder(transcoding));
-        const remaining = await env.DB.prepare('SELECT count(*) AS n FROM upload_error WHERE path = ?')
-            .bind('/2024/06-15/again.mov')
-            .first<number>('n');
+        const { uploadError } = schema;
+        const remaining = await orm(env.DB)
+            .select()
+            .from(uploadError)
+            .where(eq(uploadError.path, '/2024/06-15/again.mov'))
+            .all();
 
-        expect(remaining).toBe(0);
+        expect(remaining).toStrictEqual([]);
     });
 });
 
@@ -198,12 +210,12 @@ describe('video upload retries', () => {
         await processUploadEvent(event, withTranscoder(transcoding));
         // Redelivered after success, as Queues may do, with the inbox object gone.
         await processUploadEvent(event, withTranscoder(transcoding));
-        const item = await env.DB.prepare('SELECT * FROM item WHERE item_name = ?').bind('clip.mov').first();
+        const item = await storedItem('/2024/06-15/', 'clip.mov');
         const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/clip.mov/' });
 
-        expect(item).toMatchObject({ item_type: 'video', width: 1080, height: 1920, duration_seconds: 9.6 });
+        expect(item).toMatchObject({ itemType: 'video', width: 1080, height: 1920, durationSeconds: 9.6 });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([
-            `originals/2024/06-15/clip.mov/${String(item?.['version_id'])}`,
+            `originals/2024/06-15/clip.mov/${String(item?.versionId)}`,
         ]);
     });
 });

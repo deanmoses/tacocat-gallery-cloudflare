@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { type Column, and, eq, getTableColumns } from 'drizzle-orm';
+import { type Column, getTableColumns, like } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { callAsAdmin, callForJson, putItem } from '../helpers';
+import { callAsAdmin, callForJson, putItem, storedItem } from '../helpers';
 
 interface SearchResponse {
     count: number;
@@ -37,11 +37,7 @@ describe('saving an item', () => {
     }
 
     async function read(parentPath: string, itemName: string): Promise<Record<string, unknown>> {
-        const row = await orm(env.DB)
-            .select()
-            .from(item)
-            .where(and(eq(item.parentPath, parentPath), eq(item.itemName, itemName)))
-            .get();
+        const row = await storedItem(parentPath, itemName);
         return Object.fromEntries(Object.entries(row ?? {}).filter(([key]) => !UNCOMPARED.has(key)));
     }
 
@@ -82,7 +78,7 @@ describe('search', () => {
     });
 
     it('follows an update to the title', async () => {
-        const item = { parentPath: '/2024/07-02/', itemName: 'meal.jpg', itemType: 'image' };
+        const item: schema.NewItem = { parentPath: '/2024/07-02/', itemName: 'meal.jpg', itemType: 'image' };
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
         const old = await callForJson<SearchResponse>('/api/search?q=enchilada');
@@ -94,7 +90,8 @@ describe('search', () => {
 
     it('keeps the FTS index consistent through writes and deletes', async () => {
         await callAsAdmin('/api/seed?years=1', { method: 'POST' });
-        await env.DB.prepare("DELETE FROM item WHERE parent_path LIKE '/2000/01-%'").run();
+        await orm(env.DB).delete(schema.item).where(like(schema.item.parentPath, '/2000/01-%'));
+        // FTS5's integrity check is a command written as an insert into the index, which Drizzle cannot model.
         const check = env.DB.prepare("INSERT INTO item_fts(item_fts) VALUES('integrity-check')").run();
 
         await expect(check).resolves.toMatchObject({ success: true });

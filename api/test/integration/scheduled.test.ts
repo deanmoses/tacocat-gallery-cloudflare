@@ -1,6 +1,8 @@
 import { createExecutionContext, createScheduledController, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
+import { asc } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
+import { orm, schema } from '../../src/db';
 import worker from '../../src/index';
 import type { R2EventMessage } from '../../src/upload';
 
@@ -59,15 +61,16 @@ describe('nightly cron', () => {
     });
 
     it('purges upload errors older than a day and keeps newer ones', async () => {
-        const insert = env.DB.prepare('INSERT INTO upload_error (path, message, created_at) VALUES (?, ?, ?)');
-        await env.DB.batch([
-            insert.bind('/old.mov', 'stale', hoursAgo(25)),
-            insert.bind('/new.mov', 'fresh', hoursAgo(23)),
+        const { uploadError } = schema;
+        const database = orm(env.DB);
+        await database.insert(uploadError).values([
+            { path: '/old.mov', message: 'stale', createdAt: hoursAgo(25) },
+            { path: '/new.mov', message: 'fresh', createdAt: hoursAgo(23) },
         ]);
         await runCron('17 9 * * *');
-        const { results } = await env.DB.prepare('SELECT path FROM upload_error ORDER BY path').all<{ path: string }>();
+        const kept = await database.select({ path: uploadError.path }).from(uploadError).orderBy(asc(uploadError.path));
 
-        expect(results.map((row) => row.path)).toStrictEqual(['/new.mov']);
+        expect(kept).toStrictEqual([{ path: '/new.mov' }]);
     });
 });
 
@@ -89,23 +92,27 @@ describe('idle latency probe cron', () => {
     it('records one row per location and step, from Globalping results', async () => {
         stubGlobalping();
         await runCron('23 0,1,3,7,15 * * *');
-        const { results } = await env.DB.prepare('SELECT * FROM probe_result ORDER BY location, seq').all();
+        const { probeResult } = schema;
+        const rows = await orm(env.DB)
+            .select()
+            .from(probeResult)
+            .orderBy(asc(probeResult.location), asc(probeResult.seq));
 
-        expect(results).toHaveLength(12);
-        expect(results.at(0)).toMatchObject({
+        expect(rows).toHaveLength(12);
+        expect(rows.at(0)).toMatchObject({
             location: 'Bay Area',
             seq: 0,
             path: '/api/album/2001/',
-            probe_city: 'Paris',
+            probeCity: 'Paris',
             status: 200,
-            total_ms: 60,
-            worker_colo: 'CDG',
-            worker_ms: 12.5,
-            d1_region: 'WEUR',
-            d1_colo: 'FRA',
-            d1_primary: 'false',
-            d1_rtt_ms: 20.1,
-            measurement_id: 'm1',
+            totalMs: 60,
+            workerColo: 'CDG',
+            workerMs: 12.5,
+            d1Region: 'WEUR',
+            d1Colo: 'FRA',
+            d1Primary: 'false',
+            d1RttMs: 20.1,
+            measurementId: 'm1',
             error: null,
         });
     });

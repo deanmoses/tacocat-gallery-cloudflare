@@ -1,5 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
+import { and, eq } from 'drizzle-orm';
+import { orm, schema } from '../src/db';
 import worker from '../src/index';
 
 export const ORIGIN = 'http://localhost:8787';
@@ -50,6 +52,16 @@ export async function callAsAdmin(path: string, init: Init = {}): Promise<Respon
 }
 
 /** Saves an item as an admin through the write API. */
-export async function putItem(item: Record<string, unknown>): Promise<Response> {
+export async function putItem(item: schema.NewItem): Promise<Response> {
     return callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(item) });
+}
+
+/** The item stored at `parentPath` under `itemName`, read straight from D1. */
+export async function storedItem(parentPath: string, itemName: string): Promise<schema.Item | undefined> {
+    const { item } = schema;
+    return orm(env.DB)
+        .select()
+        .from(item)
+        .where(and(eq(item.parentPath, parentPath), eq(item.itemName, itemName)))
+        .get();
 }
