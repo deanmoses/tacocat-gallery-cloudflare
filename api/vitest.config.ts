@@ -5,6 +5,10 @@ export default defineConfig({
     test: {
         // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
         restoreMocks: true,
+        // Undoes vi.stubGlobal() after each test in the same way.
+        unstubGlobals: true,
+        // A test that asserts nothing fails.
+        expect: { requireAssertions: true },
         // Files and the tests in them run in a random order, so a test that passes only because of what ran before it
         // fails. Each run prints its seed; rerun a failure in the same order with --sequence.seed=<seed>.
         sequence: { shuffle: true },

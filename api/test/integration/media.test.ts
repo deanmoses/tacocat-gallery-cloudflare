@@ -1,7 +1,7 @@
 import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { orm, upsertItem } from '../../src/db';
 import worker from '../../src/index';
 import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/upload';
@@ -17,16 +17,38 @@ function uploadEvent(key: string): R2EventMessage {
     return { action: 'PutObject', bucket: 'tacocat-proto-media', object: { key }, eventTime: now.toISOString() };
 }
 
+/** One batch of upload events, as the queue delivers them, with ids counting from 1. */
+function uploadBatch(keys: string[]): MessageBatch<R2EventMessage> {
+    return createMessageBatch<R2EventMessage>(
+        'tacocat-proto-uploads',
+        keys.map((key, index) => ({
+            id: String(index + 1),
+            timestamp: new Date(),
+            attempts: 1,
+            body: uploadEvent(key),
+        })),
+    );
+}
+
 /** Delivers one upload event through the queue and reports whether the consumer acked it. */
 async function deliverUpload(key: string): Promise<string[]> {
-    const batch = createMessageBatch<R2EventMessage>('tacocat-proto-uploads', [
-        { id: '1', timestamp: new Date(), attempts: 1, body: uploadEvent(key) },
-    ]);
+    const batch = uploadBatch([key]);
     const ctx = createExecutionContext();
     await handler.queue?.(batch, env, ctx);
     await waitOnExecutionContext(ctx);
     const result = await getQueueResult(batch, ctx);
     return result.explicitAcks;
+}
+
+/** Makes R2 refuse to read `failing`, as it might in an outage, while every other key reads as usual. */
+function failReading(failing: string): void {
+    const read = env.MEDIA.get.bind(env.MEDIA);
+    vi.spyOn(env.MEDIA, 'get').mockImplementation(async (key: string) => {
+        if (key === failing) {
+            throw new Error('R2 unavailable');
+        }
+        return read(key);
+    });
 }
 
 /** The bindings with the transcoder container replaced by something that answers every request with `respond`. */
@@ -97,6 +119,26 @@ describe('upload pipeline', () => {
             { parent_path: '/', item_name: '1999', title: null, published: 0 },
             { parent_path: '/1999/', item_name: '03-03', title: 'Kept', published: 1 },
         ]);
+    });
+});
+
+describe('a batch of uploads', () => {
+    it('acks each upload as it is stored, and leaves the one that fails and those after it for a retry', async () => {
+        const first = 'inbox/2024/06-15/first.jpg';
+        const second = 'inbox/2024/06-15/second.jpg';
+        const third = 'inbox/2024/06-15/third.jpg';
+        await Promise.all([first, second, third].map(async (key) => env.MEDIA.put(key, jpg)));
+        failReading(second);
+        const batch = uploadBatch([first, second, third]);
+        const ctx = createExecutionContext();
+
+        await expect(handler.queue?.(batch, env, ctx)).rejects.toThrow('R2 unavailable');
+
+        const result = await getQueueResult(batch, ctx);
+        const inbox = await env.MEDIA.list({ prefix: 'inbox/' });
+
+        expect(result.explicitAcks).toStrictEqual(['1']);
+        expect(inbox.objects.map((object) => object.key)).toStrictEqual([second, third]);
     });
 });
 

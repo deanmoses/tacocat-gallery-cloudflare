@@ -52,7 +52,7 @@ An FTS trigger that scanned the whole index on every write once read 37.7M D1 ro
 
 ## Rules
 
-- **Tests.** Never change production behavior without a test that fails without the change.
+- **Tests.** Never change production behavior without a test that fails without the change. Read `docs/Testing.md` before writing one.
 - **No `eslint-disable` comments.** Fix the code, or ask the user if you can turn the rule off in `eslint.config.ts` with the reason.
 - `npm run lint:fix` fixers can change what code means; review the diff.
 - **New checks go in `scripts/lint.sh` or `scripts/test.sh`**, never only in the pre-commit hook.
