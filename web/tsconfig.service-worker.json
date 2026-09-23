@@ -1,0 +1,8 @@
+{
+    // The service worker, which `svelte-kit sync` leaves out of the app's project: it runs in a worker, with that
+    // global scope rather than the DOM's. `npm run check` type-checks it with this, and ESLint reads it through this.
+    "extends": "./tsconfig.json",
+    "compilerOptions": { "lib": ["es2025", "webworker"] },
+    "include": ["src/service-worker.ts", ".svelte-kit/ambient.d.ts", ".svelte-kit/non-ambient.d.ts"],
+    "exclude": []
+}

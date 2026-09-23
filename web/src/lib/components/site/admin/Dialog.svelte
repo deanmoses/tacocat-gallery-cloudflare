@@ -10,26 +10,29 @@
     interface Props {
         content?: Snippet | undefined;
         buttons?: Snippet | undefined;
-        onkeydown?: (e: KeyboardEvent) => void | undefined;
+        onkeydown?: ((event: KeyboardEvent) => void) | undefined;
     }
 
     let { content, buttons, onkeydown }: Props = $props();
-    let dialog = $state()!;
+    let dialog: HTMLDialogElement | undefined = $state();
 
     export function show(): void {
-        dialog.showModal();
+        dialog?.showModal();
     }
 
     export function close(): void {
-        dialog.close();
+        dialog?.close();
     }
 
     /** Close dialog when user clicks outside it */
-    function onClick(e: MouseEvent): void {
-        if (e.target != dialog) return;
+    function onClick(event: MouseEvent): void {
+        if (dialog === undefined || event.target !== dialog) return;
         const rect = dialog.getBoundingClientRect();
         const clickIsOutsideDialog =
-            e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+            event.clientX < rect.left ||
+            event.clientX > rect.right ||
+            event.clientY < rect.top ||
+            event.clientY > rect.bottom;
         if (clickIsOutsideDialog) {
             dialog.close();
         }
@@ -52,7 +55,7 @@
 
 <style>
     dialog::backdrop {
-        background-image: linear-gradient(45deg, magenta, rebeccapurple, dodgerblue, green);
+        background-image: linear-gradient(45deg, #ff00ff, #663399, #1e90ff, #008000);
         opacity: 0.75;
     }
 

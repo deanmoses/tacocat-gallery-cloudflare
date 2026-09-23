@@ -1,7 +1,7 @@
 import { toast } from '@zerodevx/svelte-toast';
 import { getParentFromPath, isValidAlbumPath } from '$lib/utils/galleryPathUtils';
 import { createAlbumUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { albumState } from '../AlbumState.svelte';
 import { CreateStatus } from '$lib/models/album';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -27,22 +27,22 @@ class AlbumCreateMachine {
     //
 
     createAlbum(albumPath: string): void {
-        this.#createAlbum(albumPath); // call async logic in a fire-and-forget manner
+        void this.#createAlbum(albumPath); // call async logic in a fire-and-forget manner
     }
 
-    #createStarted(albumPath: string) {
+    #createStarted(albumPath: string): void {
         albumState.albumCreates.set(albumPath, {
             status: CreateStatus.IN_PROGRESS,
         });
     }
 
-    #success(albumPath: string) {
+    #success(albumPath: string): void {
         console.log(`Album [${albumPath}] created`);
         albumState.albumCreates.delete(albumPath);
         toast.push(`Album [${albumPath}] created`);
     }
 
-    #error(albumPath: string, errorMessage: string) {
+    #error(albumPath: string, errorMessage: string): void {
         console.error(`Error creating album ${albumPath}: ${errorMessage}`);
         albumState.albumCreates.delete(albumPath);
         toast.push(`Error creating album: ${errorMessage}`);
@@ -65,14 +65,13 @@ class AlbumCreateMachine {
             this.#createStarted(albumPath);
             const response = await adminApi.put(createAlbumUrl(albumPath));
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
             await albumLoadMachine.reloadAfterChange(albumPath); // load newly created album
             this.#success(albumPath);
             await albumLoadMachine.reloadAfterChange(getParentFromPath(albumPath)); // reload parent album
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
             this.#error(albumPath, msg);
         }
     }

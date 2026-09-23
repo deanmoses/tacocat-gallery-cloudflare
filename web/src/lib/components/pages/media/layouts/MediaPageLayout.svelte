@@ -30,7 +30,7 @@
     {@render editControls?.()}
     {#if titleEditor}
         <Header hideSearch hideSiteTitle hideWhenSmall>
-            {@render titleEditor?.()}
+            {@render titleEditor()}
         </Header>
     {:else if title}
         <Header hideSearch hideSiteTitle hideWhenSmall>
@@ -41,13 +41,13 @@
         <main>
             {#if caption}
                 <section class="caption" aria-label="Caption">
-                    {@render caption?.()}
+                    {@render caption()}
                 </section>
             {/if}
-            <div class="navAndMedia">
+            <div class="nav-and-media">
                 {#if nav}
                     <Nav>
-                        {@render nav?.()}
+                        {@render nav()}
                     </Nav>
                 {/if}
                 <section aria-label="Media">
@@ -64,10 +64,10 @@
         display: flex;
         gap: calc(var(--default-padding) * 2);
         padding: calc(var(--default-padding) * 2);
-        background-color: white;
+        background-color: #ffffff;
     }
 
-    @media screen and (max-width: 975px) {
+    @media screen and (width <= 975px) {
         main {
             flex-direction: column;
         }
@@ -77,7 +77,7 @@
         flex: 1;
     }
 
-    .navAndMedia {
+    .nav-and-media {
         flex: 3;
     }
 </style>

@@ -7,8 +7,8 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        isDropAllowed: (e: DragEvent) => boolean;
-        onDrop: (e: DragEvent) => Promise<void>;
+        isDropAllowed: (event: DragEvent) => boolean;
+        onDrop: (event: DragEvent) => Promise<void>;
         children?: Snippet | undefined;
     }
 
@@ -16,26 +16,26 @@
 
     let dragging = $state(false);
 
-    function ondragenter(e: DragEvent) {
-        if (!isDropAllowed(e)) return;
-        e.preventDefault();
+    function ondragenter(event: DragEvent): void {
+        if (!isDropAllowed(event)) return;
+        event.preventDefault();
         dragging = true;
     }
 
-    function ondragover(e: DragEvent) {
-        if (!isDropAllowed(e)) return;
-        e.preventDefault();
+    function ondragover(event: DragEvent): void {
+        if (!isDropAllowed(event)) return;
+        event.preventDefault();
     }
 
-    function ondragleave() {
+    function ondragleave(): void {
         dragging = false;
     }
 
-    async function ondrop(e: DragEvent) {
-        if (!isDropAllowed(e)) return;
-        e.preventDefault();
+    async function ondrop(event: DragEvent): Promise<void> {
+        if (!isDropAllowed(event)) return;
+        event.preventDefault();
         dragging = false;
-        await onDrop(e);
+        await onDrop(event);
     }
 </script>
 

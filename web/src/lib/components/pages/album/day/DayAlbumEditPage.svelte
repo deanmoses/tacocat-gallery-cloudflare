@@ -19,7 +19,7 @@
     import UploadThumbnail from '$lib/components/site/admin/UploadThumbnail.svelte';
     import { draftMachine } from '$lib/stores/admin/DraftMachine.svelte';
     import { albumThumbnailSetMachine } from '$lib/stores/admin/AlbumThumbnailSetMachine.svelte';
-    import { getParentAlbum, getUploadsForAlbum } from '$lib/stores/AlbumState.svelte';
+    import { getParentAlbum, getUploadsForAlbum, mediaActivity } from '$lib/stores/AlbumState.svelte';
 
     interface Props {
         album: Album;
@@ -27,9 +27,9 @@
     let { album }: Props = $props();
     let neighbours = $derived(albumNav(album.path, getParentAlbum(album.path)));
     let okToNavigate = $derived(draftMachine.okToNavigate);
-    let uploads: UploadEntry[] | undefined = $derived(getUploadsForAlbum(album.path));
+    let uploads: UploadEntry[] = $derived(getUploadsForAlbum(album.path));
 
-    function albumThumbnailSelected(newThumbnailMediaPath: string) {
+    function albumThumbnailSelected(newThumbnailMediaPath: string): void {
         albumThumbnailSetMachine.setAlbumThumbnail(album.path, newThumbnailMediaPath);
     }
 </script>
@@ -46,7 +46,7 @@
     {/snippet}
 
     {#snippet caption()}
-        {#if uploads?.length}
+        {#if uploads.length > 0}
             {#await import('./UploadStatus.svelte') then { default: UploadStatus }}
                 <UploadStatus {uploads} />
             {/await}
@@ -56,13 +56,13 @@
     {/snippet}
 
     {#snippet thumbnails()}
-        {#if album.media?.length}
+        {#if album.media.length > 0}
             {#each album.media as media (media.path)}
                 {#if okToNavigate}
                     <MediaThumbnail
+                        activity={mediaActivity(media.path)}
                         href={media.path}
                         mediaType={media.mediaType}
-                        path={media.path}
                         summary={media.summary}
                         thumbnailUrlInfo={media.thumbnailUrlInfo}
                         title={media.title}
@@ -78,8 +78,8 @@
                 {:else}
                     <div title="💾 Save changes before navigating">
                         <MediaThumbnail
+                            activity={mediaActivity(media.path)}
                             mediaType={media.mediaType}
-                            path={media.path}
                             summary={media.summary}
                             thumbnailUrlInfo={media.thumbnailUrlInfo}
                             title={media.title}
@@ -87,10 +87,10 @@
                     </div>
                 {/if}
             {/each}
-        {:else if !album.published && !uploads?.length && okToNavigate}
+        {:else if !album.published && uploads.length === 0 && okToNavigate}
             <p>Drop images and videos or a 📁</p>
         {/if}
-        {#if uploads?.length}
+        {#if uploads.length > 0}
             {#each uploads as upload (upload.uploadPath)}
                 <UploadThumbnail {upload} />
             {/each}
@@ -104,12 +104,12 @@
         cursor: not-allowed;
     }
 
-    :global(.thumbnail:hover .notSelected) {
-        animation: fadeIn 1400ms;
+    :global(.thumbnail:hover .not-selected) {
+        animation: fade-in 1400ms;
         display: inherit;
     }
 
-    @keyframes fadeIn {
+    @keyframes fade-in {
         0% {
             opacity: 0;
         }

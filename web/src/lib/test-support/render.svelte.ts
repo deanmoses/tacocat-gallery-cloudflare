@@ -28,7 +28,7 @@ export function render<Props extends Record<string, unknown>>(
         target.remove();
     });
     return {
-        rerender: (next) => {
+        rerender: (next): void => {
             Object.assign(state, next);
             flushSync();
         },

@@ -18,20 +18,21 @@
     let albumPath = $derived(getParentFromPath(mediaPath));
     let media = $derived(albumState.albums.get(albumPath)?.album?.getMedia(mediaPath));
 
-    let fileInput = $state()!;
+    let fileInput: HTMLInputElement | undefined = $state();
 
-    async function onUploadButtonClick() {
-        fileInput.click();
+    function onUploadButtonClick(): void {
+        fileInput?.click();
     }
 
-    function onFileSelected() {
-        const files = fileInput.files;
-        if (!files?.length) return;
+    function onFileSelected(): void {
+        const files = fileInput?.files;
+        if (!files || files.length === 0) return;
         // this error should never happen
         if (files.length > 1) throw new Error('Only one file can be uploaded at a time');
-        const file = files[0];
+        const [file] = files;
+        if (file === undefined) return;
         const extensionError = getReplacementExtensionError(mediaPath, file.name);
-        if (extensionError) {
+        if (extensionError !== undefined) {
             toast.push(extensionError);
             return;
         }

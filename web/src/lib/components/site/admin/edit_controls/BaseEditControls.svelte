@@ -21,9 +21,9 @@
     let { rightControls }: Props = $props();
 
     let path: string | undefined = $derived(page.url.pathname);
-    let status: DraftStatus | undefined = $derived(draftMachine.status);
+    let draftStatus: DraftStatus | undefined = $derived(draftMachine.status);
     let hasUnsavedChanges: boolean = $derived(
-        draftMachine.status == DraftStatus.UNSAVED_CHANGES || draftMachine.status == DraftStatus.ERRORED,
+        draftMachine.status === DraftStatus.UNSAVED_CHANGES || draftMachine.status === DraftStatus.ERRORED,
     );
 
     // Navigate to new path whenever it changes
@@ -31,38 +31,28 @@
         handleNavigation(path);
     });
 
-    const rightControls_render = $derived(rightControls);
+    const rightControlsFromParent = $derived(rightControls);
 
-    function handleNavigation(path: string | undefined): void {
+    function handleNavigation(pathname: string | undefined): void {
         // Cancel the draft when any navigation happens
         // TODO: there's no reason to do it here, the draft store
         // could subscribe to page.url.pathname itself.
         // I guess the only reason to do it here is that when you're
         // NOT in edit mode, there's no need to listen to it.
-        if (path === undefined) throw new Error(`path is undefined`);
-        const backEndPath = isValidMediaPath(path) ? path : `${path}/`;
+        if (pathname === undefined) throw new Error(`path is undefined`);
+        const backEndPath = isValidMediaPath(pathname) ? pathname : `${pathname}/`;
         draftMachine.init(backEndPath);
     }
 
-    function onCancelButtonClick() {
+    function onCancelButtonClick(): void {
         editModeMachine.turnOffEditMode();
         draftMachine.cancel();
     }
 
-    function onSaveButtonClick() {
+    function onSaveButtonClick(): void {
         draftMachine.save();
     }
 </script>
-
-<!-- 
-    This snippet is necessary because trying to execute <StatusMessage {status} />  
-    directly within <EditControlsLayout>'s {#snippet status()} would create a conflict 
-    between the EditControlsLayout.status property and this component's status
-    property, which are of two different datatypes. 
--->
-{#snippet statusMessage()}
-    <StatusMessage {status} />
-{/snippet}
 
 <EditControlsLayout>
     {#snippet leftControls()}
@@ -70,11 +60,11 @@
     {/snippet}
 
     {#snippet status()}
-        {@render statusMessage()}
+        <StatusMessage status={draftStatus} />
     {/snippet}
 
     {#snippet rightControls()}
-        {@render rightControls_render?.()}
+        {@render rightControlsFromParent?.()}
         <SaveButton {hasUnsavedChanges} onclick={onSaveButtonClick} />
     {/snippet}
 </EditControlsLayout>

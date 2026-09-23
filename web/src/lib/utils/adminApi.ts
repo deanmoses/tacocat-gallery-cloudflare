@@ -6,9 +6,26 @@
  */
 
 const JSON_HEADERS = {
-    Accept: 'application/json',
+    accept: 'application/json',
     'Content-Type': 'application/json',
 };
+
+/**
+ * The server's own account of a failed request when it sent one, else the status text.
+ */
+export async function failureMessage(response: Response): Promise<string> {
+    let body: unknown;
+    try {
+        body = await response.json();
+    } catch {
+        body = {};
+    }
+    return hasErrorMessage(body) && body.errorMessage !== '' ? body.errorMessage : response.statusText;
+}
+
+function hasErrorMessage(body: unknown): body is { errorMessage: string } {
+    return typeof body === 'object' && body !== null && 'errorMessage' in body && typeof body.errorMessage === 'string';
+}
 
 /**
  * Authenticated API client for admin operations.

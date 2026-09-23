@@ -1,6 +1,6 @@
 import { RenameStatus } from '$lib/models/album';
 import { renameAlbumUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { getNameFromPath, getParentFromPath, isValidDayAlbumPath } from '$lib/utils/galleryPathUtils';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -27,7 +27,7 @@ class AlbumRenameMachine {
     //
 
     renameDayAlbum(oldAlbumPath: string, newAlbumPath: string): void {
-        this.#renameDayAlbum(oldAlbumPath, newAlbumPath); // call async logic in a fire-and-forget manner
+        void this.#renameDayAlbum(oldAlbumPath, newAlbumPath); // call async logic in a fire-and-forget manner
     }
 
     #renameStarted(oldPath: string, newPath: string): void {
@@ -70,20 +70,18 @@ class AlbumRenameMachine {
             this.#renameStarted(oldAlbumPath, newAlbumPath);
             const response = await adminApi.post(renameAlbumUrl(oldAlbumPath), { newName });
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
-            // Fetch parent album to get renamed album added to it
-            // Do NOT async await because we want the UI to move to
-            // the new album now
+            // Fetch parent album to get renamed album added to it, without waiting,
+            // because we want the UI to move to the new album now
             const parentAlbumPath = getParentFromPath(oldAlbumPath);
-            albumLoadMachine.reloadAfterChange(parentAlbumPath);
-            // Remove old album from album store, but do NOT async await
+            void albumLoadMachine.reloadAfterChange(parentAlbumPath);
+            // Remove old album from album store, without waiting,
             // because we want the UI to move away from the old album first
-            albumLoadMachine.removeFromMemoryAndDisk(oldAlbumPath);
+            void albumLoadMachine.removeFromMemoryAndDisk(oldAlbumPath);
             this.#success(oldAlbumPath);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
             this.#error(oldAlbumPath, newAlbumPath, msg);
         }
     }

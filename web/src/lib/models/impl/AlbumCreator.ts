@@ -11,9 +11,7 @@ import type { AlbumRecord } from './server';
  * @param json JSON object coming from server or stored in idb
  */
 export default function toAlbum(json: AlbumRecord): Album {
-    if (!json) throw new Error('No JSON object received');
-    if (typeof json !== 'object') throw new Error(`JSON is not an object: [${json}]`);
-    const path = json?.path;
+    const { path } = json;
     if (!path) throw new Error(`JSON has no path`);
     const type = getAlbumType(path);
     switch (type) {
@@ -24,6 +22,6 @@ export default function toAlbum(json: AlbumRecord): Album {
         case AlbumType.DAY:
             return new AlbumDayImpl(json);
         default:
-            throw new Error(`Unexpected album type [${type}]`);
+            throw new Error(`Unexpected album type for [${path}]`);
     }
 }

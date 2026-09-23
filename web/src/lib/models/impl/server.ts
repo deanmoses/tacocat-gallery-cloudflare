@@ -9,12 +9,10 @@ import type { AlbumRecord, GalleryRecord, ImageRecord, MediaRecord, VideoRecord 
 export type {
     AlbumGalleryItem,
     AlbumRecord,
-    AlbumThumbnailRecord,
     GalleryRecord,
     ImageRecord,
     MediaRecord,
     Rectangle,
-    Size,
     VideoRecord,
 } from 'tacocat-gallery-shared';
 

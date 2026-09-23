@@ -7,6 +7,7 @@ import { albumRecord } from '$lib/test-support/records';
 import { currentYearAlbumPath } from '$lib/utils/latestAlbum';
 import { longDate } from '$lib/utils/date-utils';
 import { albumPathToDate } from '$lib/utils/galleryPathUtils';
+import type { AlbumGalleryItem } from '$lib/models/impl/server';
 
 /**
  * The thumbnail is read off the current year album in the store. On a cold
@@ -19,9 +20,9 @@ const YEAR = YEAR_PATH.slice(1, -1);
 const older = `${YEAR_PATH}06-15/`;
 const newer = `${YEAR_PATH}12-31/`;
 // The browser's locale decides the text; which album it names is the assertion
-const title = (path: string) => longDate(albumPathToDate(path));
+const title = (path: string): string => longDate(albumPathToDate(path));
 
-function year(newerPublished: boolean) {
+function year(newerPublished: boolean): AlbumGalleryItem {
     return albumRecord({
         path: YEAR_PATH,
         parentPath: '/',

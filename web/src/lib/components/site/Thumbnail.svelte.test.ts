@@ -5,17 +5,20 @@ import type { Locator } from 'vitest/browser';
 import Thumbnail from './Thumbnail.svelte';
 
 /**
- * A play overlay is gated on the thumbnail image having fired `load`, so that it
- * is never drawn over a broken or not-yet-arrived image. Only a real browser
- * fetches an <img> and fires that event, and only a real browser runs the
- * `$effect` that resets the gate, which is why these run in the browser project.
+ * A play overlay is gated on the thumbnail image having fired `load` for its
+ * current source, so that it is never drawn over a broken or not-yet-arrived
+ * image. Only a real browser fetches an <img> and fires that event, which is
+ * why these run in the browser project.
  */
 const LOADABLE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const BROKEN_IMAGE = 'data:image/gif;base64,not-a-gif';
 
 /** An overlay is absent before the image settles as well as after, so absence only means something once it has. */
 async function settles(image: Locator): Promise<void> {
-    const img = image.element() as HTMLImageElement;
+    const img = image.element();
+    if (!(img instanceof HTMLImageElement)) {
+        throw new TypeError('The locator did not find an <img>');
+    }
     await vi.waitFor(() => {
         expect(img.complete).toBe(true);
     });
@@ -48,7 +51,7 @@ describe(Thumbnail, () => {
 
         await expect.element(page.getByTestId('play-overlay')).toBeVisible();
 
-        await screen.rerender({ src: LOADABLE_IMAGE, isVideo: false });
+        screen.rerender({ src: LOADABLE_IMAGE, isVideo: false });
 
         await expect.element(page.getByTestId('play-overlay')).not.toBeInTheDocument();
     });
@@ -64,7 +67,7 @@ describe(Thumbnail, () => {
 
         await expect.element(page.getByTestId('play-overlay')).toBeVisible();
 
-        await screen.rerender({ src: BROKEN_IMAGE, isVideo: true });
+        screen.rerender({ src: BROKEN_IMAGE, isVideo: true });
 
         await expect.element(page.getByTestId('play-overlay')).not.toBeInTheDocument();
     });

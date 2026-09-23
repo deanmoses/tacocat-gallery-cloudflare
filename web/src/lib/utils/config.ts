@@ -134,30 +134,26 @@ export function renameMediaUrl(mediaPath: string): string {
 /**
  * URL to send HTTP GET to search for the specified terms
  */
-export function searchUrl(q: SearchQuery, startAt: number, pageSize: number): string {
-    let url = `${baseApiUrl()}search/${encodeURIComponent(q.terms)}`;
+export function searchUrl(query: SearchQuery, startAt: number, pageSize: number): string {
     const params: string[] = [];
-    if (q.oldestYear) params.push(`oldest=${q.oldestYear}`);
-    if (q.newestYear) params.push(`newest=${q.newestYear}`);
-    if (q.oldestFirst) params.push(`oldestFirst=${q.oldestFirst}`);
-    if (startAt) params.push(`startAt=${startAt}`);
-    if (pageSize) params.push(`pageSize=${pageSize}`);
-    if (params) url += `?${params.join('&')}`;
-    return url;
+    if (query.oldestYear !== undefined) params.push(`oldest=${query.oldestYear}`);
+    if (query.newestYear !== undefined) params.push(`newest=${query.newestYear}`);
+    if (query.oldestFirst === true) params.push('oldestFirst=true');
+    if (startAt !== 0) params.push(`startAt=${startAt}`);
+    if (pageSize !== 0) params.push(`pageSize=${pageSize}`);
+    return `${baseApiUrl()}search/${encodeURIComponent(query.terms)}?${params.join('&')}`;
 }
 
 /**
  * Relative URL to the search page within the Sveltekit app
  */
-export function localSearchUrl(q: SearchQuery, returnPath: string): string {
-    let url = `/search/${encodeURIComponent(ensureDumbQuotes(q.terms))}`;
+export function localSearchUrl(query: SearchQuery, returnPath: string): string {
     const params: string[] = [];
     params.push(`returnPath=${returnPath}`);
-    if (q.oldestYear) params.push(`oldest=${q.oldestYear}`);
-    if (q.newestYear) params.push(`newest=${q.newestYear}`);
-    if (q.oldestFirst) params.push(`oldestFirst=${q.oldestFirst}`);
-    if (params) url += `?${params.join('&')}`;
-    return url;
+    if (query.oldestYear !== undefined) params.push(`oldest=${query.oldestYear}`);
+    if (query.newestYear !== undefined) params.push(`newest=${query.newestYear}`);
+    if (query.oldestFirst === true) params.push('oldestFirst=true');
+    return `/search/${encodeURIComponent(ensureDumbQuotes(query.terms))}?${params.join('&')}`;
 }
 
 /**
@@ -166,7 +162,7 @@ export function localSearchUrl(q: SearchQuery, returnPath: string): string {
  * Turn them into dumb quotes.
  */
 function ensureDumbQuotes(searchTerms: string): string {
-    return searchTerms.replaceAll(/[\u{2018}\u{2019}]/gv, "'").replaceAll(/[\u{201C}\u{201D}]/gv, '"');
+    return searchTerms.replaceAll(/[‘’]/gv, "'").replaceAll(/[“”]/gv, '"');
 }
 
 /**

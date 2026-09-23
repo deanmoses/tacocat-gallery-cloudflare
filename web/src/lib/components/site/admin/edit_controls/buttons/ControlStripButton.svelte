@@ -11,7 +11,7 @@
         /** Alt text*/
         title?: string | undefined;
         children?: Snippet | undefined;
-        onclick?: (event: MouseEvent) => void | undefined;
+        onclick?: ((event: MouseEvent) => void) | undefined;
     }
 
     let { disabled = false, title, children, onclick }: Props = $props();

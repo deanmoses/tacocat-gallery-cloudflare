@@ -22,9 +22,9 @@
 
     let { editControls, nav, caption, thumbnails }: Props = $props();
 
-    let year = $derived(page.params.year || '');
+    let year = $derived(page.params.year ?? '');
 
-    const editControls_render = $derived(editControls);
+    const editControlsSnippet = $derived(editControls);
 </script>
 
 <svelte:head>
@@ -33,7 +33,7 @@
 
 <SiteLayout>
     {#snippet editControls()}
-        {@render editControls_render?.()}
+        {@render editControlsSnippet?.()}
     {/snippet}
     <Header hideBottomBorder>
         {year}

@@ -1,5 +1,5 @@
 import { getPresignedUploadUrlGenerationUrl } from './config';
-import { adminApi } from './adminApi';
+import { adminApi, failureMessage } from './adminApi';
 
 export type S3UploadResult = { success: true; versionId: string } | { success: false; error: string };
 
@@ -27,7 +27,7 @@ export async function uploadToS3(file: File, presignedUrl: string): Promise<S3Up
         }
 
         const versionId = response.headers.get('x-amz-version-id');
-        if (!versionId) {
+        if (versionId === null || versionId === '') {
             return {
                 success: false,
                 error: 'No versionId returned. Check bucket CORS configuration for x-amz-version-id header.',
@@ -35,8 +35,8 @@ export async function uploadToS3(file: File, presignedUrl: string): Promise<S3Up
         }
 
         return { success: true, versionId };
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         return { success: false, error: msg };
     }
 }
@@ -53,15 +53,22 @@ export async function fetchPresignedUrls(albumPath: string, imagePaths: string[]
         const response = await adminApi.post(getPresignedUploadUrlGenerationUrl(albumPath), imagePaths);
 
         if (!response.ok) {
-            const body = await response.json().catch(() => ({}));
-            const msg = body.errorMessage || response.statusText;
-            return { success: false, error: msg };
+            return { success: false, error: await failureMessage(response) };
         }
 
-        const urls = await response.json();
+        const urls: unknown = await response.json();
+        if (!isUrlByPath(urls)) throw new Error('Expected a presigned URL for each path');
         return { success: true, urls };
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         return { success: false, error: msg };
     }
+}
+
+function isUrlByPath(value: unknown): value is Record<string, string> {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        Object.values(value).every((entry: unknown) => typeof entry === 'string')
+    );
 }

@@ -10,29 +10,29 @@
 
     interface Props {
         /** Callback to be called when the user confirms */
-        onConfirm?: () => void | undefined;
+        onConfirm?: (() => void) | undefined;
     }
 
     let { onConfirm }: Props = $props();
 
-    let dialog = $state()!;
+    let dialog: { show: () => void; close: () => void } | undefined = $state();
     let filesAlreadyInAlbum: string[] = $state([]);
     let filez = $derived(filesAlreadyInAlbum.join(', '));
 
-    export function show(f: string[]): void {
-        filesAlreadyInAlbum = f;
-        dialog.show();
+    export function show(files: string[]): void {
+        filesAlreadyInAlbum = files;
+        dialog?.show();
     }
 
-    function onSubmit(e?: Event): void {
-        e?.preventDefault();
-        dialog.close();
+    function onSubmit(event?: Event): void {
+        event?.preventDefault();
+        dialog?.close();
         filesAlreadyInAlbum = [];
         if (onConfirm) onConfirm();
     }
 
     function onCancelButtonClick(): void {
-        dialog.close();
+        dialog?.close();
         filesAlreadyInAlbum = [];
     }
 
@@ -50,7 +50,7 @@
         Already in album: {filez}
     {/snippet}
     {#snippet buttons()}
-        <button onclick={onCancelButtonClick}><CancelIcon /> Cancel</button>
-        <button onclick={onSubmit}><UploadIcon /> Overwrite</button>
+        <button onclick={onCancelButtonClick} type="button"><CancelIcon /> Cancel</button>
+        <button onclick={onSubmit} type="button"><UploadIcon /> Overwrite</button>
     {/snippet}
 </Dialog>

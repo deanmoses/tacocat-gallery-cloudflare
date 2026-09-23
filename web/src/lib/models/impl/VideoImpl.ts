@@ -10,9 +10,7 @@ export class VideoImpl extends MediaBaseImpl implements Video {
         this.json = json;
     }
 
-    get mediaType(): 'video' {
-        return 'video';
-    }
+    readonly mediaType = 'video';
 
     get duration(): number {
         return this.json.duration;

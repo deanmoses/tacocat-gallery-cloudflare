@@ -11,7 +11,7 @@
     interface Props {
         path: string;
         albumThumbPath: string | undefined;
-        onSelected?: (path: string) => void | undefined;
+        onSelected?: ((path: string) => void) | undefined;
     }
 
     let { path, albumThumbPath, onSelected }: Props = $props();
@@ -19,13 +19,15 @@
     let selected: boolean = $derived(path === albumThumbPath);
 
     let selecting: boolean = $state(false);
+    let previouslySelected: boolean | undefined = $state();
+    // A change to `selected`, in either direction, is the store answering the click, so the transition ends
     $effect(() => {
-        // Reference 'selected' so that $effect is triggered every time it changes
-        selected;
+        if (selected === previouslySelected) return;
+        previouslySelected = selected;
         selecting = false;
     });
 
-    function onEmptyStarClick() {
+    function onEmptyStarClick(): void {
         selecting = true;
         if (onSelected) {
             onSelected(path);
@@ -38,7 +40,7 @@
 {:else if selecting}
     <div class="selecting"><TransitionStarIcon onclick={onEmptyStarClick} /></div>
 {:else}
-    <div class="notSelected"><EmptyStarIcon onclick={onEmptyStarClick} /></div>
+    <div class="not-selected"><EmptyStarIcon onclick={onEmptyStarClick} /></div>
 {/if}
 
 <style>
@@ -50,15 +52,15 @@
 
     .selected,
     .selecting {
-        color: yellow;
+        color: #ffff00;
     }
 
-    .notSelected {
-        color: white;
+    .not-selected {
+        color: #ffffff;
         display: none;
     }
 
-    .notSelected:hover {
-        color: yellow;
+    .not-selected:hover {
+        color: #ffff00;
     }
 </style>

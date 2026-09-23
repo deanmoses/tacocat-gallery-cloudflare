@@ -12,7 +12,7 @@
     let path: string = $derived(page.url.pathname);
     let show: boolean = $derived(path !== '/'); // Show this button everywhere but root
 
-    function onEditButtonClick() {
+    function onEditButtonClick(): void {
         editModeMachine.turnOnEditMode();
     }
 </script>

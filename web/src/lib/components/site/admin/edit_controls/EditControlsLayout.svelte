@@ -30,7 +30,7 @@
 <style>
     .editing-controls-container {
         background-color: rgb(65 64 64);
-        border-bottom: 1px solid black;
+        border-bottom: 1px solid #000000;
     }
 
     .editing-controls {
@@ -40,10 +40,10 @@
         gap: 1em;
         padding: 0.5em;
         color: rgb(211 211 211);
-        animation: fadeIn 600ms;
+        animation: fade-in 600ms;
     }
 
-    @keyframes fadeIn {
+    @keyframes fade-in {
         0% {
             opacity: 0;
         }

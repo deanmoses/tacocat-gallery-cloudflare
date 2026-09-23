@@ -30,11 +30,11 @@ class SessionStore {
     //
 
     fetchUserStatus(): void {
-        this.#fetchUserStatus(); // invoke async service in fire-and-forget fashion
+        void this.#fetchUserStatus(); // invoke async service in fire-and-forget fashion
     }
 
     fetchHasBeenLoggedIn(): void {
-        this.#fetchHasBeenLoggedIn(); // invoke async service in fire-and-forget fashion
+        void this.#fetchHasBeenLoggedIn(); // invoke async service in fire-and-forget fashion
     }
 
     #authenticationSuccess(): void {
@@ -74,8 +74,8 @@ class SessionStore {
                 cache: 'no-store',
             });
             this.#handleErrors(response);
-            // The admin's name, or null for a guest
-            const json = await response.json();
+            const json: unknown = await response.json();
+            if (!isAuthStatus(json)) throw new Error('Expected authentication status to name an admin or null');
             const isAdmin = json.admin !== null;
             if (isAdmin) {
                 console.log('User is an admin');
@@ -100,19 +100,22 @@ class SessionStore {
         if (!response.ok) {
             const msg = `Response not OK fetching authentication status: ${response.statusText}`;
             throw new Error(msg);
-        } else if (response.status !== 200) {
+        }
+        if (response.status !== 200) {
             const msg = `Non-200 response (${response.status}) fetching authentication status`;
             throw new Error(msg);
-        } else if (!response.headers.get('content-type')?.startsWith('application/json')) {
-            const ctnt = response.headers.get('content-type');
-            const msg = `Expected response to be in JSON.  Instead got ${ctnt}. ${response.statusText}`;
-            throw new Error(msg);
+        }
+        const contentType = response.headers.get('content-type');
+        if (contentType?.startsWith('application/json') !== true) {
+            throw new Error(
+                `Expected response to be in JSON.  Instead got ${String(contentType)}. ${response.statusText}`,
+            );
         }
     }
 
     async #fetchHasBeenLoggedIn(): Promise<void> {
-        const hasBeenLoggedIn = await getFromIdb(HasBeenLoggedInIDBKey);
-        if (hasBeenLoggedIn) this.#hasBeenLoggedInSuccess();
+        const hasBeenLoggedIn: unknown = await getFromIdb(HasBeenLoggedInIDBKey);
+        if (hasBeenLoggedIn === true) this.#hasBeenLoggedInSuccess();
         else {
             console.log(`user has never been logged in before:`, hasBeenLoggedIn);
         }
@@ -120,3 +123,13 @@ class SessionStore {
 }
 
 export const sessionStore = new SessionStore();
+
+/** The admin's name, or null for a guest */
+function isAuthStatus(value: unknown): value is { admin: string | null } {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'admin' in value &&
+        (typeof value.admin === 'string' || value.admin === null)
+    );
+}

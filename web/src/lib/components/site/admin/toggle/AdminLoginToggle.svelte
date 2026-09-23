@@ -8,7 +8,7 @@
 </script>
 
 <div>
-    <nav class="editing-controls">
+    <nav>
         <LoginButton />
     </nav>
 </div>
@@ -25,7 +25,7 @@
     nav {
         width: 100%;
         padding: 0.5em;
-        border-bottom: 1px solid black;
+        border-bottom: 1px solid #000000;
         border-bottom-right-radius: 8px;
         background-color: rgb(65 64 64);
         color: rgb(211 211 211);
@@ -36,10 +36,10 @@
         display: flex;
         align-items: center;
         gap: 1em;
-        animation: fadeIn 1400ms;
+        animation: fade-in 1400ms;
     }
 
-    @keyframes fadeIn {
+    @keyframes fade-in {
         0% {
             opacity: 0;
         }

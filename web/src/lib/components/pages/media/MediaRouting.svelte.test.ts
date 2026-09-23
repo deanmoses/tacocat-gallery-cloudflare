@@ -42,8 +42,8 @@ const OTHER: Target = { albumPath: '/2001/12-30/', mediaPath: mediaPath('other.j
 const media = dayAlbum([imageRecord({ path: MEDIA_PATH, itemName: 'image.jpg' })]).media[0];
 const item = createRawSnippet(() => ({ render: () => `<p>${MEDIA_CONTENT}</p>` }));
 
-function show(overrides: { media?: Media | undefined } = {}) {
-    return render(MediaRouting, { albumPath: ALBUM_PATH, mediaPath: MEDIA_PATH, media, loaded: item, ...overrides });
+function show(overrides: { media?: Media | undefined } = {}): void {
+    render(MediaRouting, { albumPath: ALBUM_PATH, mediaPath: MEDIA_PATH, media, loaded: item, ...overrides });
 }
 
 type Seed = (target: Target) => void;
@@ -56,12 +56,14 @@ type MessageCase = Case & { message: string };
 
 const setStatus =
     (loadStatus: AlbumLoadStatus): Seed =>
-    ({ albumPath }) =>
+    ({ albumPath }) => {
         albumState.albums.set(albumPath, { loadStatus });
+    };
 const setUpload =
     (status: UploadState): Seed =>
-    ({ mediaPath }) =>
-        albumState.uploads.push(uploadEntry({ mediaPath, status }));
+    ({ mediaPath: itemPath }) => {
+        albumState.uploads.push(uploadEntry({ mediaPath: itemPath, status }));
+    };
 
 /** States whose page puts no words on the screen, leaving the title to carry it */
 const WORDLESS: Case[] = [
@@ -78,20 +80,23 @@ const UPLOAD_TITLES: Record<UploadState, string> = {
 
 /** States whose page announces itself with a heading as well as a title */
 const PROCESSING: Case[] = [
-    ...(Object.keys(UPLOAD_TITLES) as UploadState[]).map((status) => ({
+    ...Object.values(UploadState).map((status) => ({
         state: `holding an upload at ${status}`,
         seed: setUpload(status),
         title: UPLOAD_TITLES[status],
     })),
     {
         state: 'renaming an item',
-        seed: ({ mediaPath }) =>
-            albumState.mediaRenames.set(mediaPath, renameEntry(mediaPath, 'renamed.jpg', RenameStatus.IN_PROGRESS)),
+        seed: ({ mediaPath: itemPath }) => {
+            albumState.mediaRenames.set(itemPath, renameEntry(itemPath, 'renamed.jpg', RenameStatus.IN_PROGRESS));
+        },
         title: 'Rename In Progress',
     },
     {
         state: 'deleting an item',
-        seed: ({ mediaPath }) => albumState.mediaDeletes.set(mediaPath, { status: DeleteStatus.IN_PROGRESS }),
+        seed: ({ mediaPath: itemPath }) => {
+            albumState.mediaDeletes.set(itemPath, { status: DeleteStatus.IN_PROGRESS });
+        },
         title: 'Delete In Progress',
     },
 ];
@@ -128,7 +133,7 @@ describe(MediaRouting, () => {
      * any layout and so offers no title and no way back.
      */
     it('waits on an album absent from memory', async () => {
-        await show();
+        show();
 
         expect(document.title).toBe(NO_TITLE);
         await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
@@ -137,7 +142,7 @@ describe(MediaRouting, () => {
     it.each(WORDLESS)('an album $state shows $title', async ({ seed, title }) => {
         seed(THIS);
 
-        await show();
+        show();
 
         expect(document.title).toBe(title);
         await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
@@ -146,7 +151,7 @@ describe(MediaRouting, () => {
     it.each(PROCESSING)('an album $state shows $title', async ({ seed, title }) => {
         seed(THIS);
 
-        await show();
+        show();
 
         expect(document.title).toBe(title);
         await expect.element(page.getByRole('heading', { name: title })).toBeVisible();
@@ -156,7 +161,7 @@ describe(MediaRouting, () => {
     it.each(WITH_MESSAGE)('an album $state shows $message', async ({ seed, title, message }) => {
         seed(THIS);
 
-        await show();
+        show();
 
         expect(document.title).toBe(title);
         await expect.element(page.getByText(message)).toBeVisible();
@@ -167,7 +172,7 @@ describe(MediaRouting, () => {
     it('an album ERROR_LOADING offers a labelled way home', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.ERROR_LOADING });
 
-        await show();
+        show();
 
         await expect.element(page.getByRole('link', { name: 'Go back Home?' })).toBeVisible();
     });
@@ -175,7 +180,7 @@ describe(MediaRouting, () => {
     it('shows the media once the album is loaded', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-        await show();
+        show();
 
         await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
     });
@@ -188,7 +193,7 @@ describe(MediaRouting, () => {
      */
     it('follows the album from loading to loaded under the page', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADING });
-        await show();
+        show();
 
         await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
 
@@ -204,7 +209,7 @@ describe(MediaRouting, () => {
      */
     it.each(PROCESSING)('an album $state after the media is on screen shows $title', async ({ seed, title }) => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
-        await show();
+        show();
 
         await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
 
@@ -222,7 +227,7 @@ describe(MediaRouting, () => {
             seed(OTHER);
             albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-            await show();
+            show();
 
             await expect.element(page.getByText(MEDIA_CONTENT)).toBeVisible();
         },
@@ -232,7 +237,7 @@ describe(MediaRouting, () => {
     it('reports a missing item on an album that loaded without it', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-        await show({ media: undefined });
+        show({ media: undefined });
 
         expect(document.title).toBe('Media Not Found');
     });
@@ -246,7 +251,7 @@ describe(MediaRouting, () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
         albumState.mediaDeletes.set(MEDIA_PATH, { status: DeleteStatus.IN_PROGRESS });
 
-        await show();
+        show();
 
         expect(document.title).toBe('Delete In Progress');
         await expect.element(page.getByText(MEDIA_CONTENT)).not.toBeInTheDocument();
@@ -263,7 +268,7 @@ describe(MediaRouting, () => {
     it('an unrecognized status shows the status on a titled page', async () => {
         albumState.albums.set(ALBUM_PATH, { loadStatus: 'WAT' as AlbumLoadStatus });
 
-        await show();
+        show();
 
         expect(document.title).toBe('Error');
         await expect.element(page.getByText('Unknown status: [WAT]')).toBeVisible();
@@ -272,7 +277,7 @@ describe(MediaRouting, () => {
     it('an unrecognized upload status shows the status on a titled page', async () => {
         albumState.uploads.push(uploadEntry({ mediaPath: MEDIA_PATH, status: 'WAT' as UploadState }));
 
-        await show();
+        show();
 
         expect(document.title).toBe('Error');
         await expect.element(page.getByText('Unknown upload status: [WAT]')).toBeVisible();

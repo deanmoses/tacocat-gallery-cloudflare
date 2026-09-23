@@ -1,6 +1,6 @@
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { recropThumbnailUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
 import { getParentFromPath } from '$lib/utils/galleryPathUtils';
 import { albumState } from '../AlbumState.svelte';
@@ -36,15 +36,15 @@ class CropMachine {
             crop,
             status: CropStatus.IN_PROGRESS,
         });
-        this.#crop(mediaPath, crop); // call async logic in a fire-and-forget manner
+        void this.#crop(mediaPath, crop); // call async logic in a fire-and-forget manner
     }
 
-    #success(mediaPath: string) {
+    #success(mediaPath: string): void {
         albumState.crops.delete(mediaPath);
         toast.push(`Thumbnail cropped`);
     }
 
-    #error(mediaPath: string, errorMessage: string) {
+    #error(mediaPath: string, errorMessage: string): void {
         console.log(`Error cropping thumbnail for [${mediaPath}]: ${errorMessage}`);
         albumState.crops.delete(mediaPath);
         toast.push(`Error cropping thumbnail: ${errorMessage}`);
@@ -68,8 +68,7 @@ class CropMachine {
 
             // Check for errors
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
 
             console.log(`Updated thumbnail of [${mediaPath}]`);

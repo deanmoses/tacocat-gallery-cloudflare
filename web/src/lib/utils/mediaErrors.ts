@@ -34,15 +34,28 @@ export async function checkMediaErrors(paths: string[]): Promise<MediaErrorsResp
             };
         }
 
-        const data = await response.json();
-        return {
-            success: true,
-            errors: data.errors,
-        };
-    } catch (err) {
+        const data: unknown = await response.json();
+        const errors = errorsIn(data);
+        return errors === undefined ? { success: true } : { success: true, errors };
+    } catch (error) {
         return {
             success: false,
-            error: err instanceof Error ? err.message : 'Unknown error',
+            error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
+}
+
+/** The failures the server reports, keyed by path, when the body carries any. */
+function errorsIn(body: unknown): Record<string, string> | undefined {
+    if (typeof body !== 'object' || body === null || !('errors' in body)) return undefined;
+    const { errors } = body;
+    return isStringRecord(errors) ? errors : undefined;
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        Object.values(value).every((entry: unknown) => typeof entry === 'string')
+    );
 }

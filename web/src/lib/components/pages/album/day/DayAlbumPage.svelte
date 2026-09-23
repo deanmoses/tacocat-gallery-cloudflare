@@ -14,14 +14,14 @@
     import { albumNav } from '$lib/utils/albumNavigation';
     import type { UploadEntry } from '$lib/models/album';
     import { sessionStore } from '$lib/stores/SessionStore.svelte';
-    import { albumState, getParentAlbum } from '$lib/stores/AlbumState.svelte';
+    import { albumState, getParentAlbum, mediaActivity } from '$lib/stores/AlbumState.svelte';
 
     interface Props {
         album: Album;
     }
     let { album }: Props = $props();
     let neighbours = $derived(albumNav(album.path, getParentAlbum(album.path)));
-    let uploads: UploadEntry[] | undefined = $derived(
+    let uploads: UploadEntry[] = $derived(
         albumState.uploads.filter((upload) => upload.mediaPath.startsWith(album.path)),
     );
 </script>
@@ -38,7 +38,7 @@
     {/snippet}
 
     {#snippet caption()}
-        {#if uploads?.length}
+        {#if uploads.length > 0}
             {#await import('./UploadStatus.svelte') then { default: UploadStatus }}
                 <UploadStatus {uploads} />
             {/await}
@@ -48,21 +48,21 @@
     {/snippet}
 
     {#snippet thumbnails()}
-        {#if album.media?.length}
+        {#if album.media.length > 0}
             {#each album.media as media (media.path)}
                 <MediaThumbnail
+                    activity={mediaActivity(media.path)}
                     href={media.href}
                     mediaType={media.mediaType}
-                    path={media.path}
                     summary={media.summary}
                     thumbnailUrlInfo={media.thumbnailUrlInfo}
                     title={media.title}
                 />
             {/each}
-        {:else if !album.published && !uploads?.length}
+        {:else if !album.published && uploads.length === 0}
             <p>Drop images and videos or a 📁</p>
         {/if}
-        {#if uploads?.length}
+        {#if uploads.length > 0}
             <!-- 
                   Lazy / async / dynamic load the component
                   It's a hint to the bundling system that it can be put into a separate bundle, 

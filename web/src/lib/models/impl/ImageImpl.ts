@@ -11,9 +11,7 @@ export class ImageImpl extends MediaBaseImpl implements Image {
         this.json = json;
     }
 
-    get mediaType(): 'image' {
-        return 'image';
-    }
+    readonly mediaType = 'image';
 
     get originalUrl(): string {
         return originalMediaUrl(this.json.path, this.json.versionId);

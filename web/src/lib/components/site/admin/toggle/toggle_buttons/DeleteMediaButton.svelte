@@ -14,9 +14,9 @@
     let imagePath: string = $derived(page.url.pathname);
     let show: boolean = $derived(isValidMediaPath(imagePath)); // Show this button on media pages (images and videos)
 
-    function onDeleteButtonClick() {
+    function onDeleteButtonClick(): void {
         mediaDeleteMachine.delete(imagePath);
-        goto(getParentFromPath(imagePath));
+        void goto(getParentFromPath(imagePath));
     }
 </script>
 

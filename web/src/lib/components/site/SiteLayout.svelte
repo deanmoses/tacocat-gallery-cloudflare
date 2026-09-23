@@ -15,7 +15,7 @@
     }
 
     let { hideFooter = false, editControls, children }: Props = $props();
-    let year = $derived(page.params.year || 'current');
+    let year = $derived(page.params.year ?? 'current');
 </script>
 
 {@render editControls?.()}

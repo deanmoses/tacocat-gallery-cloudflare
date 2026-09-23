@@ -3,6 +3,7 @@ import { handleKeyboardNavigation } from './keyboard-navigation';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { albumRecord, dayAlbum, imageRecord, mediaPath } from '$lib/test-support/records';
+import type { AlbumGalleryItem, ImageRecord } from '$lib/models/impl/server';
 
 /**
  * What the arrow keys do from each kind of page, given what is in memory.
@@ -11,16 +12,17 @@ import { albumRecord, dayAlbum, imageRecord, mediaPath } from '$lib/test-support
  * album. The store is stood in for by a map, since all the handler asks of it
  * is an album by path.
  */
-const image = (name: string) => imageRecord({ path: mediaPath(name), itemName: name });
-const day = (name: string) => albumRecord({ path: `/2001/${name}/`, parentPath: '/2001/', itemName: name });
-const year = (name: string) => albumRecord({ path: `/${name}/`, parentPath: '/', itemName: name });
+const image = (name: string): ImageRecord => imageRecord({ path: mediaPath(name), itemName: name });
+const day = (name: string): AlbumGalleryItem =>
+    albumRecord({ path: `/2001/${name}/`, parentPath: '/2001/', itemName: name });
+const year = (name: string): AlbumGalleryItem => albumRecord({ path: `/${name}/`, parentPath: '/', itemName: name });
 
 const IN_MEMORY = new Map<string, Album>([
     ['/', toAlbum(albumRecord({ path: '/', parentPath: '', itemName: '', children: ['2000', '2001'].map(year) }))],
     ['/2001/', toAlbum(albumRecord({ children: ['01-01', '12-31'].map(day) }))],
     ['/2001/12-31/', dayAlbum(['a.jpg', 'b.jpg', 'c.jpg'].map(image))],
 ]);
-const getAlbum = (path: string) => IN_MEMORY.get(path);
+const getAlbum = (path: string): Album | undefined => IN_MEMORY.get(path);
 
 interface Case {
     key: string;

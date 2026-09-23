@@ -23,10 +23,12 @@
     }
 
     let { width = '1em', height = '1em', title, d, viewBox, bottom = '0.125em' }: Props = $props();
+
+    let hasTitle: boolean = $derived(title !== undefined && title !== '');
 </script>
 
-<svg style:bottom aria-hidden={title ? undefined : true} {height} {viewBox} {width}>
-    {#if title}<title>{title}</title>{/if}
+<svg style:bottom aria-hidden={!hasTitle || undefined} {height} {viewBox} {width}>
+    {#if hasTitle}<title>{title}</title>{/if}
     <path {d} />
 </svg>
 
@@ -38,6 +40,6 @@
     }
 
     path {
-        fill: currentColor;
+        fill: currentcolor;
     }
 </style>

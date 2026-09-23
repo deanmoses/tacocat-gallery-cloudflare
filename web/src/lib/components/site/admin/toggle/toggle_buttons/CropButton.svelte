@@ -13,8 +13,8 @@
 
     let path: string = $derived(page.url.pathname);
     let show: boolean = $derived(isValidMediaPath(path)); // Show this button only on media pages
-    function onCropButtonClick() {
-        goto(`${path}/crop`);
+    function onCropButtonClick(): void {
+        void goto(`${path}/crop`);
     }
 </script>
 

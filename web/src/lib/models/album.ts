@@ -148,3 +148,17 @@ export const CropStatus = {
     IN_PROGRESS: 'In Progress',
 } as const;
 export type CropStatus = (typeof CropStatus)[keyof typeof CropStatus];
+
+/** What an admin is doing to an album right now, for its thumbnail to show. */
+export interface AlbumActivity {
+    creating: boolean;
+    deleting: boolean;
+    renaming: boolean;
+}
+
+/** What an admin is doing to a media item right now, for its thumbnail to show. */
+export interface MediaActivity {
+    deleting: boolean;
+    renaming: boolean;
+    cropping: boolean;
+}

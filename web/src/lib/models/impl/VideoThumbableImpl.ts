@@ -9,7 +9,5 @@ export class VideoThumbableImpl extends MediaThumbableBaseImpl {
         this.json = json;
     }
 
-    get mediaType(): 'video' {
-        return 'video';
-    }
+    readonly mediaType = 'video';
 }

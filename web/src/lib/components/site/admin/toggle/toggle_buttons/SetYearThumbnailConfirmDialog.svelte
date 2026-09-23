@@ -10,25 +10,25 @@
 
     interface Props {
         /** Callback to be called when the user confirms */
-        onConfirm?: () => void | undefined;
+        onConfirm?: (() => void) | undefined;
     }
 
     let { onConfirm }: Props = $props();
 
-    let dialog = $state()!;
+    let dialog: { show: () => void; close: () => void } | undefined = $state();
 
-    export function show() {
-        dialog.show();
+    export function show(): void {
+        dialog?.show();
     }
 
-    function onSubmit(e?: Event): void {
-        e?.preventDefault();
-        dialog.close();
+    function onSubmit(event?: Event): void {
+        event?.preventDefault();
+        dialog?.close();
         if (onConfirm) onConfirm();
     }
 
     function onCancelButtonClick(): void {
-        dialog.close();
+        dialog?.close();
     }
 
     function onkeydown(event: KeyboardEvent): void {
@@ -45,7 +45,7 @@
         Set as thumbnail for year?
     {/snippet}
     {#snippet buttons()}
-        <button onclick={onCancelButtonClick}><CancelIcon /> Cancel</button>
-        <button onclick={onSubmit}><StarIcon /> Set Year Thumb</button>
+        <button onclick={onCancelButtonClick} type="button"><CancelIcon /> Cancel</button>
+        <button onclick={onSubmit} type="button"><StarIcon /> Set Year Thumb</button>
     {/snippet}
 </Dialog>

@@ -5,7 +5,7 @@ import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { getParentFromPath, isValidMediaPath, isValidPath } from '$lib/utils/galleryPathUtils';
 import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
 import { updateUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumState } from '../AlbumState.svelte';
 
@@ -40,7 +40,7 @@ class DraftMachine {
     readonly status: DraftStatus | undefined = $derived(this.#draft.status);
 
     readonly okToNavigate: boolean = $derived(
-        this.#draft.status !== DraftStatus.UNSAVED_CHANGES && this.#draft.status != DraftStatus.SAVING,
+        this.#draft.status !== DraftStatus.UNSAVED_CHANGES && this.#draft.status !== DraftStatus.SAVING,
     );
 
     //
@@ -76,28 +76,36 @@ class DraftMachine {
      * Set the title of the current draft
      */
     setTitle(title: string): void {
-        this.#updateContent((content) => (content.title = title));
+        this.#updateContent((content) => {
+            content.title = title;
+        });
     }
 
     /**
      * Set the description of the current draft
      */
     setDescription(description: string): void {
-        this.#updateContent((content) => (content.description = description));
+        this.#updateContent((content) => {
+            content.description = description;
+        });
     }
 
     /**
      * Set the album summary of the current draft
      */
     setSummary(summary: string): void {
-        this.#updateContent((content) => (content.summary = summary));
+        this.#updateContent((content) => {
+            content.summary = summary;
+        });
     }
 
     /**
      * Set the published status of the current draft
      */
     setPublished(published: boolean): void {
-        this.#updateContent((content) => (content.published = published));
+        this.#updateContent((content) => {
+            content.published = published;
+        });
     }
 
     /**
@@ -112,7 +120,7 @@ class DraftMachine {
      * Save the current draft to the server
      */
     save(): void {
-        this.#save(this.#draft); // call async logic in a fire-and-forget manner
+        void this.#save(this.#draft); // call async logic in a fire-and-forget manner
     }
 
     #saveStart(): void {
@@ -121,7 +129,7 @@ class DraftMachine {
 
     #saveError(errorMessage?: string): void {
         this.#setStatus(DraftStatus.ERRORED);
-        if (errorMessage) toast.push(errorMessage);
+        if (errorMessage !== undefined && errorMessage !== '') toast.push(errorMessage);
     }
 
     #saveSuccess(): void {
@@ -130,7 +138,7 @@ class DraftMachine {
 
     #clearSaveSuccess(): void {
         // Only clear saved status if the status is actually still saved
-        if (this.#draft.status == DraftStatus.SAVED) {
+        if (this.#draft.status === DraftStatus.SAVED) {
             console.log('DraftStore: in timeout, setting draft status to NO_CHANGES');
             this.#setStatus(DraftStatus.NO_CHANGES);
         } else {
@@ -154,7 +162,7 @@ class DraftMachine {
     #updateContent(applyChangesToDraftContent: (draftContent: DraftContent) => void): void {
         const newState: Draft = produce(this.#draft, (originalState) => {
             originalState.status = DraftStatus.UNSAVED_CHANGES;
-            if (originalState.content === undefined) throw 'originalState.content is undefined';
+            if (originalState.content === undefined) throw new Error('originalState.content is undefined');
             applyChangesToDraftContent(originalState.content);
         });
         console.log(`Update draft [${newState.path}]:`, newState.content);
@@ -182,12 +190,11 @@ class DraftMachine {
             try {
                 const response = await adminApi.patch(updateUrl(draft.path), draft.content);
                 if (!response.ok) {
-                    const json = await response.json().catch(() => ({}));
-                    throw new Error(json?.errorMessage || response.statusText);
+                    throw new Error(await failureMessage(response));
                 }
-            } catch (e) {
-                console.error(`Error saving [${draft.path}]: ${e}`);
-                this.#saveError(e instanceof Error ? e.message : 'Error saving');
+            } catch (error) {
+                console.error(`Error saving [${draft.path}]: ${String(error)}`);
+                this.#saveError(error instanceof Error ? error.message : 'Error saving');
                 return;
             }
 
@@ -206,9 +213,8 @@ class DraftMachine {
 
                 // Make a copy of the album entry.  Apply changes to the copy
                 const updatedAlbumEntry = produce(albumEntry, (albumEntryCopy) => {
-                    if (albumEntryCopy === undefined) throw new Error('albumEntryCopy is undefined');
                     const image: Thumbable | undefined = albumEntryCopy.album?.media.find(
-                        (image: Thumbable) => image.path === draft.path,
+                        (media: Thumbable) => media.path === draft.path,
                     );
                     if (!image) throw new Error(`Did not find image [${draft.path}] in album [${albumPath}]`);
                     Object.assign(image, draft.content); // Apply contents of draft to image

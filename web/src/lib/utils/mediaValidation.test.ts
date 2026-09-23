@@ -57,7 +57,8 @@ describe('mediaValidation', () => {
         // handed, so the stub can name the URL after it and let FakeImage
         // decide the outcome from that name
         vi.spyOn(URL, 'createObjectURL').mockImplementation((file) => {
-            const url = `blob:${(file as File).name}`;
+            if (!(file instanceof File)) throw new Error('Expected a File');
+            const url = `blob:${file.name}`;
             createdUrls.push(url);
             return url;
         });

@@ -2,38 +2,38 @@
 // code to handle drag and drop
 //
 
-export async function getDroppedFiles(e: DragEvent): Promise<File[]> {
-    e.preventDefault(); // Prevent default behavior, which is the browser opening the files
+export async function getDroppedFiles(event: DragEvent): Promise<File[]> {
+    event.preventDefault(); // Prevent default behavior, which is the browser opening the files
     let files: File[] = [];
-    if (!e.dataTransfer) {
+    if (!event.dataTransfer) {
         console.log('No dataTransfer');
         return files;
     }
-    if (e.dataTransfer.items) {
-        // Use DataTransferItemList interface to access the file(s)
-        for (const item of e.dataTransfer.items) {
-            const itemEntry = item.webkitGetAsEntry();
-            if (itemEntry?.isDirectory) {
-                const x = await getFilesInDirectory(itemEntry as FileSystemDirectoryEntry);
-                files = files.concat(x);
-            } else if (itemEntry?.isFile) {
-                const file = item.getAsFile();
-                if (file) {
-                    files.push(file);
-                } else {
-                    console.log(`There warn't no file name in ${file}`);
-                }
+    for (const item of event.dataTransfer.items) {
+        const itemEntry = item.webkitGetAsEntry();
+        if (itemEntry !== null && isDirectoryEntry(itemEntry)) {
+            const directoryFiles = await getFilesInDirectory(itemEntry);
+            files = files.concat(directoryFiles);
+        } else if (itemEntry !== null && isFileEntry(itemEntry)) {
+            const file = item.getAsFile();
+            if (file) {
+                files.push(file);
             } else {
-                console.log(`Unrecognized type of file`, item, itemEntry);
+                console.log(`There warn't no file in`, item);
             }
-        }
-    } else {
-        // Use DataTransfer interface to access the file(s)
-        for (const file of e.dataTransfer.files) {
-            files.push(file);
+        } else {
+            console.log(`Unrecognized type of file`, item, itemEntry);
         }
     }
     return files;
+}
+
+function isDirectoryEntry(entry: FileSystemEntry): entry is FileSystemDirectoryEntry {
+    return entry.isDirectory;
+}
+
+function isFileEntry(entry: FileSystemEntry): entry is FileSystemFileEntry {
+    return entry.isFile;
 }
 
 /**
@@ -43,10 +43,9 @@ async function getFilesInDirectory(directory: FileSystemDirectoryEntry): Promise
     const files: File[] = [];
     const entries = await readAllDirectoryEntries(directory);
     for (const entry of entries) {
-        if (entry.isFile) {
+        if (isFileEntry(entry)) {
             //console.log(`Directory item`, entry);
-            const fileEntry = entry as FileSystemFileEntry;
-            const file = await readEntryContentAsync(fileEntry);
+            const file = await readEntryContentAsync(entry);
             //console.log(`Adding file [${file.name}] of type [${file.type}]`);
             files.push(file);
         } else {

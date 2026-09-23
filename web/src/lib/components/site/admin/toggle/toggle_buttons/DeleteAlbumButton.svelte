@@ -19,13 +19,13 @@
     // Show this button on year and day albums but not root albums, and only if they don't have children
     let show: boolean = $derived(isValidPath && !hasChildren(albumEntry));
 
-    function hasChildren(albumEntry: AlbumEntry | undefined): boolean {
-        return Boolean(albumEntry?.album?.albums.length) || Boolean(albumEntry?.album?.media.length);
+    function hasChildren(entry: AlbumEntry | undefined): boolean {
+        return Boolean(entry?.album?.albums.length) || Boolean(entry?.album?.media.length);
     }
 
-    function onDeleteButtonClick() {
+    function onDeleteButtonClick(): void {
         albumDeleteMachine.deleteAlbum(albumPath);
-        goto(getParentFromPath(albumPath));
+        void goto(getParentFromPath(albumPath));
     }
 </script>
 

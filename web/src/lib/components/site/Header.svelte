@@ -34,12 +34,12 @@
     }: Props = $props();
 </script>
 
-<header class:bottomBorder={!hideBottomBorder} class:hidden-sm={hideWhenSmall}>
+<header class:bottom-border={!hideBottomBorder} class:hidden-sm={hideWhenSmall}>
     <h1>{@render children?.()}</h1>
 
     <div>
         {#if !hideSiteTitle}
-            <span class="site-title hidden-xs">{siteTitle()}</span>
+            <span class="hidden-xs">{siteTitle()}</span>
         {/if}
         {#if !hideSearch}
             <a class="hidden-xxs" href="/search?returnPath={page.url.pathname}" title="Search">
@@ -59,7 +59,7 @@
         color: var(--default-text-color);
     }
 
-    header.bottomBorder {
+    .bottom-border {
         border-bottom: var(--default-border);
     }
 

@@ -24,21 +24,21 @@
 
     let newCrop: Crop;
 
-    function onCropChange(e: OnCropCompleteEvent) {
-        console.log('onCropChange', e.percent);
-        newCrop = e.percent;
+    function onCropChange(event: OnCropCompleteEvent): void {
+        console.log('onCropChange', event.percent);
+        newCrop = event.percent;
     }
 </script>
 
-<div class="cropContainer">
+<div class="crop-container">
     <Cropper aspect={1} image={media.detailUrl} oncropcomplete={onCropChange} showGrid={false} />
 </div>
 
 <style>
-    .cropContainer {
+    .crop-container {
         position: relative;
         width: 100%;
         min-height: 400px;
-        background-color: white;
+        background-color: #ffffff;
     }
 </style>

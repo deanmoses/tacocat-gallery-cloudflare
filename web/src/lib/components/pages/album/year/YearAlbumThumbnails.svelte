@@ -24,37 +24,32 @@
      * Group the albums by month
      */
     function albumsByMonth(albums: Thumbable[]): AlbumsByMonth {
-        // array to return
-        let albumsByMonth: AlbumsByMonth = [];
+        // Sparse, indexed by month number, so the months come out in calendar order
+        const months: AlbumsByMonth = [];
 
-        if (albums) {
-            // iterate over the albums, putting them into the correct month
-            for (const album of albums) {
-                const albumDate = albumPathToDate(album.path);
-                const month: number = albumDate.getMonth();
-                if (!albumsByMonth[month]) {
-                    let monthName = albumDate.toLocaleString('default', { month: 'long' });
-                    // capitalize the first letter
-                    monthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-                    albumsByMonth[month] = {
-                        monthName,
-                        albums: [],
-                    };
-                }
-                albumsByMonth[month].albums.unshift(album);
+        for (const childAlbum of albums) {
+            const albumDate = albumPathToDate(childAlbum.path);
+            const month: number = albumDate.getMonth();
+            let entry = months[month];
+            if (entry === undefined) {
+                let monthName = albumDate.toLocaleString('default', { month: 'long' });
+                // capitalize the first letter
+                monthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+                entry = { monthName, albums: [] };
+                months[month] = entry;
             }
+            entry.albums.unshift(childAlbum);
         }
 
         // remove empty months
-        albumsByMonth = albumsByMonth.filter(Boolean);
-
-        return albumsByMonth.reverse();
+        return months.filter(Boolean).toReversed();
     }
 
     function getTitle(albumPath: string): string {
         const albumDate = albumPathToDate(albumPath);
         return shortDate(albumDate);
     }
+    import { albumActivity } from '$lib/stores/AlbumState.svelte';
 </script>
 
 {#each albumsByMonth(album.albums) as month (month.monthName)}
@@ -63,8 +58,8 @@
         <Thumbnails>
             {#each month.albums as childAlbum (childAlbum.path)}
                 <AlbumThumbnail
+                    activity={albumActivity(childAlbum.path)}
                     href={childAlbum.href}
-                    path={childAlbum.path}
                     published={childAlbum.published}
                     summary={childAlbum.summary}
                     thumbnailUrlInfo={childAlbum.thumbnailUrlInfo}
@@ -78,7 +73,7 @@
 <style>
     h2 {
         background-color: var(--month-color, var(--header-color));
-        font-weight: bold;
+        font-weight: 700;
         font-size: 1.3em;
         line-height: 1.1;
         padding: 0.3em 0.4em;

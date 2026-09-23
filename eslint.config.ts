@@ -316,6 +316,15 @@ export default defineConfig(
         files: ['web/src/**/*'],
         languageOptions: { globals: globals.browser },
     },
+    {
+        // Outside the app's project, which `svelte-kit sync` writes without it, so it is typed through its own.
+        name: 'web service worker',
+        files: ['web/src/service-worker.ts'],
+        languageOptions: {
+            globals: globals.serviceworker,
+            parserOptions: { projectService: false, project: './web/tsconfig.service-worker.json' },
+        },
+    },
     // The web app sees the Worker only through its HTTP responses, whose shapes live in shared/. A table's row type
     // reaching it would tie the pages to column names the Worker is free to change.
     webLayer('web imports no worker code', ['web/src/**/*'], []),
@@ -448,6 +457,9 @@ export default defineConfig(
             'vitest/unbound-method': 'error',
             // Asymmetric matchers such as expect.any(String) are typed any, and an expected object is where they belong.
             '@typescript-eslint/no-unsafe-assignment': 'off',
+            // A test hands the code what the types forbid on purpose: a status outside the enum, a load event with
+            // only the params the load reads.
+            '@typescript-eslint/no-unsafe-type-assertion': 'off',
             // A one-line callback in a table of cases shows its type in its body; named functions still declare theirs.
             '@typescript-eslint/explicit-function-return-type': ['error', { allowExpressions: true }],
         },
@@ -573,6 +585,12 @@ export default defineConfig(
         },
     },
     {
+        // JavaScript has no syntax for a return type; JSDoc carries it.
+        name: 'javascript',
+        files: ['**/*.js', '**/*.mjs'],
+        rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
+    },
+    {
         name: 'turned off',
         files: CODE,
         rules: {
@@ -599,6 +617,9 @@ export default defineConfig(
             // Prefers the element's tag over its class in a selector. A class says what the element is for; the tag
             // says what it happens to be.
             'svelte/consistent-selector-style': 'off',
+            // textContent joins the two sides of a line break with nothing between; innerText is the rendered text of
+            // a contenteditable, which is what an admin typed.
+            'unicorn/prefer-dom-node-text-content': 'off',
             // Wants every function prop named on*. The app's function props are predicates and transforms a parent
             // injects, such as which files a drop zone accepts, and an on* name would present them as events.
             'svelte/require-event-prefix': 'off',

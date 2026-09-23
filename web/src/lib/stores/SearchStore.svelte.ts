@@ -39,7 +39,7 @@ class SearchStore {
         }
 
         this.#setLoadStatus(query, SearchLoadStatus.LOADING);
-        this.#fetchFromServer(query);
+        void this.#fetchFromServer(query);
     }
 
     /**
@@ -52,7 +52,7 @@ class SearchStore {
         console.log(`Getting more results...`, query, startAt);
         this.#getOrCreateWritableStore(query);
         this.#setLoadStatus(query, SearchLoadStatus.LOADING_MORE_RESULTS);
-        this.#fetchFromServer(query, startAt);
+        void this.#fetchFromServer(query, startAt);
     }
 
     /**
@@ -72,45 +72,43 @@ class SearchStore {
      *
      * @param startAt The number result from which to start fetching
      */
-    #fetchFromServer(query: SearchQuery, startAt = 0): void {
+    async #fetchFromServer(query: SearchQuery, startAt = 0): Promise<void> {
         const pageSize = 30;
-        fetch(searchUrl(query, startAt, pageSize))
-            .then(async (response: Response) => {
-                if (!response.ok) {
-                    throw new Error(response.statusText);
-                }
-                return response.json();
-            })
-            .then((json) => {
-                console.log(`Search`, query, `fetched from server`, json);
-                const searchResults = this.#toSearchResults(json);
-                console.log(`Transformed search results`, searchResults);
-                // Calculate next offset based on server response size, not filtered size
-                const serverItemCount = searchResults.items?.length ?? 0;
-                searchResults.nextStartAt = startAt + serverItemCount;
-                if (startAt > 0) {
-                    const read = this.#searches.get(query);
-                    if (read) {
-                        const prev = read;
-                        if (prev.results?.items && searchResults.items) {
-                            // Filter out duplicates by path (handles edge case of data changing between requests)
-                            const existingPaths = new Set(prev.results.items.map((i) => i.path));
-                            const newItems = searchResults.items.filter((i) => !existingPaths.has(i.path));
-                            console.log(
-                                `Adding ${newItems.length} new results to ${prev.results.items.length} existing results (${searchResults.items.length - newItems.length} duplicates filtered)`,
-                            );
-                            searchResults.items = prev.results.items.concat(newItems);
-                        }
+        try {
+            const response = await fetch(searchUrl(query, startAt, pageSize));
+            if (!response.ok) {
+                throw new Error(response.statusText);
+            }
+            const json: unknown = await response.json();
+            console.log(`Search`, query, `fetched from server`, json);
+            if (!isServerSearchResults(json)) throw new Error('Expected a total and a list of items');
+            const searchResults = this.#toSearchResults(json);
+            console.log(`Transformed search results`, searchResults);
+            // Calculate next offset based on server response size, not filtered size
+            const serverItemCount = searchResults.items?.length ?? 0;
+            searchResults.nextStartAt = startAt + serverItemCount;
+            if (startAt > 0) {
+                const read = this.#searches.get(query);
+                if (read) {
+                    const prev = read;
+                    if (prev.results?.items && searchResults.items) {
+                        // Filter out duplicates by path (handles edge case of data changing between requests)
+                        const existingPaths = new Set(prev.results.items.map((item) => item.path));
+                        const newItems = searchResults.items.filter((item) => !existingPaths.has(item.path));
+                        console.log(
+                            `Adding ${newItems.length} new results to ${prev.results.items.length} existing results (${searchResults.items.length - newItems.length} duplicates filtered)`,
+                        );
+                        searchResults.items = prev.results.items.concat(newItems);
                     }
                 }
-                this.#setSearch(query, searchResults); // Put search results in Svelte store
-            })
-            .catch((error) => {
-                this.#handleFetchError(query, error);
-            });
+            }
+            this.#setSearch(query, searchResults); // Put search results in Svelte store
+        } catch (error) {
+            this.#handleFetchError(query, error);
+        }
     }
 
-    #handleFetchError(query: SearchQuery, error: string): void {
+    #handleFetchError(query: SearchQuery, error: unknown): void {
         console.error(`Search error fetching from server:`, query, error);
         const status = this.#getLoadStatus(query);
         switch (status) {
@@ -191,7 +189,7 @@ class SearchStore {
         const items: GalleryRecord[] = json.items;
         return {
             total: json.total,
-            items: items.map((i) => this.#toThumbable(i)),
+            items: items.map((item) => this.#toThumbable(item)),
         };
     }
 
@@ -203,7 +201,7 @@ class SearchStore {
         } else if (isImageRecord(json)) {
             return this.#toImage(json);
         }
-        throw new Error(`Unknown item type in ${json}`);
+        throw new Error(`Unknown item type in ${JSON.stringify(json)}`);
     }
 
     #toImage(json: ImageRecord): ImageThumbableImpl {
@@ -227,4 +225,31 @@ export const searchStore: SearchStore = new SearchStore();
 interface ServerSearchResults {
     total: number;
     items: GalleryRecord[];
+}
+
+/**
+ * Checks the shape the transform reads: a count and a list of records, each saying which kind it is. What a record
+ * holds beyond that is the model classes' concern.
+ */
+function isServerSearchResults(value: unknown): value is ServerSearchResults {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'total' in value &&
+        typeof value.total === 'number' &&
+        'items' in value &&
+        Array.isArray(value.items) &&
+        value.items.every(isGalleryRecordLike)
+    );
+}
+
+function isGalleryRecordLike(item: unknown): boolean {
+    return (
+        typeof item === 'object' &&
+        item !== null &&
+        'itemType' in item &&
+        (item.itemType === 'album' || item.itemType === 'media') &&
+        'path' in item &&
+        typeof item.path === 'string'
+    );
 }

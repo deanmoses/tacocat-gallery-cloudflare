@@ -20,20 +20,20 @@
 
     let albumPath: string = $derived(`${page.url.pathname}/`);
     let show: boolean = $derived(isValidDayAlbumPath(albumPath)); // Show this button only on day albums
-    let dialog = $state()!;
+    let dialog: { show: () => void } | undefined = $state();
 
     function originalName(): string {
         return getNameFromPath(albumPath);
     }
 
-    function onButtonClick() {
-        dialog.show();
+    function onButtonClick(): void {
+        dialog?.show();
     }
 
-    function onNewAlbumName(newAlbumName: string) {
+    function onNewAlbumName(newAlbumName: string): void {
         const newAlbumPath = albumNameToPath(newAlbumName);
         albumRenameMachine.renameDayAlbum(albumPath, newAlbumPath);
-        goto(getParentFromPath(newAlbumPath));
+        void goto(getParentFromPath(newAlbumPath));
     }
 
     async function validateDayAlbumName(albumName: string): Promise<string | undefined> {

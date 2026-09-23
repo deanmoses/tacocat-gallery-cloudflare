@@ -8,6 +8,7 @@ import {
 import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import { getMediaPath } from './fileFormats';
 import { dayAlbum, imageRecord, mediaPath, videoRecord } from '$lib/test-support/records';
+import type { Album } from '$lib/models/GalleryItemInterfaces';
 
 /**
  * Replacing a media item asks two questions of the same pair of paths: whether
@@ -92,7 +93,7 @@ describe(getReplacementExtensionError, () => {
 });
 
 describe(getUploadPathForReplacement, () => {
-    it.each(REPLACEMENT_CASES.filter((testCase) => !testCase.error))(
+    it.each(REPLACEMENT_CASES.filter((testCase) => testCase.error === undefined))(
         '$fileName onto $targetPath uploads to $uploadPath',
         ({ targetPath, fileName, uploadPath }) => {
             expect(getUploadPathForReplacement(targetPath, fileName)).toBe(uploadPath);
@@ -259,7 +260,9 @@ describe(findProcessedUploads, () => {
     );
 
     it('reports nothing to do for an empty batch', () => {
-        const result = findProcessedUploads([], () => {});
+        const result = findProcessedUploads([], (imagePath) => {
+            throw new Error(`Looked up ${imagePath} with nothing to look for`);
+        });
 
         expect(result.processed).toStrictEqual([]);
         expect(result.allProcessed).toBe(true);
@@ -346,7 +349,7 @@ function mediaToUpload(fileName: string): MediaItemToUpload {
 }
 
 /** The media already in the album, under the names an upload might collide with */
-const albumWithPhotoAndClip = () =>
+const albumWithPhotoAndClip = (): Album =>
     dayAlbum([
         imageRecord({
             mediaType: 'image',
@@ -366,7 +369,7 @@ describe(enrichWithPreviousVersionIds, () => {
         const files = [mediaToUpload('new.jpg')];
 
         expect(enrichWithPreviousVersionIds(files, albumWithPhotoAndClip())).toStrictEqual([]);
-        expect(files[0].previousVersionId).toBeUndefined();
+        expect(files[0]?.previousVersionId).toBeUndefined();
     });
 
     // The name is what the admin is shown in the confirmation dialog, so it is
@@ -375,7 +378,7 @@ describe(enrichWithPreviousVersionIds, () => {
         const files = [mediaToUpload('photo.jpg')];
 
         expect(enrichWithPreviousVersionIds(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg']);
-        expect(files[0].previousVersionId).toBe('photo-v1');
+        expect(files[0]?.previousVersionId).toBe('photo-v1');
     });
 
     // A HEIC is stored as a JPG, so it collides with a JPG already in the album
@@ -385,7 +388,7 @@ describe(enrichWithPreviousVersionIds, () => {
         const files = [mediaToUpload('photo.heic')];
 
         expect(enrichWithPreviousVersionIds(files, albumWithPhotoAndClip())).toStrictEqual(['photo.heic']);
-        expect(files[0].previousVersionId).toBe('photo-v1');
+        expect(files[0]?.previousVersionId).toBe('photo-v1');
     });
 
     it('checks every file in the batch, and leaves the ones that collide with nothing alone', () => {
@@ -404,6 +407,6 @@ describe(enrichWithPreviousVersionIds, () => {
         const files = [mediaToUpload('photo.jpg')];
 
         expect(enrichWithPreviousVersionIds(files, album)).toStrictEqual([]);
-        expect(files[0].previousVersionId).toBeUndefined();
+        expect(files[0]?.previousVersionId).toBeUndefined();
     });
 });

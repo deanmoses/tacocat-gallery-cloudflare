@@ -14,7 +14,7 @@
 
     let { href = '', title, children }: Props = $props();
 
-    let ariaDisabled: boolean | null = $derived(href ? null : true);
+    let ariaDisabled: boolean | null = $derived(href === '' || null);
 </script>
 
 <a aria-disabled={ariaDisabled} {href} {title}><span>{@render children?.()}</span></a>
@@ -37,11 +37,11 @@
         padding: 6px 12px;
     }
 
-    a[aria-disabled] {
-        background-color: white;
+    [aria-disabled] {
+        background-color: #ffffff;
     }
 
-    a[aria-disabled] span {
+    [aria-disabled] span {
         color: #cccccc;
         cursor: not-allowed;
         opacity: 0.65;

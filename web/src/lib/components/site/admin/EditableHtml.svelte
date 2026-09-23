@@ -14,13 +14,9 @@
 
     let { htmlContent = '' }: Props = $props();
 
-    function handleChange(html: string) {
-        if (html == null) {
-            console.log('<EditableHtml>: html is null');
-        } else {
-            // TODO: this class should not know about DraftStore nor the specific field they represent ("description", "title")
-            draftMachine.setDescription(html);
-        }
+    function handleChange(html: string): void {
+        // TODO: this class should not know about DraftStore nor the specific field they represent ("description", "title")
+        draftMachine.setDescription(html);
     }
 </script>
 

@@ -9,7 +9,7 @@
 
     interface Props {
         hasUnsavedChanges: boolean;
-        onclick?: (event: MouseEvent) => void | undefined;
+        onclick?: ((event: MouseEvent) => void) | undefined;
     }
 
     let { hasUnsavedChanges, onclick }: Props = $props();

@@ -1,6 +1,6 @@
 import { DeleteStatus } from '$lib/models/album';
 import { deleteUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { getParentFromPath, isValidAlbumPath } from '$lib/utils/galleryPathUtils';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -27,7 +27,7 @@ class AlbumDeleteMachine {
     //
 
     deleteAlbum(albumPath: string): void {
-        this.#deleteAlbum(albumPath); // call async logic in a fire-and-forget manner
+        void this.#deleteAlbum(albumPath); // call async logic in a fire-and-forget manner
     }
 
     #deleteStarted(albumPath: string): void {
@@ -64,14 +64,13 @@ class AlbumDeleteMachine {
             this.#deleteStarted(albumPath);
             const response = await adminApi.delete(deleteUrl(albumPath));
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
             await albumLoadMachine.removeFromMemoryAndDisk(albumPath);
             await albumLoadMachine.reloadAfterChange(getParentFromPath(albumPath)); // reload parent album
             this.#success(albumPath);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
             this.#error(albumPath, msg);
         }
     }

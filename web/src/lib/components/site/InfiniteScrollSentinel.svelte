@@ -33,7 +33,7 @@
     onMount(() => {
         const observer = new IntersectionObserver(
             (entries) => {
-                isCurrentlyIntersecting = entries[0].isIntersecting;
+                isCurrentlyIntersecting = entries[0]?.isIntersecting ?? false;
 
                 // Reset trigger flag when sentinel leaves viewport
                 if (!isCurrentlyIntersecting) {
@@ -42,7 +42,7 @@
                 }
 
                 // Only trigger once per intersection, and only if not disabled
-                if (!isCurrentlyIntersecting || disabled || hasTriggered) {
+                if (disabled || hasTriggered) {
                     return;
                 }
 
@@ -52,7 +52,7 @@
             { rootMargin },
         );
         observer.observe(sentinel);
-        return () => {
+        return (): void => {
             observer.disconnect();
         };
     });

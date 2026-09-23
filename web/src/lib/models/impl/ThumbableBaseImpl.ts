@@ -8,8 +8,8 @@ export abstract class ThumbableBaseImpl implements Thumbable {
         this.json = json;
     }
 
-    abstract get title(): string;
-    abstract get summary(): string;
+    abstract readonly title: string;
+    abstract readonly summary: string;
     abstract get href(): string;
     abstract get thumbnailUrlInfo(): ThumbnailUrlInfo | undefined;
 
@@ -30,7 +30,7 @@ export abstract class ThumbableBaseImpl implements Thumbable {
     }
 
     get description(): string {
-        return this.json.description || '';
+        return this.json.description ?? '';
     }
 
     set description(description: string) {
@@ -43,6 +43,6 @@ export abstract class ThumbableBaseImpl implements Thumbable {
 
     get published(): boolean {
         // TODO: all images are published=false by this logic
-        return 'published' in this.json ? Boolean(this.json.published) : false;
+        return 'published' in this.json && Boolean(this.json.published);
     }
 }

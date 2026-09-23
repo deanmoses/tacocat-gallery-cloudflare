@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
     interface Props {
-        onclick?: (event: MouseEvent) => void | undefined;
+        onclick?: ((event: MouseEvent) => void) | undefined;
     }
 
     let { onclick }: Props = $props();
@@ -37,6 +37,6 @@
     }
 
     path {
-        fill: currentColor;
+        fill: currentcolor;
     }
 </style>

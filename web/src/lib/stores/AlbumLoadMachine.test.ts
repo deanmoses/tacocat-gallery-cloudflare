@@ -6,6 +6,7 @@ import { clear as clearDisk, keys as diskKeys, get as getFromDisk, set as setOnD
 import { fakeServer, jsonResponse, notFound, serverError } from '$lib/test-support/http';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord, mediaPath } from '$lib/test-support/records';
+import type { AlbumGalleryItem } from '$lib/models/impl/server';
 
 /**
  * Covers the album load pipeline end to end: memory, the browser's disk cache
@@ -21,7 +22,7 @@ const PARENT_PATH = '/2001/';
 const ROUTE = '/api/album/2001/12-31/';
 const IMAGE_PATH = mediaPath('image.jpg');
 
-function record() {
+function record(): AlbumGalleryItem {
     return albumRecord({
         path: PATH,
         parentPath: PARENT_PATH,
@@ -41,7 +42,10 @@ const loadStatus = (path = PATH): AlbumLoadStatus | undefined => albumState.albu
  * more event-loop turns than this, on a machine under load more still. Wait on
  * the end state the work reaches instead.
  */
-const settle = async (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async (): Promise<void> =>
+    new Promise((resolve) => {
+        setTimeout(resolve, 0);
+    });
 
 describe('albumLoadMachine', () => {
     beforeEach(async () => {
@@ -66,7 +70,7 @@ describe('albumLoadMachine', () => {
                 expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
             });
 
-            expect(albumState.albums.get(PATH)?.album?.media.map((m) => m.path)).toStrictEqual([IMAGE_PATH]);
+            expect(albumState.albums.get(PATH)?.album?.media.map((media) => media.path)).toStrictEqual([IMAGE_PATH]);
             expect(server.calls).toStrictEqual([{ method: 'GET', pathname: ROUTE, body: undefined }]);
             await expect(getFromDisk(PATH)).resolves.toStrictEqual(record());
             // Cached under the album path itself, which is what lets a later
@@ -98,7 +102,7 @@ describe('albumLoadMachine', () => {
                 expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
             });
 
-            expect(albumState.albums.get(PATH)?.album?.media.map((m) => m.path)).toStrictEqual([IMAGE_PATH]);
+            expect(albumState.albums.get(PATH)?.album?.media.map((media) => media.path)).toStrictEqual([IMAGE_PATH]);
             expect(server.calls).toHaveLength(1);
         });
 
@@ -176,7 +180,8 @@ describe('albumLoadMachine', () => {
     describe('reading past the edge cache after a change', () => {
         afterEach(() => vi.useRealTimers());
 
-        const searches = (server: ReturnType<typeof fakeServer>) => server.rawCalls.map((call) => call.url.search);
+        const searches = (server: ReturnType<typeof fakeServer>): string[] =>
+            server.rawCalls.map((call) => call.url.search);
 
         it('reloadAfterChange asks past the cache', async () => {
             const server = fakeServer();
@@ -338,7 +343,13 @@ describe('albumLoadMachine', () => {
 
     describe('albumExists', () => {
         it.each([
-            { where: 'memory', seed: async () => void seedLoadedAlbum(record()), expected: true },
+            {
+                where: 'memory',
+                seed: async () => {
+                    seedLoadedAlbum(record());
+                },
+                expected: true,
+            },
             { where: 'disk', seed: async () => setOnDisk(PATH, record()), expected: true },
         ])('finds an album in $where without asking the server', async ({ seed, expected }) => {
             await seed();

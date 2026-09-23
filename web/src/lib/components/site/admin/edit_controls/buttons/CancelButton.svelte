@@ -8,7 +8,7 @@
     import ControlStripButton from './ControlStripButton.svelte';
 
     interface Props {
-        onclick?: (event: MouseEvent) => void | undefined;
+        onclick?: ((event: MouseEvent) => void) | undefined;
     }
 
     let { onclick }: Props = $props();

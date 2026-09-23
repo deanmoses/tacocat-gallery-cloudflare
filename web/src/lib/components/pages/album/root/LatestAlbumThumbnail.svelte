@@ -33,7 +33,7 @@
 
     div h2 {
         font-size: 16px;
-        font-weight: bold;
+        font-weight: 700;
         color: var(--default-text-color);
     }
 </style>

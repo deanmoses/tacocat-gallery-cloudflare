@@ -46,7 +46,7 @@ export function getUploadPathForReplacement(targetPath: string, fileName: string
         return targetPath;
     }
     // Replace target extension with source extension (e.g., HEIC replacing JPG)
-    return targetPath.replace(/\.[^.]+$/v, `.${sourceExt}`);
+    return targetPath.replace(/\.[^.]+$/v, () => `.${sourceExt}`);
 }
 
 /**
@@ -86,7 +86,7 @@ export function findProcessedUploads(
     for (const upload of uploads) {
         // Skip uploads not yet in PROCESSING state (still uploading to S3) or
         // missing versionId (defensive check - should always have versionId when PROCESSING)
-        if (upload.status !== UploadState.PROCESSING || !upload.versionId) {
+        if (upload.status !== UploadState.PROCESSING || upload.versionId === undefined) {
             allProcessed = false;
             continue;
         }
@@ -113,7 +113,7 @@ export function findProcessedUploads(
 function isUploadComplete(upload: UploadEntry, albumVersionId: string | undefined): boolean {
     if (isRenamedOnServer(upload.uploadPath)) {
         // File is renamed on server (e.g., HEIC → JPG), so versionId will differ from upload
-        if (upload.previousVersionId) {
+        if (upload.previousVersionId !== undefined) {
             // Replacement: wait for versionId to change from the previous one
             return albumVersionId !== undefined && albumVersionId !== upload.previousVersionId;
         }

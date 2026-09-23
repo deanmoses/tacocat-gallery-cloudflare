@@ -5,8 +5,8 @@ import type { Thumbable } from './GalleryItemInterfaces';
  */
 export interface SearchQuery {
     terms: string;
-    oldestYear?: number;
-    newestYear?: number;
+    oldestYear?: number | undefined;
+    newestYear?: number | undefined;
     oldestFirst?: boolean;
 }
 

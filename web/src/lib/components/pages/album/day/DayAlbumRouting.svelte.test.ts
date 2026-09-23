@@ -29,8 +29,8 @@ const UNSET_TITLE = 'unset';
 
 const album = createRawSnippet(() => ({ render: () => `<p>${ALBUM_CONTENT}</p>` }));
 
-function show() {
-    return render(DayAlbumRouting, { albumPath: PATH, loaded: album });
+function show(): void {
+    render(DayAlbumRouting, { albumPath: PATH, loaded: album });
 }
 
 type Seed = (path: string) => void;
@@ -43,8 +43,9 @@ type MessageCase = Case & { message: string };
 
 const setStatus =
     (loadStatus: AlbumLoadStatus): Seed =>
-    (path) =>
+    (path) => {
         albumState.albums.set(path, { loadStatus });
+    };
 
 /** States whose page puts no words on the screen, leaving the title to carry it */
 const WORDLESS: Case[] = [
@@ -70,19 +71,25 @@ const WITH_MESSAGE: MessageCase[] = [
     // are the same words reaching the reader by two different routes
     {
         state: 'being created',
-        seed: (path) => albumState.albumCreates.set(path, { status: CreateStatus.IN_PROGRESS }),
+        seed: (path) => {
+            albumState.albumCreates.set(path, { status: CreateStatus.IN_PROGRESS });
+        },
         title: 'Create in progress',
         message: 'Create in progress',
     },
     {
         state: 'being deleted',
-        seed: (path) => albumState.albumDeletes.set(path, { status: DeleteStatus.IN_PROGRESS }),
+        seed: (path) => {
+            albumState.albumDeletes.set(path, { status: DeleteStatus.IN_PROGRESS });
+        },
         title: 'Delete in progress',
         message: 'Delete in progress',
     },
     {
         state: 'being renamed',
-        seed: (path) => albumState.albumRenames.set(path, renameEntry(path, '12-30/', RenameStatus.IN_PROGRESS)),
+        seed: (path) => {
+            albumState.albumRenames.set(path, renameEntry(path, '12-30/', RenameStatus.IN_PROGRESS));
+        },
         title: 'Rename in progress',
         message: 'Rename in progress',
     },
@@ -102,7 +109,7 @@ describe(DayAlbumRouting, () => {
      * The reader waits on a spinner that nothing will take down.
      */
     it('waits on an album absent from memory', async () => {
-        await show();
+        show();
 
         expect(document.title).toBe('Loading...');
         await expect.element(page.getByText(ALBUM_CONTENT)).not.toBeInTheDocument();
@@ -111,7 +118,7 @@ describe(DayAlbumRouting, () => {
     it.each(WORDLESS)('an album $state shows $title', async ({ seed, title }) => {
         seed(PATH);
 
-        await show();
+        show();
 
         expect(document.title).toBe(title);
         await expect.element(page.getByText(ALBUM_CONTENT)).not.toBeInTheDocument();
@@ -120,7 +127,7 @@ describe(DayAlbumRouting, () => {
     it.each(WITH_MESSAGE)('an album $state shows $message', async ({ seed, title, message }) => {
         seed(PATH);
 
-        await show();
+        show();
 
         expect(document.title).toBe(title);
         await expect.element(page.getByText(message)).toBeVisible();
@@ -130,7 +137,7 @@ describe(DayAlbumRouting, () => {
     it('shows the album once it is loaded', async () => {
         albumState.albums.set(PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-        await show();
+        show();
 
         await expect.element(page.getByText(ALBUM_CONTENT)).toBeVisible();
     });
@@ -143,7 +150,7 @@ describe(DayAlbumRouting, () => {
      */
     it('follows the album from loading to loaded under the page', async () => {
         albumState.albums.set(PATH, { loadStatus: AlbumLoadStatus.LOADING });
-        await show();
+        show();
 
         await expect.element(page.getByText(ALBUM_CONTENT)).not.toBeInTheDocument();
 
@@ -158,7 +165,7 @@ describe(DayAlbumRouting, () => {
         seed(OTHER_PATH);
         albumState.albums.set(PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
-        await show();
+        show();
 
         await expect.element(page.getByText(ALBUM_CONTENT)).toBeVisible();
     });
@@ -172,7 +179,7 @@ describe(DayAlbumRouting, () => {
         albumState.albums.set(PATH, { loadStatus: AlbumLoadStatus.LOADED });
         albumState.albumDeletes.set(PATH, { status: DeleteStatus.IN_PROGRESS });
 
-        await show();
+        show();
 
         expect(document.title).toBe('Delete in progress');
         await expect.element(page.getByText(ALBUM_CONTENT)).not.toBeInTheDocument();
@@ -189,7 +196,7 @@ describe(DayAlbumRouting, () => {
     it('an unrecognized status shows the status on a titled page', async () => {
         albumState.albums.set(PATH, { loadStatus: 'WAT' as AlbumLoadStatus });
 
-        await show();
+        show();
 
         expect(document.title).toBe('Error');
         await expect.element(page.getByText('Unknown album status: WAT')).toBeVisible();
@@ -199,7 +206,7 @@ describe(DayAlbumRouting, () => {
     it('an album DOES_NOT_EXIST offers a labelled way home', async () => {
         albumState.albums.set(PATH, { loadStatus: AlbumLoadStatus.DOES_NOT_EXIST });
 
-        await show();
+        show();
 
         await expect.element(page.getByRole('link', { name: 'Go back Home?' })).toBeVisible();
     });

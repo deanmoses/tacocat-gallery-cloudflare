@@ -19,11 +19,11 @@
 
     let { published = false, showSummary = false, summary = '' }: Props = $props();
 
-    function onSummaryChange(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
+    function onSummaryChange(event: Event & { currentTarget: EventTarget & HTMLInputElement }): void {
         if (event.target) draftMachine.setSummary(event.currentTarget.value);
     }
 
-    function onPublishedChange(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
+    function onPublishedChange(event: Event & { currentTarget: EventTarget & HTMLInputElement }): void {
         if (event.target) draftMachine.setPublished(event.currentTarget.checked);
     }
 </script>
@@ -32,7 +32,7 @@
     {#snippet rightControls()}
         {#if showSummary}
             <div>
-                <input name="text" oninput={onSummaryChange} type="text" value={summary ?? ''} />
+                <input name="text" oninput={onSummaryChange} type="text" value={summary} />
             </div>
         {/if}
         <div>

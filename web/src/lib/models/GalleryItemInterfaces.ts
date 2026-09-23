@@ -16,7 +16,7 @@ export type MediaType = 'image' | 'video';
 export interface ThumbnailUrlInfo {
     readonly imagePath: string;
     readonly versionId: string;
-    readonly crop?: Rectangle;
+    readonly crop?: Rectangle | undefined;
 }
 
 export interface Album extends Thumbable {
@@ -56,7 +56,7 @@ export interface Video extends Media {
     readonly duration: number;
 }
 
-export interface Nextable extends Thumbable {
+interface Nextable extends Thumbable {
     readonly prevHref: string | undefined;
     readonly nextHref: string | undefined;
     readonly prevTitle: string | undefined;

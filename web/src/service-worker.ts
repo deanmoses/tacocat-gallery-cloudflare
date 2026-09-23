@@ -2,7 +2,8 @@
 /// <reference types="@sveltejs/kit" />
 import { build, files, version } from '$service-worker';
 
-const worker = self as unknown as ServiceWorkerGlobalScope;
+// The worker lib types `self` as a plain worker's scope; this is a service worker's.
+declare const self: ServiceWorkerGlobalScope;
 
 // name of the cache of the application's static assets,
 // meaning all the bundler-generated files as well as
@@ -17,43 +18,41 @@ const OFFLINE_CACHE_NAME = `offline${version}`;
 // `files` is an array of everything in the `static` directory
 const staticAssets = new Set(build.concat(files));
 
-const to_cache = Array.from(staticAssets);
+const toCache = Array.from(staticAssets);
 
-worker.addEventListener('install', (event) => {
-    // cache all static assets
-    event.waitUntil(
-        caches
-            .open(STATIC_ASSETS_CACHE_NAME)
-            .then((cache) => cache.addAll(to_cache))
-            .then(() => {
-                worker.skipWaiting();
-            }),
-    );
+self.addEventListener('install', (event) => {
+    event.waitUntil(cacheStaticAssets());
 });
 
-worker.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then(async (keys) => {
-            // delete old caches
-            // i.e., any cache that's not my new static asset cache
-            for (const key of keys) {
-                if (key !== STATIC_ASSETS_CACHE_NAME) await caches.delete(key);
-            }
-            worker.clients.claim();
-        }),
-    );
+async function cacheStaticAssets(): Promise<void> {
+    const cache = await caches.open(STATIC_ASSETS_CACHE_NAME);
+    await cache.addAll(toCache);
+    void self.skipWaiting();
+}
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(deleteOldCaches());
 });
+
+/** Deletes every cache but the new static asset cache */
+async function deleteOldCaches(): Promise<void> {
+    const keys = await caches.keys();
+    for (const key of keys) {
+        if (key !== STATIC_ASSETS_CACHE_NAME) await caches.delete(key);
+    }
+    void self.clients.claim();
+}
 
 /**
  * Fetch asset from network and store in cache.
  * Fall back to cache if user is offline.
  */
-async function fetchAndCache(request: Request) {
+async function fetchAndCache(request: Request): Promise<Response> {
     const cache = await caches.open(OFFLINE_CACHE_NAME);
 
     try {
         const response = await fetch(request);
-        cache.put(request, response.clone());
+        void cache.put(request, response.clone());
         return response;
     } catch (err) {
         const response = await cache.match(request);
@@ -62,7 +61,7 @@ async function fetchAndCache(request: Request) {
     }
 }
 
-worker.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET' || event.request.headers.has('range')) return;
 
     const url = new URL(event.request.url);
@@ -87,14 +86,5 @@ worker.addEventListener('fetch', (event) => {
     const isImageRequest = !isStaticAsset && event.request.destination === 'image';
     if (!isImageRequest) return;
 
-    event.respondWith(
-        (async () => {
-            // always serve static files and bundler-generated assets from cache.
-            // if your application has other URLs with data that will never change,
-            // set this variable to true for them and they will only be fetched once.
-            const cachedAsset = isStaticAsset && (await caches.match(event.request));
-
-            return cachedAsset || fetchAndCache(event.request);
-        })(),
-    );
+    event.respondWith(fetchAndCache(event.request));
 });

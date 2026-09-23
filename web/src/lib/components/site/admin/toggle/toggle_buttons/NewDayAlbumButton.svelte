@@ -16,24 +16,23 @@
     let albumPath: string = $derived(`${page.url.pathname}/`);
     let show: boolean = $derived(isValidYearAlbumPath(albumPath)); // Show this button only on year albums
 
-    let dialog = $state()!;
+    let dialog: { show: () => void } | undefined = $state();
 
     function todayAlbumName(): string {
         const d = new Date();
         const month = `0${d.getMonth() + 1}`.slice(-2);
         const day = `0${d.getDate()}`.slice(-2);
-        const month_day = `${month}-${day}`;
-        return month_day;
+        return `${month}-${day}`;
     }
 
-    function onButtonClick() {
-        dialog.show();
+    function onButtonClick(): void {
+        dialog?.show();
     }
 
-    function onNewAlbumName(newAlbumName: string) {
+    function onNewAlbumName(newAlbumName: string): void {
         const newAlbumPath = albumNameToPath(newAlbumName);
         albumCreateMachine.createAlbum(newAlbumPath);
-        goto(newAlbumPath);
+        void goto(newAlbumPath);
     }
 
     async function validateDayAlbumName(albumName: string): Promise<string | undefined> {

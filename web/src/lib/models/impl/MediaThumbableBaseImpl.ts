@@ -17,17 +17,17 @@ export abstract class MediaThumbableBaseImpl extends ThumbableBaseImpl implement
         this.json = json;
     }
 
-    abstract get mediaType(): MediaType;
+    abstract readonly mediaType: MediaType;
 
     get title(): string {
-        return this.json?.title ?? toTitleFromFilename(this.json.itemName);
+        return this.json.title ?? toTitleFromFilename(this.json.itemName);
     }
 
     set title(title: string) {
         this.json.title = title;
     }
 
-    get summary() {
+    get summary(): string {
         return this.#summary ?? '';
     }
 

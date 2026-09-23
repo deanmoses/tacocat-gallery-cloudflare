@@ -27,14 +27,14 @@
     let noResults = $derived(!results?.items);
     // Use nextStartAt to determine if more results exist (handles duplicate filtering correctly)
     let moreResultsOnServer = $derived(results?.nextStartAt !== undefined && results.nextStartAt < results.total);
-    let loadingMore = $derived(SearchLoadStatus.LOADING_MORE_RESULTS == status);
-    let errorLoadingMore = $derived(SearchLoadStatus.ERROR_LOADING_MORE_RESULTS == status);
+    let loadingMore = $derived(SearchLoadStatus.LOADING_MORE_RESULTS === status);
+    let errorLoadingMore = $derived(SearchLoadStatus.ERROR_LOADING_MORE_RESULTS === status);
 
     // Debouncing to prevent rapid-fire requests
     let lastRequestTime = 0;
     const MIN_REQUEST_INTERVAL = 500; // ms
 
-    function getMoreResults() {
+    function getMoreResults(): void {
         const now = Date.now();
         if (now - lastRequestTime < MIN_REQUEST_INTERVAL) return;
         lastRequestTime = now;
@@ -52,7 +52,7 @@
             ><input
                 id="oldestYear"
                 name="oldestYear"
-                class="yearInput"
+                class="year-input"
                 max={new Date().getFullYear()}
                 min="1964"
                 placeholder="oldest year"
@@ -64,7 +64,7 @@
             ><input
                 id="newestYear"
                 name="newestYear"
-                class="yearInput"
+                class="year-input"
                 max={new Date().getFullYear()}
                 min="1964"
                 placeholder="newest year"
@@ -77,7 +77,7 @@
             <span class="result-count">({results.total} results)</span>
         {/if}
     </section>
-    <section class:noResults>
+    <section class:no-results={noResults}>
         <h2 style:display="none">Search Results</h2>
         <Thumbnails>
             {#if results?.items}
@@ -109,11 +109,11 @@
 
 <style>
     section {
-        background-color: white;
+        background-color: #ffffff;
         padding: var(--default-padding);
     }
 
-    section.noResults {
+    .no-results {
         display: flex;
         justify-content: center;
     }
@@ -122,7 +122,7 @@
         white-space: nowrap;
     }
 
-    .yearInput {
+    .year-input {
         width: 8em;
     }
 

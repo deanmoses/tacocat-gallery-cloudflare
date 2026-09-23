@@ -1,12 +1,14 @@
-import type {
-    AlbumEntry,
-    CreateEntry,
-    CropEntry,
-    DeleteEntry,
-    ReloadStatus,
-    RenameEntry,
-    UploadEntry,
+import {
+    type AlbumActivity,
+    type AlbumEntry,
+    type CreateEntry,
+    CreateStatus,
+    CropStatus,
+    DeleteStatus,
+    type MediaActivity,
+    RenameStatus,
 } from '$lib/models/album';
+import type { CropEntry, DeleteEntry, ReloadStatus, RenameEntry, UploadEntry } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { getParentFromPath } from '$lib/utils/galleryPathUtils';
 import { SvelteMap } from 'svelte/reactivity';
@@ -45,4 +47,20 @@ export function getUpload(mediaPath: string): UploadEntry | undefined {
 /** The album's parent, if it has loaded. The root has none. */
 export function getParentAlbum(albumPath: string): Album | undefined {
     return albumState.albums.get(getParentFromPath(albumPath))?.album;
+}
+
+export function albumActivity(albumPath: string): AlbumActivity {
+    return {
+        creating: albumState.albumCreates.get(albumPath)?.status === CreateStatus.IN_PROGRESS,
+        deleting: albumState.albumDeletes.get(albumPath)?.status === DeleteStatus.IN_PROGRESS,
+        renaming: albumState.albumRenames.get(albumPath)?.status === RenameStatus.IN_PROGRESS,
+    };
+}
+
+export function mediaActivity(mediaPath: string): MediaActivity {
+    return {
+        deleting: albumState.mediaDeletes.get(mediaPath)?.status === DeleteStatus.IN_PROGRESS,
+        renaming: albumState.mediaRenames.get(mediaPath)?.status === RenameStatus.IN_PROGRESS,
+        cropping: albumState.crops.get(mediaPath)?.status === CropStatus.IN_PROGRESS,
+    };
 }

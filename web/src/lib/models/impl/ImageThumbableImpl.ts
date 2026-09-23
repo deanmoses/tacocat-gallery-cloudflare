@@ -9,7 +9,5 @@ export class ImageThumbableImpl extends MediaThumbableBaseImpl {
         this.json = json;
     }
 
-    get mediaType(): 'image' {
-        return 'image';
-    }
+    readonly mediaType = 'image';
 }

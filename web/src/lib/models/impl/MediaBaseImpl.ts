@@ -19,21 +19,19 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
         this.#album = album;
     }
 
-    abstract get mediaType(): MediaType;
+    abstract readonly mediaType: MediaType;
 
     // Thumbable implementations
 
     get title(): string {
-        return this.json?.title ?? toTitleFromFilename(this.json.itemName);
+        return this.json.title ?? toTitleFromFilename(this.json.itemName);
     }
 
     set title(title: string) {
         this.json.title = title;
     }
 
-    get summary(): string {
-        return '';
-    }
+    readonly summary = '';
 
     get href(): string {
         return this.path;
@@ -98,7 +96,7 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
 
     get #next(): Thumbable | undefined {
         let foundMyself = false;
-        return this.#album.media?.find((item) => {
+        return this.#album.media.find((item) => {
             if (foundMyself) {
                 return true;
             }
@@ -111,7 +109,7 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
 
     get #prev(): Thumbable | undefined {
         let prev: Thumbable | undefined;
-        this.#album.media?.find((item) => {
+        this.#album.media.find((item) => {
             if (item.path === this.path) {
                 return true;
             }

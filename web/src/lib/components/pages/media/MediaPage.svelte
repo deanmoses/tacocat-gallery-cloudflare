@@ -21,8 +21,8 @@
     let mediaTitle = $derived(media.title);
 
     // Preload adjacent media for smoother navigation
-    let nextMedia = $derived(media.nextHref ? album.getMedia(media.nextHref) : undefined);
-    let prevMedia = $derived(media.prevHref ? album.getMedia(media.prevHref) : undefined);
+    let nextMedia = $derived(media.nextHref === undefined ? undefined : album.getMedia(media.nextHref));
+    let prevMedia = $derived(media.prevHref === undefined ? undefined : album.getMedia(media.prevHref));
 </script>
 
 <svelte:head>

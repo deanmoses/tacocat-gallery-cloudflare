@@ -14,21 +14,21 @@
     import TextDialog from './TextDialog.svelte';
 
     let show: boolean = $derived(page.url.pathname === '/'); // Show this button only on root album
-    let dialog = $state()!;
+    let dialog: { show: () => void } | undefined = $state();
 
     function yearAlbumName(): string {
         const d = new Date();
         return d.getFullYear().toString();
     }
 
-    function onButtonClick() {
-        dialog.show();
+    function onButtonClick(): void {
+        dialog?.show();
     }
 
-    function onNewAlbumName(newAlbumName: string) {
+    function onNewAlbumName(newAlbumName: string): void {
         const newAlbumPath = `/${newAlbumName}/`;
         albumCreateMachine.createAlbum(newAlbumPath);
-        goto(newAlbumPath);
+        void goto(newAlbumPath);
     }
 
     async function validateYearAlbumName(albumName: string): Promise<string | undefined> {

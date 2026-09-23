@@ -5,15 +5,15 @@ export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'];
 export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'mpg', 'mpeg'];
 
 /** Pattern matching any valid media extension */
-const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].join('|');
+const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].toSorted().join('|');
 
 /** Regex for validating media file extensions */
-const VALID_MEDIA_EXT_REGEX = new RegExp(String.raw`^.+\.(${MEDIA_EXT_PATTERN})$`, 'i');
+const VALID_MEDIA_EXT_REGEX = new RegExp(String.raw`^.+\.(?:${MEDIA_EXT_PATTERN})$`, 'iv');
 
 /** Regex for validating full media paths like /2001/12-31/image.jpg */
 const VALID_MEDIA_PATH_REGEX = new RegExp(
-    String.raw`^/\d\d\d\d/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/[a-zA-Z0-9_-]+\.(${MEDIA_EXT_PATTERN})$`,
-    'i',
+    String.raw`^/\d{4}/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])/[\w\-]+\.(?:${MEDIA_EXT_PATTERN})$`,
+    'iv',
 );
 
 /**
@@ -55,7 +55,7 @@ export function isValidMediaPath(path: string): boolean {
  * like / or /2001/ or /2001/12-31/
  */
 export function isValidAlbumPath(path: string): boolean {
-    return /^(\/\d{4}(\/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))?)?\/$/v.test(path);
+    return /^(?:\/\d{4}(?:\/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?)?\/$/v.test(path);
 }
 
 /**
@@ -69,7 +69,7 @@ export function isValidYearAlbumPath(path: string): boolean {
  * Return true if specified string is a valid day album path like /2001/12-31/
  */
 export function isValidDayAlbumPath(path: string): boolean {
-    return /^\/\d{4}\/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\/$/v.test(path);
+    return /^\/\d{4}\/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\/$/v.test(path);
 }
 
 /**
@@ -82,7 +82,7 @@ export function isValidMediaNameWithoutExtensionStrict(filename: string): boolea
     // Pattern: alphanumeric start, then optional groups of (single underscore + alphanumeric)
     // ReDoS-safe because _ and [a-z0-9] are disjoint character classes (no ambiguity)
     // Old vulnerable pattern: /^[a-z0-9]+([a-z0-9_]*[a-z0-9]+)*$/
-    return /^[0-9a-z]+(_[0-9a-z]+)*$/v.test(filename);
+    return /^[0-9a-z]+(?:_[0-9a-z]+)*$/v.test(filename);
 }
 
 /**
@@ -93,7 +93,7 @@ export function isValidMediaNameWithoutExtensionStrict(filename: string): boolea
 export function sanitizeMediaNameWithoutExtension(name: string): string {
     return (name || '')
         .toLowerCase()
-        .replaceAll(/[^0-9_a-z]+/g, '_') // any invalid chars to _
+        .replaceAll(/[^0-9_a-z]+/gv, '_') // any invalid chars to _
         .replaceAll(/_+/gv, '_') // multiple _ to _
         .replace(/^_/v, ''); // remove leading underscore
     // Note: trailing underscores are NOT removed here to allow underscores
@@ -130,7 +130,7 @@ export function sanitizeMediaFilename(filename: string): string {
 export function sanitizeDayAlbumName(albumName: string): string {
     return (albumName || '')
         .replaceAll(/[A-Za-z]+/gv, '') // letters to nothing
-        .replaceAll(/[^-0-9]+/g, '-') // any other invalid chars to -
+        .replaceAll(/[^\-0-9]+/gv, '-') // any other invalid chars to -
         .replaceAll(/-+/gv, '-') // multple - to single -
         .replaceAll(/^-/gv, ''); // remove leading -
 }
@@ -149,12 +149,13 @@ export function sanitizeDayAlbumName(albumName: string): string {
  */
 export function getParentAndNameFromPath(path: string): { parent: string; name: string } {
     if (!path) throw new Error('Invalid path: cannot be empty');
-    path = path.trim();
-    if (!path) throw new Error('Invalid path: cannot be empty');
-    if (!isValidPath(path)) throw new Error(`Invalid path: [${path}]`);
-    if (path === '/') return { parent: '', name: '' };
-    const pathParts = path.split('/'); // split the path apart
-    if (!pathParts.at(-1)) pathParts.pop(); // if the path ended in a "/", remove the blank path part at the end
+    const trimmedPath = path.trim();
+    if (!trimmedPath) throw new Error('Invalid path: cannot be empty');
+    if (!isValidPath(trimmedPath)) throw new Error(`Invalid path: [${trimmedPath}]`);
+    if (trimmedPath === '/') return { parent: '', name: '' };
+    const pathParts = trimmedPath.split('/'); // split the path apart
+    const lastPart = pathParts.at(-1);
+    if (lastPart === undefined || lastPart === '') pathParts.pop(); // if the path ended in a "/", remove the blank path part at the end
     const name = pathParts.pop(); // remove leaf of path
     // Unreachable. Every valid path starts with a slash, so split() yields a
     // leading '' plus at least one segment: 3 parts minimum for a non-root path
@@ -162,12 +163,12 @@ export function getParentAndNameFromPath(path: string): { parent: string; name: 
     // this pop always finds one. A throw rather than a fallback because that
     // guarantee lives in isValidPath(), not here, and loosening it there should
     // fail loudly instead of quietly yielding an empty name.
-    if (name === undefined) throw new Error(`Invalid path: [${path}]`);
-    path = pathParts.join('/');
-    if (!path.endsWith('/')) path += '/';
-    if (!path.startsWith('/')) path = `/${path}`;
+    if (name === undefined) throw new Error(`Invalid path: [${trimmedPath}]`);
+    let parent = pathParts.join('/');
+    if (!parent.endsWith('/')) parent += '/';
+    if (!parent.startsWith('/')) parent = `/${parent}`;
     return {
-        parent: path,
+        parent,
         name,
     };
 }
@@ -220,12 +221,15 @@ export function albumPathToDate(albumPath: string): Date {
     if (albumPath === '/') {
         return new Date(1826, 0, 1); // Date of first surviving photograph
     }
-    const m = /^\/(?<year>\d{4})\/((?<month>\d{2})-(?<day>\d{2})\/)?$/v.exec(albumPath);
-    if (!m?.groups?.year) throw new Error(`Error matching`);
-    const year = Number.parseInt(m.groups.year, 10);
-    if (Boolean(m?.groups?.month) && Boolean(m?.groups?.day)) {
-        const month = Number.parseInt(m.groups.month, 10) - 1;
-        const day = Number.parseInt(m.groups.day, 10);
+    const groups = /^\/(?<year>\d{4})\/(?:(?<month>\d{2})-(?<day>\d{2})\/)?$/v.exec(albumPath)?.groups;
+    const yearDigits = groups?.['year'];
+    if (groups === undefined || yearDigits === undefined || yearDigits === '') throw new Error(`Error matching`);
+    const year = Number(yearDigits);
+    const monthDigits = groups['month'];
+    const dayDigits = groups['day'];
+    if (monthDigits !== undefined && monthDigits !== '' && dayDigits !== undefined && dayDigits !== '') {
+        const month = Number(monthDigits) - 1;
+        const day = Number(dayDigits);
         return new Date(year, month, day);
     }
     return new Date(year, 0, 1); // Use Jan 1 for year albums
@@ -251,7 +255,7 @@ export function deduplicateMediaPaths(mediaPaths: string[]): string[] {
     const seenCount = new Map<string, number>();
 
     for (const path of mediaPaths) {
-        const count = seenCount.get(path) || 0;
+        const count = seenCount.get(path) ?? 0;
         seenCount.set(path, count + 1);
 
         if (count === 0) {

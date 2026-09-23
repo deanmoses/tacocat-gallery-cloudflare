@@ -13,10 +13,10 @@
 
     let path: string = $derived(page.url.pathname);
     let show: boolean = $derived(isValidMediaPath(path)); // Show this button only on media pages
-    let dialog = $state()!;
+    let dialog: { show: () => void } | undefined = $state();
 
     function onclick(): void {
-        dialog.show();
+        dialog?.show();
     }
 
     function onConfirm(): void {

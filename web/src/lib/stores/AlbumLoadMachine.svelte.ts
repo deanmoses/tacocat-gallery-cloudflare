@@ -4,6 +4,7 @@ import { type AlbumEntry, AlbumLoadStatus, ReloadStatus } from '$lib/models/albu
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import { isValidAlbumPath } from '$lib/utils/galleryPathUtils';
 import type { AlbumRecord } from '$lib/models/impl/server';
+import { parseAlbum } from 'tacocat-gallery-shared';
 import { albumUrl } from '$lib/utils/config';
 import { albumState } from './AlbumState.svelte';
 
@@ -60,12 +61,12 @@ class AlbumLoadMachine {
         // I don't have album in memory
         if (AlbumLoadStatus.LOADED !== status) {
             this.#setLoadStatus(path, AlbumLoadStatus.LOADING);
-            this.#fetchFromDiskAndServer(path); // fire and forget, don't await
+            void this.#fetchFromDiskAndServer(path); // fire and forget, don't await
         }
         // I have a copy in memory, but the caller has asked to re-fetch
         else if (refetch) {
             this.setUpdateStatus(path, ReloadStatus.RELOADING);
-            this.fetchFromServer(path, this.#changedRecently(path)); // fire and forget, don't await
+            void this.fetchFromServer(path, this.#changedRecently(path)); // fire and forget, don't await
         }
     }
 
@@ -101,12 +102,12 @@ class AlbumLoadMachine {
      *
      * @param path path of the album
      */
-    #notFound(path: string) {
+    #notFound(path: string): void {
         console.warn(`Album [${path}] not found on server`);
         const albumEntry = this.#getOrCreateWritableStore(path);
         const newAlbumEntry = produce(albumEntry, (draftState: AlbumEntry) => {
             draftState.loadStatus = AlbumLoadStatus.DOES_NOT_EXIST;
-            draftState.album = undefined;
+            delete draftState.album;
         });
         albumState.albums.set(path, newAlbumEntry);
         this.setUpdateStatus(path, ReloadStatus.NOT_RELOADING);
@@ -185,12 +186,13 @@ class AlbumLoadMachine {
             const response = await fetch(albumUrl(path) + (fresh ? '?fresh' : ''), this.#buildFetchConfig());
             if (response.status === 404) {
                 this.#notFound(path);
-                this.#removeFromDisk(path); // Delete album from local disk
+                void this.#removeFromDisk(path); // Delete album from local disk
             } else if (response.ok) {
-                const json = await response.json();
+                const json: unknown = await response.json();
                 console.log(`Album [${path}] fetched from server`, json);
-                this.#found(path, json); // Put album in memory
-                this.#writeToDisk(path, json); // Put album on local disk
+                const album = parseAlbum(json);
+                this.#found(path, album); // Put album in memory
+                void this.#writeToDisk(path, album); // Put album on local disk
             } else {
                 throw new Error(response.statusText);
             }
@@ -261,13 +263,12 @@ class AlbumLoadMachine {
      * Update the album in the Svelte store and on the browser's local disk cache
      */
     updateAlbumEntry(albumEntry: AlbumEntry): void {
-        if (!albumEntry) throw 'Album entry is null';
-        if (!albumEntry.album) throw 'Album is null';
+        if (!albumEntry.album) throw new Error('Album is null');
         const oldAlbumEntry = albumState.albums.get(albumEntry.album.path);
-        if (!oldAlbumEntry) throw 'albumEntryStore is null';
+        if (!oldAlbumEntry) throw new Error('albumEntryStore is null');
         albumState.albumChangedAt.set(albumEntry.album.path, Date.now());
         albumState.albums.set(albumEntry.album.path, albumEntry);
-        this.#writeToDisk(albumEntry.album.path, albumEntry.album.json); // Put album in browser's local disk cache
+        void this.#writeToDisk(albumEntry.album.path, albumEntry.album.json); // Put album in browser's local disk cache
     }
 
     /**
@@ -275,31 +276,29 @@ class AlbumLoadMachine {
      *
      * @param path path of the album
      */
-    #writeToDisk(path: string, album: AlbumRecord): void {
+    async #writeToDisk(path: string, album: AlbumRecord): Promise<void> {
         const idbKey = this.#idbKey(path);
         // TODO: maybe don't write it if the value is unchanged?
         // Or maybe refresh some sort of last_fetched timestamp?
-        setToIdb(idbKey, album)
-            .then(() => {
-                console.log(`Album [${path}] stored in idb`);
-            })
-            .catch((e) => {
-                console.error(`Album [${path}] error storing in idb`, e);
-            });
+        try {
+            await setToIdb(idbKey, album);
+            console.log(`Album [${path}] stored in idb`);
+        } catch (error) {
+            console.error(`Album [${path}] error storing in idb`, error);
+        }
     }
 
     /**
      * Remove album from the browser's local disk storage
      */
-    #removeFromDisk(path: string): void {
+    async #removeFromDisk(path: string): Promise<void> {
         const idbKey = this.#idbKey(path);
-        delFromIdb(idbKey)
-            .then(() => {
-                console.log(`Album [${path}] removed from idb`);
-            })
-            .catch((e) => {
-                console.error(`Album [${path}] error removing from idb`, e);
-            });
+        try {
+            await delFromIdb(idbKey);
+            console.log(`Album [${path}] removed from idb`);
+        } catch (error) {
+            console.error(`Album [${path}] error removing from idb`, error);
+        }
     }
 
     /**
@@ -365,7 +364,7 @@ class AlbumLoadMachine {
      * Remove album from client.
      * This assumes that the album has already been deleted from the server.
      */
-    async removeFromMemoryAndDisk(albumPath: string) {
+    async removeFromMemoryAndDisk(albumPath: string): Promise<void> {
         if (!isValidAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
 
         // Delete from disk

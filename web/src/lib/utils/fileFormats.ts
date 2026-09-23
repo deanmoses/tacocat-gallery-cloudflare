@@ -13,7 +13,7 @@ import { VIDEO_EXTENSIONS } from './galleryPathUtils';
 
 const heicHandler: FileFormatHandler = {
     extensions: ['heic', 'heif'],
-    getMediaPath: (uploadPath) => uploadPath.replace(/\.(heic|heif)$/iv, '.jpg'),
+    getMediaPath: (uploadPath) => uploadPath.replace(/\.(?:heic|heif)$/iv, '.jpg'),
     browserCanDisplay: false,
 };
 
@@ -65,7 +65,7 @@ function hasExtension(fileName: string, extensions: string[]): boolean {
  * @param fileNameOrPath Accepts filename or full path.
  */
 function getHandler(fileNameOrPath: string): FileFormatHandler | undefined {
-    return handlers.find((h) => hasExtension(fileNameOrPath, h.extensions));
+    return handlers.find((handler) => hasExtension(fileNameOrPath, handler.extensions));
 }
 
 /** Get the expected final mediaPath in the album after the server changes the file format */

@@ -22,7 +22,7 @@
         text-align: center;
         padding-top: 5em;
         padding-bottom: 5em;
-        background-color: white;
+        background-color: #ffffff;
         color: var(--default-text-color);
     }
 

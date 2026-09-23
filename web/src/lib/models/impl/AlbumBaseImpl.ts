@@ -14,7 +14,7 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
         this.json = json;
     }
 
-    abstract get parentTitle(): string;
+    abstract readonly parentTitle: string;
 
     override get published(): boolean {
         return this.json.published ?? false;
@@ -44,7 +44,7 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
     }
 
     get thumbnailPath(): string | undefined {
-        return this.json?.thumbnail?.path;
+        return this.json.thumbnail?.path;
     }
 
     set thumbnailPath(imagePath: string | undefined) {
@@ -62,31 +62,30 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
     }
 
     get thumbnailUrlInfo(): ThumbnailUrlInfo | undefined {
-        return this.json?.thumbnail?.path && this.json.thumbnail.versionId
+        const { thumbnail } = this.json;
+        if (thumbnail === undefined) {
+            return undefined;
+        }
+        // A thumbnail the thumbnailPath setter has put here has no versionId yet, whatever its type says.
+        return thumbnail.path && thumbnail.versionId
             ? {
-                  imagePath: this.json.thumbnail.path,
-                  versionId: this.json.thumbnail.versionId,
-                  crop: this.json.thumbnail.crop,
+                  imagePath: thumbnail.path,
+                  versionId: thumbnail.versionId,
+                  crop: thumbnail.crop,
               }
             : undefined;
     }
 
     get media(): Media[] {
-        return this.json?.children
-            ? this.json?.children
-                  .filter((child) => child && isMediaRecord(child))
-                  .map((record) => toMedia(record, this))
-            : [];
+        return this.json.children?.filter(isMediaRecord).map((record) => toMedia(record, this)) ?? [];
     }
 
     get albums(): Thumbable[] {
-        return this.json?.children
-            ? this.json?.children.filter((child) => child && isAlbumRecord(child)).map((record) => toAlbum(record))
-            : [];
+        return this.json.children?.filter(isAlbumRecord).map((record) => toAlbum(record)) ?? [];
     }
 
     getMedia(mediaPath: string): Media | undefined {
-        const record = this.json?.children?.find((child: GalleryRecord) => child.path === mediaPath);
+        const record = this.json.children?.find((child: GalleryRecord) => child.path === mediaPath);
         return !record || !isMediaRecord(record) ? undefined : toMedia(record, this);
     }
 }

@@ -7,7 +7,7 @@
     interface Props {
         width?: string | undefined;
         height?: string | undefined;
-        onclick?: (event: MouseEvent) => void | undefined;
+        onclick?: ((event: MouseEvent) => void) | undefined;
     }
 
     let { width = '1em', height = '1em', onclick }: Props = $props();
@@ -23,6 +23,6 @@
 
 <style>
     path {
-        fill: currentColor;
+        fill: currentcolor;
     }
 </style>

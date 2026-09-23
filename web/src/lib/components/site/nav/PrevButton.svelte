@@ -14,7 +14,7 @@
 
     let { href = '', title = '' }: Props = $props();
 
-    let a11yTitle: string = $derived(title ? title : 'Previous');
+    let a11yTitle: string = $derived(title || 'Previous');
 </script>
 
 <Button {href} title={a11yTitle}><PrevIcon /><span class="hidden-xs">{title}</span></Button>

@@ -29,7 +29,7 @@
 
         const currentPath = page.url.pathname;
         const newPath = handleKeyboardNavigation(event.key, currentPath, getAlbum);
-        if (newPath) goto(newPath);
+        if (newPath !== null) void goto(newPath);
     }
 
     /**
@@ -42,7 +42,7 @@
     }
 </script>
 
-{@render children?.()}
+{@render children()}
 {#if sessionStore.isAdmin || sessionStore.hasBeenLoggedIn}
     <!--
         Toast component for admin notifications.

@@ -12,7 +12,7 @@
         htmlContent?: string | undefined;
 
         /** Callback to be called every time the content changes */
-        onChange?: (newHtml: string) => void | undefined;
+        onChange?: ((newHtml: string) => void) | undefined;
     }
 
     let { htmlContent = '', onChange }: Props = $props();
@@ -22,7 +22,9 @@
 
     // Load the Quill editor when the component is mounted,
     // so as to be able to pass the DOM node into Quill's constructor
-    function createEditorOnMount(editorElement: HTMLDivElement /* The DOM node on which to mount the Quill editor */) {
+    function createEditorOnMount(
+        editorElement: HTMLDivElement /* The DOM node on which to mount the Quill editor */,
+    ): void {
         // Prevent Quill from adding target="_blank" and rel="noopener noreferrer" to links
         Quill.register(QuillLink);
 
@@ -37,14 +39,14 @@
                         // Custom link handler that allows editing existing links
                         // instead of Quill's default behavior of removing them.
                         // See: https://github.com/slab/quill/issues/1380
-                        link(this: { quill: Quill }, value: boolean) {
+                        link(this: { quill: Quill }, value: boolean): void {
                             const quillInstance = this.quill;
                             const selection = quillInstance.getSelection();
                             if (!selection) return;
 
                             // Check if the selected text already has a link
                             const format = quillInstance.getFormat(selection);
-                            const existingLink = typeof format.link === 'string' ? format.link : '';
+                            const existingLink = typeof format['link'] === 'string' ? format['link'] : '';
 
                             if (value || existingLink) {
                                 // Either adding a new link or editing an existing one
@@ -76,7 +78,7 @@
             if (quill && onChange) {
                 // TODO: remove the replaceAll() workaround once Quill fixes this bug: https://github.com/slab/quill/issues/4509
                 //onChange(quill.getSemanticHTML());
-                onChange(quill.getSemanticHTML().replaceAll(/((?:&nbsp;)*)&nbsp;/gv, '$1 '));
+                onChange(quill.getSemanticHTML().replaceAll(/&nbsp;(?!&nbsp;)/gv, ' '));
             }
         });
     }
@@ -89,7 +91,7 @@
     // contains the caption from the previous photo.
     $effect(() => {
         quill?.setContents(
-            quill.clipboard.convert({ html: htmlContent ?? '' }),
+            quill.clipboard.convert({ html: htmlContent }),
             'silent' /* Don't trigger a text-change event */,
         );
     });

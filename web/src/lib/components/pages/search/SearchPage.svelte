@@ -19,36 +19,47 @@
 
     let { searchTerms = $bindable(''), returnPath = '', title = '', children }: Props = $props();
 
-    let searchInput = $state()!;
+    let searchInput: HTMLInputElement | undefined = $state();
 
-    let pageTitle = $derived(searchTerms ? `Search for ${searchTerms}` : title || 'Search The Moses Family');
+    let pageTitle = $derived(pageTitleFor(searchTerms, title));
     let disabled = $derived(searchTerms.length < 3);
 
-    function autofocus(formInput: HTMLInputElement) {
+    function pageTitleFor(terms: string, fallback: string): string {
+        if (terms !== '') return `Search for ${terms}`;
+        return fallback === '' ? 'Search The Moses Family' : fallback;
+    }
+
+    function autofocus(formInput: HTMLInputElement): void {
         formInput.focus();
     }
 
-    function onInput() {
-        searchTerms = searchInput.value || '';
+    function onInput(): void {
+        searchTerms = searchInput?.value ?? '';
     }
 
-    function onSubmit(e: Event) {
-        e.preventDefault();
-        const terms = searchInput.value;
-        if (terms) {
-            const oldestYear = toInt((document.getElementById('oldestYear') as HTMLInputElement).value);
-            const newestYear = toInt((document.getElementById('newestYear') as HTMLInputElement).value);
-            const oldestFirst = toBool((document.getElementById('oldestFirst') as HTMLInputElement).checked);
-            goto(localSearchUrl({ terms, oldestYear, newestYear, oldestFirst }, returnPath));
-        }
+    function onSubmit(event: Event): void {
+        event.preventDefault();
+        const terms = searchInput?.value;
+        if (terms === undefined || terms === '') return;
+        const oldestYear = toInt(inputValue('oldestYear'));
+        const newestYear = toInt(inputValue('newestYear'));
+        const oldestFirst = inputChecked('oldestFirst');
+        void goto(localSearchUrl({ terms, oldestYear, newestYear, oldestFirst }, returnPath));
     }
 
-    function toInt(s: string | null): number | undefined {
-        return s ? parseInt(s, 10) : undefined;
+    /** The year and order controls belong to the results page, which renders them as this page's children */
+    function inputValue(id: string): string | null {
+        const input = document.getElementById(id);
+        return input instanceof HTMLInputElement ? input.value : null;
     }
 
-    function toBool(s: boolean | null): boolean {
-        return s ?? false;
+    function inputChecked(id: string): boolean {
+        const input = document.getElementById(id);
+        return input instanceof HTMLInputElement && input.checked;
+    }
+
+    function toInt(value: string | null): number | undefined {
+        return value !== null && value !== '' ? Math.trunc(Number(value)) : undefined;
     }
 </script>
 
@@ -70,7 +81,7 @@
                 value={searchTerms}
                 use:autofocus
             />
-            <button class="btn" {disabled} type="submit"> Search </button>
+            <button {disabled} type="submit"> Search </button>
         </form>
     </header>
     {@render children?.()}

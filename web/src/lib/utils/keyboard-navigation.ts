@@ -19,13 +19,13 @@ export function handleKeyboardNavigation(
     path: string,
     getAlbum: GetAlbumFunction,
 ): string | null {
-    if (isValidAlbumPath(`${path}/`)) path += '/';
+    const currentPath = isValidAlbumPath(`${path}/`) ? `${path}/` : path;
 
     // get URL to navigate to
-    let newPath = getUrlToNavigateTo(key, path, getAlbum);
+    let newPath = getUrlToNavigateTo(key, currentPath, getAlbum);
 
     // make sure there's a / at root
-    if (newPath != null && !newPath.startsWith('/')) {
+    if (newPath !== null && !newPath.startsWith('/')) {
         newPath = `/${newPath}`;
     }
 
@@ -39,14 +39,14 @@ export function handleKeyboardNavigation(
  * @param path path to the current album or media item
  * @returns path of album or media item to navigate to, or null if do not navigate
  */
-function getUrlToNavigateTo(key: KeyboardEvent['key'], path: string, getAlbum: GetAlbumFunction) {
+function getUrlToNavigateTo(key: KeyboardEvent['key'], path: string, getAlbum: GetAlbumFunction): string | null {
     switch (key) {
         // left arrow: go to previous photo or album
         case 'ArrowLeft':
-            return navigateToPeer(path, getAlbum, Direction.Prev);
+            return navigateToPeer(path, getAlbum, Direction.PREV);
         // right arrow: go to next photo or album
         case 'ArrowRight':
-            return navigateToPeer(path, getAlbum, Direction.Next);
+            return navigateToPeer(path, getAlbum, Direction.NEXT);
         // up arrow: go to parent album
         case 'ArrowUp':
             return navigateToParent(path);
@@ -59,8 +59,8 @@ function getUrlToNavigateTo(key: KeyboardEvent['key'], path: string, getAlbum: G
 }
 
 const Direction = {
-    Next: 'Next',
-    Prev: 'Prev',
+    NEXT: 'Next',
+    PREV: 'Prev',
 } as const;
 type Direction = (typeof Direction)[keyof typeof Direction];
 
@@ -76,8 +76,8 @@ function navigateToPeer(path: string, getAlbum: GetAlbumFunction, direction: Dir
     // the site pages through them newest first, so "next" is the older one.
     if (isValidAlbumPath(path)) {
         const nav = albumNav(path, getAlbum(getParentFromPath(path)));
-        const newPath = direction === Direction.Next ? nav.prevHref : nav.nextHref;
-        if (newPath) {
+        const newPath = direction === Direction.NEXT ? nav.prevHref : nav.nextHref;
+        if (newPath !== undefined && newPath !== '') {
             return newPath;
         }
     }
@@ -88,8 +88,8 @@ function navigateToPeer(path: string, getAlbum: GetAlbumFunction, direction: Dir
         if (album) {
             const media = album.getMedia(path);
             if (media) {
-                const newPath = direction === Direction.Next ? media.nextHref : media.prevHref;
-                if (newPath) {
+                const newPath = direction === Direction.NEXT ? media.nextHref : media.prevHref;
+                if (newPath !== undefined && newPath !== '') {
                     return newPath;
                 }
             } else {
@@ -138,13 +138,15 @@ function navigateToFirstChild(path: string, getAlbum: GetAlbumFunction): string 
         const album = getAlbum(path);
         if (album) {
             // If we're on an album with media items, go to first media item
-            if (Boolean(album.media) && album.media.length > 0) {
-                return album.media[0].path;
+            const firstMedia = album.media[0];
+            if (firstMedia !== undefined) {
+                return firstMedia.path;
             }
             // Else we're on an album with no media items, but subalbums.
             // Go to first subalbum.
-            else if (Boolean(album.albums) && album.albums.length > 0) {
-                return album.albums[0].path;
+            const firstAlbum = album.albums[0];
+            if (firstAlbum !== undefined) {
+                return firstAlbum.path;
             }
         } else {
             console.log(`No album found at path: ${path}`);

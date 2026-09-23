@@ -4,33 +4,29 @@
   A thumbnail of an album
 -->
 <script lang="ts">
-    import { CreateStatus, DeleteStatus, RenameStatus } from '$lib/models/album';
-    import { albumState } from '$lib/stores/AlbumState.svelte';
+    import type { AlbumActivity } from '$lib/models/album';
     import type { ThumbnailUrlInfo } from '$lib/models/GalleryItemInterfaces';
     import type { Snippet } from 'svelte';
     import Thumbnail from './Thumbnail.svelte';
 
     interface Props {
-        path: string;
         href?: string | undefined;
         thumbnailUrlInfo?: ThumbnailUrlInfo | undefined;
         title?: string | undefined;
         summary?: string | undefined;
         published?: boolean | undefined;
+        activity?: AlbumActivity | undefined;
         selectionControls?: Snippet | undefined;
     }
-    let { path, href, thumbnailUrlInfo, title, summary, published, selectionControls }: Props = $props();
-    let creating: boolean = $derived(CreateStatus.IN_PROGRESS === albumState.albumCreates.get(path)?.status);
-    let deleting: boolean = $derived(DeleteStatus.IN_PROGRESS === albumState.albumDeletes.get(path)?.status);
-    let renaming: boolean = $derived(RenameStatus.IN_PROGRESS === albumState.albumRenames.get(path)?.status);
+    let { href, thumbnailUrlInfo, title, summary, published, activity, selectionControls }: Props = $props();
 </script>
 
 <Thumbnail
-    {creating}
-    {deleting}
+    creating={activity?.creating}
+    deleting={activity?.deleting}
     {href}
     {published}
-    {renaming}
+    renaming={activity?.renaming}
     {selectionControls}
     {summary}
     {thumbnailUrlInfo}

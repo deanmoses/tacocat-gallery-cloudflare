@@ -36,11 +36,11 @@ class UploadMachine {
     //
 
     uploadMediaItem(uploadPath: string, file: File, previousVersionId?: string): void {
-        this.#uploadMediaItem(uploadPath, file, previousVersionId); // invoke async service in fire-and-forget fashion
+        void this.#uploadMediaItem(uploadPath, file, previousVersionId); // invoke async service in fire-and-forget fashion
     }
 
     uploadMediaItems(albumPath: string, mediaItemsToUpload: MediaItemToUpload[]): void {
-        this.#uploadMediaItems(albumPath, mediaItemsToUpload); // invoke async service in fire-and-forget fashion
+        void this.#uploadMediaItems(albumPath, mediaItemsToUpload); // invoke async service in fire-and-forget fashion
     }
 
     #uploadEnqueued(uploadPath: string, file: File, previousVersionId?: string): void {
@@ -49,12 +49,12 @@ class UploadMachine {
             uploadPath,
             mediaPath: getMediaPath(uploadPath),
             status: UploadState.UPLOAD_NOT_STARTED,
-            previousVersionId,
+            ...(previousVersionId === undefined ? {} : { previousVersionId }),
         });
     }
 
     #uploadStarted(uploadPath: string): void {
-        const upload = albumState.uploads.find((u) => u.uploadPath === uploadPath);
+        const upload = albumState.uploads.find((entry) => entry.uploadPath === uploadPath);
         if (!upload) {
             console.warn(`Upload not found for path: ${uploadPath}`);
             return;
@@ -63,7 +63,7 @@ class UploadMachine {
     }
 
     #uploadProcessing(uploadPath: string, versionId: string): void {
-        const upload = albumState.uploads.find((u) => u.uploadPath === uploadPath);
+        const upload = albumState.uploads.find((entry) => entry.uploadPath === uploadPath);
         if (!upload) {
             console.warn(`Upload not found for path: ${uploadPath}`);
             return;
@@ -116,14 +116,13 @@ class UploadMachine {
      * @param previousVersionId For replacements: versionId of the media item being replaced
      */
     async #uploadMediaItem(uploadPath: string, file: File, previousVersionId?: string): Promise<void> {
-        if (!file) return;
         try {
             const albumPath = getParentFromPath(uploadPath);
             this.#uploadEnqueued(uploadPath, file, previousVersionId);
             await this.#uploadSingleMediaItem(albumPath, { file, uploadPath });
             await this.#pollForProcessedMediaItems(albumPath);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
             this.#uploadErrored(uploadPath, msg);
         }
     }
@@ -156,18 +155,20 @@ class UploadMachine {
             throw new Error(presignedResult.error);
         }
         const presignedUrl = presignedResult.urls[mediaItemToUpload.uploadPath];
-        if (!presignedUrl) {
+        if (presignedUrl === undefined || presignedUrl === '') {
             throw new Error('No presigned URL for media item');
         }
         await this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presignedUrl);
     }
 
     async #uploadMediaItems(albumPath: string, mediaItemsToUpload: MediaItemToUpload[]): Promise<void> {
+        // Narrowed as validation rejects items, so a failure cleans up only the ones still in play
+        let itemsToUpload = mediaItemsToUpload;
         try {
-            if (!mediaItemsToUpload || mediaItemsToUpload.length === 0) throw new Error('No media to upload');
+            if (itemsToUpload.length === 0) throw new Error('No media to upload');
 
             // Validate file extensions and media paths
-            mediaItemsToUpload = mediaItemsToUpload.filter((mediaItemToUpload) => {
+            itemsToUpload = itemsToUpload.filter((mediaItemToUpload) => {
                 if (!hasValidMediaExtension(mediaItemToUpload.file.name)) {
                     this.#uploadSkipped(
                         mediaItemToUpload.uploadPath,
@@ -184,18 +185,18 @@ class UploadMachine {
                 }
                 return true;
             });
-            if (mediaItemsToUpload.length === 0) return;
+            if (itemsToUpload.length === 0) return;
 
             // Validate media content (checks file size > 0 and that browser can load any browser-loadable media)
-            const validationResult = await validateMediaBatch(mediaItemsToUpload);
+            const validationResult = await validateMediaBatch(itemsToUpload);
             for (const uploadPath of validationResult.invalid) {
                 this.#uploadSkipped(uploadPath, 'Invalid or corrupted media file');
             }
-            mediaItemsToUpload = validationResult.valid;
-            if (mediaItemsToUpload.length === 0) return;
+            itemsToUpload = validationResult.valid;
+            if (itemsToUpload.length === 0) return;
 
             // Get presigned URLs
-            const uploadPaths = mediaItemsToUpload.map((img) => img.uploadPath);
+            const uploadPaths = itemsToUpload.map((img) => img.uploadPath);
             const presignedResult = await fetchPresignedUrls(albumPath, uploadPaths);
             if (!presignedResult.success) {
                 throw new Error(presignedResult.error);
@@ -203,7 +204,7 @@ class UploadMachine {
             const presignedUrls = presignedResult.urls;
 
             // Enqueue uploads
-            for (const mediaItemToUpload of mediaItemsToUpload) {
+            for (const mediaItemToUpload of itemsToUpload) {
                 this.#uploadEnqueued(
                     mediaItemToUpload.uploadPath,
                     mediaItemToUpload.file,
@@ -213,9 +214,9 @@ class UploadMachine {
 
             // Upload to S3 in parallel
             const mediaUploads: Promise<void>[] = [];
-            for (const mediaItemToUpload of mediaItemsToUpload) {
+            for (const mediaItemToUpload of itemsToUpload) {
                 const presignedUrl = presignedUrls[mediaItemToUpload.uploadPath];
-                if (!presignedUrl) {
+                if (presignedUrl === undefined || presignedUrl === '') {
                     this.#uploadErrored(mediaItemToUpload.uploadPath, `No presigned URL for media`);
                     continue;
                 }
@@ -223,12 +224,12 @@ class UploadMachine {
             }
             await Promise.allSettled(mediaUploads);
             await this.#pollForProcessedMediaItems(albumPath);
-        } catch (e) {
+        } catch (error) {
             // Clean up any uploads that were enqueued before the failure
-            for (const mediaItemToUpload of mediaItemsToUpload) {
+            for (const mediaItemToUpload of itemsToUpload) {
                 this.#uploadComplete(mediaItemToUpload.uploadPath);
             }
-            toast.push(`${e}`);
+            toast.push(String(error));
         }
     }
 
@@ -251,7 +252,7 @@ class UploadMachine {
 
         // Calculate max poll attempts based on the slowest-processing file type
         const uploads = getUploadsForAlbum(albumPath);
-        const maxTimeoutMs = Math.max(...uploads.map((u) => getProcessingTimeout(u.uploadPath)));
+        const maxTimeoutMs = Math.max(...uploads.map((upload) => getProcessingTimeout(upload.uploadPath)));
         const maxPollAttempts = Math.ceil(maxTimeoutMs / POLL_INTERVAL_MS);
 
         let processingComplete: boolean;
@@ -264,21 +265,20 @@ class UploadMachine {
         console.log(`Media have been processed. Loop count: [${pollAttemptCount}]`);
 
         // If polling timed out with media still processing, clear them from UI and notify user
-        if (!processingComplete) {
-            const remaining = getUploadsForAlbum(albumPath);
-            for (const upload of remaining) {
-                this.#uploadComplete(upload.uploadPath);
-            }
-            toast.push('Some media are still processing. Refresh to see them when ready.');
+        if (processingComplete) return;
+        const remaining = getUploadsForAlbum(albumPath);
+        for (const upload of remaining) {
+            this.#uploadComplete(upload.uploadPath);
         }
+        toast.push('Some media are still processing. Refresh to see them when ready.');
     }
 
     async #areMediaProcessed(albumPath: string): Promise<boolean> {
         const uploads = getUploadsForAlbum(albumPath);
-        if (!uploads || uploads.length === 0) return true;
+        if (uploads.length === 0) return true;
         try {
             // Check for processing errors (e.g., video transcoding failures)
-            const uploadPaths = uploads.map((u) => u.uploadPath);
+            const uploadPaths = uploads.map((upload) => upload.uploadPath);
             const errorResult = await checkMediaErrors(uploadPaths);
             if (errorResult.success && errorResult.errors) {
                 for (const [path, errorMessage] of Object.entries(errorResult.errors)) {
@@ -301,15 +301,19 @@ class UploadMachine {
             }
 
             return allProcessed;
-        } catch (e) {
-            console.error(`Error checking if media are processed`, e);
+        } catch (error) {
+            console.error(`Error checking if media are processed`, error);
             return false;
         }
     }
 }
 export const uploadMachine = new UploadMachine();
 
-const sleep = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+async function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 
 //
 // Utils for working with machine
@@ -325,14 +329,12 @@ export function getSanitizedFiles(files: FileList | File[], albumPath: string): 
 
     // Deduplicate paths
     // e.g., my-photo.jpg and my_photo.jpg both become my_photo.jpg, and therefore one needs to become my_photo_1.jpg
-    const originalPaths = filesWithPaths.map((f) => f.uploadPath);
+    const originalPaths = filesWithPaths.map((item) => item.uploadPath);
     const deduplicatedPaths = deduplicateMediaPaths(originalPaths);
 
-    // Build result with deduplicated paths
-    const result: MediaItemToUpload[] = [];
-    for (let i = 0; i < filesWithPaths.length; i++) {
-        const uploadPath = deduplicatedPaths[i];
-        result.push({ file: filesWithPaths[i].file, uploadPath });
-    }
-    return result;
+    // Build result with deduplicated paths, which come back one per original path in the same order
+    return filesWithPaths.map((item, index) => ({
+        file: item.file,
+        uploadPath: deduplicatedPaths[index] ?? item.uploadPath,
+    }));
 }

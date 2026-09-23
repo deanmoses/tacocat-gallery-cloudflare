@@ -13,9 +13,10 @@
 
     let { textContent = '' }: Props = $props();
 
-    let div = $state()!;
+    let div: HTMLDivElement | undefined = $state();
 
-    function onInput() {
+    function onInput(): void {
+        if (div === undefined) return;
         let editedText = div.innerText;
         // I'm having a problem with a /n being added at some point where I'm
         // then not able to remove it.  This is a blunt intstrument, but maybe
@@ -29,7 +30,7 @@
 <div bind:this={div} contenteditable oninput={onInput}>{textContent}</div>
 
 <style>
-    div[contenteditable] {
+    [contenteditable] {
         min-width: 10em; /* make edit surface visible even when there's no text in it */
     }
 </style>

@@ -12,12 +12,20 @@
         media: Media;
     }
     let { media }: Props = $props();
+
+    function isVideo(item: Media): item is Video {
+        return item.mediaType === 'video';
+    }
+
+    function isImage(item: Media): item is Image {
+        return item.mediaType === 'image';
+    }
 </script>
 
-{#if media.mediaType === 'video'}
-    <VideoPlayer video={media as Video} />
-{:else if media.mediaType === 'image'}
-    <BigImage image={media as Image} />
+{#if isVideo(media)}
+    <VideoPlayer video={media} />
+{:else if isImage(media)}
+    <BigImage image={media} />
 {:else}
     Unsupported media type
 {/if}

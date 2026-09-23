@@ -21,7 +21,8 @@
     $effect(() => {
         let active = true;
         let currentUrl = '';
-        createPreviewUrl(upload.file).then((url) => {
+        async function preview(): Promise<void> {
+            const url = await createPreviewUrl(upload.file);
             if (!active) {
                 // Effect was cleaned up before promise resolved
                 if (url) URL.revokeObjectURL(url);
@@ -29,8 +30,9 @@
             }
             currentUrl = url;
             urlForTemplate = url || undefined;
-        });
-        return () => {
+        }
+        void preview();
+        return (): void => {
             active = false;
             if (!currentUrl) {
                 return;

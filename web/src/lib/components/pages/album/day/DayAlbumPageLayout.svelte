@@ -22,7 +22,7 @@
         thumbnails?: Snippet | undefined;
     }
 
-    let { title = '', published = false, editControls, nav, caption, thumbnails }: Props = $props();
+    let { title, published, editControls, nav, caption, thumbnails }: Props = $props();
 
     let unpublished = $derived(!published);
 </script>

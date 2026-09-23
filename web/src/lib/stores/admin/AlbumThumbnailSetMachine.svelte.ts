@@ -2,14 +2,14 @@ import { SvelteMap } from 'svelte/reactivity';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { ReloadStatus } from '$lib/models/album';
 import { setThumbnailUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
 import { getParentFromPath, isValidYearAlbumPath } from '$lib/utils/galleryPathUtils';
 
 /**
  * Album thumbnail set machine
  */
-export interface AlbumThumbnailSetEntry {
+interface AlbumThumbnailSetEntry {
     albumPath: string;
     newThumbnailImagePath: string;
     status: AlbumThumbnailSetStatus;
@@ -18,10 +18,10 @@ export interface AlbumThumbnailSetEntry {
 /**
  * Status of setting the album's thumbnail
  */
-export const AlbumThumbnailSetStatus = {
+const AlbumThumbnailSetStatus = {
     IN_PROGRESS: 'In Progress',
 } as const;
-export type AlbumThumbnailSetStatus = (typeof AlbumThumbnailSetStatus)[keyof typeof AlbumThumbnailSetStatus];
+type AlbumThumbnailSetStatus = (typeof AlbumThumbnailSetStatus)[keyof typeof AlbumThumbnailSetStatus];
 
 /**
  * Store of album thumbnail set states
@@ -68,20 +68,19 @@ class AlbumThumbnailSetMachine {
         albumLoadMachine.setUpdateStatus(albumPath, ReloadStatus.RELOADING);
 
         // Call the async logic in a fire-and-forget manner
-        this.#setAlbumThumbnail(albumPath, newThumbnailMediaPath);
+        void this.#setAlbumThumbnail(albumPath, newThumbnailMediaPath);
     }
 
-    #success(albumPath: string) {
+    #success(albumPath: string): void {
         this.#state.delete(albumPath);
         albumLoadMachine.setUpdateStatus(albumPath, ReloadStatus.NOT_RELOADING);
 
-        if (isValidYearAlbumPath(albumPath)) {
-            const year = albumPath.replaceAll('/', '');
-            toast.push(`Thumbnail set for ${year}`);
-        }
+        if (!isValidYearAlbumPath(albumPath)) return;
+        const year = albumPath.replaceAll('/', '');
+        toast.push(`Thumbnail set for ${year}`);
     }
 
-    #error(albumPath: string, errorMessage: string) {
+    #error(albumPath: string, errorMessage: string): void {
         console.log(`Error saving thumbnail for album [${albumPath}]: ${errorMessage}`);
         this.#state.delete(albumPath);
         albumLoadMachine.setUpdateStatus(albumPath, ReloadStatus.NOT_RELOADING);
@@ -106,8 +105,7 @@ class AlbumThumbnailSetMachine {
                 mediaPath: newThumbnailMediaPath,
             });
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
             console.log(`Set thumbnail of album [${albumPath}] to [${newThumbnailMediaPath}]`);
             console.log(`Reloading album [${albumPath}] from server`);

@@ -21,22 +21,27 @@
 
     let { albumPath, allowDrop = true }: Props = $props();
 
-    let dialog = $state()!;
+    /** What this page asks of the confirm dialog it binds to */
+    interface ConfirmDialog {
+        show: (collidingNames: string[]) => void;
+    }
+
+    let dialog: ConfirmDialog | undefined = $state();
 
     let imagesToUpload: MediaItemToUpload[] = $state([]);
 
-    function isDropAllowed(e: DragEvent): boolean {
-        return allowDrop && sessionStore.isAdmin && Boolean(e.dataTransfer?.types.includes('Files'));
+    function isDropAllowed(event: DragEvent): boolean {
+        return allowDrop && sessionStore.isAdmin && Boolean(event.dataTransfer?.types.includes('Files'));
     }
 
-    async function onDrop(e: DragEvent): Promise<void> {
-        const files = await getDroppedFiles(e);
+    async function onDrop(event: DragEvent): Promise<void> {
+        const files = await getDroppedFiles(event);
         imagesToUpload = getSanitizedFiles(files, albumPath);
         if (!imagesToUpload.length) return;
         const album = albumState.albums.get(albumPath)?.album;
         const collidingNames = enrichWithPreviousVersionIds(imagesToUpload, album);
         if (collidingNames.length > 0) {
-            dialog.show(collidingNames);
+            dialog?.show(collidingNames);
         } else {
             uploadMachine.uploadMediaItems(albumPath, imagesToUpload);
         }

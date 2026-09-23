@@ -21,19 +21,19 @@
 
     let { mediaPath, versionId, allowDrop = true }: Props = $props();
 
-    function isDropAllowed(e: DragEvent): boolean {
-        return allowDrop && sessionStore.isAdmin && Boolean(e.dataTransfer?.types.includes('Files'));
+    function isDropAllowed(event: DragEvent): boolean {
+        return allowDrop && sessionStore.isAdmin && Boolean(event.dataTransfer?.types.includes('Files'));
     }
 
-    async function onDrop(e: DragEvent): Promise<void> {
-        const files = await getDroppedFiles(e);
-        if (!files || files.length !== 1) {
+    async function onDrop(event: DragEvent): Promise<void> {
+        const files = await getDroppedFiles(event);
+        const file = files[0];
+        if (files.length !== 1 || file === undefined) {
             toast.push('Please drop a single file');
             return;
         }
-        const file = files[0];
         const extensionError = getReplacementExtensionError(mediaPath, file.name);
-        if (extensionError) {
+        if (extensionError !== undefined) {
             toast.push(extensionError);
             return;
         }

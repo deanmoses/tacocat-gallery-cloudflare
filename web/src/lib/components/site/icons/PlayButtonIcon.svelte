@@ -24,6 +24,6 @@
         justify-content: center;
         border-radius: 50%;
         background: rgb(0 0 0 / 40%);
-        color: white;
+        color: #ffffff;
     }
 </style>

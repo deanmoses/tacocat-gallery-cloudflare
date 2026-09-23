@@ -16,10 +16,10 @@ export const load: PageLoad = ({ params, url }) => {
     };
 };
 
-function toInt(s: string | null): number | undefined {
-    return s ? parseInt(s, 10) : undefined;
+function toInt(value: string | null): number | undefined {
+    return value !== null && value !== '' ? Math.trunc(Number(value)) : undefined;
 }
 
-function toBool(s: string | null): boolean {
-    return s ? s.toLowerCase() === 'true' || s === '1' : false;
+function toBool(value: string | null): boolean {
+    return value !== null && (value.toLowerCase() === 'true' || value === '1');
 }

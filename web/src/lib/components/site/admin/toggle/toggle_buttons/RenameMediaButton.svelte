@@ -21,29 +21,27 @@
 
     let mediaPath: string = $derived(page.url.pathname);
     let show: boolean = $derived(isValidMediaPath(mediaPath)); // Show this button on media (images and videos)
-    let dialog = $state()!;
+    let dialog: { show: () => void } | undefined = $state();
 
     function originalMediaName(): string {
         const mediaName = getNameFromPath(mediaPath);
-        const mediaNameWithoutExtension = mediaName.split('.', 1)[0];
-        return mediaNameWithoutExtension;
+        return mediaName.split('.', 1)[0] ?? '';
     }
 
     function fileExtension(): string {
         const mediaName = getNameFromPath(mediaPath);
-        const extension = `.${mediaName.split('.', 2)[1]}`;
-        return extension;
+        return `.${mediaName.split('.', 2)[1] ?? ''}`;
     }
 
-    function onButtonClick() {
-        dialog.show();
+    function onButtonClick(): void {
+        dialog?.show();
     }
 
-    function onNewMediaName(newMediaName: string) {
+    function onNewMediaName(newMediaName: string): void {
         const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
         mediaRenameMachine.renameMediaItem(mediaPath, newMediaPath);
         const albumPath = getParentFromPath(newMediaPath);
-        goto(albumPath);
+        void goto(albumPath);
     }
 
     async function validateMediaName(newMediaName: string): Promise<string | undefined> {

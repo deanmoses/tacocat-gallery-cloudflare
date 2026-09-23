@@ -23,7 +23,8 @@
 
     let { album }: Props = $props();
 
-    let sortedAlbums = $derived(album.albums ? album.albums.sort((a, b) => b.path.localeCompare(a.path)) : []);
+    let sortedAlbums = $derived(album.albums.toSorted((first, second) => second.path.localeCompare(first.path)));
+    import { albumActivity } from '$lib/stores/AlbumState.svelte';
 </script>
 
 <svelte:head>
@@ -43,8 +44,8 @@
             <Thumbnails>
                 {#each sortedAlbums as childAlbum (childAlbum.path)}
                     <AlbumThumbnail
+                        activity={albumActivity(childAlbum.path)}
                         href={childAlbum.href}
-                        path={childAlbum.path}
                         thumbnailUrlInfo={childAlbum.thumbnailUrlInfo}
                         title={childAlbum.title}
                     />

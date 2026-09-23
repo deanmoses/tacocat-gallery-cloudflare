@@ -1,6 +1,6 @@
 import { DeleteStatus } from '$lib/models/album';
 import { deleteUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { getParentFromPath, isValidMediaPath } from '$lib/utils/galleryPathUtils';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumState } from '../AlbumState.svelte';
@@ -27,7 +27,7 @@ class MediaDeleteMachine {
     //
 
     delete(mediaPath: string): void {
-        this.#deleteMediaItem(mediaPath); // call async logic in a fire-and-forget manner
+        void this.#deleteMediaItem(mediaPath); // call async logic in a fire-and-forget manner
     }
 
     #deleteStarted(mediaPath: string): void {
@@ -56,21 +56,20 @@ class MediaDeleteMachine {
     //  - These don't return values; they return void or Promise<void>
     //
 
-    async #deleteMediaItem(mediaPath: string) {
+    async #deleteMediaItem(mediaPath: string): Promise<void> {
         try {
             if (!isValidMediaPath(mediaPath)) throw new Error(`Invalid media path [${mediaPath}]`);
             this.#deleteStarted(mediaPath);
             const response = await adminApi.delete(deleteUrl(mediaPath));
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
             console.log(`Media [${mediaPath}] deleted`);
             // reload the album
             await albumLoadMachine.reloadAfterChange(getParentFromPath(mediaPath));
             this.#success(mediaPath);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
             this.#error(mediaPath, msg);
         }
     }

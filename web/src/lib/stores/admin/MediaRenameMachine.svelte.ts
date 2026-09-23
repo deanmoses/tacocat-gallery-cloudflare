@@ -1,6 +1,6 @@
 import { RenameStatus } from '$lib/models/album';
 import { renameMediaUrl } from '$lib/utils/config';
-import { adminApi } from '$lib/utils/adminApi';
+import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { getNameFromPath, getParentFromPath, isValidMediaPath } from '$lib/utils/galleryPathUtils';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -27,7 +27,7 @@ class MediaRenameMachine {
     //
 
     renameMediaItem(oldPath: string, newPath: string): void {
-        this.#renameMediaItem(oldPath, newPath); // call async logic in a fire-and-forget manner
+        void this.#renameMediaItem(oldPath, newPath); // call async logic in a fire-and-forget manner
     }
 
     #renameStarted(oldPath: string, newPath: string): void {
@@ -59,7 +59,7 @@ class MediaRenameMachine {
     //  - These don't return values; they return void or Promise<void>
     //
 
-    async #renameMediaItem(oldMediaPath: string, newMediaPath: string) {
+    async #renameMediaItem(oldMediaPath: string, newMediaPath: string): Promise<void> {
         try {
             if (!isValidMediaPath(oldMediaPath)) throw new Error(`Invalid media path [${oldMediaPath}]`);
             if (!isValidMediaPath(newMediaPath)) throw new Error(`Invalid media path [${newMediaPath}]`);
@@ -71,13 +71,12 @@ class MediaRenameMachine {
             this.#renameStarted(oldMediaPath, newMediaPath);
             const response = await adminApi.post(renameMediaUrl(oldMediaPath), { newName });
             if (!response.ok) {
-                const json = await response.json().catch(() => ({}));
-                throw new Error(json?.errorMessage || response.statusText);
+                throw new Error(await failureMessage(response));
             }
             await albumLoadMachine.reloadAfterChange(albumPath); // update the album
             this.#success(oldMediaPath);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
             this.#error(oldMediaPath, newMediaPath, msg);
         }
     }

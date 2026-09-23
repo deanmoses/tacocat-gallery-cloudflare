@@ -54,13 +54,14 @@
             : src,
     );
     let unpublished: boolean = $derived(!published);
-    let imageLoaded = $state(false);
 
-    // Reset imageLoaded when imgSrc changes to avoid showing play icon over stale image
-    $effect(() => {
-        imgSrc;
-        imageLoaded = false;
-    });
+    // The source whose image has loaded, so that a replaced source counts as unloaded until its own load fires
+    let loadedSrc: string | undefined = $state();
+    let imageLoaded: boolean = $derived(loadedSrc === imgSrc);
+
+    function onImageLoad(): void {
+        loadedSrc = imgSrc;
+    }
 </script>
 
 <div class="thumbnail" data-testid="thumbnail">
@@ -70,7 +71,7 @@
                 data-testid="thumbnail-image"
                 decoding="async"
                 draggable="false"
-                onload={() => (imageLoaded = true)}
+                onload={onImageLoad}
                 src={imgSrc}
             />{:else}<div class="no-image"></div>{/if}{#if creating}<div class="icon-overlay">
                 <CreateIcon height="10em" width="10em" />
@@ -100,7 +101,7 @@
 
     a {
         text-decoration: none;
-        color: black;
+        color: #000000;
     }
 
     a:nth-of-type(1) {
@@ -134,7 +135,7 @@
         top: 0;
         right: 0;
         padding: 1em;
-        color: red;
+        color: #ff0000;
     }
 
     .play-overlay {

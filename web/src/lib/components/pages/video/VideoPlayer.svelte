@@ -26,19 +26,29 @@
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
-    function handlePlay() {
+    function handlePlay(): void {
         isPlaying = true;
         // Wait for video element to be rendered, then play
         setTimeout(() => {
-            videoElement?.play().catch(() => {
-                // If autoplay fails (e.g., browser policy), revert to poster state
-                isPlaying = false;
-            });
+            void play();
         }, 0);
     }
 
-    function handleEnded() {
+    async function play(): Promise<void> {
+        try {
+            await videoElement?.play();
+        } catch {
+            // If autoplay fails (e.g., browser policy), revert to poster state
+            isPlaying = false;
+        }
+    }
+
+    function handleEnded(): void {
         isPlaying = false;
+    }
+
+    function onPosterLoad(): void {
+        posterLoaded = true;
     }
 </script>
 
@@ -51,7 +61,7 @@
             </video>
         {:else}
             <button aria-label="Play video: {video.title}" onclick={handlePlay} type="button">
-                <img alt={video.title} draggable="false" onload={() => (posterLoaded = true)} src={video.detailUrl} />
+                <img alt={video.title} draggable="false" onload={onPosterLoad} src={video.detailUrl} />
                 {#if posterLoaded}
                     <div class="play-overlay">
                         <PlayButtonIcon size="5em" />
@@ -115,7 +125,7 @@
         bottom: 0.5em;
         right: 0.5em;
         background: rgb(0 0 0 / 75%);
-        color: white;
+        color: #ffffff;
         padding: 0.2em 0.5em;
         border-radius: 0.25em;
         font-size: 0.9em;

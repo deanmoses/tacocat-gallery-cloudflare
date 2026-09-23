@@ -15,16 +15,16 @@ export interface MediaValidationResult {
  * @returns Valid files and list of invalid filenames
  */
 export async function validateMediaBatch(files: MediaItemToUpload[]): Promise<MediaValidationResult> {
-    const results = await Promise.all(files.map(async (file) => validateMediaItem(file)));
+    const results = await Promise.all(files.map(async (item) => ({ item, isValid: await validateMediaItem(item) })));
 
     const valid: MediaItemToUpload[] = [];
     const invalid: string[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-        if (results[i]) {
-            valid.push(files[i]);
+    for (const { item, isValid } of results) {
+        if (isValid) {
+            valid.push(item);
         } else {
-            invalid.push(files[i].uploadPath);
+            invalid.push(item.uploadPath);
         }
     }
 

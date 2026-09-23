@@ -20,16 +20,16 @@ export function serverError(statusText = 'Internal Server Error'): Response {
 }
 
 /** A reply, or a function that produces one -- a thrown error stands for the network being down */
-export type Reply = Response | (() => Response);
+type Reply = Response | (() => Response);
 
-export interface Call {
+interface Call {
     method: string;
     pathname: string;
     body: unknown;
 }
 
 /** A call as fetch() received it, for what Call leaves out: the query string, the request options */
-export interface RawCall {
+interface RawCall {
     url: URL;
     init: RequestInit | undefined;
 }
@@ -73,12 +73,12 @@ export function fakeServer(): Routes {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input), ORIGIN);
         const method = init?.method ?? 'GET';
-        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+        const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
         calls.push({ method, pathname: url.pathname, body });
         rawCalls.push({ url, init });
 
         const replies = routes.get(`${method} ${url.pathname}`);
-        const reply = replies?.length && replies.length > 1 ? replies.shift() : replies?.[0];
+        const reply = replies !== undefined && replies.length > 1 ? replies.shift() : replies?.[0];
         if (!reply) throw new Error(`No route registered for ${method} ${url.href}`);
         // Cloned so a reply registered once can be read by more than one call
         return typeof reply === 'function' ? reply() : reply.clone();
