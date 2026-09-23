@@ -1,6 +1,15 @@
 {
     "permissions": {
         "allow": [
+            "Bash(npm run db:migrate)",
+            "Bash(npm run probes)",
+            "Bash(npx wrangler deploy)",
+            "Bash(npx wrangler deploy:*)",
+            "Bash(npx wrangler d1 migrations apply:*)",
+            "Bash(npx wrangler d1 execute:*)",
+            "Bash(npx wrangler r2 object put:*)",
+            "Bash(npx wrangler tail)",
+            "Bash(npx wrangler tail:*)",
             "Bash(npm test)",
             "Bash(npm test:*)",
             "Bash(npm run lint)",
