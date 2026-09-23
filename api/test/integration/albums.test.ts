@@ -1,6 +1,6 @@
 import { type Album, parseAlbum } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { call, callAsAdmin, callForJson, putItem } from '../helpers';
+import { call, callAsAdmin, callForJson, parseExactly, putItem } from '../helpers';
 
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
@@ -14,8 +14,7 @@ async function setThumbnail(albumPath: string, mediaPath: string, asAdmin = true
 }
 
 async function album(path: string, asAdmin = false): Promise<Album> {
-    const response = await (asAdmin ? callAsAdmin : call)(`/api/album${path}`);
-    return parseAlbum(await response.json());
+    return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/album${path}`), parseAlbum);
 }
 
 describe('an album', () => {
@@ -161,7 +160,7 @@ describe('an album', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('cache-control')).toBeNull();
-        expect(parseAlbum(await response.json()).path).toBe(DAY);
+        expect((await parseExactly(response, parseAlbum)).path).toBe(DAY);
     });
 });
 
@@ -208,7 +207,7 @@ describe('an album thumbnail', () => {
         const response = await call('/api/album/1982/05-05/', { headers: { cookie } });
 
         expect(response.headers.get('cache-control')).toBe('private, no-store');
-        expect(parseAlbum(await response.json()).thumbnail?.path).toBe('/1982/05-05/b.jpg');
+        expect((await parseExactly(response, parseAlbum)).thumbnail?.path).toBe('/1982/05-05/b.jpg');
     });
 
     it('needs an admin', async () => {

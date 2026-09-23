@@ -1,6 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
+import { expect } from 'vitest';
 import { orm, schema } from '../src/db';
 import worker from '../src/index';
 import { adminCookie } from './secrets';
@@ -27,6 +28,20 @@ export async function call(path: string, init: Init = {}): Promise<Response> {
 export async function callForJson<T>(path: string, init: Init = {}): Promise<T> {
     const response = await call(path, init);
     return response.json<T>();
+}
+
+/**
+ * The response body parsed with `parse`, a schema's parse function from shared/, and checked to be exactly that type.
+ * Parsing drops fields the schema lacks, so the body must equal what parsing leaves of it: a field the Worker sends but
+ * the web app never sees fails here.
+ */
+export async function parseExactly<T>(response: Response, parse: (input: unknown) => T): Promise<T> {
+    const body: unknown = await response.json();
+    const parsed = parse(body);
+
+    expect(body).toStrictEqual(parsed);
+
+    return parsed;
 }
 
 /** Sends a request with a valid admin session. */

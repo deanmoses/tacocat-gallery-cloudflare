@@ -55,5 +55,5 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - Title a unit test's `describe` with the function itself, as in `describe(transcodeVideo, ...)`.
 - Use `it.each` for cases that differ only in data, with object rows and a `$name` in the title.
 - Read the database back through `orm(env.DB)` and `schema`, so a renamed column is a type error. Raw SQL is for FTS5, which Drizzle cannot see.
-- Check an API response by parsing it with its schema from `shared/`, as `albums.test.ts` does with `parseAlbum`.
+- Read an API response with `parseExactly` and its parse function from `shared/`, such as `parseAlbum`. It fails on a field the schema lacks, which parsing alone would drop.
 - Every test asserts something; `requireAssertions` fails one that doesn't.

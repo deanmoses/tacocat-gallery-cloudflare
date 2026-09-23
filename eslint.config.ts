@@ -252,6 +252,68 @@ export default defineConfig(
         languageOptions: { globals: globals.browser },
     },
     {
+        // The web app sees the Worker only through its HTTP responses, whose shapes live in shared/. A table's row type
+        // reaching it would tie the pages to column names the Worker is free to change.
+        name: 'web imports no worker code',
+        files: ['web/src/**/*'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['tacocat-gallery-api', 'tacocat-gallery-api/*', '**/api/src', '**/api/src/**'],
+                            message: 'Put the shape in shared/ and have the Worker map to it.',
+                        },
+                        {
+                            group: ['drizzle-orm', 'drizzle-orm/*'],
+                            message: 'Database types stay in the Worker; put the response shape in shared/.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    {
+        name: 'worker imports no web code',
+        files: ['api/**/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['tacocat-gallery-web', 'tacocat-gallery-web/*', '**/web/src', '**/web/src/**'],
+                            message: 'Move what both sides need into shared/.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    {
+        // Runs in both the Worker and the browser, so anything tied to one of them, Node included, breaks the other.
+        name: 'shared imports only what runs everywhere',
+        files: ['shared/src/**/*'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            regex: String.raw`^(?!\.{1,2}/|valibot$|vitest$)`,
+                            message: 'shared/ runs in the Worker and the browser alike; keep it to valibot.',
+                        },
+                        {
+                            group: ['**/api/**', '**/web/**'],
+                            message: 'shared/ is what the Worker and the web app both import; it imports neither.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    {
         name: 'tests',
         files: ['api/test/**/*.ts', 'web/src/**/*.test.ts', 'shared/src/**/*.test.ts'],
         // The recommended set plus the rules below, the same as tacocat-gallery-sveltekit's. Vitest's `all` preset is
