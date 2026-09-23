@@ -1,9 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
-import type { Rectangle } from 'tacocat-gallery-shared';
+import { type Rectangle, itemTypeSchema } from 'tacocat-gallery-shared';
 
 // The FTS5 table `item_fts` and the triggers that keep it in sync with `item` are raw SQL in migrations/, because
 // Drizzle does not model virtual tables or triggers. drizzle-kit leaves them alone.
+
+// As SQL literals for the check constraint. A new item type changes the constraint, which needs a migration.
+const ITEM_TYPES_SQL = itemTypeSchema.options.map((type) => `'${type}'`).join(', ');
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
@@ -14,7 +17,7 @@ export const item = sqliteTable(
         id: integer('id').primaryKey(),
         parentPath: text('parent_path').notNull(),
         itemName: text('item_name').notNull(),
-        itemType: text('item_type', { enum: ['album', 'image', 'video'] }).notNull(),
+        itemType: text('item_type', { enum: itemTypeSchema.options }).notNull(),
         title: text('title'),
         description: text('description'),
         tags: text('tags'),
@@ -31,7 +34,7 @@ export const item = sqliteTable(
     },
     (table) => [
         unique().on(table.parentPath, table.itemName),
-        check('item_type_check', sql`${table.itemType} IN ('album', 'image', 'video')`),
+        check('item_type_check', sql`${table.itemType} IN (${sql.raw(ITEM_TYPES_SQL)})`),
     ],
 );
 
