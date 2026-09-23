@@ -56,7 +56,7 @@ export async function sign(env: SessionEnv, payload: { exp: number } & Record<st
     return `${body}.${signature.toBase64(TO_BASE64URL)}`;
 }
 
-function readCookie(request: Request, name: string): string | undefined {
+export function readCookie(request: Request, name: string): string | undefined {
     const header = request.headers.get('cookie') ?? '';
     for (const part of header.split(';')) {
         const [key, ...value] = part.trim().split('=');

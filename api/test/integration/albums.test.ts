@@ -145,6 +145,24 @@ describe('an album', () => {
         expect(response.headers.get('x-d1-bookmark')).not.toBe('');
         expect(response.headers.get('x-d1')).toMatch(/^rows=\d+ region=/v);
     });
+
+    it('leaves caching open to a read without a bookmark', async () => {
+        const response = await call(`/api/album${DAY}`);
+        await response.body?.cancel();
+
+        expect(response.headers.get('cache-control')).toBeNull();
+    });
+
+    it.each([
+        { name: 'an empty bookmark cookie', cookie: 'd1_bookmark=' },
+        { name: 'a bookmark cookie D1 cannot read', cookie: 'd1_bookmark=nonsense' },
+    ])('is served with $name as if it had none', async ({ cookie }) => {
+        const response = await call(`/api/album${DAY}`, { headers: { cookie } });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('cache-control')).toBeNull();
+        expect(parseAlbum(await response.json()).path).toBe(DAY);
+    });
 });
 
 describe('an album thumbnail', () => {
@@ -162,8 +180,7 @@ describe('an album thumbnail', () => {
         const [day, year] = await Promise.all([album('/1982/05-05/'), album('/1982/')]);
         const thumbnail = { path: '/1982/05-05/b.jpg', versionId: 'v2', crop: null };
 
-        expect(set.status).toBe(200);
-        expect(parseAlbum(await set.json()).thumbnail).toStrictEqual(thumbnail);
+        expect(set.status).toBe(204);
         expect(day.thumbnail).toStrictEqual(thumbnail);
         expect(year.children).toStrictEqual([expect.objectContaining({ path: '/1982/05-05/', thumbnail })]);
     });
@@ -171,8 +188,27 @@ describe('an album thumbnail', () => {
     it('can be a photo from another album, such as a day shown on its year', async () => {
         const set = await setThumbnail('/1982/', '/1982/05-05/a.jpg');
 
-        expect(set.status).toBe(200);
+        expect(set.status).toBe(204);
         expect((await album('/1982/')).thumbnail?.path).toBe('/1982/05-05/a.jpg');
+    });
+
+    it('hands back its bookmark as a header and as a cookie for the browser to read with', async () => {
+        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b.jpg');
+        const bookmark = set.headers.get('x-d1-bookmark') ?? '';
+
+        expect(bookmark).toMatch(/^\S+$/v);
+        expect(set.headers.get('set-cookie')).toBe(
+            `d1_bookmark=${bookmark}; Max-Age=300; Path=/; HttpOnly; Secure; SameSite=Lax`,
+        );
+    });
+
+    it('is read back with the bookmark cookie, in an answer no cache keeps', async () => {
+        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b.jpg');
+        const [cookie = ''] = (set.headers.get('set-cookie') ?? '').split(';', 1);
+        const response = await call('/api/album/1982/05-05/', { headers: { cookie } });
+
+        expect(response.headers.get('cache-control')).toBe('private, no-store');
+        expect(parseAlbum(await response.json()).thumbnail?.path).toBe('/1982/05-05/b.jpg');
     });
 
     it('needs an admin', async () => {

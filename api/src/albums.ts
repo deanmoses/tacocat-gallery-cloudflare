@@ -17,7 +17,8 @@ import * as valibot from 'valibot';
 import { currentAdmin } from './auth';
 import { NOW, type Orm, orm, schema } from './db';
 import { d1Header } from './db/timing';
-import { BOOKMARK_HEADER, json, notFound, pathAfter } from './http';
+import { BOOKMARK_COOKIE, BOOKMARK_HEADER, json, notFound, pathAfter, written } from './http';
+import { readCookie } from './session';
 
 // A crop as the column stores it, JSON text.
 const CROP = valibot.pipe(
@@ -76,22 +77,25 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
         return notFound();
     }
     const admin = (await currentAdmin(request, env)) !== null;
+    const bookmark = requestBookmark(request);
     const constraint =
-        request.headers.get(BOOKMARK_HEADER) ??
-        (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
+        bookmark ?? (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
     const session = env.DB.withSession(constraint);
     const read = await readAlbum(orm(session), path, admin);
-    return read.album === null
-        ? notFound()
-        : json(read.album, 200, {
-              [BOOKMARK_HEADER]: session.getBookmark() ?? '',
-              'x-d1': d1Header(read.meta, read.d1Ms, read.rowsRead),
-          });
+    if (read.album === null) {
+        return notFound();
+    }
+    return json(read.album satisfies Album, 200, {
+        [BOOKMARK_HEADER]: session.getBookmark() ?? '',
+        'x-d1': d1Header(read.meta, read.d1Ms, read.rowsRead),
+        // What one browser sees just after its own write is no answer for anyone else.
+        ...(bookmark !== null && { 'cache-control': 'private, no-store' }),
+    });
 }
 
 /**
- * `POST /api/album/<path>/thumbnail` with `{ path }` of a media item makes that the album's thumbnail, and answers
- * with the album as the admin now sees it.
+ * `POST /api/album/<path>/thumbnail` with `{ path }` of a media item makes that the album's thumbnail. The album is
+ * read afresh with the bookmark the answer carries.
  */
 export async function setAlbumThumbnail(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -109,16 +113,11 @@ export async function setAlbumThumbnail(request: Request, env: Env): Promise<Res
         return json({ error: 'expected { path } of a media item, such as /2001/06-15/felix.jpg' }, 400);
     }
     const session = env.DB.withSession('first-primary');
-    const database = orm(session);
-    const set = await setThumbnail(database, album, media).run();
-    if (set.meta.changes === 0) {
-        return notFound({ album: path, media: mediaPath(media.parentPath, media.itemName) });
-    }
-    const read = await readAlbum(database, path, true);
-    return json(read.album, 200, {
-        [BOOKMARK_HEADER]: session.getBookmark() ?? '',
-        'x-d1': d1Header(read.meta, read.d1Ms, set.meta.rows_read + read.rowsRead),
-    });
+    const started = performance.now();
+    const set = await setThumbnail(orm(session), album, media).run();
+    return set.meta.changes === 0
+        ? notFound({ album: path, media: mediaPath(media.parentPath, media.itemName) })
+        : written(session, { 'x-d1': d1Header(set.meta, performance.now() - started) });
 }
 
 /**
@@ -148,6 +147,15 @@ export function setThumbnail(
                 ...(onlyIfNone ? [isNull(item.thumbnailId)] : []),
             ),
         );
+}
+
+// The shape Time Travel documents, as in 00000085-0000024c-00004c6d-8e61117bf38d7adb71b934ebbf891683.
+const BOOKMARK = /^[\da-f]{8}-[\da-f]{8}-[\da-f]{8}-[\da-f]{32}$/v;
+
+/** The client's bookmark, from its header or its cookie. D1 does not say what it does with a malformed one, so it gets none. */
+function requestBookmark(request: Request): string | null {
+    const bookmark = request.headers.get(BOOKMARK_HEADER) ?? readCookie(request, BOOKMARK_COOKIE);
+    return bookmark !== undefined && BOOKMARK.test(bookmark) ? bookmark : null;
 }
 
 function withTrailingSlash(path: string): string {
