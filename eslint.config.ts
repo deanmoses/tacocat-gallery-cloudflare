@@ -235,6 +235,7 @@ export default defineConfig(
             'api/test/stack/**/*.ts',
             'web/*.ts',
             'web/*.js',
+            'shared/*.ts',
         ],
         extends: asErrors(node.configs['flat/recommended']),
         languageOptions: { globals: globals.node },
@@ -252,7 +253,7 @@ export default defineConfig(
     },
     {
         name: 'tests',
-        files: ['api/test/**/*.ts', 'web/src/**/*.test.ts'],
+        files: ['api/test/**/*.ts', 'web/src/**/*.test.ts', 'shared/src/**/*.test.ts'],
         // The recommended set plus the rules below, the same as tacocat-gallery-sveltekit's. Vitest's `all` preset is
         // mostly test-structure opinion, such as banning beforeAll and afterEach outright.
         extends: asErrors(vitest.configs.recommended),
@@ -389,6 +390,9 @@ export default defineConfig(
             // With promise-function-async, every function that returns a promise is async, so one with nothing to
             // await is deliberate.
             '@typescript-eslint/require-await': 'off',
+            // Deprecated in favour of no-navigation-without-resolve, which is on. resolve() already applies the base path,
+            // and this rule cannot see that, so the two cannot both pass.
+            'svelte/no-navigation-without-base': 'off',
         },
     },
 

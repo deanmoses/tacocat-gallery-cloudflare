@@ -8,6 +8,7 @@
             "entry": ["scripts/passkey-selftest.ts", "transcoder/server.ts"],
         },
         "web": {},
+        "shared": {},
     },
 
     "ignoreDependencies": [

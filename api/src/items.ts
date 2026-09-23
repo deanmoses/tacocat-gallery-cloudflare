@@ -2,44 +2,10 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
 import { type ItemUpsert, type Orm, orm, schema, upsertItem } from './db';
 import { d1Header, pickMeta, round } from './db/timing';
-import { json, pathAfter } from './http';
+import { BOOKMARK_HEADER, json } from './http';
 import { inSequence } from './sequence';
 
-const BOOKMARK_HEADER = 'x-d1-bookmark';
-
 const TITLE_ROW = valibot.object({ title: valibot.nullable(valibot.string()) });
-
-/**
- * Reads through the Sessions API so a nearby replica can answer. A client that just wrote passes the
- * bookmark it got back, which guarantees it reads its own write; ?consistency=primary forces the primary.
- */
-export async function getAlbum(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const albumPath = `/${pathAfter(url, '/api/album/')}`;
-    const constraint =
-        request.headers.get(BOOKMARK_HEADER) ??
-        (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
-    const session = env.DB.withSession(constraint);
-    const started = performance.now();
-    const { item } = schema;
-    const children = await orm(session)
-        .select()
-        .from(item)
-        .where(eq(item.parentPath, albumPath))
-        .orderBy(item.itemName)
-        .run();
-    const d1Ms = performance.now() - started;
-    return json(
-        {
-            path: albumPath,
-            count: children.results.length,
-            children: children.results,
-            d1: { ...pickMeta(children.meta), roundTripMs: round(d1Ms) },
-        },
-        200,
-        { [BOOKMARK_HEADER]: session.getBookmark() ?? '', 'x-d1': d1Header(children.meta, d1Ms) },
-    );
-}
 
 export async function putItem(request: Request, env: Env): Promise<Response> {
     const item = await request.json<schema.NewItem>();
@@ -144,7 +110,9 @@ function chunks<T>(items: readonly T[], size: number): [T, ...T[]][] {
 
 function seedYear(database: Orm, yearIndex: number): ItemUpsert[] {
     const year = String(2000 + yearIndex);
-    const statements: ItemUpsert[] = [];
+    const statements: ItemUpsert[] = [
+        upsertItem(database, { parentPath: '/', itemName: year, itemType: 'album', published: true }),
+    ];
     for (let dayIndex = 0; dayIndex < 60; dayIndex += 1) {
         const day = `${String((dayIndex % 12) + 1).padStart(2, '0')}-${String((dayIndex % 28) + 1).padStart(2, '0')}`;
         statements.push(

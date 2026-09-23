@@ -1,0 +1,12 @@
+{
+    // Code both the Worker and the browser run, so it gets neither runtime's types: only the language.
+    "extends": "../tsconfig.base.json",
+    "compilerOptions": {
+        // Reuses the last run's results for files that have not changed.
+        "incremental": true,
+        "tsBuildInfoFile": "../node_modules/.cache/tsc/shared.tsbuildinfo",
+        "lib": ["es2025"],
+        "types": []
+    },
+    "include": ["src", "*.ts"]
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The tests of both workspaces: api/'s, run by its Vitest inside workerd, and web/'s, run by its own Vitest in a browser.
-# The two are different Vitest majors, so each runs from its own directory with the Vitest it resolves there. CI and
+# The tests of every workspace: shared/'s in Node and api/'s inside workerd, both on the Vitest 4 hoisted to the root,
+# and web/'s in a browser on its own Vitest 5. Each runs from its own directory with the Vitest it resolves there. CI and
 # `npm test` run all of them; .husky/pre-commit runs this with --staged, which runs only the tests whose imports reach a
 # staged file.
 #
@@ -28,11 +28,13 @@ workspace_vitest() {
 }
 
 if [ "$STAGED" = "0" ]; then
+    shared_status=0
+    workspace_vitest shared run || shared_status=$?
     api_status=0
     workspace_vitest api run || api_status=$?
     web_status=0
     workspace_vitest web run || web_status=$?
-    [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]
+    [ "$shared_status" -eq 0 ] && [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]
     exit
 fi
 
@@ -58,7 +60,14 @@ run_staged() {
     workspace_vitest "$workspace" related --run --passWithNoTests $code
 }
 
-SHARED='^(package-lock\.json|tsconfig\.base\.json)$'
+# shared/ is imported through node_modules, where vitest's import graph does not follow it, so a change there runs
+# every test.
+SHARED='^(package-lock\.json|tsconfig\.base\.json|shared/src/.*\.ts)$'
+
+shared_status=0
+run_staged shared \
+    "^(package-lock\.json|tsconfig\.base\.json)$|^shared/(package\.json|vitest\.config\.ts|tsconfig\.json)$" \
+    '^shared/src/.*\.ts$' || shared_status=$?
 
 api_status=0
 run_staged api \
@@ -68,4 +77,4 @@ web_status=0
 run_staged web \
     "$SHARED|^web/(package\.json|vite\.config\.ts|svelte\.config\.js|tsconfig\.json)$" \
     '^web/src/.*\.(ts|js|svelte)$' || web_status=$?
-[ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]
+[ "$shared_status" -eq 0 ] && [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]

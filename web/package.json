@@ -12,6 +12,9 @@
         "test": "vitest run",
         "prepare": "svelte-kit sync"
     },
+    "dependencies": {
+        "tacocat-gallery-shared": "0.0.1"
+    },
     "devDependencies": {
         "@sveltejs/adapter-static": "^3.0.10",
         "@sveltejs/kit": "^2.70.3",

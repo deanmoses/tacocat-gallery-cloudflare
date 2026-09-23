@@ -2,40 +2,14 @@ import { env } from 'cloudflare:workers';
 import { type Column, and, eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../src/db';
-import { callAsAdmin, callForJson } from './helpers';
+import { callAsAdmin, callForJson, putItem } from './helpers';
 
 interface SearchResponse {
     count: number;
     results: Record<string, unknown>[];
 }
 
-async function putItem(item: Record<string, unknown>): Promise<Response> {
-    return callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(item) });
-}
-
-describe('albums', () => {
-    it('lists what an admin saved, and hands back a bookmark', async () => {
-        const saved = await putItem({
-            parentPath: '/2024/06-15/',
-            itemName: 'a.jpg',
-            itemType: 'image',
-            title: 'Beach',
-        });
-        const album = await callForJson<{ count: number }>('/api/album/2024/06-15/');
-
-        expect(saved.status).toBe(200);
-        expect(saved.headers.get('x-d1-bookmark')).not.toBe('');
-        expect(album.count).toBe(1);
-    });
-
-    // Rows come straight from D1, so the columns keep their SQL names.
-    it('returns the saved fields under their SQL column names', async () => {
-        await putItem({ parentPath: '/2024/06-16/', itemName: 'a.jpg', itemType: 'image', title: 'Beach' });
-        const album = await callForJson<{ children: Record<string, unknown>[] }>('/api/album/2024/06-16/');
-
-        expect(album.children.at(0)).toMatchObject({ item_name: 'a.jpg', title: 'Beach' });
-    });
-
+describe('read-your-writes', () => {
     it('reads its own write through the bookmark', async () => {
         const { summary } = await callForJson<{ summary: string }>('/api/ryw');
 

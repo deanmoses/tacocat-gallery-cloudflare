@@ -6,7 +6,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-The pix.tacocat.com photo gallery, moving from AWS to Cloudflare. Two npm workspaces: `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for both, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has the risk register, the budget, and how to run and restore; read it before anything that touches the account.
+The pix.tacocat.com photo gallery, moving from AWS to Cloudflare. Three npm workspaces: `shared/` holds the album schema and path helpers both sides agree on, `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has the risk register, the budget, and how to run and restore; read it before anything that touches the account.
 
 ## The Cloudflare account costs money
 

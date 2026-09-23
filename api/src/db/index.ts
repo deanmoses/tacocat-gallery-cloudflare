@@ -1,6 +1,8 @@
 import { getTableColumns, sql } from 'drizzle-orm';
+import type { BatchItem } from 'drizzle-orm/batch';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
+import type { AlbumKey } from 'tacocat-gallery-shared';
 import * as schema from './schema';
 
 /** Drizzle over D1 or over a Sessions API session. */
@@ -54,5 +56,15 @@ const ITEM_UPSERT_SET = {
     ),
     updatedOn: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 };
+
+/** Creates an album unless one exists; an existing album keeps every field, whatever it was given here. */
+export function insertAlbumIfMissing(database: Orm, key: AlbumKey): BatchItem<'sqlite'> {
+    const { item } = schema;
+    // Unpublished until an admin decides the album is ready for visitors.
+    return database
+        .insert(item)
+        .values({ ...key, itemType: 'album', published: false })
+        .onConflictDoNothing({ target: [item.parentPath, item.itemName] });
+}
 
 export * as schema from './schema';

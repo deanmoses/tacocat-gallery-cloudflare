@@ -36,3 +36,8 @@ export async function callAsAdmin(path: string, init: RequestInit = {}): Promise
     headers.set('cookie', await adminCookie());
     return call(path, { ...init, headers });
 }
+
+/** Saves an item as an admin through the write API. */
+export async function putItem(item: Record<string, unknown>): Promise<Response> {
+    return callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(item) });
+}

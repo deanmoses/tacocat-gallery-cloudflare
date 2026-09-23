@@ -3,6 +3,7 @@
     "version": "0.0.1",
     "description": "Prototype to de-risk moving pix.tacocat.com to Cloudflare",
     "workspaces": [
+        "shared",
         "api",
         "web"
     ],

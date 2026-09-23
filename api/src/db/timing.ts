@@ -22,8 +22,9 @@ export function pickMeta(meta: D1Meta): D1Timing {
  * The same as a header, which Globalping can record without reading the body. A missing value prints as
  * `undefined`, as it always has, so rows already in probe_result stay comparable.
  */
-export function d1Header(meta: D1Meta, roundTripMs: number): string {
+export function d1Header(meta: D1Meta, roundTripMs: number, rowsRead: number = meta.rows_read): string {
     return [
+        `rows=${String(rowsRead)}`,
         `region=${String(meta.served_by_region)}`,
         `colo=${String(meta.served_by_colo)}`,
         `primary=${String(meta.served_by_primary)}`,

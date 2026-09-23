@@ -2,6 +2,7 @@ import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecu
 import { env } from 'cloudflare:workers';
 import jpgDataUrl from '../fixtures/FullMetadata.jpg?inline';
 import { describe, expect, it } from 'vitest';
+import { orm, upsertItem } from '../src/db';
 import worker from '../src/index';
 import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../src/upload';
 import { call, callAsAdmin } from './helpers';
@@ -75,6 +76,26 @@ describe('upload pipeline', () => {
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([
             `originals/2024/06-15/FullMetadata.jpg/${String(item?.['version_id'])}`,
+        ]);
+    });
+
+    it('creates the year and day albums an upload lands in, unpublished, and leaves an existing one as it was', async () => {
+        await upsertItem(orm(env.DB), {
+            parentPath: '/1999/',
+            itemName: '03-03',
+            itemType: 'album',
+            title: 'Kept',
+            published: true,
+        }).run();
+        await env.MEDIA.put('inbox/1999/03-03/kept.jpg', jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        await deliverUpload('inbox/1999/03-03/kept.jpg');
+        const albums = await env.DB.prepare(
+            "SELECT parent_path, item_name, title, published FROM item WHERE item_type = 'album' AND (item_name = '1999' OR parent_path = '/1999/') ORDER BY parent_path",
+        ).all();
+
+        expect(albums.results).toStrictEqual([
+            { parent_path: '/', item_name: '1999', title: null, published: 0 },
+            { parent_path: '/1999/', item_name: '03-03', title: 'Kept', published: 1 },
         ]);
     });
 });

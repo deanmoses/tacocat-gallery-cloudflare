@@ -1,5 +1,6 @@
 import ExifReader from 'exifreader';
-import { orm, upsertItem } from './db';
+import { albumsEnclosing } from 'tacocat-gallery-shared';
+import { insertAlbumIfMissing, orm, upsertItem } from './db';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 import { json, pathAfter } from './http';
 import { isVideoName } from './media';
@@ -132,6 +133,8 @@ async function store(env: UploadEnv, { placement, object, body, caption, video }
             published: false,
             ...video,
         }),
+        // The year and day albums the upload lands in, so it has a page to appear on.
+        ...albumsEnclosing(placement.parentPath).map((key) => insertAlbumIfMissing(database, key)),
         uploadErrorDelete(database, placement.galleryPath),
     ]);
     await env.MEDIA.put(`originals${placement.galleryPath}/${placement.versionId}`, body, {
