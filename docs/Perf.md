@@ -4,7 +4,7 @@ Whether pix.tacocat.com on Cloudflare would feel faster than it does on AWS toda
 
 ## Goal
 
-Perceived performance strictly better than the AWS site, or at least better in almost every case, for readers in California, Louisiana and France. The case that matters is the usual one at this traffic: a visitor arriving after hours in which nobody has touched the site.
+Perceived performance strictly better than the AWS site, or at least better in almost every case. A case is a scenario: a reader in California, Louisiana or France loading an album page, either cold, after an hour or more in which nobody has touched the site (the usual case at this traffic), or warm, just after someone else was there. Each scenario is judged on the whole page load as the reader sees it, not step by step: Cloudflare can lose one step, such as the album JSON, and still win the page. Timings of single steps explain a result; they do not decide it.
 
 The verdict is a page load in a real browser from a reader's region. Timings of single requests are for finding out why a page is slow, not whether it is: they miss what a browser does with connection hints, HTTP/3 and connection reuse, which is why the local `npm run perf` script in `tacocat-gallery-sveltekit` is not a verdict either (its bundled Chromium ignores `preconnect`).
 
@@ -21,18 +21,17 @@ The verdict is a page load in a real browser from a reader's region. Timings of 
 The two sites have to serve the same page for the comparison to mean anything, which today they do not (see _Before the first run_).
 
 - **Page:** one day album with real photos, the same on both sites: `https://pix.tacocat.com/<year>/<day>` against `https://pix.deanmoses.com/<year>/<day>`. A day album's largest contentful paint is its first thumbnail, so it exercises the page, the JS, the album JSON and a derived image in the order a visitor waits on them.
-- **Locations:** Paris, the nearest to Louisiana that the free plan offers (Dallas or Atlanta), and California. Which locations the free plan has is unchecked.
-- **Settings:** Chrome, desktop, native connection (no throttling), first view only, one run per test. Repeat view would halve the budget and says nothing about a visitor arriving cold.
-- **Cold:** run only when both sites have been idle for at least an hour, and record how long. The idle probes hit the Cloudflare site five times a day at fixed times (00:23, 01:23, 03:23, 07:23 and 15:23 UTC), and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California; that is each site's real background traffic and is left alone.
+- **Locations:** Paris for France and Los Angeles for California. The free plan has nothing in the US South (its North American locations are Los Angeles, Salt Lake City and Toronto), so Louisiana has no page-load verdict; the idle probes time its steps only.
+- **Settings:** Chrome, desktop, native connection (no throttling), first view only, one run per test. Repeat view measures the browser's own cache, which both sites set the same way.
+- **Cold:** run only when both sites have been idle for at least an hour, and record how long. Warm is the same test again a minute later, still in a fresh browser, so the site has just served that page. The idle probes hit the Cloudflare site five times a day at fixed times (00:23, 01:23, 03:23, 07:23 and 15:23 UTC), and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California; that is each site's real background traffic and is left alone.
 - **Order:** the two sites back to back from the same location, alternating which goes first.
-- **Record:** time to first byte of the page, the album JSON request's start and end from the waterfall, and LCP. Keep the test URLs.
-- **Budget:** each comparison is two runs; three locations a session is six. 300 runs a month is about 50 sessions.
+- **Record:** LCP, which decides the scenario. Also the page's time to first byte and the album JSON request's start and end from the waterfall, to explain it. Keep the test URLs.
+- **Budget:** each site cold then warm is four runs per location, eight a session for Paris and Los Angeles. 300 runs a month is about 37 sessions.
 
 ### Before the first run
 
 1. The Cloudflare database holds made-up albums (60 a year, 20 images each), not real photos. Copy one real day album into it, originals through R2's S3 API so the upload pipeline makes its derived images, and check its page renders every thumbnail.
 2. The Cloudflare site's `web/` app is new and smaller than the production SvelteKit app, so its JS alone may win. Compare the two waterfalls' JS bytes and request counts, and say so beside any result it could explain.
-3. Sign up for WebPageTest's free plan and note the locations it offers.
 
 ## What is known
 
@@ -58,7 +57,16 @@ Three runs on 2026-09-23: the first ever, then after 4 and 8 hours idle. First a
 
 - **The Worker is not cold.** It ran in Paris for every Paris probe, and TTFB minus the Worker's time is the same on the first read after idle as on the warm repeat seconds later (about 106 ms from Paris). The idle cost is all D1.
 - **The regional replicas are inactive at this traffic.** D1's replicas are "active/inactive based on query traffic". Baton Rouge's second read reached the Dallas replica (about 20 ms); Paris stayed on the primary for 8 of 9 reads, 173 to 194 ms even warm, and reached London once (49 ms). A read does not activate the replica within the few seconds between probe steps.
-- **Static assets are unmeasured.** The page and the JS chunks are served without running the Worker, and no probe has requested them, so where a cold Paris request for them is answered is unknown.
+- **Static assets are served locally from the first request.** One Globalping probe each from Paris and Baton Rouge on 2026-09-23 requested `/2001/06-15` and the entry chunk twice on each site, the chunk never before requested at those locations:
+
+| From        | Request     | Cloudflare, first / repeat TTFB | AWS, first / repeat TTFB        |
+| ----------- | ----------- | ------------------------------- | ------------------------------- |
+| Paris       | album page  | 31 / 20 ms, HIT                 | 286 / 290 ms, origin both times |
+| Paris       | entry chunk | 34 / 31 ms, HIT                 | 294 ms miss / 7 ms hit          |
+| Baton Rouge | album page  | 171 / 66 ms, HIT                | 139 / 187 ms, origin both times |
+| Baton Rouge | entry chunk | 127 / 82 ms, HIT                | 162 ms miss / 63 ms hit         |
+
+CloudFront serves an album page through its error response for the single-page app, so it goes to S3 in Virginia on every request. The Baton Rouge probe's own network adds 40 to 60 ms to each request (its TCP time).
 
 ## Ruled out
 
@@ -67,11 +75,10 @@ Three runs on 2026-09-23: the first ever, then after 4 and 8 hours idle. First a
 
 ## Log
 
-- **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument.
+- **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument. Static assets probed from Paris and Baton Rouge: served locally on Cloudflare from the first request.
 
 ## Open questions
 
 - How long a D1 replica stays active after its last read, and whether a Durable Object in Western Europe reading every few minutes keeps Paris on the London replica.
 - Whether a Durable Object in Western Europe holding the album JSON answers a cold Paris read in tens of milliseconds.
-- Where a cold request for a static asset is answered, from Paris and Baton Rouge.
 - Whether `<link rel="preload">` for the album JSON, starting it alongside the JS, is worth the roughly 120 ms of page download it would overlap.

@@ -6,7 +6,7 @@ The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit fro
 
 ## Where the prototype stands
 
-The risk register is in `docs/Risks.md`, and how performance is judged against the AWS site in `docs/Perf.md`. What fails today: reads after hours of idle from Louisiana and France go to the D1 primary in San Jose, derived images are no faster than the AWS image CDN, SvelteKit SSR has to wait for SvelteKit 3, the Images binding rejects 10-bit HEIC, and uploads do not read XMP.
+The risk register is in `docs/Risks.md`, and how performance is judged against the AWS site in `docs/Perf.md`. What fails today: reads after hours of idle from Louisiana and France go to the D1 primary in San Jose, SvelteKit SSR has to wait for SvelteKit 3, the Images binding rejects 10-bit HEIC, and uploads do not read XMP.
 
 ## Running it
 
