@@ -56,6 +56,11 @@ export function cropText({ x, y, width, height }: Rectangle): string {
     return `${x},${y},${width},${height}`;
 }
 
+/** A version of a media item as it was uploaded, whatever format that is. */
+export function originalUrl(path: string, versionId: string): string {
+    return `/raw/originals${path}/${versionId}`;
+}
+
 /** The R2 prefix under which a version's derivatives live: the transcoder's MP4 and poster, and every image size. */
 export function derivedPrefix(path: string, versionId: string): string {
     return `derived${path}/${versionId}`;

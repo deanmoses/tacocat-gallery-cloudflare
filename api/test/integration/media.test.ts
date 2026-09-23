@@ -160,12 +160,12 @@ describe('image uploads', () => {
             method: 'POST',
             body: JSON.stringify({ paths: ['/2024/06-15/broken.jpg'] }),
         });
-        const { errors } = await listed.json<{ errors: Record<string, { message: string }> }>();
+        const { errors } = await listed.json<{ errors: Record<string, string> }>();
 
         expect(item).toBeUndefined();
         expect(originals.objects).toHaveLength(0);
         expect(inbox).toBeNull();
-        expect(errors['/2024/06-15/broken.jpg']?.message).toContain('not a readable image');
+        expect(errors['/2024/06-15/broken.jpg']).toContain('not a readable image');
     });
 });
 
@@ -200,13 +200,13 @@ describe('video uploads', () => {
             method: 'POST',
             body: JSON.stringify({ paths: ['/2024/06-15/broken.mov', '/2024/06-15/fine.mov'] }),
         });
-        const { errors } = await listed.json<{ errors: Record<string, { message: string }> }>();
+        const { errors } = await listed.json<{ errors: Record<string, string> }>();
 
         expect(item).toBeUndefined();
         expect(originals.objects).toHaveLength(0);
         expect(inbox).toBeNull();
         expect(Object.keys(errors)).toStrictEqual(['/2024/06-15/broken.mov']);
-        expect(errors['/2024/06-15/broken.mov']?.message).toBe('ffmpeg exited 1: moov atom not found');
+        expect(errors['/2024/06-15/broken.mov']).toBe('ffmpeg exited 1: moov atom not found');
     });
 
     it('clears the error once a later upload of the same path succeeds', async () => {

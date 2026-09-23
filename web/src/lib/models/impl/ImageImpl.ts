@@ -16,8 +16,7 @@ export class ImageImpl extends MediaBaseImpl implements Image {
     }
 
     get originalUrl(): string {
-        return originalMediaUrl(this.json.path);
-        // TODO: implement cachebuster with the versionId
+        return originalMediaUrl(this.json.path, this.json.versionId);
     }
 
     get originalWidth(): number {

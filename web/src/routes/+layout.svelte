@@ -14,11 +14,8 @@
     let { children }: LayoutProps = $props();
 
     // The app's one authentication check. The root layout mounts once per
-    // document load, and that includes the load returning from the Cognito
-    // login redirect, which is how a login gets noticed.
-    //
-    // Nothing exercises this outside a real deployment: FAKE_ADMIN_ON_DEV
-    // short-circuits before the request on localhost.
+    // document load, and that includes the load returning from the login
+    // page, which is how a login gets noticed.
     onMount(() => {
         sessionStore.fetchUserStatus();
     });

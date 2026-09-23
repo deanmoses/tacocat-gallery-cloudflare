@@ -1,9 +1,6 @@
-import { dev } from '$app/environment';
 import { checkAuthenticationUrl } from '$lib/utils/config';
 import { get as getFromIdb, set as setToIdb } from 'idb-keyval';
 
-/** True: simulate being an admin when in a dev (localhost) environment */
-const FAKE_ADMIN_ON_DEV = true;
 const HasBeenLoggedInIDBKey = 'HasBeenLoggedIn';
 /**
  * Store of the current user / session
@@ -70,38 +67,27 @@ class SessionStore {
      * Fetch current user's status from server
      */
     async #fetchUserStatus(): Promise<void> {
-        const fakeAdmin: boolean = FAKE_ADMIN_ON_DEV && dev;
-        if (fakeAdmin) {
-            console.warn('FAKE: setting user to be an admin');
-            this.#authenticationSuccess();
-            return;
-        }
         try {
             const response = await fetch(checkAuthenticationUrl(), {
                 // no-store: the browser fetches from the remote server without first looking in the cache,
                 // and will not update the cache with the downloaded resource
                 cache: 'no-store',
-                credentials: 'include',
             });
-            // 401 unauthorized
-            if (401 === response.status) {
+            this.#handleErrors(response);
+            // The admin's name, or null for a guest
+            const json = await response.json();
+            const isAdmin = json.admin !== null;
+            if (isAdmin) {
+                console.log('User is an admin');
+                this.#authenticationSuccess();
+                await setToIdb(HasBeenLoggedInIDBKey, true);
+            } else {
                 // User is not logged in,
                 // check to see whether they have
                 // EVER been logged in
                 if (!this.hasBeenLoggedIn) {
                     await this.#fetchHasBeenLoggedIn();
                 }
-                this.#authenticationFailure();
-                return;
-            }
-            this.#handleErrors(response);
-            const json = await response.json();
-            const isAdmin = !!json.user;
-            if (isAdmin) {
-                console.log('User is an admin');
-                this.#authenticationSuccess();
-                await setToIdb(HasBeenLoggedInIDBKey, true);
-            } else {
                 this.#authenticationFailure();
             }
         } catch (error) {

@@ -45,7 +45,7 @@ export async function uploadErrors(request: Request, env: Pick<Env, 'DB'>): Prom
             ? []
             : await orm(env.DB).select().from(uploadError).where(and(asked, recent)).all();
     return json({
-        errors: Object.fromEntries(rows.map((row) => [row.path, { message: row.message, createdAt: row.createdAt }])),
+        errors: Object.fromEntries(rows.map((row) => [row.path, row.message])),
     });
 }
 

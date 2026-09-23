@@ -1,37 +1,13 @@
 import type { Rectangle } from '$lib/models/impl/server';
-import { emulateProdOnLocalhost } from './settings';
 import { isValidAlbumPath, isValidMediaPath } from './galleryPathUtils';
-import { browser } from '$app/environment';
 import type { SearchQuery } from '$lib/models/search';
-import { videoUrl } from 'tacocat-gallery-shared';
+import { type ImageSize, imageUrl, originalUrl, videoUrl } from 'tacocat-gallery-shared';
 
 /**
- * I'm in staging (aka development) when one of these is true:
- *  - I'm on the staging domain
- *  - I'm on localhost and I'm not emulating prod
- * At all other times, I'm in prod.
- */
-function isStaging(): boolean {
-    if (!browser) return false; // To make SSR build happy
-    return (
-        window?.location?.hostname?.includes('staging') ||
-        (window?.location?.hostname?.includes('localhost') && !emulateProdOnLocalhost)
-    );
-}
-
-/**
- * The API is served on the site's own domain: through the site's CloudFront
- * distribution in staging and prod, and through Vite's proxy on localhost.
+ * The API, the media and the login are all served by the Worker on the site's own origin, so every URL is a path.
  */
 function baseApiUrl(): string {
     return '/api/';
-}
-function baseAuthApiUrl(): string {
-    return isStaging() ? 'https://auth.staging-pix.tacocat.com/' : 'https://auth.pix.tacocat.com/';
-}
-
-function cdnDomain(): string {
-    return isStaging() ? 'img.staging-pix.tacocat.com' : 'img.pix.tacocat.com';
 }
 
 /**
@@ -41,10 +17,7 @@ function cdnDomain(): string {
  * @param crop Optional crop rectangle
  */
 export function thumbnailUrl(mediaPath: string, versionId: string, crop?: Rectangle): string {
-    return (
-        `https://${cdnDomain()}/i${mediaPath}?version=${versionId}&size=200x200` +
-        (crop ? `&crop=${crop.x},${crop.y},${crop.width},${crop.height}` : '')
-    );
+    return imageUrl({ path: mediaPath, versionId, size: { width: 200, height: 200 }, crop: crop ?? null });
 }
 
 /**
@@ -54,16 +27,20 @@ export function thumbnailUrl(mediaPath: string, versionId: string, crop?: Rectan
  * @param size size like '1024' (landscape) or 'x1024' (portrait)
  */
 export function detailImageUrl(mediaPath: string, versionId: string, size: string): string {
-    return `https://${cdnDomain()}/i${mediaPath}?version=${versionId}&size=${size}`;
+    const imageSize: ImageSize = size.startsWith('x')
+        ? { width: null, height: Number(size.slice(1)) }
+        : { width: Number(size), height: null };
+    return imageUrl({ path: mediaPath, versionId, size: imageSize, crop: null });
 }
 
 /**
  * URL to view the full sized original raw media.
  * For some formats (like video), this may not be displayable in a browser.
  * @param mediaPath path to media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
+ * @param versionId Version of the media
  */
-export function originalMediaUrl(mediaPath: string): string {
-    return `https://${cdnDomain()}${mediaPath}`;
+export function originalMediaUrl(mediaPath: string, versionId: string): string {
+    return originalUrl(mediaPath, versionId);
 }
 
 /**
@@ -196,21 +173,7 @@ function ensureDumbQuotes(searchTerms: string): string {
  * URL to check user's authentication status
  */
 export function checkAuthenticationUrl(): string {
-    return baseAuthApiUrl();
-}
-
-/**
- * URL that redirects to the Cognito-hosted login page
- */
-export function getLoginUrl(): string {
-    return baseAuthApiUrl() + 'login';
-}
-
-/**
- * URL that deletes cookies and redirects to the Cognito-hosted logout page
- */
-export function getLogoutUrl(): string {
-    return baseAuthApiUrl() + 'logout';
+    return baseApiUrl() + 'auth/status';
 }
 
 /**
