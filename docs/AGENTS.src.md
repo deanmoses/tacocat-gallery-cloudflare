@@ -70,6 +70,7 @@ The account is on Workers Paid ($5/month), so going past an allowance costs mone
 - Originals are never overwritten. Each upload gets a new time-sortable `versionId` in its R2 key, and the database says which one is current.
 - The FTS5 table and its triggers are raw SQL in `api/migrations/`; Drizzle cannot see them. Every other table change starts in `api/src/db/schema.ts`, then `npm run db:generate --workspace api`.
 - Start a raw SQL migration with `npm run db:generate --workspace api -- --custom --name <what_it_does>` and fill in the empty file it creates. That keeps it in drizzle-kit's journal, in order with the generated ones. Never hand-create a migration file or edit a generated one or its snapshot; lint fails when the migrations and `schema.ts` disagree.
+- A `--custom` migration's snapshot is a copy of the previous one, so a raw SQL migration that changes `item` (SQLite can only change a check constraint by rebuilding the table) is followed by a plain `npm run db:generate --workspace api` for the snapshot, whose generated rebuild then runs on the reshaped rows. Dropping a table drops its triggers, so a third, `--custom` migration recreates the FTS triggers and rebuilds the index. `api/migrations/20260923223051_two_level_item_type.sql` and the two after it are the example. A generated migration that removes something gets a `-- non-additive: <reason>` line added at its top, which is the one edit lint expects.
 - After editing `api/wrangler.jsonc`, run `npm run types --workspace api`.
 
 ## Rules

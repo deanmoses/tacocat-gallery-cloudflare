@@ -18,7 +18,8 @@ export function albumChild(path: string, overrides: Partial<AlbumChild> = {}): A
 
 export function mediaChild(path: string, overrides: Partial<MediaChild> = {}): MediaChild {
     return {
-        itemType: 'image',
+        itemType: 'media',
+        mediaType: 'image',
         path,
         itemName: mediaKey(path)?.itemName ?? '',
         title: null,

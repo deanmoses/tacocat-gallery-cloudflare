@@ -27,7 +27,8 @@ describe('an album', () => {
             putItem({
                 parentPath: DAY,
                 itemName: 'a.jpg',
-                itemType: 'image',
+                itemType: 'media',
+                mediaType: 'image',
                 title: 'Beach',
                 versionId: 'v1',
                 width: 40,
@@ -35,7 +36,14 @@ describe('an album', () => {
                 published: true,
                 thumbnailCrop: CROP,
             }),
-            putItem({ parentPath: DAY, itemName: 'b.mov', itemType: 'video', durationSeconds: 9.5, published: false }),
+            putItem({
+                parentPath: DAY,
+                itemName: 'b.mov',
+                itemType: 'media',
+                mediaType: 'video',
+                durationSeconds: 9.5,
+                published: false,
+            }),
         ]);
         await setThumbnail(DAY, '/1981/01-01/a.jpg');
     });
@@ -52,7 +60,8 @@ describe('an album', () => {
             thumbnail: { path: '/1981/01-01/a.jpg', versionId: 'v1', crop: CROP },
             children: [
                 {
-                    itemType: 'image',
+                    itemType: 'media',
+                    mediaType: 'image',
                     path: '/1981/01-01/a.jpg',
                     itemName: 'a.jpg',
                     title: 'Beach',
@@ -66,7 +75,8 @@ describe('an album', () => {
                     thumbnailCrop: CROP,
                 },
                 {
-                    itemType: 'video',
+                    itemType: 'media',
+                    mediaType: 'video',
                     path: '/1981/01-01/b.mov',
                     itemName: 'b.mov',
                     title: null,
@@ -169,8 +179,20 @@ describe('an album thumbnail', () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '05-05', itemType: 'album', published: true }),
-            putItem({ parentPath: '/1982/05-05/', itemName: 'a.jpg', itemType: 'image', versionId: 'v1' }),
-            putItem({ parentPath: '/1982/05-05/', itemName: 'b.jpg', itemType: 'image', versionId: 'v2' }),
+            putItem({
+                parentPath: '/1982/05-05/',
+                itemName: 'a.jpg',
+                itemType: 'media',
+                mediaType: 'image',
+                versionId: 'v1',
+            }),
+            putItem({
+                parentPath: '/1982/05-05/',
+                itemName: 'b.jpg',
+                itemType: 'media',
+                mediaType: 'image',
+                versionId: 'v2',
+            }),
         ]);
     });
 

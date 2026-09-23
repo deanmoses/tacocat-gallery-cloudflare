@@ -92,7 +92,8 @@ describe('upload pipeline', () => {
         expect(acks).toStrictEqual(['1']);
         expect(inbox).toBeNull();
         expect(item).toMatchObject({
-            itemType: 'image',
+            itemType: 'media',
+            mediaType: 'image',
             published: false,
             title: 'My Image Title',
             description: 'My image description',
@@ -228,7 +229,13 @@ describe('video upload retries', () => {
         const item = await storedItem('/2024/06-15/', 'clip.mov');
         const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/clip.mov/' });
 
-        expect(item).toMatchObject({ itemType: 'video', width: 1080, height: 1920, durationSeconds: 9.6 });
+        expect(item).toMatchObject({
+            itemType: 'media',
+            mediaType: 'video',
+            width: 1080,
+            height: 1920,
+            durationSeconds: 9.6,
+        });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([
             `originals/2024/06-15/clip.mov/${String(item?.versionId)}`,
         ]);

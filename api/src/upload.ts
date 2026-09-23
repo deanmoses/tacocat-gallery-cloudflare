@@ -130,7 +130,8 @@ async function store(env: UploadEnv, { placement, object, body, caption, video }
         upsertItem(database, {
             parentPath: placement.parentPath,
             itemName: placement.itemName,
-            itemType: video === undefined ? 'image' : 'video',
+            itemType: 'media',
+            mediaType: video === undefined ? 'image' : 'video',
             ...caption,
             versionId: placement.versionId,
             published: false,

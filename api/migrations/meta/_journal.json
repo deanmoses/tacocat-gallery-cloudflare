@@ -36,6 +36,27 @@
       "when": 1790182400904,
       "tag": "20260923165320_spent_challenge",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790202651091,
+      "tag": "20260923223051_two_level_item_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790202652861,
+      "tag": "20260923223052_two_level_item_type_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790202654432,
+      "tag": "20260923223054_fts_triggers_after_rebuild",
+      "breakpoints": true
     }
   ]
 }

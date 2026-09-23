@@ -1,12 +1,17 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
-import { type Rectangle, itemTypeSchema } from 'tacocat-gallery-shared';
+import { type Rectangle, itemTypeSchema, mediaTypeSchema } from 'tacocat-gallery-shared';
 
 // The FTS5 table `item_fts` and the triggers that keep it in sync with `item` are raw SQL in migrations/, because
 // Drizzle does not model virtual tables or triggers. drizzle-kit leaves them alone.
 
-// As SQL literals for the check constraint. A new item type changes the constraint, which needs a migration.
-const ITEM_TYPES_SQL = itemTypeSchema.options.map((type) => `'${type}'`).join(', ');
+// As SQL literals for the check constraints. A new item or media type changes a constraint, which needs a migration.
+const ITEM_TYPES_SQL = sqlList(itemTypeSchema.options);
+const MEDIA_TYPES_SQL = sqlList(mediaTypeSchema.options);
+
+function sqlList(values: readonly string[]): string {
+    return values.map((value) => `'${value}'`).join(', ');
+}
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
@@ -18,6 +23,8 @@ export const item = sqliteTable(
         parentPath: text('parent_path').notNull(),
         itemName: text('item_name').notNull(),
         itemType: text('item_type', { enum: itemTypeSchema.options }).notNull(),
+        // Which kind of media a media item is; null for an album.
+        mediaType: text('media_type', { enum: mediaTypeSchema.options }),
         title: text('title'),
         description: text('description'),
         tags: text('tags'),
@@ -35,6 +42,11 @@ export const item = sqliteTable(
     (table) => [
         unique().on(table.parentPath, table.itemName),
         check('item_type_check', sql`${table.itemType} IN (${sql.raw(ITEM_TYPES_SQL)})`),
+        // Every media item says which kind it is, and an album says nothing.
+        check(
+            'media_type_check',
+            sql`(${table.itemType} = 'media') = (${table.mediaType} IS NOT NULL) AND (${table.mediaType} IS NULL OR ${table.mediaType} IN (${sql.raw(MEDIA_TYPES_SQL)}))`,
+        ),
     ],
 );
 

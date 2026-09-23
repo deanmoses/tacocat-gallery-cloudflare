@@ -3,9 +3,9 @@ import {
     type SearchResponse,
     type SearchResult,
     albumPath,
-    itemTypeSchema,
     itemWriteSchema,
     mediaPath,
+    mediaTypeSchema,
 } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
 import { currentAdmin } from './auth';
@@ -38,7 +38,13 @@ export async function readYourWrites(env: Env): Promise<Response> {
     const key = { parentPath: '/ryw/', itemName: crypto.randomUUID() };
     const writer = env.DB.withSession('first-primary');
     let started = performance.now();
-    const saved = await upsertItem(orm(writer), { ...key, itemType: 'image', title, published: true }).run();
+    const saved = await upsertItem(orm(writer), {
+        ...key,
+        itemType: 'media',
+        mediaType: 'image',
+        title,
+        published: true,
+    }).run();
     const writeMs = performance.now() - started;
     const { item } = schema;
     // Not get(), because only run() returns the D1 meta that says which replica answered.
@@ -85,14 +91,17 @@ export async function search(request: Request, env: Env): Promise<Response> {
 }
 
 // A search match as D1 returns it, under SQL column names.
+const SEARCH_ROW_FIELDS = {
+    parent_path: valibot.string(),
+    item_name: valibot.string(),
+    title: valibot.nullable(valibot.string()),
+    snippet: valibot.nullable(valibot.string()),
+};
 const SEARCH_ROWS = valibot.array(
-    valibot.object({
-        parent_path: valibot.string(),
-        item_name: valibot.string(),
-        item_type: itemTypeSchema,
-        title: valibot.nullable(valibot.string()),
-        snippet: valibot.nullable(valibot.string()),
-    }),
+    valibot.variant('item_type', [
+        valibot.object({ item_type: valibot.literal('album'), media_type: valibot.null(), ...SEARCH_ROW_FIELDS }),
+        valibot.object({ item_type: valibot.literal('media'), media_type: mediaTypeSchema, ...SEARCH_ROW_FIELDS }),
+    ]),
 );
 
 interface Found {
@@ -107,23 +116,25 @@ interface Found {
 export async function searchItems(database: Orm, query: string, admin: boolean): Promise<Found> {
     // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
     const found = await database.run(
-        sql`SELECT i.parent_path, i.item_name, i.item_type, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
+        sql`SELECT i.parent_path, i.item_name, i.item_type, i.media_type, i.title,
+                snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
             FROM item_fts JOIN item i ON i.id = item_fts.rowid
             ${admin ? sql`` : GUEST_VISIBLE_JOIN}
             WHERE item_fts MATCH ${query}
             ${admin ? sql`` : GUEST_VISIBLE_FILTER}
             ORDER BY rank LIMIT 50`,
     );
-    const results = valibot.parse(SEARCH_ROWS, found.results).map((row): SearchResult => ({
-        itemType: row.item_type,
-        path:
-            row.item_type === 'album'
-                ? albumPath(row.parent_path, row.item_name)
-                : mediaPath(row.parent_path, row.item_name),
-        itemName: row.item_name,
-        title: row.title,
-        snippet: row.snippet,
-    }));
+    const results = valibot.parse(SEARCH_ROWS, found.results).map((row): SearchResult => {
+        const shared = { itemName: row.item_name, title: row.title, snippet: row.snippet };
+        return row.item_type === 'album'
+            ? { itemType: 'album', path: albumPath(row.parent_path, row.item_name), ...shared }
+            : {
+                  itemType: 'media',
+                  mediaType: row.media_type,
+                  path: mediaPath(row.parent_path, row.item_name),
+                  ...shared,
+              };
+    });
     return { results, meta: found.meta };
 }
 
@@ -174,7 +185,8 @@ function seedYear(database: Orm, yearIndex: number): ItemUpsert[] {
                 upsertItem(database, {
                     parentPath: `/${year}/${day}/`,
                     itemName: `img_${imageIndex}.jpg`,
-                    itemType: 'image',
+                    itemType: 'media',
+                    mediaType: 'image',
                     title: `${word} ${imageIndex}`,
                     description: `A photo about ${word} on ${year}-${day}`,
                     tags: word,

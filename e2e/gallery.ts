@@ -14,7 +14,8 @@ const GALLERY = {
     cake: {
         parentPath: '/2001/06-15/',
         itemName: 'cake.jpg',
-        itemType: 'image',
+        itemType: 'media',
+        mediaType: 'image',
         title: 'Cake',
         versionId: 'v1',
         width: 4032,
@@ -23,7 +24,8 @@ const GALLERY = {
     felix: {
         parentPath: '/2001/06-15/',
         itemName: 'felix.jpg',
-        itemType: 'image',
+        itemType: 'media',
+        mediaType: 'image',
         title: 'Felix',
         versionId: 'v1',
         width: 4032,

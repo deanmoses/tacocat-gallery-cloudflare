@@ -15,7 +15,7 @@
         {/if}
         <figcaption>
             {caption}
-            {#if media.itemType === 'video'}
+            {#if media.mediaType === 'video'}
                 (video)
             {/if}
         </figcaption>

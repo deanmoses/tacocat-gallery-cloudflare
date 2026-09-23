@@ -28,7 +28,11 @@ describe('a media page', () => {
     });
 
     it('plays a video from its MP4 with its poster', async () => {
-        const clip = mediaChild('/2001/06-15/clip.mov', { itemType: 'video', durationSeconds: 9.6 });
+        const clip = mediaChild('/2001/06-15/clip.mov', {
+            itemType: 'media',
+            mediaType: 'video',
+            durationSeconds: 9.6,
+        });
         render(MediaPage, { album: DAY, media: clip, prev: null, next: null });
         const video = document.querySelector('video');
 

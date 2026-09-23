@@ -35,7 +35,8 @@ const albumChild = valibot.object({
 });
 
 const mediaChild = valibot.object({
-    itemType: mediaTypeSchema,
+    itemType: valibot.literal('media'),
+    mediaType: mediaTypeSchema,
     ...record,
     tags: valibot.nullable(valibot.string()),
     versionId: valibot.nullable(valibot.string()),

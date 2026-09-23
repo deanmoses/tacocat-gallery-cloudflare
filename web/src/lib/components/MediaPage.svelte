@@ -6,7 +6,7 @@
     let { album, media, prev, next }: MediaInAlbum = $props();
     const title = $derived(mediaTitle(media));
     const detail = $derived(detailImageUrl(media));
-    const video = $derived(media.itemType === 'video' ? mediaVideoUrl(media) : null);
+    const video = $derived(media.mediaType === 'video' ? mediaVideoUrl(media) : null);
 </script>
 
 <svelte:head>

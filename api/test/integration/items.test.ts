@@ -43,7 +43,7 @@ describe('saving an item', () => {
 
     it('leaves an item as a fresh insert of the same values would, clearing every field left out', async () => {
         const database = orm(env.DB);
-        const saved = { itemName: 'upsert.jpg', itemType: 'album' } as const;
+        const saved = { itemName: 'upsert.jpg', itemType: 'media', mediaType: 'image' } as const;
         const everyField = Object.fromEntries(
             Object.entries(getTableColumns(item))
                 .filter(([key]) => key !== 'id' && key !== 'updatedOn')
@@ -59,7 +59,7 @@ describe('saving an item', () => {
 });
 
 describe('saving an item through the API', () => {
-    const ITEM = { parentPath: '/2024/09-01/', itemName: 'a.jpg', itemType: 'image' } as const;
+    const ITEM = { parentPath: '/2024/09-01/', itemName: 'a.jpg', itemType: 'media', mediaType: 'image' } as const;
 
     it('answers with a bookmark to read the write back with, and no body', async () => {
         const response = await putItem({ ...ITEM, title: 'Saved', thumbnailCrop: { x: 1, y: 2, width: 3, height: 4 } });
@@ -81,6 +81,9 @@ describe('saving an item through the API', () => {
         { name: 'a field of the wrong type', body: { ...ITEM, title: 5 } },
         { name: 'an unknown item type', body: { ...ITEM, itemType: 'gif' } },
         { name: 'no item type', body: { parentPath: ITEM.parentPath, itemName: ITEM.itemName } },
+        { name: 'an unknown media type', body: { ...ITEM, mediaType: 'gif' } },
+        { name: 'a media item with no media type', body: { ...ITEM, mediaType: undefined } },
+        { name: 'an album with a media type', body: { ...ITEM, itemType: 'album' } },
     ])('is refused with $name, and writes nothing', async ({ body }) => {
         const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
 
@@ -95,22 +98,25 @@ describe('saving an item through the API', () => {
         { name: 'an album inside a day', body: { parentPath: '/2024/09-01/', itemName: '10-02', itemType: 'album' } },
         { name: 'the root album', body: { parentPath: '', itemName: '', itemType: 'album' } },
         { name: 'an album name holding a path', body: { parentPath: '/', itemName: '2024/09-01', itemType: 'album' } },
-        { name: 'media in a year album', body: { parentPath: '/2024/', itemName: 'a.jpg', itemType: 'image' } },
+        {
+            name: 'media in a year album',
+            body: { parentPath: '/2024/', itemName: 'a.jpg', itemType: 'media', mediaType: 'image' },
+        },
         {
             name: 'a parent path with no slash',
-            body: { parentPath: '/2024/09-01', itemName: 'a.jpg', itemType: 'image' },
+            body: { parentPath: '/2024/09-01', itemName: 'a.jpg', itemType: 'media', mediaType: 'image' },
         },
         {
             name: 'a media name holding a path',
-            body: { parentPath: '/2024/', itemName: '09-01/a.jpg', itemType: 'image' },
+            body: { parentPath: '/2024/', itemName: '09-01/a.jpg', itemType: 'media', mediaType: 'image' },
         },
         {
             name: 'an image named as a video',
-            body: { parentPath: '/2024/09-01/', itemName: 'a.mov', itemType: 'image' },
+            body: { parentPath: '/2024/09-01/', itemName: 'a.mov', itemType: 'media', mediaType: 'image' },
         },
         {
             name: 'a video named as an image',
-            body: { parentPath: '/2024/09-01/', itemName: 'a.jpg', itemType: 'video' },
+            body: { parentPath: '/2024/09-01/', itemName: 'a.jpg', itemType: 'media', mediaType: 'video' },
         },
     ])('is refused for $name, which no album page could show', async ({ body }) => {
         const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
@@ -133,7 +139,8 @@ describe('search', () => {
         await putItem({
             parentPath: '/2024/07-01/',
             itemName: 'quesadilla.jpg',
-            itemType: 'image',
+            itemType: 'media',
+            mediaType: 'image',
             title: 'Quesadilla night',
             description: 'Quesadillas at home',
         });
@@ -144,7 +151,8 @@ describe('search', () => {
             count: 1,
             results: [
                 {
-                    itemType: 'image',
+                    itemType: 'media',
+                    mediaType: 'image',
                     path: '/2024/07-01/quesadilla.jpg',
                     itemName: 'quesadilla.jpg',
                     title: 'Quesadilla night',
@@ -170,7 +178,12 @@ describe('search', () => {
     });
 
     it('follows an update to the title', async () => {
-        const item: ItemWrite = { parentPath: '/2024/07-02/', itemName: 'meal.jpg', itemType: 'image' };
+        const item: ItemWrite = {
+            parentPath: '/2024/07-02/',
+            itemName: 'meal.jpg',
+            itemType: 'media',
+            mediaType: 'image',
+        };
         await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
@@ -197,9 +210,27 @@ describe('search', () => {
                     title: 'Fajita',
                     published: false,
                 }),
-                putItem({ parentPath: '/2024/07-10/', itemName: 'shown.jpg', itemType: 'image', title: 'Fajita' }),
-                putItem({ parentPath: '/2024/07-11/', itemName: 'hidden.jpg', itemType: 'image', title: 'Fajita' }),
-                putItem({ parentPath: '/2024/07-12/', itemName: 'no-album.jpg', itemType: 'image', title: 'Fajita' }),
+                putItem({
+                    parentPath: '/2024/07-10/',
+                    itemName: 'shown.jpg',
+                    itemType: 'media',
+                    mediaType: 'image',
+                    title: 'Fajita',
+                }),
+                putItem({
+                    parentPath: '/2024/07-11/',
+                    itemName: 'hidden.jpg',
+                    itemType: 'media',
+                    mediaType: 'image',
+                    title: 'Fajita',
+                }),
+                putItem({
+                    parentPath: '/2024/07-12/',
+                    itemName: 'no-album.jpg',
+                    itemType: 'media',
+                    mediaType: 'image',
+                    title: 'Fajita',
+                }),
             ]);
         });
 
@@ -230,8 +261,8 @@ describe('search', () => {
 
 describe('backup', () => {
     it('writes every item to R2 as JSON', async () => {
-        await putItem({ parentPath: '/2024/08-01/', itemName: 'c.jpg', itemType: 'image' });
-        await putItem({ parentPath: '/2024/08-01/', itemName: 'd.jpg', itemType: 'image' });
+        await putItem({ parentPath: '/2024/08-01/', itemName: 'c.jpg', itemType: 'media', mediaType: 'image' });
+        await putItem({ parentPath: '/2024/08-01/', itemName: 'd.jpg', itemType: 'media', mediaType: 'image' });
         const response = await callAsAdmin('/api/backup', { method: 'POST' });
         const { key, rows } = await response.json<{ key: string; rows: number }>();
         const object = await env.MEDIA.get(key);

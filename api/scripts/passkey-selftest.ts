@@ -87,7 +87,12 @@ const login = await call('/api/auth/login/verify', assertion);
 check('login', login.status === 200 && login.body.admin === admin, login);
 const status = await call('/api/auth/status', undefined, 'GET');
 check('status reports admin', status.body.admin === admin && status.authStatus === 'admin', status);
-const write = await call('/api/item', { parentPath: '/selftest/', itemName: 'x', itemType: 'image' });
+const write = await call('/api/item', {
+    parentPath: '/selftest/',
+    itemName: 'x',
+    itemType: 'media',
+    mediaType: 'image',
+});
 check('write allowed as admin', write.status === 204);
 
 // Login needs the challenge cookie from its own options call, which login clears.

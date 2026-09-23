@@ -40,7 +40,8 @@ async function seedGallery(database: Orm): Promise<void> {
                     upsertItem(database, {
                         parentPath: day.path,
                         itemName: `img_${index}.jpg`,
-                        itemType: 'image',
+                        itemType: 'media',
+                        mediaType: 'image',
                         title: `Taco ${index}`,
                         description: 'Tacos on the beach',
                     }),
@@ -67,7 +68,7 @@ describe('rows read on a gallery-sized table', () => {
         { what: 'inserting an item', values: { parentPath: '/2001/01-01/', itemName: 'new.jpg', title: 'Quesadilla' } },
         { what: 'updating an item', values: { parentPath: '/2001/01-01/', itemName: 'img_3.jpg', title: 'Burrito' } },
     ])('$what reads a few rows', async ({ values }) => {
-        const result = await upsertItem(database, { ...values, itemType: 'image' }).run();
+        const result = await upsertItem(database, { ...values, itemType: 'media', mediaType: 'image' }).run();
 
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
@@ -110,7 +111,8 @@ describe('rows read on a gallery-sized table', () => {
         await upsertItem(database, {
             parentPath: dayPath(9),
             itemName: 'q.jpg',
-            itemType: 'image',
+            itemType: 'media',
+            mediaType: 'image',
             title: 'Quesadilla',
         }).run();
         const found = await searchItems(database, 'quesadilla', admin);

@@ -8,9 +8,9 @@ import {
     albumKey,
     albumPath,
     isAlbumPath,
-    itemTypeSchema,
     mediaKey,
     mediaPath,
+    mediaTypeSchema,
     rectangleSchema,
     setThumbnailSchema,
 } from 'tacocat-gallery-shared';
@@ -30,10 +30,9 @@ const CROP = valibot.pipe(
 
 // A row of `item` joined to its thumbnail's row, as D1 returns it under SQL column names: run() is the query method
 // that returns D1's meta, and its rows are untyped.
-const ROW = valibot.object({
+const ROW_FIELDS = {
     parent_path: valibot.string(),
     item_name: valibot.string(),
-    item_type: itemTypeSchema,
     title: valibot.nullable(valibot.string()),
     description: valibot.nullable(valibot.string()),
     tags: valibot.nullable(valibot.string()),
@@ -48,7 +47,11 @@ const ROW = valibot.object({
     thumb_item_name: valibot.nullable(valibot.string()),
     thumb_version_id: valibot.nullable(valibot.string()),
     thumb_crop: valibot.nullable(CROP),
-});
+};
+const ROW = valibot.variant('item_type', [
+    valibot.object({ item_type: valibot.literal('album'), media_type: valibot.null(), ...ROW_FIELDS }),
+    valibot.object({ item_type: valibot.literal('media'), media_type: mediaTypeSchema, ...ROW_FIELDS }),
+]);
 const ROWS = valibot.array(ROW);
 type Row = valibot.InferOutput<typeof ROW>;
 
@@ -265,7 +268,8 @@ function toChild(row: Row): Child {
         };
     }
     return {
-        itemType: row.item_type,
+        itemType: 'media',
+        mediaType: row.media_type,
         path: mediaPath(row.parent_path, row.item_name),
         ...shared,
         tags: row.tags,
