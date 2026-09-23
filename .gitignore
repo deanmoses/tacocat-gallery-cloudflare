@@ -2,3 +2,4 @@ node_modules/
 .wrangler/
 .dev.vars
 fixtures/iphone-*.mov
+fixtures/IMG_*
