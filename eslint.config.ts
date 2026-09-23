@@ -16,7 +16,7 @@ import svelteConfig from './web/svelte.config.js';
 
 // Every plugin's recommended rules are on, so a rule its maintainers add to them arrives with the upgrade. Rules beyond
 // that come on only by name (PICKED_RULES, UNICORN_BUG_RULES, the tests block), because the rest of each plugin's
-// `all` preset is mostly house style. Plugins whose every rule is about their own subject (svelte, regexp, n, json,
+// `all` preset is mostly house style. Plugins whose every rule is about their own subject (svelte, regexp, json,
 // eslint-comments) run all of them. Rules come off only in the "turned off" block, each with the reason.
 
 const CODE = ['**/*.ts', '**/*.mjs', '**/*.js', '**/*.svelte'];
@@ -236,7 +236,7 @@ export default defineConfig(
             'web/*.ts',
             'web/*.js',
         ],
-        extends: asErrors(node.configs['flat/all']),
+        extends: asErrors(node.configs['flat/recommended']),
         languageOptions: { globals: globals.node },
     },
     {
@@ -386,8 +386,6 @@ export default defineConfig(
         name: 'turned off',
         files: CODE,
         rules: {
-            // Top-level await is standard ESM, and the scripts use it.
-            'n/no-top-level-await': 'off',
             // With promise-function-async, every function that returns a promise is async, so one with nothing to
             // await is deliberate.
             '@typescript-eslint/require-await': 'off',
