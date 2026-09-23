@@ -1,0 +1,11 @@
+{
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "worker",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev", "--workspace", "api"],
+            "port": 8787
+        }
+    ]
+}
