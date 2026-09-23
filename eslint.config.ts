@@ -7,6 +7,7 @@ import prettier from 'eslint-config-prettier';
 import node from 'eslint-plugin-n';
 import regexp from 'eslint-plugin-regexp';
 import unicorn from 'eslint-plugin-unicorn';
+import type { Linter } from 'eslint';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
@@ -29,6 +30,28 @@ function allRules(
     );
 }
 
+/**
+ * The presets with every rule they set to warn raised to error. Some `all` presets warn, and a warning shows yellow in
+ * the editor and lets a bare `eslint` run pass, where scripts/lint.sh's --max-warnings 0 fails it.
+ */
+function asErrors(...presets: (Linter.Config | Linter.Config[])[]): Linter.Config[] {
+    return presets.flat().map((preset) => ({
+        ...preset,
+        rules: Object.fromEntries(Object.entries(preset.rules ?? {}).map(([rule, entry]) => [rule, raise(entry)])),
+    }));
+}
+
+function raise(entry: Linter.RuleEntry | undefined): Linter.RuleEntry | undefined {
+    if (entry === 'warn' || entry === 1) {
+        return 'error';
+    }
+    if (!Array.isArray(entry) || (entry[0] !== 'warn' && entry[0] !== 1)) {
+        return entry;
+    }
+    const options: unknown[] = entry.slice(1);
+    return ['error', ...options];
+}
+
 export default defineConfig(
     includeIgnoreFile(path.resolve(import.meta.dirname, '.gitignore')),
     // Generated: Wrangler's types and drizzle-kit's migration snapshots.
@@ -43,7 +66,7 @@ export default defineConfig(
     {
         name: 'code',
         files: CODE,
-        extends: [js.configs.all, ts.configs.all, unicorn.configs.all, regexp.configs.all],
+        extends: asErrors(js.configs.all, ts.configs.all, unicorn.configs.all, regexp.configs.all),
         plugins: { '@eslint-community/eslint-comments': comments },
         // No `all` preset for eslint-comments; no-use and no-restricted-disable are lists to fill in, not checks.
         rules: allRules('@eslint-community/eslint-comments', comments, ['no-use', 'no-restricted-disable']),
@@ -59,7 +82,7 @@ export default defineConfig(
     {
         name: 'node',
         files: ['*.ts', 'scripts/**/*.ts', 'transcoder/**/*.ts'],
-        extends: [node.configs['flat/all']],
+        extends: asErrors(node.configs['flat/all']),
         languageOptions: { globals: globals.node },
         rules: {
             // Uint8Array#toBase64 and fromBase64 arrived in Node 25; .nvmrc pins 24, so Node code uses Buffer.
@@ -74,7 +97,7 @@ export default defineConfig(
     {
         name: 'tests',
         files: ['test/**/*.ts'],
-        extends: [vitest.configs.all],
+        extends: asErrors(vitest.configs.all),
         rules: {
             // For tests whose assertions sit in callbacks that might never run. Every test here awaits its work,
             // and no-floating-promises catches one that doesn't.
