@@ -20,6 +20,7 @@
         "wrangler": "^4.136.3"
     },
     "dependencies": {
+        "aws4fetch": "^1.0.20",
         "exifreader": "^4.45.2"
     },
     "private": true

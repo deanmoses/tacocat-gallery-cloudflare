@@ -1,10 +1,15 @@
+import { AwsClient } from 'aws4fetch';
 import ExifReader from 'exifreader';
 
 interface Env {
     DB: D1Database;
     MEDIA: R2Bucket;
     IMAGES: ImagesBinding;
+    R2_ACCESS_KEY_ID: string;
+    R2_SECRET_ACCESS_KEY: string;
 }
+
+const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com/tacocat-proto-media';
 
 // Shape of an R2 event notification delivered through a Queue.
 interface R2EventMessage {
@@ -65,6 +70,9 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (pathname === '/api/search' && request.method === 'GET') return search(env, url);
     if (pathname === '/api/seed' && request.method === 'POST') return seed(env, url);
     if (pathname === '/api/backup' && request.method === 'POST') return json(await backupDatabase(env));
+    if (pathname === '/api/upload-url' && request.method === 'POST') return uploadUrl(request, env);
+    if (pathname === '/upload-test') return new Response(UPLOAD_TEST_PAGE, { headers: { 'content-type': 'text/html' } });
+    if (pathname.startsWith('/raw/')) return raw(env, url);
     if (pathname.startsWith('/upload/') && request.method === 'PUT') return upload(request, env, url);
     if (pathname.startsWith('/debug/image/')) return debugImage(env, url);
     if (pathname.startsWith('/i/') && request.method === 'GET') return derivedImage(env, url);
@@ -172,8 +180,9 @@ async function search(env: Env, url: URL): Promise<Response> {
     const t0 = performance.now();
     const rows = await session
         .prepare(
-            `SELECT parent_path, item_name, title, snippet(item_fts, 3, '[', ']', '…', 8) AS snippet
-             FROM item_fts WHERE item_fts MATCH ?1 ORDER BY rank LIMIT 50`,
+            `SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
+             FROM item_fts JOIN item i ON i.id = item_fts.rowid
+             WHERE item_fts MATCH ?1 ORDER BY rank LIMIT 50`,
         )
         .bind(q)
         .run();
@@ -233,6 +242,29 @@ async function upload(request: Request, env: Env, url: URL): Promise<Response> {
         httpMetadata: { contentType: request.headers.get('content-type') ?? undefined },
     });
     return json({ key: obj?.key, size: obj?.size });
+}
+
+/** Presigned PUT straight to R2's S3 endpoint, so upload bytes never pass through the Worker. */
+async function uploadUrl(request: Request, env: Env): Promise<Response> {
+    const { path, contentType } = (await request.json()) as { path: string; contentType: string };
+    const client = new AwsClient({
+        accessKeyId: env.R2_ACCESS_KEY_ID,
+        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        service: 's3',
+        region: 'auto',
+    });
+    const target = new URL(`${R2_S3_ENDPOINT}/inbox/${path.replace(/^\//, '')}`);
+    target.searchParams.set('X-Amz-Expires', '900');
+    const signed = await client.sign(new Request(target, { method: 'PUT', headers: { 'content-type': contentType } }), {
+        aws: { signQuery: true },
+    });
+    return json({ url: signed.url, contentType });
+}
+
+async function raw(env: Env, url: URL): Promise<Response> {
+    const obj = await env.MEDIA.get(decodeURIComponent(url.pathname.slice('/raw/'.length)));
+    if (!obj) return json({ error: 'not found' }, 404);
+    return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'application/octet-stream' } });
 }
 
 /** Moves an inbox upload to its immutable key and records it, mirroring processMediaUpload. */
@@ -395,3 +427,36 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
         headers: { 'content-type': 'application/json', ...headers },
     });
 }
+
+const UPLOAD_TEST_PAGE = `<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>R2 upload test</title>
+<style>body{font:15px system-ui;margin:16px;max-width:720px}pre{white-space:pre-wrap;background:#f4f4f4;padding:8px}</style>
+<h1>Presigned PUT to R2</h1>
+<p><input type="file" id="file" multiple accept="image/*,video/*"> <button id="self">Self-test with a fixture</button></p>
+<pre id="log"></pre>
+<script>
+const log = (m) => (document.getElementById('log').textContent += m + '\\n');
+const day = new Date().toISOString().slice(5, 10);
+async function upload(name, blob) {
+    const path = '/2025/' + day + '/' + name;
+    const t0 = performance.now();
+    const signed = await (await fetch('/api/upload-url', { method: 'POST', body: JSON.stringify({ path, contentType: blob.type || 'application/octet-stream' }) })).json();
+    const t1 = performance.now();
+    const put = await fetch(signed.url, { method: 'PUT', body: blob, headers: { 'content-type': signed.contentType } });
+    const t2 = performance.now();
+    log(name + ': sign ' + Math.round(t1 - t0) + ' ms, PUT ' + put.status + ' in ' + Math.round(t2 - t1) + ' ms (' + blob.size + ' bytes), ETag ' + put.headers.get('etag'));
+    for (let i = 0; i < 30; i++) {
+        const album = await (await fetch('/api/album/2025/' + day + '/?consistency=primary')).json();
+        const item = album.children.find((c) => c.item_name === name);
+        if (item) { log('  processed after ' + Math.round(performance.now() - t2) + ' ms: title=' + item.title + ' version=' + item.version_id); return; }
+        await new Promise((r) => setTimeout(r, 1000));
+    }
+    log('  not processed after 30 s');
+}
+document.getElementById('file').onchange = async (e) => { for (const f of e.target.files) await upload(f.name, f); };
+document.getElementById('self').onclick = async () => {
+    const blob = await (await fetch('/raw/originals/2024/06-15/FullMetadata.jpg/0mudcdwwsdc76b9b2fc9b4169')).blob();
+    await upload('selftest-' + Date.now() + '.jpg', new Blob([blob], { type: 'image/jpeg' }));
+};
+</script>`;
