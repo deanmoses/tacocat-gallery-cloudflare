@@ -14,6 +14,10 @@
         "prepare": "svelte-kit sync"
     },
     "dependencies": {
+        "idb-keyval": "^6.3.0",
+        "immer": "^11.1.18",
+        "quill": "^2.0.3",
+        "svelte-easy-crop": "^5.0.1",
         "tacocat-gallery-shared": "0.0.1"
     },
     "devDependencies": {
@@ -22,6 +26,8 @@
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
         "@vitest/browser-playwright": "^5.0.1",
         "@vitest/coverage-istanbul": "^5.0.1",
+        "@zerodevx/svelte-toast": "^0.9.6",
+        "fake-indexeddb": "^6.2.5",
         "playwright": "1.63.0",
         "svelte": "^5.57.1",
         "svelte-check": "^4.7.6",

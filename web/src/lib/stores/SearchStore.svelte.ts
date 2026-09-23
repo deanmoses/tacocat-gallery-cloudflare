@@ -1,0 +1,228 @@
+import { produce } from 'immer';
+import type { Search, SearchQuery, SearchResults } from '$lib/models/search';
+import { SearchLoadStatus } from '$lib/models/search';
+import toAlbum from '$lib/models/impl/AlbumCreator';
+import { ImageThumbableImpl } from '$lib/models/impl/ImageThumbableImpl';
+import { VideoThumbableImpl } from '$lib/models/impl/VideoThumbableImpl';
+import { searchUrl } from '$lib/utils/config';
+import { longDate } from '$lib/utils/date-utils';
+import { albumPathToDate, getParentFromPath } from '$lib/utils/galleryPathUtils';
+import type { GalleryRecord, ImageRecord, VideoRecord } from '$lib/models/impl/server';
+import { isAlbumRecord, isImageRecord, isVideoRecord } from '$lib/models/impl/server';
+import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
+import { SvelteMap } from 'svelte/reactivity';
+
+/**
+ * Store of search results
+ */
+class SearchStore {
+    /**
+     * Private writable store of search results
+     */
+    readonly #searches = new SvelteMap<SearchQuery, Search>();
+
+    /**
+     * Public read-only version of store
+     */
+    readonly searches: ReadonlyMap<SearchQuery, Search> = $derived(this.#searches);
+
+    /**
+     * Do the search
+     */
+    search(query: SearchQuery): void {
+        this.#removeUndefinedKeys(query);
+        // Get or create the writable version of the search
+        const searchEntry = this.#getOrCreateWritableStore(query);
+        // I don't have a copy in memory.  Go get it
+        if (SearchLoadStatus.NOT_LOADED === searchEntry.status) {
+            this.#setLoadStatus(query, SearchLoadStatus.LOADING);
+            this.#fetchFromServer(query);
+        }
+    }
+
+    /**
+     * Fetch more results for an existing search
+     *
+     * @param startAt The number result from which to start fetching
+     */
+    getMore(query: SearchQuery, startAt: number): void {
+        this.#removeUndefinedKeys(query);
+        console.log(`Getting more results...`, query, startAt);
+        this.#getOrCreateWritableStore(query);
+        this.#setLoadStatus(query, SearchLoadStatus.LOADING_MORE_RESULTS);
+        this.#fetchFromServer(query, startAt);
+    }
+
+    /**
+     * Drop keys that are present but undefined, simply to make logging cleaner.
+     *
+     * Mutates in place rather than returning a copy: the query object itself is
+     * the key a search is stored under, so a copy would never find the search again.
+     */
+    #removeUndefinedKeys(query: SearchQuery): void {
+        if (query.oldestYear === undefined) delete query.oldestYear;
+        if (query.newestYear === undefined) delete query.newestYear;
+        if (query.oldestFirst === undefined) delete query.oldestFirst;
+    }
+
+    /**
+     * Fetch search results from server
+     *
+     * @param startAt The number result from which to start fetching
+     */
+    #fetchFromServer(query: SearchQuery, startAt = 0): void {
+        const pageSize = 30;
+        fetch(searchUrl(query, startAt, pageSize))
+            .then((response: Response) => {
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                return response.json();
+            })
+            .then((json) => {
+                console.log(`Search`, query, `fetched from server`, json);
+                const searchResults = this.#toSearchResults(json);
+                console.log(`Transformed search results `, searchResults);
+                // Calculate next offset based on server response size, not filtered size
+                const serverItemCount = searchResults.items?.length ?? 0;
+                searchResults.nextStartAt = startAt + serverItemCount;
+                if (startAt > 0) {
+                    const read = this.#searches.get(query);
+                    if (read) {
+                        const prev = read;
+                        if (prev.results?.items && searchResults.items) {
+                            // Filter out duplicates by path (handles edge case of data changing between requests)
+                            const existingPaths = new Set(prev.results.items.map((i) => i.path));
+                            const newItems = searchResults.items.filter((i) => !existingPaths.has(i.path));
+                            console.log(
+                                `Adding ${newItems.length} new results to ${prev.results.items.length} existing results (${searchResults.items.length - newItems.length} duplicates filtered)`,
+                            );
+                            searchResults.items = prev.results.items.concat(newItems);
+                        }
+                    }
+                }
+                this.#setSearch(query, searchResults); // Put search results in Svelte store
+            })
+            .catch((error) => {
+                this.#handleFetchError(query, error);
+            });
+    }
+
+    #handleFetchError(query: SearchQuery, error: string): void {
+        console.error(`Search error fetching from server: `, query, error);
+        const status = this.#getLoadStatus(query);
+        switch (status) {
+            case SearchLoadStatus.LOADING:
+            case SearchLoadStatus.NOT_LOADED:
+                this.#setLoadStatus(query, SearchLoadStatus.ERROR_LOADING);
+                break;
+            case SearchLoadStatus.LOADING_MORE_RESULTS:
+            case SearchLoadStatus.LOADED:
+                this.#setLoadStatus(query, SearchLoadStatus.ERROR_LOADING_MORE_RESULTS);
+                break;
+            case SearchLoadStatus.ERROR_LOADING:
+            case SearchLoadStatus.ERROR_LOADING_MORE_RESULTS:
+                // already in correct state
+                break;
+            default:
+                console.error('Unexepected load status:', status);
+        }
+    }
+
+    /**
+     * Store search results in Svelte store
+     */
+    #setSearch(query: SearchQuery, searchResults: SearchResults): void {
+        const searchEntry = this.#getOrCreateWritableStore(query);
+        const newState = produce(searchEntry, (draftState: Search) => {
+            draftState.status = SearchLoadStatus.LOADED;
+            draftState.results = searchResults;
+        });
+        this.#searches.set(query, newState);
+    }
+
+    /**
+     * Set the load status of the search
+     */
+    #setLoadStatus(query: SearchQuery, loadStatus: SearchLoadStatus): void {
+        const searchEntry = this.#getOrCreateWritableStore(query);
+        const newState = produce(searchEntry, (draftState: Search) => {
+            draftState.status = loadStatus;
+        });
+        this.#searches.set(query, newState);
+    }
+
+    #getLoadStatus(query: SearchQuery): SearchLoadStatus {
+        const search = this.#searches.get(query);
+        return !!search ? search.status : SearchLoadStatus.NOT_LOADED;
+    }
+
+    /**
+     * Get the #read-write version of the search,
+     * creating a stand-in if it doesn't exist.
+     *
+     * @param query the search terms
+     */
+    #getOrCreateWritableStore(query: SearchQuery): Search {
+        let searchEntry = this.#searches.get(query);
+
+        // If the search wasn't found in memory
+        if (!searchEntry) {
+            console.log(`Search not found in memory `, query);
+            // Create blank entry so that consumers have some object
+            // to which they can subscribe to changes
+            searchEntry = {
+                status: SearchLoadStatus.NOT_LOADED,
+            };
+            this.#searches.set(query, searchEntry);
+        }
+
+        return searchEntry;
+    }
+
+    /**
+     * Transform from server JSON to a search results object
+     *
+     * @param json JSON object coming from server
+     */
+    #toSearchResults(json: ServerSearchResults): SearchResults {
+        const items: GalleryRecord[] = json.items;
+        return {
+            total: json.total,
+            items: items.map((i) => this.#toThumbable(i)),
+        };
+    }
+
+    #toThumbable(json: GalleryRecord): Thumbable {
+        if (isAlbumRecord(json)) {
+            return toAlbum(json);
+        } else if (isVideoRecord(json)) {
+            return this.#toVideo(json);
+        } else if (isImageRecord(json)) {
+            return this.#toImage(json);
+        }
+        throw new Error(`Unknown item type in ${json}`);
+    }
+
+    #toImage(json: ImageRecord): ImageThumbableImpl {
+        const image = new ImageThumbableImpl(json);
+        image.summary = this.#dateFromPath(image.path);
+        return image;
+    }
+
+    #toVideo(json: VideoRecord): VideoThumbableImpl {
+        const video = new VideoThumbableImpl(json);
+        video.summary = this.#dateFromPath(video.path);
+        return video;
+    }
+
+    #dateFromPath(mediaPath: string): string {
+        return longDate(albumPathToDate(getParentFromPath(mediaPath)));
+    }
+}
+export const searchStore: SearchStore = new SearchStore();
+
+type ServerSearchResults = {
+    total: number;
+    items: GalleryRecord[];
+};

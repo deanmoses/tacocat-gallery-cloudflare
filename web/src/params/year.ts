@@ -1,4 +1,3 @@
-import type { ParamMatcher } from '@sveltejs/kit';
-import { isYearName } from 'tacocat-gallery-shared';
-
-export const match: ParamMatcher = isYearName;
+export function match(param: string): boolean {
+    return /^\d\d\d\d$/.test(param);
+}

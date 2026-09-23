@@ -1,4 +1,3 @@
-import type { ParamMatcher } from '@sveltejs/kit';
-import { isDayName } from 'tacocat-gallery-shared';
-
-export const match: ParamMatcher = isDayName;
+export function match(param: string): boolean {
+    return /^\d\d-\d\d$/.test(param);
+}

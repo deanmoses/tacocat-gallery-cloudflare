@@ -1,10 +1,10 @@
-import { albumPath } from 'tacocat-gallery-shared';
-import { loadAlbum, loadParent } from '$lib/album';
 import type { PageLoad } from './$types';
+import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
+import { getParentFromPath } from '$lib/utils/galleryPathUtils';
 
-export const load: PageLoad = async ({ fetch, params }) => {
-    const path = albumPath(albumPath('/', params.year), params.day);
-    // Not awaited: the page shows without its parent, which only its prev and next links come from.
-    const parent = loadParent(fetch, path);
-    return { album: await loadAlbum(fetch, path), parent };
+export const load: PageLoad = ({ params }) => {
+    const albumPath = `/${params.year}/${params.day}/`;
+    albumLoadMachine.fetch(albumPath);
+    albumLoadMachine.fetch(getParentFromPath(albumPath)); // the page's prev/next come from its child list
+    return { albumPath };
 };

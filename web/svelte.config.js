@@ -3,14 +3,21 @@ import adapter from '@sveltejs/adapter-static';
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
     compilerOptions: {
-        // Runes mode for every component, including ones that use no runes, so legacy syntax (`export let`, `$:`) is a
-        // compile error rather than a silent switch to the old mode. A dependency that ships Svelte 4 components would
-        // need this to become a function that returns undefined for files under node_modules.
-        runes: true,
+        // A component that uses no runes at all -- most of the icons, several
+        // layouts -- is otherwise compiled in the mode-ambiguous default, where
+        // `export let` and `$:` still work. Forcing runes mode makes legacy
+        // syntax a compile error instead of a silent per-component mode switch.
+        //
+        // Dependencies keep the default, because @zerodevx/svelte-toast and
+        // svelte-easy-crop ship uncompiled Svelte 4 source. Removable in Svelte 6,
+        // once runes mode is the only mode.
+        runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true),
     },
+
     kit: {
-        // A single-page app: every path the build has no file for gets index.html, and the router takes it from there.
-        adapter: adapter({ fallback: 'index.html' }),
+        adapter: adapter({
+            fallback: 'index.html',
+        }),
     },
 };
 
