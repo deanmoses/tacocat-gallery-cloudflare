@@ -57,6 +57,8 @@ npm run dev
 
 The probe cron runs on Cloudflare, not locally. To read the results, run `npm run probes`. To try the probe code without waiting for the schedule, run `npx wrangler dev --test-scheduled --enable-containers=false` and request `/__scheduled?cron=23+0,1,3,7,15+*+*+*`. That runs the handler locally against the deployed Worker and writes to the local D1.
 
+Requests to Globalping carry the `GLOBALPING_TOKEN` Worker secret (in `.dev.vars` locally), which lifts the limit from a per-IP 250 tests an hour, shared with every Worker on the same egress IP, to 500 an hour for the account.
+
 Deploy with `npx wrangler deploy --containers-rollout=none` to leave the transcoder container untouched.
 
 ## Deploying to your account

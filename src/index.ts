@@ -8,6 +8,7 @@ interface Env {
     IMAGES: ImagesBinding;
     R2_ACCESS_KEY_ID: string;
     R2_SECRET_ACCESS_KEY: string;
+    GLOBALPING_TOKEN?: string;
     TRANSCODER: DurableObjectNamespace<Transcoder>;
 }
 
@@ -492,7 +493,7 @@ async function probeIdleLatency(env: Env): Promise<void> {
                 let error: string | undefined;
                 for (const option of probeFrom ? [probeFrom] : loc.options) {
                     try {
-                        m = await globalping(option, step);
+                        m = await globalping(env, option, step);
                         error = undefined;
                         break;
                     } catch (e) {
@@ -510,12 +511,16 @@ async function probeIdleLatency(env: Env): Promise<void> {
 }
 
 async function globalping(
+    env: Env,
     locations: string | Record<string, string>[],
     request: { path: string; query?: string },
 ): Promise<GlobalpingMeasurement> {
     const created = await fetch('https://api.globalping.io/v1/measurements', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+            'content-type': 'application/json',
+            ...(env.GLOBALPING_TOKEN && { authorization: `Bearer ${env.GLOBALPING_TOKEN}` }),
+        },
         body: JSON.stringify({
             type: 'http',
             target: PROBE_TARGET,
