@@ -42,6 +42,7 @@ type ItemInput = {
 };
 
 const BOOKMARK_HEADER = 'x-d1-bookmark';
+const BACKUP_CRON = '17 9 * * *';
 
 export default {
     async fetch(request, env): Promise<Response> {
@@ -67,8 +68,9 @@ export default {
         }
     },
 
-    async scheduled(_controller, env): Promise<void> {
-        await backupDatabase(env);
+    async scheduled(controller, env): Promise<void> {
+        if (controller.cron === BACKUP_CRON) await backupDatabase(env);
+        else await probeIdleLatency(env);
     },
 } satisfies ExportedHandler<Env>;
 
@@ -440,6 +442,139 @@ async function debugImage(env: Env, url: URL): Promise<Response> {
             return { status: r.status, bytes: (await r.arrayBuffer()).byteLength };
         }),
     });
+}
+
+const PROBE_TARGET = 'tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev';
+
+// Louisiana has a single Globalping probe, so Houston stands in when it is offline.
+const PROBE_LOCATIONS: { name: string; options: Record<string, string>[][] }[] = [
+    { name: 'Bay Area', options: [[{ country: 'US', state: 'CA', city: 'San Jose' }]] },
+    { name: 'Los Angeles', options: [[{ country: 'US', state: 'CA', city: 'Los Angeles' }]] },
+    { name: 'Paris', options: [[{ country: 'FR', city: 'Paris' }]] },
+    { name: 'Louisiana', options: [[{ country: 'US', state: 'LA' }], [{ country: 'US', state: 'TX', city: 'Houston' }]] },
+];
+
+// The first request at each location is the one that finds the isolate and replica idle; the repeats, from the
+// same probe, are the warm baseline.
+const PROBE_SEQUENCE = [
+    { path: '/api/album/2001/' },
+    { path: '/api/album/2001/' },
+    { path: '/api/search', query: 'q=marseille' },
+];
+
+interface GlobalpingMeasurement {
+    id: string;
+    status: 'in-progress' | 'finished';
+    results: {
+        probe: { city: string; network: string };
+        result: {
+            status: string;
+            statusCode?: number;
+            headers?: Record<string, string | string[]>;
+            timings?: { total: number; dns: number | null; tcp: number; tls: number | null; firstByte: number };
+            rawOutput?: string;
+        };
+    }[];
+}
+
+/** Times reads through Globalping from each reader region, recording how long the Worker had been left alone. */
+async function probeIdleLatency(env: Env): Promise<void> {
+    const runAt = new Date().toISOString();
+    const prev = await env.DB.prepare('SELECT max(run_at) AS run_at FROM probe_result').first<{ run_at: string | null }>();
+    const idleHours = prev?.run_at ? round((Date.parse(runAt) - Date.parse(prev.run_at)) / 3_600_000) : null;
+
+    const rows = await Promise.all(
+        PROBE_LOCATIONS.map(async (loc) => {
+            const out: D1PreparedStatement[] = [];
+            let probeFrom: string | Record<string, string>[] | undefined;
+            for (const [seq, step] of PROBE_SEQUENCE.entries()) {
+                let m: GlobalpingMeasurement | undefined;
+                let error: string | undefined;
+                for (const option of probeFrom ? [probeFrom] : loc.options) {
+                    try {
+                        m = await globalping(option, step);
+                        error = undefined;
+                        break;
+                    } catch (e) {
+                        error = String(e);
+                    }
+                }
+                probeFrom = m?.id ?? probeFrom;
+                out.push(probeRow(env, { runAt, idleHours, location: loc.name, seq, path: step.path, m, error }));
+            }
+            return out;
+        }),
+    );
+    await env.DB.batch(rows.flat());
+    console.info({ event: 'idle_probe_done', runAt, idleHours });
+}
+
+async function globalping(
+    locations: string | Record<string, string>[],
+    request: { path: string; query?: string },
+): Promise<GlobalpingMeasurement> {
+    const created = await fetch('https://api.globalping.io/v1/measurements', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+            type: 'http',
+            target: PROBE_TARGET,
+            locations,
+            limit: 1,
+            measurementOptions: { protocol: 'HTTPS', request: { ...request, method: 'GET' } },
+        }),
+    });
+    if (!created.ok) throw new Error(`globalping create ${created.status}: ${(await created.text()).slice(0, 300)}`);
+    const { id } = (await created.json()) as { id: string };
+    for (let i = 0; i < 60; i++) {
+        await scheduler.wait(500);
+        const m = (await (await fetch(`https://api.globalping.io/v1/measurements/${id}`)).json()) as GlobalpingMeasurement;
+        if (m.status !== 'in-progress') return m;
+    }
+    throw new Error(`globalping ${id} still in progress after 30 s`);
+}
+
+function probeRow(
+    env: Env,
+    r: { runAt: string; idleHours: number | null; location: string; seq: number; path: string; m?: GlobalpingMeasurement; error?: string },
+): D1PreparedStatement {
+    const res = r.m?.results[0];
+    const header = (name: string) => {
+        const v = res?.result.headers?.[name];
+        return Array.isArray(v) ? v[0] : v;
+    };
+    const d1 = Object.fromEntries((header('x-d1') ?? '').split(' ').map((kv) => kv.split('=')));
+    const workerMs = header('server-timing')?.match(/dur=([\d.]+)/)?.[1];
+    const t = res?.result.timings;
+    const failed = res && res.result.status !== 'finished' ? res.result.rawOutput?.slice(0, 300) : undefined;
+    return env.DB.prepare(
+        `INSERT INTO probe_result (run_at, idle_hours, location, seq, path, probe_city, probe_network, status, total_ms,
+            dns_ms, tcp_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_region, d1_colo, d1_primary, d1_rtt_ms,
+            measurement_id, error)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`,
+    ).bind(
+        r.runAt,
+        r.idleHours,
+        r.location,
+        r.seq,
+        r.path,
+        res?.probe.city ?? null,
+        res?.probe.network ?? null,
+        res?.result.statusCode ?? null,
+        t?.total ?? null,
+        t?.dns ?? null,
+        t?.tcp ?? null,
+        t?.tls ?? null,
+        t?.firstByte ?? null,
+        header('x-worker-colo') ?? null,
+        workerMs ? Number(workerMs) : null,
+        d1.region ?? null,
+        d1.colo ?? null,
+        d1.primary ?? null,
+        d1.rtt ? Number(d1.rtt) : null,
+        r.m?.id ?? null,
+        r.error ?? failed ?? null,
+    );
 }
 
 /** Nightly dump of the canonical table to R2; the FTS index is derived data and is rebuilt on restore. */
