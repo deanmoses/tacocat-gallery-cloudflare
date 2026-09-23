@@ -4,3 +4,6 @@ node_modules/
 fixtures/iphone-*.mov
 fixtures/IMG_*
 .claude/settings.local.json
+web/.svelte-kit/
+web/build/
+web/.vitest/

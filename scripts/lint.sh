@@ -125,8 +125,11 @@ echo "================================================="
 echo -n "Format: Prettier (code, JSON, Markdown)... "
 over_files prettier --check --log-level warn --ignore-unknown -- ':(glob)**/*'
 
-echo -n "Lint: ESLint (code and JSON)... "
-over_files eslint --max-warnings 0 --no-warn-ignored -- '*.ts' '*.mjs' '*.js' '*.json' '*.jsonc'
+echo -n "Lint: ESLint (code, Svelte and JSON)... "
+over_files eslint --max-warnings 0 --no-warn-ignored -- '*.ts' '*.mjs' '*.js' '*.svelte' '*.json' '*.jsonc'
+
+echo -n "Lint: Stylelint (CSS and Svelte styles)... "
+over_files stylelint --max-warnings 0 -- '*.css' '*.svelte'
 
 echo -n "Lint: Markdown (markdownlint)... "
 over_files markdownlint-cli2 --no-globs -- '*.md'

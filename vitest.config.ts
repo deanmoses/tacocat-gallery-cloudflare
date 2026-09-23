@@ -21,6 +21,8 @@ export default defineConfig({
         })),
     ],
     test: {
+        // The Worker's tests only; web/ runs its own under its own Vitest.
+        include: ['test/**/*.test.ts'],
         setupFiles: ['./test/setup.ts'],
         // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
         restoreMocks: true,

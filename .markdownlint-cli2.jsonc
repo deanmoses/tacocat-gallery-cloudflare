@@ -3,7 +3,7 @@
     "globs": ["**/*.md"],
     "ignores": [
         ".git",
-        "node_modules",
+        "**/node_modules",
         ".wrangler",
         "infra/.terraform",
         // Generated from docs/AGENTS.src.md; linting them duplicates linting the source.

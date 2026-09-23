@@ -15,8 +15,10 @@
     "typescript.tsdk": "node_modules/typescript/lib",
     "typescript.enablePromptUseWorkspaceTsdk": true,
 
-    // eslint.config.ts lints JSON too.
-    "eslint.validate": ["javascript", "typescript", "json", "jsonc"],
+    // eslint.config.ts lints Svelte components and JSON too.
+    "eslint.validate": ["javascript", "typescript", "svelte", "json", "jsonc"],
+    // Stylelint checks the <style> blocks in components as well as .css files.
+    "stylelint.validate": ["css", "svelte"],
 
     // Generated: `npm run types` rewrites the first from wrangler.jsonc, drizzle-kit the snapshots, `npm run agent-docs`
     // the agent docs.
@@ -26,10 +28,13 @@
         "CLAUDE.md": true,
         "AGENTS.md": true
     },
-    // worker-configuration.d.ts is 600 KB of runtime types, and .wrangler holds local D1, R2 and build output.
+    // worker-configuration.d.ts is 600 KB of runtime types, .wrangler holds local D1, R2 and build output, and web/ has
+    // SvelteKit's generated types and the app's build.
     "search.exclude": {
         "worker-configuration.d.ts": true,
         ".wrangler": true,
-        "infra/.terraform": true
+        "infra/.terraform": true,
+        "web/.svelte-kit": true,
+        "web/build": true
     }
 }

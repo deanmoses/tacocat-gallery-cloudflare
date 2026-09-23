@@ -1,8 +1,13 @@
 {
     "$schema": "https://unpkg.com/knip@6/schema.json",
 
-    // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
-    "entry": ["scripts/passkey-selftest.ts", "transcoder/server.ts"],
+    "workspaces": {
+        ".": {
+            // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
+            "entry": ["scripts/passkey-selftest.ts", "transcoder/server.ts"],
+        },
+        "web": {},
+    },
 
     "ignoreDependencies": [
         // cloudflare:test and cloudflare:workers are modules of the workerd runtime, not npm packages.

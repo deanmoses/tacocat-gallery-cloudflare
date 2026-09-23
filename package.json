@@ -2,12 +2,15 @@
     "name": "tacocat-gallery-cloudflare",
     "version": "0.0.1",
     "description": "Prototype to de-risk moving pix.tacocat.com to Cloudflare",
+    "workspaces": [
+        "web"
+    ],
     "scripts": {
         "dev": "wrangler dev --local-upstream localhost:8787",
         "test": "scripts/test.sh",
         "test:watch": "vitest",
         "types": "wrangler types",
-        "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test",
+        "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test && npm run --silent check --workspace web",
         "lint": "scripts/lint.sh",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write --log-level warn . && shfmt --write scripts .claude/hooks .husky/pre-commit .husky/commit-msg && tofu -chdir=infra fmt -recursive",
@@ -38,6 +41,7 @@
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-n": "^18.3.0",
         "eslint-plugin-regexp": "^3.3.1",
+        "eslint-plugin-svelte": "^3.23.0",
         "eslint-plugin-unicorn": "^76.0.0",
         "globals": "^17.12.0",
         "husky": "^9.1.7",
@@ -45,7 +49,12 @@
         "knip": "^6.37.0",
         "lint-staged": "^17.5.1",
         "markdownlint-cli2": "^0.23.3",
+        "postcss-html": "^2.0.0",
         "prettier": "^3.9.8",
+        "prettier-plugin-svelte": "^4.1.1",
+        "stylelint": "^17.15.0",
+        "stylelint-config-html": "^2.0.0",
+        "stylelint-config-standard": "^40.0.0",
         "typescript": "~6.0.3",
         "typescript-eslint": "^8.70.1",
         "vitest": "~4.1.11",
@@ -64,7 +73,7 @@
         "node": ">=24.2.0 <25"
     },
     "lint-staged": {
-        "*.{ts,mjs,js,json,jsonc,md,yml,yaml}": [
+        "*.{ts,mjs,js,svelte,css,html,json,jsonc,md,yml,yaml}": [
             "prettier --write"
         ]
     }

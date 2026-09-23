@@ -1,0 +1,5 @@
+{
+    // The repo's strict settings, then what `svelte-kit sync` generates for this app: path aliases, the DOM lib, and
+    // which files are in the project. Later entries win.
+    "extends": ["../tsconfig.base.json", "./.svelte-kit/tsconfig.json"]
+}

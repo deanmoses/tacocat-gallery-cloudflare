@@ -6,16 +6,20 @@ import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import node from 'eslint-plugin-n';
 import regexp from 'eslint-plugin-regexp';
+import svelte from 'eslint-plugin-svelte';
 import unicorn from 'eslint-plugin-unicorn';
 import type { Linter } from 'eslint';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
+import svelteConfig from './web/svelte.config.js';
 
 // Every rule of every plugin is on, via each one's `all` preset, so a rule added upstream is enforced as soon as the
 // dependency is upgraded. Rules come off only in the "reconfigured" and "turned off" blocks, each with the reason.
 
-const CODE = ['**/*.ts', '**/*.mjs', '**/*.js'];
+const CODE = ['**/*.ts', '**/*.mjs', '**/*.js', '**/*.svelte'];
+// Components, and modules whose `.svelte.` infix lets them use runes.
+const SVELTE = ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'];
 
 /** Every rule a plugin exports, for plugins with no `all` preset, minus the ones named in `except`. */
 function allRules(
@@ -80,8 +84,49 @@ export default defineConfig(
     },
 
     {
+        name: 'svelte',
+        files: SVELTE,
+        extends: asErrors(svelte.configs['flat/all']),
+        languageOptions: {
+            parserOptions: {
+                // The <script lang="ts"> inside a component goes to the TypeScript parser, with the type information
+                // the `code` block sets up.
+                parser: ts.parser,
+                extraFileExtensions: ['.svelte'],
+                svelteConfig,
+            },
+        },
+        rules: {
+            // The preset's default wants no `lang` at all; every script here is TypeScript.
+            'svelte/block-lang': ['error', { script: 'ts' }],
+            // A component's top-level `let` is its state, and its event handlers are how that state changes.
+            'unicorn/no-top-level-assignment-in-function': 'off',
+        },
+    },
+    {
+        name: 'svelte components',
+        files: ['**/*.svelte'],
+        rules: {
+            // Components are PascalCase, as they are when imported; SvelteKit's route files (`+page.svelte`) are
+            // named by SvelteKit. Directories stay kebab-case, which the rule checks on every other file.
+            'unicorn/filename-case': [
+                'error',
+                { case: 'pascalCase', ignore: [String.raw`^\+`], checkDirectories: false },
+            ],
+        },
+    },
+    {
+        name: 'sveltekit routes',
+        files: ['web/src/routes/**/+*.ts'],
+        rules: {
+            // Page options such as `ssr` and `prerender` are names SvelteKit reads.
+            'unicorn/consistent-boolean-name': 'off',
+        },
+    },
+
+    {
         name: 'node',
-        files: ['*.ts', 'scripts/**/*.ts', 'transcoder/**/*.ts'],
+        files: ['*.ts', 'scripts/**/*.ts', 'transcoder/**/*.ts', 'web/*.ts', 'web/*.js'],
         extends: asErrors(node.configs['flat/all']),
         languageOptions: { globals: globals.node },
         rules: {
@@ -95,8 +140,13 @@ export default defineConfig(
         languageOptions: { globals: globals.serviceworker },
     },
     {
+        name: 'web',
+        files: ['web/src/**/*'],
+        languageOptions: { globals: globals.browser },
+    },
+    {
         name: 'tests',
-        files: ['test/**/*.ts'],
+        files: ['test/**/*.ts', 'web/src/**/*.test.ts'],
         extends: asErrors(vitest.configs.all),
         rules: {
             // For tests whose assertions sit in callbacks that might never run. Every test here awaits its work,
@@ -140,10 +190,11 @@ export default defineConfig(
                 'error',
                 { functions: false, classes: true, variables: false, enums: true, typedefs: false },
             ],
-            // `Env`, `env` and `ctx` are what Cloudflare's docs and types call the bindings and execution context.
+            // `Env`, `env` and `ctx` are what Cloudflare's docs and types call the bindings and execution context, and
+            // `props` and `Props` are what Svelte calls a component's inputs.
             'unicorn/name-replacements': [
                 'error',
-                { allowList: Object.fromEntries(['Env', 'env', 'ctx'].map((name) => [name, true])) },
+                { allowList: Object.fromEntries(['Env', 'env', 'ctx', 'Props', 'props'].map((name) => [name, true])) },
             ],
             // `void promise;` marks a promise deliberately left running, which is how no-floating-promises is
             // satisfied; every other use of void stays an error.
@@ -220,4 +271,5 @@ export default defineConfig(
 
     // Last, so formatting is Prettier's alone.
     { files: CODE, extends: [prettier] },
+    { files: SVELTE, extends: [svelte.configs['flat/prettier']] },
 );

@@ -4,6 +4,8 @@
         "anthropic.claude-code",
         "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
+        "stylelint.vscode-stylelint",
+        "svelte.svelte-vscode",
         "davidanson.vscode-markdownlint",
         "editorconfig.editorconfig",
         "vitest.explorer",
