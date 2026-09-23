@@ -13,6 +13,9 @@ describe('an album page', () => {
         await expect
             .element(page.getByRole('img', { name: 'Felix' }))
             .toHaveAttribute('src', '/i/2001/06-15/felix.jpg/v1?size=200x200');
+        await expect
+            .element(page.getByRole('link', { name: 'Felix' }))
+            .toHaveAttribute('href', '/2001/06-15/felix.jpg');
     });
 
     it('links a year album to its days and marks the unpublished ones', async () => {

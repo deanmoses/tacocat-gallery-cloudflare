@@ -1,16 +1,12 @@
-import { type Album, type AlbumChild, type MediaChild, albumKey } from 'tacocat-gallery-shared';
+import { type Album, type AlbumChild, type MediaChild, albumKey, mediaKey } from 'tacocat-gallery-shared';
 
 const UPDATED_ON = '2001-06-15T12:00:00.000Z';
-
-function nameOf(path: string): string {
-    return albumKey(path)?.itemName ?? path.slice(path.lastIndexOf('/') + 1);
-}
 
 export function albumChild(path: string, overrides: Partial<AlbumChild> = {}): AlbumChild {
     return {
         itemType: 'album',
         path,
-        itemName: nameOf(path),
+        itemName: albumKey(path)?.itemName ?? '',
         title: null,
         description: null,
         updatedOn: UPDATED_ON,
@@ -23,7 +19,7 @@ export function mediaChild(path: string, overrides: Partial<MediaChild> = {}): M
     return {
         itemType: 'image',
         path,
-        itemName: nameOf(path),
+        itemName: mediaKey(path)?.itemName ?? '',
         title: null,
         description: null,
         updatedOn: UPDATED_ON,

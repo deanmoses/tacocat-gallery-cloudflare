@@ -28,12 +28,15 @@ describe('the asset router', () => {
         expect(response.headers.has('x-worker-colo')).toBe(true);
     });
 
-    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/search/tacos'])('serves the web app for %s', async (path) => {
-        const response = await navigate(path);
-        const body = await response.text();
+    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix.jpg', '/search/tacos'])(
+        'serves the web app for %s',
+        async (path) => {
+            const response = await navigate(path);
+            const body = await response.text();
 
-        expect(response.status).toBe(200);
-        expect(response.headers.has('x-worker-colo')).toBe(false);
-        expect(body).toContain('<meta name="robots" content="noindex" />');
-    });
+            expect(response.status).toBe(200);
+            expect(response.headers.has('x-worker-colo')).toBe(false);
+            expect(body).toContain('<meta name="robots" content="noindex" />');
+        },
+    );
 });

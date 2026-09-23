@@ -1,7 +1,7 @@
 import { isHttpError } from '@sveltejs/kit';
 import { describe, expect, it } from 'vitest';
-import { albumTitle, loadAlbum } from './album';
-import { album } from './test-support/fixtures';
+import { albumTitle, loadAlbum, loadMedia, mediaTitle } from './album';
+import { album, mediaChild } from './test-support/fixtures';
 
 describe(loadAlbum, () => {
     it('asks the Worker for the album and hands back what it parsed', async () => {
@@ -40,5 +40,39 @@ describe(albumTitle, () => {
 
     it('prefers the title the album has', () => {
         expect(albumTitle({ path: '/2001/06-15/', title: 'Felix' })).toBe('Felix');
+    });
+});
+
+describe(loadMedia, () => {
+    const day = album('/2001/06-15/', {
+        children: [mediaChild('/2001/06-15/a.jpg'), mediaChild('/2001/06-15/b.jpg'), mediaChild('/2001/06-15/c.jpg')],
+    });
+    const fetch: typeof globalThis.fetch = async () => Response.json(day);
+
+    it('finds the media in its day album, with the media either side of it', async () => {
+        const found = await loadMedia(fetch, '/2001/06-15/b.jpg');
+
+        expect(found.album.path).toBe('/2001/06-15/');
+        expect(found.media.path).toBe('/2001/06-15/b.jpg');
+        expect(found.prev?.path).toBe('/2001/06-15/a.jpg');
+        expect(found.next?.path).toBe('/2001/06-15/c.jpg');
+    });
+
+    it('has no neighbour past either end', async () => {
+        const first = await loadMedia(fetch, '/2001/06-15/a.jpg');
+
+        expect(first.prev).toBeNull();
+        expect(first.next?.path).toBe('/2001/06-15/b.jpg');
+    });
+
+    it('is not found when the album has no such media', async () => {
+        await expect(loadMedia(fetch, '/2001/06-15/nope.jpg')).rejects.toSatisfy((thrown) => isHttpError(thrown, 404));
+    });
+});
+
+describe(mediaTitle, () => {
+    it('falls back to the file name', () => {
+        expect(mediaTitle({ itemName: 'felix.jpg', title: null })).toBe('felix.jpg');
+        expect(mediaTitle({ itemName: 'felix.jpg', title: 'Felix' })).toBe('Felix');
     });
 });

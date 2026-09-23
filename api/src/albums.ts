@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import {
     type Album,
-    type AlbumKey,
     type Child,
+    type ItemKey,
     type NavInfo,
     albumKey,
     albumPath,
@@ -88,7 +88,7 @@ export async function childrenOf(database: Orm, path: string): Promise<Rows> {
 /** The album, or null when there is no such row or `admin` is false and it is unpublished. The root is not a row. */
 function assemble(
     path: string,
-    key: AlbumKey | null,
+    key: ItemKey | null,
     children: Row[],
     family: Row[] | null,
     admin: boolean,

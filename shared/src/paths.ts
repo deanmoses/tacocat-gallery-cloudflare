@@ -3,6 +3,7 @@
 
 const YEAR_NAME = /^\d{4}$/v;
 const DAY_NAME = /^\d{2}-\d{2}$/v;
+const MEDIA_NAME = /^[^.\/]+\.[^.\/]+$/v;
 
 export function isYearName(name: string): boolean {
     return YEAR_NAME.test(name);
@@ -10,6 +11,11 @@ export function isYearName(name: string): boolean {
 
 export function isDayName(name: string): boolean {
     return DAY_NAME.test(name);
+}
+
+/** A file name with one extension: `felix.jpg`. */
+export function isMediaName(name: string): boolean {
+    return MEDIA_NAME.test(name);
 }
 
 /** Whether `path` is the root, a year album or a day album. */
@@ -24,18 +30,37 @@ export function isAlbumPath(path: string): boolean {
     return deeper === undefined && isYearName(year) && (day === undefined || isDayName(day));
 }
 
-export interface AlbumKey {
+export function isDayAlbumPath(path: string): boolean {
+    return isAlbumPath(path) && (albumKey(path)?.parentPath ?? '/') !== '/';
+}
+
+/** Whether `path` is a media item in a day album: `/2001/06-15/felix.jpg`. */
+export function isMediaPath(path: string): boolean {
+    const key = mediaKey(path);
+    return key !== null && isDayAlbumPath(key.parentPath) && isMediaName(key.itemName);
+}
+
+/** How the database identifies an item: the album it is in, and its name there. */
+export interface ItemKey {
     parentPath: string;
     itemName: string;
 }
 
-/** An album's database key: `/2001/06-15/` is `06-15` in `/2001/`. The root has none. */
-export function albumKey(path: string): AlbumKey | null {
+/** An album's key: `/2001/06-15/` is `06-15` in `/2001/`. The root has none. */
+export function albumKey(path: string): ItemKey | null {
     if (path === '/') {
         return null;
     }
     const cut = path.lastIndexOf('/', path.length - 2);
     return { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1, -1) };
+}
+
+/** A media item's key: `/2001/06-15/felix.jpg` is `felix.jpg` in `/2001/06-15/`. */
+export function mediaKey(path: string): ItemKey | null {
+    const cut = path.lastIndexOf('/');
+    return !path.startsWith('/') || cut === path.length - 1
+        ? null
+        : { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1) };
 }
 
 export function parentAlbumPath(path: string): string | null {
@@ -51,7 +76,7 @@ export function mediaPath(parentPath: string, itemName: string): string {
 }
 
 /** The albums from the top down to `path` itself, the root left out: `/2001/06-15/` gives `/2001/` then itself. */
-export function albumsEnclosing(path: string): AlbumKey[] {
+export function albumsEnclosing(path: string): ItemKey[] {
     const key = isAlbumPath(path) ? albumKey(path) : null;
     return key === null ? [] : [...albumsEnclosing(key.parentPath), key];
 }
