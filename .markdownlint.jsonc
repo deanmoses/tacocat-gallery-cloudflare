@@ -1,0 +1,9 @@
+{
+    // Every rule is on by default; these are the exceptions.
+
+    // Nested list indent, matching the 4-space indent used everywhere else
+    "MD007": { "indent": 4 },
+
+    // Prose is written unwrapped, one paragraph per line, and the risk register is a wide table
+    "MD013": false,
+}

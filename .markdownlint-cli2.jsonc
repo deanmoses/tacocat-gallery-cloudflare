@@ -1,0 +1,5 @@
+{
+    // Rules live in .markdownlint.jsonc so the editor extension reads them too.
+    "globs": ["**/*.md"],
+    "ignores": [".git", "node_modules", ".wrangler", "infra/.terraform"],
+}

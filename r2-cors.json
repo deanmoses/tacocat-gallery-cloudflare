@@ -2,7 +2,10 @@
     "rules": [
         {
             "allowed": {
-                "origins": ["https://tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev", "http://localhost:8787"],
+                "origins": [
+                    "https://tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev",
+                    "http://localhost:8787"
+                ],
                 "methods": ["PUT"],
                 "headers": ["content-type"]
             },

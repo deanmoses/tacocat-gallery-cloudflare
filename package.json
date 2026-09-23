@@ -4,11 +4,20 @@
     "description": "Throwaway prototype to de-risk moving pix.tacocat.com to Cloudflare",
     "scripts": {
         "dev": "wrangler dev --local-upstream localhost:8787",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "types": "wrangler types",
+        "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test",
+        "lint": "prettier --check . && eslint . --max-warnings 0 && markdownlint-cli2 && knip --no-progress && npm run lint:shell && npm run lint:infra",
+        "lint:shell": "shellcheck scripts/*.sh .husky/pre-commit",
+        "lint:infra": "tofu -chdir=infra fmt -check -recursive",
+        "format": "prettier --write --log-level warn .",
+        "quality": "npm run format && npm run lint && npm run check && npm test",
+        "prepare": "husky",
         "db:generate": "drizzle-kit generate",
         "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
         "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",
         "deploy": "wrangler deploy",
-        "check": "tsc",
         "logs": "wrangler tail",
         "probes": "wrangler d1 execute tacocat-proto --remote --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
     },
@@ -17,9 +26,28 @@
     "license": "ISC",
     "type": "module",
     "devDependencies": {
-        "@cloudflare/workers-types": "^5.20260922.1",
+        "@cloudflare/vitest-plugin": "^1.2.3",
+        "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+        "@eslint/js": "^10.0.1",
+        "@levischuck/tiny-cbor": "^0.3.6",
+        "@types/node": "^24.13.6",
+        "@vitest/eslint-plugin": "^1.6.27",
         "drizzle-kit": "^0.31.11",
-        "typescript": "^5.9.3",
+        "eslint": "^10.11.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-n": "^18.3.0",
+        "eslint-plugin-regexp": "^3.3.1",
+        "eslint-plugin-unicorn": "^76.0.0",
+        "globals": "^17.12.0",
+        "husky": "^9.1.7",
+        "jiti": "^2.7.0",
+        "knip": "^6.37.0",
+        "lint-staged": "^17.5.1",
+        "markdownlint-cli2": "^0.23.3",
+        "prettier": "^3.9.8",
+        "typescript": "~6.0.3",
+        "typescript-eslint": "^8.70.1",
+        "vitest": "~4.1.11",
         "wrangler": "^4.136.3"
     },
     "dependencies": {
@@ -27,7 +55,23 @@
         "@simplewebauthn/server": "^14.0.2",
         "aws4fetch": "^1.0.20",
         "drizzle-orm": "^0.45.3",
-        "exifreader": "^4.45.2"
+        "exifreader": "^4.45.2",
+        "valibot": "^1.5.0"
     },
-    "private": true
+    "private": true,
+    "engines": {
+        "node": ">=24.2.0"
+    },
+    "lint-staged": {
+        "*.{ts,mjs,js}": [
+            "prettier --write",
+            "eslint --max-warnings 0 --no-warn-ignored"
+        ],
+        "*.{json,jsonc,md,yml,yaml}": [
+            "prettier --write"
+        ],
+        "*.md": [
+            "markdownlint-cli2"
+        ]
+    }
 }

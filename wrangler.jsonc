@@ -6,6 +6,7 @@
     "compatibility_date": "2026-09-01",
     "compatibility_flags": ["nodejs_compat"],
     "observability": { "enabled": true },
+    "secrets": { "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"] },
     "d1_databases": [
         {
             "binding": "DB",

@@ -1,13 +1,14 @@
 {
+    // Code that runs in Node: config files, scripts and the transcoder container. The Worker is src/tsconfig.json and
+    // its tests are test/tsconfig.json; each directory's nearest tsconfig.json is the one editors and ESLint use.
+    "extends": "./tsconfig.base.json",
     "compilerOptions": {
-        "target": "es2024",
-        "module": "es2022",
-        "moduleResolution": "bundler",
-        "lib": ["es2024"],
-        "types": ["@cloudflare/workers-types"],
-        "strict": true,
-        "noEmit": true,
-        "skipLibCheck": true
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "rewriteRelativeImportExtensions": true,
+        "lib": ["es2025"],
+        "types": ["node"]
     },
-    "include": ["src"]
+    "include": ["*.ts", "*.mjs", "scripts", "transcoder"],
+    "exclude": ["worker-configuration.d.ts"]
 }

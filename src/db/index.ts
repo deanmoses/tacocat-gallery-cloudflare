@@ -1,23 +1,43 @@
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/d1';
+import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
+import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
 import * as schema from './schema';
 
-export { schema };
-
-/**
- * Drizzle over D1 or a Sessions API session. Drizzle only calls prepare() and batch(), which a session has too;
- * the cast is because its types name D1Database.
- */
-export function db(d1: D1Database | D1DatabaseSession) {
-    return drizzle(d1 as D1Database, { schema });
+/** Drizzle over D1 or over a Sessions API session. */
+export function orm(d1: D1Database | D1DatabaseSession): Orm {
+    // Only a session has getBookmark(); neither class exists at runtime to test with instanceof.
+    return drizzle('getBookmark' in d1 ? sessionAsDatabase(d1) : d1, { schema });
 }
 
-export type Db = ReturnType<typeof db>;
+/**
+ * Drizzle's types name D1Database, but it only calls prepare() and batch(), which a session has too. The rest of
+ * D1Database throws, so a Drizzle upgrade that starts using it fails loudly.
+ */
+function sessionAsDatabase(session: D1DatabaseSession): D1Database {
+    return {
+        prepare: (query) => session.prepare(query),
+        batch: async (statements) => session.batch(statements),
+        exec: unsupported('exec'),
+        withSession: unsupported('withSession'),
+        dump: unsupported('dump'),
+    };
+}
+
+function unsupported(method: string): () => never {
+    return () => {
+        throw new Error(`D1DatabaseSession has no ${method}()`);
+    };
+}
+
+export type Orm = DrizzleD1Database<typeof schema>;
+
+/** An item upsert, ready to run, await or batch. */
+export type ItemUpsert = SQLiteInsertBase<typeof schema.item, 'async', D1Result>;
 
 /** Inserts or replaces an item's fields by path; a field left out of `values` is cleared on update. */
-export function upsertItem(d: Db, values: schema.NewItem) {
+export function upsertItem(database: Orm, values: schema.NewItem): ItemUpsert {
     const { item } = schema;
-    return d
+    return database
         .insert(item)
         .values(values)
         .onConflictDoUpdate({
@@ -35,3 +55,5 @@ export function upsertItem(d: Db, values: schema.NewItem) {
             },
         });
 }
+
+export * as schema from './schema';

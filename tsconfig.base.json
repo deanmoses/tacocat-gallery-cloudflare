@@ -1,0 +1,36 @@
+{
+    // Every check TypeScript offers, on. Each project below extends this and adds only its environment.
+    "compilerOptions": {
+        "target": "es2025",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "noEmit": true,
+        "allowJs": true,
+        "checkJs": true,
+        "resolveJsonModule": true,
+        // Our own code, including our .d.ts files, is checked in full. Third-party declarations are not, because
+        // two sets fail on their own: miniflare's (reached through vitest.config.ts) import packages it does not
+        // install, and workerd's runtime types and @types/node declare the same globals (Blob, console, Headers)
+        // wherever both are loaded, which nodejs_compat requires in the Worker.
+        "skipLibCheck": true,
+
+        "strict": true,
+        "exactOptionalPropertyTypes": true,
+        "noUncheckedIndexedAccess": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": false,
+        "noUncheckedSideEffectImports": true,
+
+        "verbatimModuleSyntax": true,
+        "isolatedModules": true,
+        "erasableSyntaxOnly": true,
+        "forceConsistentCasingInFileNames": true,
+        "libReplacement": false
+    }
+}

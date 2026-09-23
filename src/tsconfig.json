@@ -1,0 +1,11 @@
+{
+    // The Worker. Runtime and binding types come from worker-configuration.d.ts, which `npm run types` regenerates
+    // from wrangler.jsonc. `node` is there for nodejs_compat, as Cloudflare documents.
+    "extends": "../tsconfig.base.json",
+    "compilerOptions": {
+        // Uint8Array base64 and hex, which workerd has.
+        "lib": ["es2025", "esnext.typedarrays"],
+        "types": ["node"]
+    },
+    "include": [".", "../worker-configuration.d.ts"]
+}

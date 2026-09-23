@@ -1,0 +1,9 @@
+# Generated
+worker-configuration.d.ts
+migrations/meta/
+package-lock.json
+infra/.terraform.lock.hcl
+
+# Ignored by infra/.gitignore, which Prettier does not read
+infra/.terraform/
+infra/*.tfstate*

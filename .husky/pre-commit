@@ -1,0 +1,18 @@
+# shellcheck shell=sh
+set -e
+
+# Scan for secrets: .dev.vars holds real tokens, and one pasted into a file here would be public once pushed.
+if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks protect --staged --no-banner
+else
+    echo "Warning: gitleaks not installed, skipping secret scan"
+    echo "Install with: brew install gitleaks"
+fi
+
+# Formats and lints staged files only. ESLint checks without --fix: two vitest rules have fixers that change what an
+# assertion means (toBeTruthy() to toBe(true), toHaveBeenCalled() to toHaveBeenCalledWith()).
+npx lint-staged
+
+# Whole-project checks: types across all three tsconfigs, and the tests inside workerd.
+npm run check
+npm test

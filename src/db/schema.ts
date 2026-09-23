@@ -24,9 +24,9 @@ export const item = sqliteTable(
         height: integer('height'),
         durationSeconds: real('duration_seconds'),
     },
-    (t) => [
-        unique().on(t.parentPath, t.itemName),
-        check('item_type_check', sql`${t.itemType} IN ('album', 'image', 'video')`),
+    (table) => [
+        unique().on(table.parentPath, table.itemName),
+        check('item_type_check', sql`${table.itemType} IN ('album', 'image', 'video')`),
     ],
 );
 
@@ -56,7 +56,7 @@ export const probeResult = sqliteTable(
         measurementId: text('measurement_id'),
         error: text('error'),
     },
-    (t) => [index('probe_result_run_at').on(t.runAt)],
+    (table) => [index('probe_result_run_at').on(table.runAt)],
 );
 
 export const adminPasskey = sqliteTable('admin_passkey', {
