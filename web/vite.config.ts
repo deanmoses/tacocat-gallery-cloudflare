@@ -1,9 +1,30 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { playwright } from '@vitest/browser-playwright';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
+/**
+ * The media URLs a rendered <img> or <video> asks for are the Worker's, so nothing serves them under test. SvelteKit's
+ * dev fallback would render them on the server instead, loading its SSR runtime as Vitest shuts down and printing
+ * "transport was disconnected". Listed before sveltekit() so this runs ahead of that fallback.
+ */
+function notFoundUnderTest(): Plugin {
+    return {
+        name: 'not-found-under-test',
+        apply: (_config, { mode }) => mode === 'test',
+        configureServer(server) {
+            return () => {
+                server.middlewares.use((_request, response) => {
+                    response.statusCode = 404;
+                    response.end();
+                });
+            };
+        },
+    };
+}
+
 export default defineConfig({
-    plugins: [sveltekit()],
+    plugins: [notFoundUnderTest(), sveltekit()],
     test: {
         include: ['src/**/*.test.ts'],
         // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
