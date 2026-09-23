@@ -7,3 +7,6 @@ api/fixtures/IMG_*
 web/.svelte-kit/
 web/build/
 web/.vitest/
+coverage/
+playwright-report/
+test-results/

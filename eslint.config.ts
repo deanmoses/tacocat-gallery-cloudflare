@@ -5,6 +5,7 @@ import json from '@eslint/json';
 import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import node from 'eslint-plugin-n';
+import playwright from 'eslint-plugin-playwright';
 import regexp from 'eslint-plugin-regexp';
 import svelte from 'eslint-plugin-svelte';
 import unicorn from 'eslint-plugin-unicorn';
@@ -233,6 +234,7 @@ export default defineConfig(
             'api/scripts/**/*.ts',
             'api/transcoder/**/*.ts',
             'api/test/stack/**/*.ts',
+            'e2e/**/*.ts',
             'web/*.ts',
             'web/*.js',
             'shared/*.ts',
@@ -388,6 +390,44 @@ export default defineConfig(
             '@typescript-eslint/no-unsafe-assignment': 'off',
             // A one-line callback in a table of cases shows its type in its body; named functions still declare theirs.
             '@typescript-eslint/explicit-function-return-type': ['error', { allowExpressions: true }],
+        },
+    },
+    {
+        name: 'e2e tests',
+        files: ['e2e/**/*.ts'],
+        ignores: ['e2e/server.ts', 'e2e/playwright.config.ts'],
+        // The recommended set plus the rules below, the same as tacocat-gallery-sveltekit's.
+        extends: asErrors(playwright.configs['flat/recommended']),
+        rules: {
+            // Weak assertions that pass when they shouldn't
+            'playwright/require-to-throw-message': 'error',
+            'playwright/require-to-pass-timeout': 'error',
+            'playwright/no-restricted-matchers': [
+                'error',
+                {
+                    toBeFalsy: 'Assert the actual expected state, e.g. toBeHidden() or toBe(false).',
+                    toBeTruthy: 'Assert the actual expected state, e.g. toBeVisible() or toBe(true).',
+                },
+            ],
+
+            // Matchers that produce a useful diff on failure
+            'playwright/prefer-comparison-matcher': 'error',
+            'playwright/prefer-equality-matcher': 'error',
+            'playwright/prefer-strict-equal': 'error',
+            'playwright/prefer-to-be': 'error',
+            'playwright/prefer-to-contain': 'error',
+
+            // Structure, as in the vitest block
+            'playwright/no-commented-out-tests': 'error',
+            'playwright/require-top-level-describe': 'error',
+            'playwright/require-hook': 'error',
+
+            // Locators a user could perceive, roles and names first, so a restyle cannot break a test. getByTitle reads
+            // a tooltip that touch screens never show.
+            'playwright/prefer-native-locators': 'error',
+            'playwright/no-nth-methods': 'error',
+            'playwright/no-get-by-title': 'error',
+            'playwright/no-raw-locators': 'error',
         },
     },
     {

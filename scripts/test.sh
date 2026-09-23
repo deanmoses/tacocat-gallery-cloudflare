@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The tests of every workspace: shared/'s in Node and api/'s inside workerd, both on the Vitest 4 hoisted to the root,
 # and web/'s in a browser on its own Vitest 5. Each runs from its own directory with the Vitest it resolves there. CI and
-# `npm test` run all of them; .husky/pre-commit runs this with --staged, which runs only the tests whose imports reach a
-# staged file.
+# `npm test` run all of them and then the e2e tests; .husky/pre-commit runs this with --staged, which runs only the
+# tests whose imports reach a staged file, and no e2e tests, since building and starting the site takes seconds.
 #
 # Usage: scripts/test.sh [--staged]
 
@@ -34,7 +34,9 @@ if [ "$STAGED" = "0" ]; then
     workspace_vitest api run || api_status=$?
     web_status=0
     workspace_vitest web run || web_status=$?
-    [ "$shared_status" -eq 0 ] && [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]
+    e2e_status=0
+    npm exec --no -- playwright test --config e2e/playwright.config.ts || e2e_status=$?
+    [ "$shared_status" -eq 0 ] && [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ] && [ "$e2e_status" -eq 0 ]
     exit
 fi
 

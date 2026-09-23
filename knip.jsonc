@@ -2,7 +2,10 @@
     "$schema": "https://unpkg.com/knip@6/schema.json",
 
     "workspaces": {
-        ".": {},
+        ".": {
+            // Started by the Playwright config's webServer command, which knip does not read.
+            "entry": ["e2e/server.ts"],
+        },
         "api": {
             // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
             "entry": ["scripts/passkey-selftest.ts", "transcoder/server.ts"],

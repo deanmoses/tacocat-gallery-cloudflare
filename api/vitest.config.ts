@@ -13,6 +13,16 @@ export default defineConfig({
         // Files and the tests in them run in a random order, so a test that passes only because of what ran before it
         // fails. Each run prints its seed; rerun a failure in the same order with --sequence.seed=<seed>.
         sequence: { shuffle: true },
+        // For finding what no test reaches, not a gate, so no thresholds. Istanbul, since V8 coverage does not work
+        // inside workerd. Only the worker project counts: the stack tests reach the Worker through a separate workerd.
+        coverage: {
+            provider: 'istanbul',
+            // Globbed from the source tree, so a file no test imports shows at 0% instead of not at all.
+            include: ['src/**/*.ts'],
+            // Set explicitly because Vitest changes its defaults when it detects an AI agent running it. skipFull lists
+            // only the files with something uncovered.
+            reporter: [['text', { skipFull: true }], 'text-summary', 'html'],
+        },
         projects: [
             {
                 extends: true,

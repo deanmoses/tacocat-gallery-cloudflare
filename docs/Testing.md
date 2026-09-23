@@ -1,8 +1,8 @@
 # Testing
 
-How the Worker in `api/` is tested. `shared/` and `web/` run their own Vitest; `scripts/test.sh` runs all three, and `npm test` from the root runs that.
+How the Worker in `api/` and the web app in `web/` are tested, each alone and together end to end. `shared/` runs its own Vitest in Node. `npm test` from the root runs `scripts/test.sh`, which runs every workspace's tests and then the e2e tests.
 
-## Where a test goes
+## Where a Worker test goes
 
 A test's directory says what it touches. All but `stack/` run inside workerd, the Workers runtime, through `@cloudflare/vitest-plugin`.
 
@@ -49,6 +49,32 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 
 `api/test/db/rows-read.test.ts` fills a gallery-sized table and holds each write to a few rows, and each read or search to little more than it returns. A new query, trigger or index change gets a case there, and a query that scans instead of seeking fails it with thousands of rows.
 
+## The web app
+
+`web/`'s tests sit beside the code as `*.test.ts`, and all of them run in headless Chromium through Vitest's browser mode, so a component's effects run and the DOM is the real one. Run them from `web/` with `npx vitest run`.
+
+- Mount a component with `render` from `$lib/test-support/render.ts` and find what it shows with `page` from `vitest/browser`. `render` runs the first render's effects before it returns, so a plain `expect` right after it sees them, such as the title `<svelte:head>` sets.
+- `expect.element` retries until its assertion holds or the test times out: use it for anything that arrives later, such as what an image's `load` event shows. A test times out after 3 seconds, since nothing here waits on a network.
+- Find elements the way a reader does, with `getByRole` and the accessible name. Fall back to `getByTestId` only where the markup offers nothing a user could perceive, and first consider giving the element a role or a label.
+- Tests run at a desktop width, 1280×800. A test about what a phone shows sets its own viewport and says so.
+- Code that fetches takes `fetch` as an argument, as a SvelteKit `load` does, so a test passes a function that answers with a fixture from `$lib/test-support/fixtures.ts`. The fixtures are built complete from the types in `shared/`, so a new field there breaks a fixture instead of leaving it a shape the Worker never sends.
+
+## End to end
+
+`e2e/*.e2e.ts` run in Playwright against the whole site on this machine: the web app's build, the asset router and the Worker, on a D1 database migrated into `.wrangler/e2e/`. Nothing reaches the Cloudflare account. `npm run test:e2e` from the root runs them; `npm test` runs them after the workspaces' tests, and the pre-commit hook does not run them.
+
+- Playwright starts `e2e/server.ts`, which builds the web app, starts the Worker on port 8790 with the test secrets, and writes the gallery in `e2e/gallery.ts` through the Worker's own `PUT /api/item`. Tests start once the last album of it answers.
+- Every test shares that gallery, and tests run in parallel, within a file too. Treat it as read-only, which is what lets a test assert exact titles and links; a test that writes makes an album no other test reads.
+- While writing tests, run `node e2e/server.ts` in a terminal: Playwright reuses a server already on the port, which skips the build. Restart it after changing the web app, the Worker or the gallery.
+- Walk a journey in one test with a `test.step` per page, since a later page is usually reached from the one before it, and the step says where it failed. `e2e/navigation.e2e.ts` is the example.
+- Locators follow the web app's rule, and lint enforces it: roles and names, no CSS selectors, no `.first()` or `.nth()`.
+- The gallery holds no originals in R2 and the ffmpeg container does not run, so a thumbnail is a broken image. Assert on text and links.
+- A failure keeps a trace and a screenshot under `e2e/test-results/`. `npx playwright show-report e2e/playwright-report` opens the HTML report, trace included.
+
+## Coverage
+
+`npm run test:coverage` from the root runs the api and web tests with Istanbul coverage and lists each file with something uncovered; `coverage/index.html` in each workspace has the detail. It is for finding what no test reaches, not a gate, so there are no thresholds. It is Istanbul because V8 coverage does not work inside workerd. The api numbers count only the tests that run inside workerd, since the stack tests reach the Worker in a separate process, and e2e tests count toward neither.
+
 ## Writing a test
 
 - A test that doesn't fail without the change it covers proves nothing. Break the code on purpose once and watch the test fail.
@@ -57,3 +83,4 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - Read the database back through `orm(env.DB)` and `schema`, so a renamed column is a type error. Raw SQL is for FTS5, which Drizzle cannot see.
 - Read an API response with `parseExactly` and its parse function from `shared/`, such as `parseAlbum`. It fails on a field the schema lacks, which parsing alone would drop.
 - Every test asserts something; `requireAssertions` fails one that doesn't.
+- Wait for the end state, never for a span of time: `expect.element`, `vi.waitFor` or Playwright's `expect`, never a `setTimeout`. A guess at how long something takes passes most runs and fails some, the hardest kind of failure to trace.

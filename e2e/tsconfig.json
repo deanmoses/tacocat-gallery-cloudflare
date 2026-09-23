@@ -1,0 +1,12 @@
+{
+    // The repo's Node tooling settings, with bundler resolution so the types from shared/ load: its source imports
+    // without file extensions, which nodenext refuses. Only its types are imported, so Node never resolves it at runtime.
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "tsBuildInfoFile": "../node_modules/.cache/tsc/e2e.tsbuildinfo",
+        "module": "preserve",
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true
+    },
+    "include": ["."]
+}

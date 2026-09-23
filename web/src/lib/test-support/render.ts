@@ -1,4 +1,4 @@
-import { type Component, mount, unmount } from 'svelte';
+import { type Component, flushSync, mount, unmount } from 'svelte';
 import { onTestFinished } from 'vitest';
 
 /**
@@ -10,6 +10,9 @@ export function render<Props extends Record<string, unknown>>(component: Compone
     const target = document.createElement('div');
     document.body.append(target);
     const instance = mount(component, { target, props });
+    // mount() leaves effects pending, such as the title <svelte:head> sets, until the next microtask. Flushed here, a
+    // plain expect() right after render sees what the component does on its first render.
+    flushSync();
     onTestFinished(async () => {
         await unmount(instance);
         target.remove();
