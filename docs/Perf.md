@@ -8,6 +8,17 @@ Perceived performance strictly better than the AWS site, or at least better in a
 
 The verdict is a page load in a real browser from a reader's region. Timings of single requests are for finding out why a page is slow, not whether it is: they miss what a browser does with connection hints, HTTP/3 and connection reuse, which is why the local `npm run perf` script in `tacocat-gallery-sveltekit` is not a verdict either (its bundled Chromium ignores `preconnect`).
 
+## How readers use the site
+
+An email goes out every week or so with the newest albums. A reader follows its link straight to a day album, clicks through its photos, and leaves; few start at the root or a year. The AWS app's CloudFront logs agree (`album_reads` in `tacocat-gallery-sveltekit`'s `production_logs`, real visitors only, 2026-09-12 to 23):
+
+- **57 album reads by 30 readers**, most of them on the newest three albums.
+- **Photos outnumber album opens about ten to one:** 574 photo requests against 57 album reads. A reader gets a median of 5 photos and a quarter get 18 or more, counting the neighbours the app preloads; the newest album's readers got a median of 21.
+- **78% of photos came from the bucket, not the edge,** at 299 ms median and 411 ms p90 to first byte, since each photo is seen about once per edge. The median gap between photos is 2.3 s.
+- **The AWS app preloads the next and previous photo** (`<link rel="preload">` in its `MediaPage.svelte`), so a click usually finds the photo already loading or loaded.
+
+So the scenario that matters most is clicking from one photo to the next, and the album page is the one-off cost of arriving.
+
 ## Instruments
 
 | Instrument                                         | What it measures                                                                                                          | What it cannot say                                                                                       |
@@ -20,18 +31,18 @@ The verdict is a page load in a real browser from a reader's region. Timings of 
 
 The two sites have to serve the same page for the comparison to mean anything, which today they do not (see _Before the first run_).
 
-- **Page:** one day album with real photos, the same on both sites: `https://pix.tacocat.com/<year>/<day>` against `https://pix.deanmoses.com/<year>/<day>`. A day album's largest contentful paint is its first thumbnail, so it exercises the page, the JS, the album JSON and a derived image in the order a visitor waits on them.
+- **Visit:** what an email reader does, scripted in WebPageTest: open one day album with real photos, the same on both sites (`https://pix.tacocat.com/<year>/<day>` against `https://pix.deanmoses.com/<year>/<day>`), open its first photo, then click next through ten more. Whether the free plan runs scripted multi-step tests is unchecked.
 - **Locations:** Paris for France and Los Angeles for California. The free plan has nothing in the US South (its North American locations are Los Angeles, Salt Lake City and Toronto), so Louisiana has no page-load verdict; the idle probes time its steps only.
 - **Settings:** Chrome, desktop, native connection (no throttling), first view only, one run per test. Repeat view measures the browser's own cache, which both sites set the same way.
 - **Cold:** run only when both sites have been idle for at least an hour, and record how long. Warm is the same test again a minute later, still in a fresh browser, so the site has just served that page. The idle probes hit the Cloudflare site five times a day at fixed times (00:23, 01:23, 03:23, 07:23 and 15:23 UTC), and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California; that is each site's real background traffic and is left alone.
 - **Order:** the two sites back to back from the same location, alternating which goes first.
-- **Record:** LCP, which decides the scenario. Also the page's time to first byte and the album JSON request's start and end from the waterfall, to explain it. Keep the test URLs.
+- **Record:** the album page's LCP, and for each click the time until the photo is on screen; together they decide the scenario, with the photo clicks weighing most. Also the page's time to first byte, the album JSON request's start and end, and each photo's request from the waterfall, to explain it. Keep the test URLs.
 - **Budget:** each site cold then warm is four runs per location, eight a session for Paris and Los Angeles. 300 runs a month is about 37 sessions.
 
 ### Before the first run
 
 1. The Cloudflare database holds made-up albums (60 a year, 20 images each), not real photos. Copy one real day album into it, originals through R2's S3 API so the upload pipeline makes its derived images, and check its page renders every thumbnail.
-2. The Cloudflare site's `web/` app is new and smaller than the production SvelteKit app, so its JS alone may win. Compare the two waterfalls' JS bytes and request counts, and say so beside any result it could explain.
+2. The Cloudflare site's `web/` app was written from scratch and lacks what the AWS app does, such as preloading the next and previous photo (see _How readers use the site_). Compare only once `web/` is a port of the AWS app, so the two sites run the same app and the comparison measures the platforms.
 
 ## What is known
 
@@ -75,7 +86,7 @@ CloudFront serves an album page through its error response for the single-page a
 
 ## Log
 
-- **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument. Static assets probed from Paris and Baton Rouge: served locally on Cloudflare from the first request.
+- **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument. Static assets probed from Paris and Baton Rouge: served locally on Cloudflare from the first request. The AWS logs show photo clicks outnumbering album opens about ten to one, so the scenario is now the email reader's visit. `web/` turned out to be a from-scratch rewrite missing the AWS app's photo preloading; the comparison waits for a port.
 
 ## Open questions
 

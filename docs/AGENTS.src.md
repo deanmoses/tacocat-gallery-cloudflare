@@ -42,7 +42,7 @@ The site this prototype has to beat runs on AWS from four repos, checked out bes
 | Repo                          | What it is                                                                        | Read first                                                                                                                       |
 | ----------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `tacocat-gallery-sam`         | The back end: DynamoDB, Lambdas, API Gateway, S3 media, the image CDN             | `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` (the move), `docs/plans/EdgeCachedAlbums.md`, `docs/Architecture.md` |
-| `tacocat-gallery-sveltekit`   | The SvelteKit single-page app that `web/` replaces                                | `docs/plans/Observability.md` (AWS performance, measured), `docs/Observability.md` (`npm run perf`), `docs/Ecosystem.md`         |
+| `tacocat-gallery-sveltekit`   | The SvelteKit single-page app that `web/` ports                                   | `docs/plans/Observability.md` (AWS performance, measured), `docs/Observability.md` (`npm run perf`), `docs/Ecosystem.md`         |
 | `tacocat-gallery-hosting-aws` | The S3 bucket and CloudFront distribution that serve the app on `pix.tacocat.com` | `template.yaml`                                                                                                                  |
 | `tacocat-gallery-auth`        | Cognito login, which the passkey login here replaces                              | `template.yaml`                                                                                                                  |
 
@@ -51,6 +51,8 @@ Search is Redis Labs, configured by hand in its dashboard, with no repo.
 ## This repo
 
 Three npm workspaces: `shared/` holds the album schema and path helpers both sides agree on, `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has how to run, deploy and restore.
+
+`web/` is the AWS app ported, not rewritten: copy `tacocat-gallery-sveltekit` and change only what the platform forces, such as the URLs in its `src/lib/utils/config.ts` and the Cognito sign-in. The Worker answers in the AWS API's shapes so the app parses them unchanged. Never rebuild a feature the AWS app already has; a difference between the two apps makes every performance comparison measure the apps instead of the platforms.
 
 ## Spending
 
