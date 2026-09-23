@@ -11,7 +11,7 @@ if [[ "${2:-}" == "--local" ]]; then
     base=http://localhost:8787
 else
     where=--remote
-    base=https://tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev
+    base=https://pix.deanmoses.com
 fi
 
 token=$(openssl rand -hex 32)
