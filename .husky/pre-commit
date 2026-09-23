@@ -13,6 +13,14 @@ fi
 # `npm run format` for shell and OpenTofu, `npm run lint:fix` for ESLint, whose fixers sometimes can.
 npx lint-staged
 
+# CLAUDE.md and AGENTS.md are generated from docs/AGENTS.src.md, so regenerating them cannot change what anything
+# means. After lint-staged, so they are built from the source as Prettier left it. A hand edit to either is caught by
+# the lint check below.
+if git diff --cached --name-only | grep -qE '^(docs/AGENTS\.src\.md|scripts/build-agent-instructions\.ts)$'; then
+    npm run --silent agent-docs
+    git add CLAUDE.md AGENTS.md
+fi
+
 # The same checks CI runs, scoped to what is staged: per-file lint checks see only staged files, and only the tests
 # that import them run. CI runs all of it over the whole repo. Types are always checked across the whole project.
 scripts/lint.sh --staged

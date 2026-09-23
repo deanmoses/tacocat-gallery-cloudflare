@@ -13,6 +13,7 @@
         "format": "prettier --write --log-level warn . && shfmt --write scripts/*.sh .husky/pre-commit && tofu -chdir=infra fmt -recursive",
         "quality": "npm run format && npm run lint && npm run check && npm test",
         "prepare": "husky",
+        "agent-docs": "node scripts/build-agent-instructions.ts",
         "db:generate": "drizzle-kit generate",
         "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
         "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",

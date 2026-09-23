@@ -82,7 +82,10 @@ The FTS5 search table and its triggers are raw SQL (`migrations/0002_fts_by_rowi
 
 - **Cmd+Shift+B** runs `npm run check` and puts every type error in the Problems panel. `Quality` and `Regenerate Worker types` are under Run Task.
 - **Debugging** (Run and Debug): `Worker: npm run dev` starts the dev server in a debug terminal, or `Worker: attach to npm run dev` attaches to one already running. `Debug Worker tests` runs Vitest one file at a time and attaches to workerd, so breakpoints stop in tests and in the Worker code they call. `Script: passkey self-test` asks for an invite link and runs `scripts/passkey-selftest.ts`. The Worker and the tests share inspector port 9229, so debug one at a time.
-- **Tests** also show in the Testing panel through the Vitest extension.
+
+## AI agents
+
+`CLAUDE.md` and `AGENTS.md` are generated from `docs/AGENTS.src.md` by `npm run agent-docs`; edit the source, never the outputs. The pre-commit hook regenerates them when the source is staged, and `npm run lint` fails if they don't match it. `.claude/skills/` holds the `/branch`, `/commit` and `/pr` skills, the same conventions as the other tacocat-gallery repos: Conventional Commits and `type/short-description` branches. On Claude Code on the web, `.claude/hooks/session-start.sh` selects Node 24 through the image's nvm and runs `npm install`.
 
 ## Admin login
 

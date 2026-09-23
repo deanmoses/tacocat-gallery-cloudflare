@@ -15,13 +15,16 @@
     "typescript.tsdk": "node_modules/typescript/lib",
     "typescript.enablePromptUseWorkspaceTsdk": true,
 
-    // eslint.config.ts lints JSON too, and the extension only asks ESLint about the languages listed here.
+    // eslint.config.ts lints JSON too.
     "eslint.validate": ["javascript", "typescript", "json", "jsonc"],
 
-    // Generated: `npm run types` rewrites the first from wrangler.jsonc, drizzle-kit the snapshots.
+    // Generated: `npm run types` rewrites the first from wrangler.jsonc, drizzle-kit the snapshots, `npm run agent-docs`
+    // the agent docs.
     "files.readonlyInclude": {
         "worker-configuration.d.ts": true,
-        "migrations/meta/**": true
+        "migrations/meta/**": true,
+        "CLAUDE.md": true,
+        "AGENTS.md": true
     },
     // worker-configuration.d.ts is 600 KB of runtime types, and .wrangler holds local D1, R2 and build output.
     "search.exclude": {

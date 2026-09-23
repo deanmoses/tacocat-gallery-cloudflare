@@ -19,6 +19,13 @@
             "presentation": { "reveal": "always", "panel": "shared" }
         },
         {
+            "label": "Regenerate AI docs",
+            "type": "npm",
+            "script": "agent-docs",
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "shared" }
+        },
+        {
             "label": "Regenerate Worker types from wrangler.jsonc",
             "type": "npm",
             "script": "types",

@@ -3,3 +3,4 @@ node_modules/
 .dev.vars
 fixtures/iphone-*.mov
 fixtures/IMG_*
+.claude/settings.local.json

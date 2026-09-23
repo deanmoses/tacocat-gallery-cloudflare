@@ -1,0 +1,31 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(npm test)",
+            "Bash(npm test:*)",
+            "Bash(npm run lint)",
+            "Bash(npm run lint:*)",
+            "Bash(npm run check)",
+            "Bash(npm run agent-docs)",
+            "Skill(branch)",
+            "Skill(branch:*)",
+            "Skill(commit)",
+            "Skill(commit:*)",
+            "Skill(pr)",
+            "Skill(pr:*)"
+        ]
+    },
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
+                        "timeout": 600
+                    }
+                ]
+            }
+        ]
+    }
+}

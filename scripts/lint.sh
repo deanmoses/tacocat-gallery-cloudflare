@@ -118,6 +118,10 @@ over_files eslint --max-warnings 0 --no-warn-ignored -- '*.ts' '*.mjs' '*.js' '*
 echo -n "Lint: Markdown (markdownlint)... "
 over_files markdownlint-cli2 --no-globs -- '*.md'
 
+# Whole file either way, since a hand edit to a generated file has to be caught whatever else is staged.
+echo -n "Docs: CLAUDE.md and AGENTS.md match docs/AGENTS.src.md... "
+check node scripts/build-agent-instructions.ts --check
+
 # Whole project either way: an unused export is a fact about the files that don't import it.
 echo -n "Lint: unused files, exports and dependencies (knip)... "
 check knip --no-progress
