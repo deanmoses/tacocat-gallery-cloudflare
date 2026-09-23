@@ -95,6 +95,12 @@ resource "cloudflare_queue" "uploads" {
   queue_name = "tacocat-proto-uploads"
 }
 
+# Upload messages that run out of retries land here (see dead_letter_queue in wrangler.jsonc).
+resource "cloudflare_queue" "uploads_dlq" {
+  account_id = local.account_id
+  queue_name = "tacocat-proto-uploads-dlq"
+}
+
 resource "cloudflare_r2_bucket_event_notification" "uploads" {
   account_id  = local.account_id
   bucket_name = cloudflare_r2_bucket.media.name

@@ -6,6 +6,8 @@
     "compatibility_date": "2026-09-01",
     "compatibility_flags": ["nodejs_compat"],
     "observability": { "enabled": true },
+    // Stack traces in logs and `wrangler tail` point at the TypeScript source instead of the bundle.
+    "upload_source_maps": true,
     "secrets": { "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"] },
     "d1_databases": [
         {
@@ -19,13 +21,32 @@
         { "binding": "MEDIA", "bucket_name": "tacocat-proto-media" },
         { "binding": "DERIVED", "bucket_name": "tacocat-proto-derived" },
     ],
+    // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,
     "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
     "images": { "binding": "IMAGES" },
     "queues": {
-        "consumers": [{ "queue": "tacocat-proto-uploads", "max_batch_size": 10, "max_batch_timeout": 1 }],
+        "consumers": [
+            {
+                "queue": "tacocat-proto-uploads",
+                "max_batch_size": 10,
+                "max_batch_timeout": 1,
+                "max_retries": 5,
+                // Seconds, so a short D1 or R2 outage can pass before the next attempt.
+                "retry_delay": 60,
+                // Messages that run out of retries are kept here for replay instead of being dropped.
+                "dead_letter_queue": "tacocat-proto-uploads-dlq",
+            },
+        ],
     },
-    "triggers": { "crons": ["17 9 * * *", "23 0,1,3,7,15 * * *"] },
+    "triggers": {
+        "crons": [
+            // Daily D1 backup. src/index.ts picks the job by this exact string (BACKUP_CRON), so change both together.
+            "17 9 * * *",
+            // Idle-latency probes (src/probes.ts) at doubling gaps; every cron other than BACKUP_CRON runs these.
+            "23 0,1,3,7,15 * * *",
+        ],
+    },
     "containers": [
         {
             "class_name": "Transcoder",

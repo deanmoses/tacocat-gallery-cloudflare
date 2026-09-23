@@ -1,6 +1,6 @@
 # tacocat-gallery-cloudflare
 
-Throwaway prototype to find out whether moving pix.tacocat.com to Cloudflare works. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. If the risks below are retired, this repo gets emptied and rebuilt properly; nothing here is meant to survive.
+Prototype to find out whether moving pix.tacocat.com to Cloudflare works. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo.
 
 One Worker holds every spike, with one D1 database, one R2 bucket, one Queue and the Images binding. It is deployed to `workers.dev`, so the tacocat.com DNS move is not needed yet.
 
