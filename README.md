@@ -1,12 +1,8 @@
 # tacocat-gallery-cloudflare
 
-Prototype to find out whether moving pix.tacocat.com to Cloudflare works. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo.
+Prototype to find out whether moving pix.tacocat.com to Cloudflare works. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. Where it stands is `docs/Risks.md`, and how performance is judged against the AWS site is `docs/Perf.md`.
 
 The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit front end (see Front end below), and `shared/` the album schema and path helpers both import. One Worker holds every spike: one D1 database, two R2 buckets (originals and derived images), an upload Queue with a dead-letter queue, the Images binding, and a Container for video transcoding. It serves `pix.deanmoses.com`, a custom domain on a Cloudflare zone standing in for tacocat.com, as well as `workers.dev`, so the tacocat.com DNS move is not needed yet.
-
-## Where the prototype stands
-
-The risk register is in `docs/Risks.md`, and how performance is judged against the AWS site in `docs/Perf.md`. What fails today: reads after hours of idle from Louisiana and France go to the D1 primary in San Jose, SvelteKit SSR has to wait for SvelteKit 3, the Images binding rejects 10-bit HEIC, and uploads do not read XMP.
 
 ## Running it
 
