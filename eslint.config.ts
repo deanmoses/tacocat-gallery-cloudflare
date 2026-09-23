@@ -322,6 +322,8 @@ export default defineConfig(
             // The vitest variant also understands `expect(obj.method)`.
             '@typescript-eslint/unbound-method': 'off',
             'vitest/unbound-method': 'error',
+            // Asymmetric matchers such as expect.any(String) are typed any, and an expected object is where they belong.
+            '@typescript-eslint/no-unsafe-assignment': 'off',
         },
     },
 
@@ -393,6 +395,8 @@ export default defineConfig(
             // Deprecated in favour of no-navigation-without-resolve, which is on. resolve() already applies the base path,
             // and this rule cannot see that, so the two cannot both pass.
             'svelte/no-navigation-without-base': 'off',
+            // {@const} is how a value derived inside an {#each} block gets a name; the rule is the preset's taste, not a check.
+            'svelte/no-at-const-tags': 'off',
         },
     },
 

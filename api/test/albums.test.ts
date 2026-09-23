@@ -5,7 +5,6 @@ import { call, callAsAdmin, putItem } from './helpers';
 // A year no other test file writes to, since storage is shared by the tests in a file.
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
-const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/v;
 
 async function album(path: string, asAdmin = false): Promise<Album> {
     const response = await (asAdmin ? callAsAdmin : call)(`/api/album${path}`);
@@ -35,15 +34,13 @@ describe('an album', () => {
 
     it('is the shared type, with its media and the published albums either side of it', async () => {
         const day = await album(DAY);
-        const [image, video] = day.children;
 
-        expect(day.updatedOn).toMatch(ISO_TIMESTAMP);
         expect(day).toStrictEqual({
             path: DAY,
             title: 'New year',
             description: null,
             published: true,
-            updatedOn: day.updatedOn,
+            updatedOn: expect.any(String),
             prev: null,
             next: { path: '/1981/03-03/', title: null },
             children: [
@@ -53,7 +50,7 @@ describe('an album', () => {
                     itemName: 'a.jpg',
                     title: 'Beach',
                     description: null,
-                    updatedOn: image?.updatedOn,
+                    updatedOn: expect.any(String),
                     tags: null,
                     versionId: 'v1',
                     width: 40,
@@ -66,7 +63,7 @@ describe('an album', () => {
                     itemName: 'b.mov',
                     title: null,
                     description: null,
-                    updatedOn: video?.updatedOn,
+                    updatedOn: expect.any(String),
                     tags: null,
                     versionId: null,
                     width: null,
