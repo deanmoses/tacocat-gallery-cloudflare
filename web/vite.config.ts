@@ -27,6 +27,7 @@ export default defineConfig({
     plugins: [notFoundUnderTest(), sveltekit()],
     test: {
         include: ['src/**/*.test.ts'],
+        setupFiles: ['src/lib/test-support/setup.ts'],
         // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
         restoreMocks: true,
         // Undoes vi.stubGlobal() after each test in the same way.

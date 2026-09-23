@@ -57,7 +57,7 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - `expect.element` retries until its assertion holds or the test times out: use it for anything that arrives later, such as what an image's `load` event shows. A test times out after 3 seconds, since nothing here waits on a network.
 - Find elements the way a reader does, with `getByRole` and the accessible name. Fall back to `getByTestId` only where the markup offers nothing a user could perceive, and first consider giving the element a role or a label.
 - Tests run at a desktop width, 1280×800. A test about what a phone shows sets its own viewport and says so.
-- Code that fetches takes `fetch` as an argument, as a SvelteKit `load` does, so a test passes a function that answers with a fixture from `$lib/test-support/fixtures.ts`. The fixtures are built complete from the types in `shared/`, so a new field there breaks a fixture instead of leaving it a shape the Worker never sends.
+- Code that fetches takes `fetch` as an argument, as a SvelteKit `load` does, so a test passes a function that answers with a fixture from `$lib/test-support/fixtures.ts`. The fixtures are built complete from the types in `shared/`, so a new field there breaks a fixture instead of leaving it a shape the Worker never sends. `$lib/test-support/setup.ts` makes the global `fetch` throw, naming the URL, so code that calls it fails loudly instead of reaching a real server.
 
 ## End to end
 
