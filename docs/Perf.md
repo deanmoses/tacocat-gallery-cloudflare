@@ -87,6 +87,7 @@ CloudFront serves an album page through its error response for the single-page a
 ## Log
 
 - **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument. Static assets probed from Paris and Baton Rouge: served locally on Cloudflare from the first request. The AWS logs show photo clicks outnumbering album opens about ten to one, so the scenario is now the email reader's visit. `web/` turned out to be a from-scratch rewrite missing the AWS app's photo preloading; the comparison waits for a port.
+- **2026-09-23, 23:53 to 23:58 UTC:** the two-level item type migration rebuilt the `item` table on the deployed D1 and the ported app was deployed, half an hour before the 00:23 UTC probe, so that run's primary was not idle.
 - **2026-09-24:** `web/` replaced by a port of the AWS app (`docs/Risks.md` row 5), so both sites now run the same app with the same photo preloading, and the Worker answers in the AWS API's shapes. The comparison still waits on a real day album in the Cloudflare database (_Before the first run_, step 1).
 
 ## Open questions
