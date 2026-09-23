@@ -26,16 +26,29 @@ describe('an album page', () => {
         await expect.element(page.getByText('unpublished')).toBeVisible();
     });
 
-    it('links to the albums before, above and after', async () => {
-        const prev = { path: '/2001/05-01/', title: null };
-        const next = { path: '/2001/07-04/', title: 'Fourth' };
-        render(AlbumPage, { album: album('/2001/06-15/', { prev, next }) });
+    it('links to the albums before, above and after, from its parent', async () => {
+        const days = [
+            albumChild('/2001/05-01/'),
+            albumChild('/2001/06-15/'),
+            albumChild('/2001/07-04/', { title: 'Fourth' }),
+        ];
+        const parent = Promise.resolve(album('/2001/', { children: days }));
+        render(AlbumPage, { album: album('/2001/06-15/'), parent });
 
         await expect
             .element(page.getByRole('link', { name: 'Previous: May 1, 2001' }))
             .toHaveAttribute('href', '/2001/05-01');
         await expect.element(page.getByRole('link', { name: 'Up: 2001' })).toHaveAttribute('href', '/2001');
         await expect.element(page.getByRole('link', { name: 'Next: Fourth' })).toHaveAttribute('href', '/2001/07-04');
+    });
+
+    it('shows before its parent arrives', async () => {
+        const felix = mediaChild('/2001/06-15/felix.jpg', { title: 'Felix' });
+        const parent = Promise.withResolvers<null>().promise;
+        render(AlbumPage, { album: album('/2001/06-15/', { children: [felix] }), parent });
+
+        await expect.element(page.getByRole('link', { name: 'Felix' })).toBeVisible();
+        await expect.element(page.getByRole('link', { name: 'Up: 2001' })).toBeVisible();
     });
 });
 

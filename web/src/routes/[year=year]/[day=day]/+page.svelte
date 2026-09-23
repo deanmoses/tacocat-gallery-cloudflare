@@ -5,4 +5,4 @@
     let { data }: PageProps = $props();
 </script>
 
-<AlbumPage album={data.album} />
+<AlbumPage album={data.album} parent={data.parent} />

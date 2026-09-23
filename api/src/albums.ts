@@ -1,10 +1,9 @@
-import { and, eq, exists, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { type SQL, and, eq, exists, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
 import {
     type Album,
     type Child,
     type ItemKey,
-    type NavInfo,
     type Thumbnail,
     albumKey,
     albumPath,
@@ -51,7 +50,7 @@ const ROW = valibot.object({
 const ROWS = valibot.array(ROW);
 type Row = valibot.InferOutput<typeof ROW>;
 
-export interface Rows {
+interface Rows {
     rows: Row[];
     meta: D1Meta;
 }
@@ -155,26 +154,31 @@ function withTrailingSlash(path: string): string {
     return path.endsWith('/') ? path : `${path}/`;
 }
 
-/** The album at `path` with its children and neighbours, as `admin` or a guest sees it. */
-async function readAlbum(database: Orm, path: string, admin: boolean): Promise<AlbumRead> {
+/**
+ * The album at `path` with its children, as `admin` or a guest sees it. Nothing in it comes from outside the album's
+ * own subtree, so a sibling changing leaves it as it was; the web app finds prev and next in the parent's children.
+ */
+export async function readAlbum(database: Orm, path: string, admin: boolean): Promise<AlbumRead> {
+    const { item } = schema;
     const key = albumKey(path);
     const started = performance.now();
-    // The parent's children hold the album's own row and the neighbours prev and next point at.
-    const [children, family] = await Promise.all([
-        childrenOf(database, path),
-        key === null ? null : childrenOf(database, key.parentPath),
+    const [children, self] = await Promise.all([
+        rowsWhere(database, eq(item.parentPath, path)),
+        key === null
+            ? null
+            : rowsWhere(database, and(eq(item.parentPath, key.parentPath), eq(item.itemName, key.itemName))),
     ]);
     const d1Ms = performance.now() - started;
     return {
-        album: assemble(path, key, children.rows, family?.rows ?? null, admin),
+        album: assemble(path, children.rows, self?.rows ?? null, admin),
         meta: children.meta,
-        rowsRead: children.meta.rows_read + (family?.meta.rows_read ?? 0),
+        rowsRead: children.meta.rows_read + (self?.meta.rows_read ?? 0),
         d1Ms,
     };
 }
 
-/** Every item directly inside the album at `path`, in name order, each with its thumbnail's row beside it. */
-export async function childrenOf(database: Orm, path: string): Promise<Rows> {
+/** The items matching `where`, in name order, each with its thumbnail's row beside it. */
+async function rowsWhere(database: Orm, where: SQL | undefined): Promise<Rows> {
     const { item } = schema;
     const result = await database
         .select({
@@ -186,23 +190,20 @@ export async function childrenOf(database: Orm, path: string): Promise<Rows> {
         })
         .from(item)
         .leftJoin(THUMB, eq(THUMB.id, item.thumbnailId))
-        .where(eq(item.parentPath, path))
+        .where(where)
         .orderBy(item.itemName)
         .run();
     return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
 }
 
-/** The album, or null when there is no such row or `admin` is false and it is unpublished. The root is not a row. */
-function assemble(
-    path: string,
-    key: ItemKey | null,
-    children: Row[],
-    family: Row[] | null,
-    admin: boolean,
-): Album | null {
+/**
+ * The album, or null when there is no such row or `admin` is false and it is unpublished. The root is not a row, so
+ * `self` is null for it.
+ */
+function assemble(path: string, children: Row[], self: Row[] | null, admin: boolean): Album | null {
     const visible = (row: Row): boolean => admin || row.item_type !== 'album' || row.published === 1;
     const shown = children.filter(visible).map(toChild);
-    if (key === null || family === null) {
+    if (self === null) {
         return {
             path,
             title: null,
@@ -210,32 +211,22 @@ function assemble(
             published: true,
             updatedOn: null,
             thumbnail: null,
-            prev: null,
-            next: null,
             children: shown,
         };
     }
-    const peers = family.filter(visible);
-    const at = peers.findIndex((row) => row.item_name === key.itemName);
-    const self = peers[at];
-    if (self === undefined) {
+    const row = self.find(visible);
+    if (row === undefined) {
         return null;
     }
     return {
         path,
-        title: self.title,
-        description: self.description,
-        published: self.published === 1,
-        updatedOn: self.updated_on,
-        thumbnail: toThumbnail(self),
-        prev: toNav(peers[at - 1]),
-        next: toNav(peers[at + 1]),
+        title: row.title,
+        description: row.description,
+        published: row.published === 1,
+        updatedOn: row.updated_on,
+        thumbnail: toThumbnail(row),
         children: shown,
     };
-}
-
-function toNav(row: Row | undefined): NavInfo | null {
-    return row === undefined ? null : { path: albumPath(row.parent_path, row.item_name), title: row.title };
 }
 
 function toThumbnail(row: Row): Thumbnail | null {

@@ -5,7 +5,7 @@
     import AlbumThumb from './AlbumThumb.svelte';
     import MediaThumb from './MediaThumb.svelte';
 
-    let { album }: { album: Album } = $props();
+    let { album, parent = Promise.resolve(null) }: { album: Album; parent?: Promise<Album | null> } = $props();
     const title = $derived(albumTitle(album));
 </script>
 
@@ -19,7 +19,7 @@
         {#if album.description !== null}
             <p>{album.description}</p>
         {/if}
-        <AlbumNav {album} />
+        <AlbumNav {album} {parent} />
     </header>
     <ul>
         {#each album.children as child (child.path)}

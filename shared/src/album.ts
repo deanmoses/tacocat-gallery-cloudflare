@@ -44,9 +44,6 @@ const mediaChild = valibot.object({
     thumbnailCrop: valibot.nullable(rectangleSchema),
 });
 
-/** Just enough to link to the album before or after this one. */
-const navInfo = valibot.object({ path: valibot.string(), title: valibot.nullable(valibot.string()) });
-
 const album = valibot.object({
     path: valibot.string(),
     title: valibot.nullable(valibot.string()),
@@ -55,8 +52,6 @@ const album = valibot.object({
     // The root album is not a row, so it has no timestamp and no thumbnail.
     updatedOn: valibot.nullable(valibot.string()),
     thumbnail: valibot.nullable(thumbnail),
-    prev: valibot.nullable(navInfo),
-    next: valibot.nullable(navInfo),
     children: valibot.array(valibot.variant('itemType', [albumChild, mediaChild])),
 });
 
@@ -69,7 +64,6 @@ export type Album = valibot.InferOutput<typeof album>;
 export type AlbumChild = valibot.InferOutput<typeof albumChild>;
 export type MediaChild = valibot.InferOutput<typeof mediaChild>;
 export type Child = AlbumChild | MediaChild;
-export type NavInfo = valibot.InferOutput<typeof navInfo>;
 
 /** Checks that `input`, a parsed JSON body, is an album; throws with the first field that is not. */
 export function parseAlbum(input: unknown): Album {

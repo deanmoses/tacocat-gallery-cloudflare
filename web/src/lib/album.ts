@@ -1,16 +1,66 @@
 import { error } from '@sveltejs/kit';
-import { type Album, type MediaChild, albumKey, mediaKey, parseAlbum } from 'tacocat-gallery-shared';
+import {
+    type Album,
+    type AlbumChild,
+    type MediaChild,
+    albumKey,
+    mediaKey,
+    parentAlbumPath,
+    parseAlbum,
+} from 'tacocat-gallery-shared';
 
 /** Fetches an album from the Worker on this origin, with the fetch a load function is given. */
 export async function loadAlbum(fetch: typeof globalThis.fetch, path: string): Promise<Album> {
+    const album = await fetchAlbum(fetch, path);
+    if (album === null) {
+        error(404, 'No such album');
+    }
+    return album;
+}
+
+async function fetchAlbum(fetch: typeof globalThis.fetch, path: string): Promise<Album | null> {
     const response = await fetch(`/api/album${path}`);
     if (response.status === 404) {
-        error(404, 'No such album');
+        await response.body?.cancel();
+        return null;
     }
     if (!response.ok) {
         error(response.status, `The album could not be loaded (${response.status})`);
     }
     return parseAlbum(await response.json());
+}
+
+/**
+ * The album that holds the album at `path`, for its prev and next links. Null for the root, and when the parent cannot
+ * be had: an unpublished year is not found for a guest who can see its published days, and the page shows without
+ * the links either way.
+ */
+export async function loadParent(fetch: typeof globalThis.fetch, path: string): Promise<Album | null> {
+    const parentPath = parentAlbumPath(path);
+    if (parentPath === null) {
+        return null;
+    }
+    try {
+        return await fetchAlbum(fetch, parentPath);
+    } catch {
+        return null;
+    }
+}
+
+/** The albums before and after an album among its parent's children. */
+export interface AlbumNav {
+    prev: AlbumChild | null;
+    next: AlbumChild | null;
+}
+
+/**
+ * The albums either side of the album at `path` in its parent's children, which the Worker has already cut down to
+ * what this viewer may see. An album's own response leaves them out, so that it stays the same when a sibling changes.
+ */
+export function albumNav(path: string, parent: Album | null): AlbumNav {
+    const siblings = (parent?.children ?? []).filter((child): child is AlbumChild => child.itemType === 'album');
+    const at = siblings.findIndex((child) => child.path === path);
+    return at === -1 ? { prev: null, next: null } : { prev: siblings[at - 1] ?? null, next: siblings[at + 1] ?? null };
 }
 
 /** A media item with the album it is in and the album's media either side of it. */

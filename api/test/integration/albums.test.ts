@@ -1,6 +1,6 @@
 import { type Album, parseAlbum } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { call, callAsAdmin, putItem } from '../helpers';
+import { call, callAsAdmin, callForJson, putItem } from '../helpers';
 
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
@@ -41,7 +41,7 @@ describe('an album', () => {
         await setThumbnail(DAY, '/1981/01-01/a.jpg');
     });
 
-    it('is the shared type, with its media and the published albums either side of it', async () => {
+    it('is the shared type, with its media', async () => {
         const day = await album(DAY);
 
         expect(day).toStrictEqual({
@@ -51,8 +51,6 @@ describe('an album', () => {
             published: true,
             updatedOn: expect.any(String),
             thumbnail: { path: '/1981/01-01/a.jpg', versionId: 'v1', crop: CROP },
-            prev: null,
-            next: { path: '/1981/03-03/', title: null },
             children: [
                 {
                     itemType: 'image',
@@ -101,10 +99,13 @@ describe('an album', () => {
         expect(admin.published).toBe(false);
     });
 
-    it('lets an admin step to an unpublished neighbour', async () => {
-        const day = await album(DAY, true);
+    // So that a cached album stays valid when its siblings change: the web app finds prev and next in the parent.
+    it('reads the same after a sibling is published', async () => {
+        const before = await callForJson<unknown>(`/api/album${DAY}`);
+        await putItem({ parentPath: YEAR, itemName: '02-02', itemType: 'album', published: true });
+        const after = await callForJson<unknown>(`/api/album${DAY}`);
 
-        expect(day.next).toStrictEqual({ path: '/1981/02-02/', title: null });
+        expect(after).toStrictEqual(before);
     });
 
     it('synthesizes the root from the year albums', async () => {
@@ -115,8 +116,6 @@ describe('an album', () => {
             published: true,
             updatedOn: null,
             thumbnail: null,
-            prev: null,
-            next: null,
         });
         expect(root.children).toContainEqual(
             expect.objectContaining({ itemType: 'album', path: YEAR, itemName: '1981', published: true }),

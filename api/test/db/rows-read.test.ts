@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { childrenOf, setThumbnail } from '../../src/albums';
+import { readAlbum, setThumbnail } from '../../src/albums';
 import { purgeSpentChallenges, spendChallenge } from '../../src/auth';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/items';
@@ -30,6 +30,7 @@ async function seedGallery(database: Orm): Promise<void> {
         .keys()
         .map((index) => ({ name: dayName(index), path: dayPath(index) }))
         .toArray();
+    await upsertItem(database, { parentPath: '/', itemName: '2001', itemType: 'album', published: true }).run();
     await inSequence(days, async (day) =>
         database.batch([
             upsertItem(database, { parentPath: '/2001/', itemName: day.name, itemType: 'album', published: true }),
@@ -83,13 +84,14 @@ describe('rows read on a gallery-sized table', () => {
     });
 
     it.each([dayPath(4), '/2001/'])(
-        'reading the album %s reads only its children and their thumbnails',
+        'reading the album %s for a guest reads its own row, its children and their thumbnails',
         async (path) => {
-            const { rows, meta } = await childrenOf(database, path);
-            const thumbnails = rows.filter((row) => row.thumb_item_name !== null).length;
+            const read = await readAlbum(database, path, false);
+            const children = read.album?.children ?? [];
+            const thumbnails = children.filter((child) => child.itemType === 'album' && child.thumbnail !== null);
 
-            expect(rows.length).toBeGreaterThan(0);
-            expect(meta.rows_read).toBeLessThanOrEqual(rows.length + thumbnails + OVERHEAD);
+            expect(children.length).toBeGreaterThan(0);
+            expect(read.rowsRead).toBeLessThanOrEqual(children.length + thumbnails.length + OVERHEAD);
         },
     );
 

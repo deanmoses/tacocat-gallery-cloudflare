@@ -42,8 +42,6 @@ export function album(path: string, overrides: Partial<Album> = {}): Album {
         published: true,
         updatedOn: path === '/' ? null : UPDATED_ON,
         thumbnail: null,
-        prev: null,
-        next: null,
         children: [],
         ...overrides,
     };
