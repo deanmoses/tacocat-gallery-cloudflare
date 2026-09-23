@@ -20,19 +20,19 @@
     // Stylelint checks the <style> blocks in components as well as .css files.
     "stylelint.validate": ["css", "svelte"],
 
-    // Generated: `npm run types` rewrites the first from wrangler.jsonc, drizzle-kit the snapshots, `npm run agent-docs`
+    // Generated: `npm run types --workspace api` rewrites the first from wrangler.jsonc, drizzle-kit the snapshots, `npm run agent-docs`
     // the agent docs.
     "files.readonlyInclude": {
-        "worker-configuration.d.ts": true,
-        "migrations/meta/**": true,
+        "api/worker-configuration.d.ts": true,
+        "api/migrations/meta/**": true,
         "CLAUDE.md": true,
         "AGENTS.md": true
     },
     // worker-configuration.d.ts is 600 KB of runtime types, .wrangler holds local D1, R2 and build output, and web/ has
     // SvelteKit's generated types and the app's build.
     "search.exclude": {
-        "worker-configuration.d.ts": true,
-        ".wrangler": true,
+        "api/worker-configuration.d.ts": true,
+        "api/.wrangler": true,
         "infra/.terraform": true,
         "web/.svelte-kit": true,
         "web/build": true

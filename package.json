@@ -3,40 +3,29 @@
     "version": "0.0.1",
     "description": "Prototype to de-risk moving pix.tacocat.com to Cloudflare",
     "workspaces": [
+        "api",
         "web"
     ],
     "scripts": {
-        "dev": "wrangler dev --local-upstream localhost:8787",
         "test": "scripts/test.sh",
-        "test:watch": "vitest",
-        "types": "wrangler types",
-        "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test && npm run --silent check --workspace web",
+        "check": "tsc -p . && npm run --silent check --workspaces",
         "lint": "scripts/lint.sh",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write --log-level warn . && shfmt --write scripts .claude/hooks .husky/pre-commit .husky/commit-msg && tofu -chdir=infra fmt -recursive",
+        "format": "prettier --write --log-level warn . && shfmt --write scripts api/scripts .claude/hooks .husky/pre-commit .husky/commit-msg && tofu -chdir=infra fmt -recursive",
         "quality": "npm run format && npm run lint && npm run check && npm test",
         "prepare": "husky",
-        "agent-docs": "node scripts/build-agent-instructions.ts",
-        "db:generate": "drizzle-kit generate",
-        "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
-        "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",
-        "deploy": "wrangler deploy",
-        "logs": "wrangler tail",
-        "probes": "wrangler d1 execute tacocat-proto --remote --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
+        "agent-docs": "node scripts/build-agent-instructions.ts"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "type": "module",
     "devDependencies": {
-        "@cloudflare/vitest-plugin": "^1.2.3",
         "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
         "@eslint/js": "^10.0.1",
         "@eslint/json": "^2.1.0",
-        "@levischuck/tiny-cbor": "^0.3.6",
         "@types/node": "^24.13.6",
         "@vitest/eslint-plugin": "^1.6.27",
-        "drizzle-kit": "^0.31.11",
         "eslint": "^10.11.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-n": "^18.3.0",
@@ -56,17 +45,7 @@
         "stylelint-config-html": "^2.0.0",
         "stylelint-config-standard": "^40.0.0",
         "typescript": "~6.0.3",
-        "typescript-eslint": "^8.70.1",
-        "vitest": "~4.1.11",
-        "wrangler": "^4.136.3"
-    },
-    "dependencies": {
-        "@cloudflare/containers": "^0.3.7",
-        "@simplewebauthn/server": "^14.0.2",
-        "aws4fetch": "^1.0.20",
-        "drizzle-orm": "^0.45.3",
-        "exifreader": "^4.45.2",
-        "valibot": "^1.5.0"
+        "typescript-eslint": "^8.70.1"
     },
     "private": true,
     "engines": {

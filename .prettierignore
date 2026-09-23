@@ -1,8 +1,8 @@
 # Generated
 CLAUDE.md
 AGENTS.md
-worker-configuration.d.ts
-migrations/meta/
+api/worker-configuration.d.ts
+api/migrations/meta/
 package-lock.json
 infra/.terraform.lock.hcl
 

@@ -29,6 +29,7 @@
             "label": "Regenerate Worker types from wrangler.jsonc",
             "type": "npm",
             "script": "types",
+            "path": "api",
             "problemMatcher": [],
             "presentation": { "reveal": "silent", "panel": "shared" }
         }

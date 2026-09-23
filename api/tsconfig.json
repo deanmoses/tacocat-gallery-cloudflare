@@ -1,0 +1,17 @@
+{
+    // Code that runs in Node: config files, scripts and the transcoder container. The Worker is src/tsconfig.json and
+    // its tests are test/tsconfig.json; each directory's nearest tsconfig.json is the one editors and ESLint use.
+    "extends": "../tsconfig.base.json",
+    "compilerOptions": {
+        // Reuses the last run's results for files that have not changed.
+        "incremental": true,
+        "tsBuildInfoFile": "../node_modules/.cache/tsc/api-node.tsbuildinfo",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "rewriteRelativeImportExtensions": true,
+        "lib": ["es2025"],
+        "types": ["node"]
+    },
+    "include": ["*.ts", "scripts", "transcoder"],
+    "exclude": ["worker-configuration.d.ts"]
+}

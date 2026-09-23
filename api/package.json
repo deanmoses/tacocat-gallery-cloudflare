@@ -1,0 +1,40 @@
+{
+    "name": "tacocat-gallery-api",
+    "version": "0.0.1",
+    "description": "The Cloudflare Worker behind the pix.tacocat.com photo gallery",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "wrangler dev --local-upstream localhost:8787",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "types": "wrangler types",
+        "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
+        "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",
+        "deploy": "wrangler deploy",
+        "logs": "wrangler tail",
+        "probes": "wrangler d1 execute tacocat-proto --remote --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
+    },
+    "dependencies": {
+        "@cloudflare/containers": "^0.3.7",
+        "@simplewebauthn/server": "^14.0.2",
+        "aws4fetch": "^1.0.20",
+        "drizzle-orm": "^0.45.3",
+        "exifreader": "^4.45.2",
+        "valibot": "^1.5.0"
+    },
+    "devDependencies": {
+        "@cloudflare/vitest-plugin": "^1.2.3",
+        "@levischuck/tiny-cbor": "^0.3.6",
+        "@types/node": "^24.13.6",
+        "drizzle-kit": "^0.31.11",
+        "typescript": "~6.0.3",
+        "vitest": "~4.1.11",
+        "wrangler": "^4.136.3"
+    },
+    "engines": {
+        "node": ">=24.2.0 <25"
+    }
+}

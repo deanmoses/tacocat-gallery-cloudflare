@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The tests: the Worker's, run by the root Vitest inside workerd, and web/'s, run by web/'s own Vitest in a browser. CI
-# and `npm test` run all of them; .husky/pre-commit runs this with --staged, which runs only the tests whose imports
-# reach a staged file.
+# The tests of both workspaces: api/'s, run by its Vitest inside workerd, and web/'s, run by its own Vitest in a browser.
+# The two are different Vitest majors, so each runs from its own directory with the Vitest it resolves there. CI and
+# `npm test` run all of them; .husky/pre-commit runs this with --staged, which runs only the tests whose imports reach a
+# staged file.
 #
 # Usage: scripts/test.sh [--staged]
 
@@ -9,7 +10,6 @@ set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR" || exit 1
-PATH="$DIR/node_modules/.bin:$PATH"
 
 case "${1:-}" in
 --staged) STAGED=1 ;;
@@ -20,59 +20,52 @@ case "${1:-}" in
     ;;
 esac
 
-# web/ has its own Vitest, a different major from the root's, so it runs from web/ with web/'s binary.
-web_vitest() {
-    (cd web && ./node_modules/.bin/vitest "$@")
+# Runs Vitest in a workspace: `workspace_vitest <dir> <args>`.
+workspace_vitest() {
+    local workspace="$1"
+    shift
+    (cd "$workspace" && npm exec --no -- vitest "$@")
 }
 
 if [ "$STAGED" = "0" ]; then
-    worker_status=0
-    vitest run || worker_status=$?
+    api_status=0
+    workspace_vitest api run || api_status=$?
     web_status=0
-    web_vitest run || web_status=$?
-    [ "$worker_status" -eq 0 ] && [ "$web_status" -eq 0 ]
+    workspace_vitest web run || web_status=$?
+    [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]
     exit
 fi
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 
-# These change every test without being imported by any, so vitest's import graph cannot see them: the test setup,
-# the Worker's bindings and migrations, dependencies, and compiler settings.
-run_worker() {
-    if echo "$staged" | grep -qE '^(vitest\.config\.ts|wrangler\.jsonc|worker-configuration\.d\.ts|package(-lock)?\.json|tsconfig[^/]*\.json|(src|test)/tsconfig\.json|migrations/|test/(setup|helpers|env\.d)\.ts|fixtures/)'; then
-        echo "Staged changes affect every Worker test; running them all."
-        vitest run
+# Runs a workspace's tests for what is staged: `run_staged <dir> <files that change every test> <code files>`, both
+# extended regexes over repo-relative paths. The first set changes every test without being imported by any, so
+# vitest's import graph cannot see it: test setup, bindings, migrations, dependencies and compiler settings.
+run_staged() {
+    local workspace="$1" everything="$2" code_pattern="$3"
+    if echo "$staged" | grep -qE "$everything"; then
+        echo "Staged changes affect every $workspace test; running them all."
+        workspace_vitest "$workspace" run
         return
     fi
     local code
-    code=$(echo "$staged" | grep -E '^(src|test)/.*\.ts$' || true)
+    code=$(echo "$staged" | grep -E "$code_pattern" | sed "s|^$workspace/||" || true)
     if [ -z "$code" ]; then
-        echo "No staged Worker code or tests; no Worker tests to run."
+        echo "No staged $workspace code or tests; no $workspace tests to run."
         return 0
     fi
     # shellcheck disable=SC2086 # word splitting is how the file list is passed
-    vitest related --run --passWithNoTests $code
+    workspace_vitest "$workspace" related --run --passWithNoTests $code
 }
 
-# The same for web/: its build and compiler config, dependencies and the root tsconfig it extends change every test.
-run_web() {
-    if echo "$staged" | grep -qE '^(package(-lock)?\.json|tsconfig\.base\.json|web/(package\.json|vite\.config\.ts|svelte\.config\.js|tsconfig\.json))$'; then
-        echo "Staged changes affect every web test; running them all."
-        web_vitest run
-        return
-    fi
-    local code
-    code=$(echo "$staged" | grep -E '^web/src/.*\.(ts|js|svelte)$' | sed 's|^web/||' || true)
-    if [ -z "$code" ]; then
-        echo "No staged web code or tests; no web tests to run."
-        return 0
-    fi
-    # shellcheck disable=SC2086 # word splitting is how the file list is passed
-    web_vitest related --run --passWithNoTests $code
-}
+SHARED='^(package-lock\.json|tsconfig\.base\.json)$'
 
-worker_status=0
-run_worker || worker_status=$?
+api_status=0
+run_staged api \
+    "$SHARED|^api/(package\.json|vitest\.config\.ts|wrangler\.jsonc|worker-configuration\.d\.ts|tsconfig\.json|(src|test)/tsconfig\.json|migrations/|test/(setup|helpers|env\.d)\.ts|fixtures/)" \
+    '^api/(src|test)/.*\.ts$' || api_status=$?
 web_status=0
-run_web || web_status=$?
-[ "$worker_status" -eq 0 ] && [ "$web_status" -eq 0 ]
+run_staged web \
+    "$SHARED|^web/(package\.json|vite\.config\.ts|svelte\.config\.js|tsconfig\.json)$" \
+    '^web/src/.*\.(ts|js|svelte)$' || web_status=$?
+[ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ]

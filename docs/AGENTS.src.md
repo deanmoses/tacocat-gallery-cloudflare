@@ -31,23 +31,23 @@ This file provides guidance to AI programming agents when working with code in t
 
 END_AGENTS
 
-The pix.tacocat.com photo gallery, moving from AWS to Cloudflare: one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, OpenTofu in `infra/` for everything outside the Worker, and the SvelteKit front end in `web/`, an npm workspace with its own Vitest 5 (the Worker's tests need Vitest 4.1). `README.md` has the risk register, the budget, and how to run and restore; read it before anything that touches the account.
+The pix.tacocat.com photo gallery, moving from AWS to Cloudflare. Two npm workspaces: `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for both, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has the risk register, the budget, and how to run and restore; read it before anything that touches the account.
 
 ## The Cloudflare account costs money
 
 An FTS trigger that scanned the whole index on every write once read 37.7M D1 rows in a day and took the whole site down.
 
-- **Ask before consuming more than 1% of a monthly allowance** in the README's Budget table, or anything billed outside it (a larger container instance, Stream, transformations past the free 5,000). Estimate before you run: a query's `rows_read` locally, a transcode's vCPU-minutes from the instance size and the last run's time. Under 1%, go ahead and say what it used. Local work (`npm run dev`, tests, `--local` D1) needs no approval.
+- **Ask before consuming more than 1% of a monthly allowance** in the README's Budget table, or anything billed outside it (a larger container instance, Stream, transformations past the free 5,000). Estimate before you run: a query's `rows_read` locally, a transcode's vCPU-minutes from the instance size and the last run's time. Under 1%, go ahead and say what it used. Local work (`npm run dev --workspace api`, tests, `--local` D1) needs no approval.
 - **Never deploy unless asked.**
 - **Watch rows read**, not rows returned: check `meta.rows_read` locally before shipping a new query or trigger.
 - **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
-- **Never print, commit or paste secrets** from `.dev.vars` or the Worker's secrets.
+- **Never print, commit or paste secrets** from `api/.dev.vars` or the Worker's secrets.
 
 ## Design rules the code doesn't spell out
 
 - Originals are never overwritten. Each upload gets a new time-sortable `versionId` in its R2 key, and the database says which one is current.
-- The FTS5 table and its triggers are raw SQL in `migrations/`; Drizzle cannot see them. Every other table change starts in `src/db/schema.ts`, then `npm run db:generate`.
-- After editing `wrangler.jsonc`, run `npm run types`.
+- The FTS5 table and its triggers are raw SQL in `api/migrations/`; Drizzle cannot see them. Every other table change starts in `api/src/db/schema.ts`, then `npm run db:generate --workspace api`.
+- After editing `api/wrangler.jsonc`, run `npm run types --workspace api`.
 
 ## Rules
 

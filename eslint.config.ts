@@ -59,7 +59,7 @@ function raise(entry: Linter.RuleEntry | undefined): Linter.RuleEntry | undefine
 export default defineConfig(
     includeIgnoreFile(path.resolve(import.meta.dirname, '.gitignore')),
     // Generated: Wrangler's types and drizzle-kit's migration snapshots.
-    { ignores: ['worker-configuration.d.ts', 'infra/', 'migrations/meta/', 'package-lock.json'] },
+    { ignores: ['api/worker-configuration.d.ts', 'infra/', 'api/migrations/meta/', 'package-lock.json'] },
     {
         linterOptions: {
             reportUnusedDisableDirectives: 'error',
@@ -126,7 +126,15 @@ export default defineConfig(
 
     {
         name: 'node',
-        files: ['*.ts', 'scripts/**/*.ts', 'transcoder/**/*.ts', 'web/*.ts', 'web/*.js'],
+        files: [
+            '*.ts',
+            'scripts/**/*.ts',
+            'api/*.ts',
+            'api/scripts/**/*.ts',
+            'api/transcoder/**/*.ts',
+            'web/*.ts',
+            'web/*.js',
+        ],
         extends: asErrors(node.configs['flat/all']),
         languageOptions: { globals: globals.node },
         rules: {
@@ -136,7 +144,7 @@ export default defineConfig(
     },
     {
         name: 'worker',
-        files: ['src/**/*.ts', 'test/**/*.ts'],
+        files: ['api/src/**/*.ts', 'api/test/**/*.ts'],
         languageOptions: { globals: globals.serviceworker },
     },
     {
@@ -146,7 +154,7 @@ export default defineConfig(
     },
     {
         name: 'tests',
-        files: ['test/**/*.ts', 'web/src/**/*.test.ts'],
+        files: ['api/test/**/*.ts', 'web/src/**/*.test.ts'],
         extends: asErrors(vitest.configs.all),
         rules: {
             // For tests whose assertions sit in callbacks that might never run. Every test here awaits its work,

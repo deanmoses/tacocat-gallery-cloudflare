@@ -104,15 +104,23 @@ check() {
 
 # Migrations changed since the last commit, by git's --diff-filter letters: in the index for a staged run, anywhere in
 # the working tree for a full run. A CI run has nothing uncommitted, so it will need a base branch to diff against.
+#
+# A move that keeps a migration's file name and content is not a change, because Wrangler records a migration by its
+# file name alone. So the diff covers the whole repo rather than just the migrations directory, which lets git pair an
+# exact move (-M100%) instead of seeing a deletion and an addition, and such a move is dropped.
 changed_migrations() {
+    local diff
     if [ "$STAGED" = "1" ]; then
-        git diff --cached --name-only --diff-filter="$1" -- 'migrations/*.sql'
+        diff=$(git diff --cached --name-status -M100% --diff-filter="$1")
     else
-        git diff HEAD --name-only --diff-filter="$1" -- 'migrations/*.sql'
+        diff=$(git diff HEAD --name-status -M100% --diff-filter="$1")
         if [ "$1" = "A" ]; then
-            git ls-files --others --exclude-standard -- 'migrations/*.sql'
+            diff+=$'\n'$(git ls-files --others --exclude-standard | sed 's/^/A\t/')
         fi
     fi
+    echo "$diff" |
+        awk -F'\t' '$1 ~ /^R100/ { n = split($2, from, "/"); m = split($3, to, "/"); if (from[n] == to[m]) next } { print $NF }' |
+        grep -E '^api/migrations/[^/]*\.sql$'
 }
 
 if [ "$STAGED" = "1" ]; then

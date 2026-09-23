@@ -1,5 +1,5 @@
 // Drives the passkey flow end to end with a software authenticator, so it can be checked without a browser.
-// Usage: node scripts/passkey-selftest.ts <invite url from scripts/invite.sh>
+// Usage: node api/scripts/passkey-selftest.ts <invite url from api/scripts/invite.sh>
 import { type CBORType, encodeCBOR } from '@levischuck/tiny-cbor';
 import * as valibot from 'valibot';
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Mints a one-time, 7-day invite link that lets an admin create a passkey. Also how a locked-out admin gets back in.
-# Usage: scripts/invite.sh <admin name> [--local]
+# Usage: api/scripts/invite.sh <admin name> [--local]
 set -euo pipefail
+
+# Wrangler finds the database through the wrangler.jsonc beside it.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 name="${1:?admin name required}"
 [[ "$name" =~ ^[A-Za-z0-9\ ._-]+$ ]] || {

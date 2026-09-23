@@ -1,5 +1,5 @@
 {
-    "$schema": "node_modules/wrangler/config-schema.json",
+    "$schema": "../node_modules/wrangler/config-schema.json",
     "name": "tacocat-gallery-cloudflare",
     "account_id": "ed3ca575118099486baeb129959697c8",
     "main": "src/index.ts",

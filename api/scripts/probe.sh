@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Times cold-ish and warm requests against a deployed prototype.
-# Usage: scripts/probe.sh https://tacocat-gallery-cloudflare.<subdomain>.workers.dev [runs]
+# Usage: api/scripts/probe.sh https://tacocat-gallery-cloudflare.<subdomain>.workers.dev [runs]
 set -euo pipefail
 
 base="${1:?base URL required}"

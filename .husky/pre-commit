@@ -1,7 +1,7 @@
 # shellcheck shell=sh
 set -e
 
-# Scan for secrets: .dev.vars holds real tokens, and one pasted into a file here would be public once pushed.
+# Scan for secrets: api/.dev.vars holds real tokens, and one pasted into a file here would be public once pushed.
 if command -v gitleaks >/dev/null 2>&1; then
     gitleaks protect --staged --no-banner
 else

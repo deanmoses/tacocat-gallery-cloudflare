@@ -1,8 +1,8 @@
 node_modules/
 .wrangler/
 .dev.vars
-fixtures/iphone-*.mov
-fixtures/IMG_*
+api/fixtures/iphone-*.mov
+api/fixtures/IMG_*
 .claude/settings.local.json
 web/.svelte-kit/
 web/build/

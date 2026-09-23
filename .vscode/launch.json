@@ -7,7 +7,7 @@
             "name": "Worker: npm run dev",
             "type": "node-terminal",
             "request": "launch",
-            "command": "npm run dev",
+            "command": "npm run dev --workspace api",
             "sourceMaps": true
         },
         {
@@ -25,7 +25,9 @@
             "name": "Tests: run Vitest with the inspector open",
             "type": "node",
             "request": "launch",
+            // The Worker's Vitest, which npm hoists to the root; web/ has a different major in web/node_modules.
             "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+            "cwd": "${workspaceFolder}/api",
             // One test file at a time, so a breakpoint stops the only run in progress.
             "args": ["run", "--inspect=9229", "--no-file-parallelism"],
             "console": "integratedTerminal"
@@ -45,7 +47,7 @@
             "name": "Script: passkey self-test",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/scripts/passkey-selftest.ts",
+            "program": "${workspaceFolder}/api/scripts/passkey-selftest.ts",
             "args": ["${input:inviteUrl}"],
             "console": "integratedTerminal"
         }
@@ -61,7 +63,7 @@
         {
             "id": "inviteUrl",
             "type": "promptString",
-            "description": "Invite link from `scripts/invite.sh Selftest --local`"
+            "description": "Invite link from `api/scripts/invite.sh Selftest --local`"
         }
     ]
 }
