@@ -1,4 +1,5 @@
 import * as valibot from 'valibot';
+import { mediaTypeSchema } from './item-type';
 
 // What `GET /api/album/<path>` returns and what the web app renders. Absent values are null rather than left out, as
 // they come out of the database, so a field is either there or a bug.
@@ -34,7 +35,7 @@ const albumChild = valibot.object({
 });
 
 const mediaChild = valibot.object({
-    itemType: valibot.picklist(['image', 'video']),
+    itemType: mediaTypeSchema,
     ...record,
     tags: valibot.nullable(valibot.string()),
     versionId: valibot.nullable(valibot.string()),

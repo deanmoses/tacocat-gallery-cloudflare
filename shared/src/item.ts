@@ -1,10 +1,7 @@
 import * as valibot from 'valibot';
 import { rectangleSchema } from './album';
+import { type ItemType, itemTypeSchema } from './item-type';
 import { type ItemKey, albumKey, albumPath, isAlbumPath, isVideoName, mediaKey, mediaPath } from './paths';
-
-export const itemTypeSchema = valibot.picklist(['album', 'image', 'video']);
-
-type ItemType = valibot.InferOutput<typeof itemTypeSchema>;
 
 function clearable<T extends valibot.GenericSchema>(
     schema: T,
