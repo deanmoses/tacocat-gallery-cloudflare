@@ -14,7 +14,7 @@ interface Env {
 /** ffmpeg in a container; see transcoder/server.mjs. */
 export class Transcoder extends Container {
     defaultPort = 8080;
-    sleepAfter = '2m';
+    sleepAfter = '10s';
 }
 
 const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com/tacocat-proto-media';
