@@ -24,12 +24,12 @@ export function pickMeta(meta: D1Meta): D1Timing {
  */
 export function d1Header(meta: D1Meta, roundTripMs: number, rowsRead: number = meta.rows_read): string {
     return [
-        `rows=${String(rowsRead)}`,
+        `rows=${rowsRead}`,
         `region=${String(meta.served_by_region)}`,
         `colo=${String(meta.served_by_colo)}`,
         `primary=${String(meta.served_by_primary)}`,
         `sql=${String(meta.timings?.sql_duration_ms.toFixed(1))}`,
-        `rtt=${String(round(roundTripMs))}`,
+        `rtt=${round(roundTripMs)}`,
     ].join(' ');
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ORIGIN, adminCookie, call, callAsAdmin } from './helpers';
+import { ORIGIN, adminCookie, call, callAsAdmin } from '../helpers';
 
 describe('session', () => {
     it('reports a guest without a cookie', async () => {

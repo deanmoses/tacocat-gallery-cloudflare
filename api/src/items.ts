@@ -24,7 +24,7 @@ export async function putItem(request: Request, env: Env): Promise<Response> {
  * measurement services, which only issue GETs, can trigger it from other continents.
  */
 export async function readYourWrites(env: Env): Promise<Response> {
-    const title = `ryw ${String(Date.now())}`;
+    const title = `ryw ${Date.now()}`;
     const key = { parentPath: '/ryw/', itemName: crypto.randomUUID() };
     const writer = env.DB.withSession('first-primary');
     let started = performance.now();
@@ -67,12 +67,7 @@ export async function search(request: Request, env: Env): Promise<Response> {
     const query = url.searchParams.get('q') ?? '';
     const session = env.DB.withSession('first-unconstrained');
     const started = performance.now();
-    // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
-    const rows = await orm(session).run(
-        sql`SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
-            FROM item_fts JOIN item i ON i.id = item_fts.rowid
-            WHERE item_fts MATCH ${query} ORDER BY rank LIMIT 50`,
-    );
+    const rows = await searchItems(orm(session), query);
     const searchMs = performance.now() - started;
     return json(
         {
@@ -83,6 +78,16 @@ export async function search(request: Request, env: Env): Promise<Response> {
         },
         200,
         { 'x-d1': d1Header(rows.meta, searchMs) },
+    );
+}
+
+/** The best 50 items for an FTS5 query, each with a snippet of its description. */
+export async function searchItems(database: Orm, query: string): Promise<D1Result> {
+    // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
+    return database.run(
+        sql`SELECT i.parent_path, i.item_name, i.title, snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
+            FROM item_fts JOIN item i ON i.id = item_fts.rowid
+            WHERE item_fts MATCH ${query} ORDER BY rank LIMIT 50`,
     );
 }
 
@@ -123,9 +128,9 @@ function seedYear(database: Orm, yearIndex: number): ItemUpsert[] {
             statements.push(
                 upsertItem(database, {
                     parentPath: `/${year}/${day}/`,
-                    itemName: `img_${String(imageIndex)}.jpg`,
+                    itemName: `img_${imageIndex}.jpg`,
                     itemType: 'image',
-                    title: `${word} ${String(imageIndex)}`,
+                    title: `${word} ${imageIndex}`,
                     description: `A photo about ${word} on ${year}-${day}`,
                     tags: word,
                     versionId: crypto.randomUUID(),

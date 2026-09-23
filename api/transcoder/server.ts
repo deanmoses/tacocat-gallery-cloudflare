@@ -138,7 +138,7 @@ function readRequest(json: unknown): TranscodeRequest {
 async function download(url: string, file: string): Promise<void> {
     const response = await fetch(url);
     if (!response.ok || !response.body) {
-        throw new Error(`GET original ${String(response.status)}`);
+        throw new Error(`GET original ${response.status}`);
     }
     await pipeline(Readable.fromWeb(response.body), createWriteStream(file));
 }
@@ -149,7 +149,7 @@ async function upload(file: string, url: string, type: string): Promise<void> {
         return;
     }
     const text = await put.text();
-    throw new Error(`PUT ${type} ${String(put.status)}: ${text}`);
+    throw new Error(`PUT ${type} ${put.status}: ${text}`);
 }
 
 function encodeArguments(input: string, filter: string, output: string): string[] {

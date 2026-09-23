@@ -1,11 +1,11 @@
 import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import jpgDataUrl from '../fixtures/FullMetadata.jpg?inline';
+import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import { describe, expect, it } from 'vitest';
-import { orm, upsertItem } from '../src/db';
-import worker from '../src/index';
-import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../src/upload';
-import { call, callAsAdmin } from './helpers';
+import { orm, upsertItem } from '../../src/db';
+import worker from '../../src/index';
+import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/upload';
+import { call, callAsAdmin } from '../helpers';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
 const handler: ExportedHandler<Env, R2EventMessage> = worker;

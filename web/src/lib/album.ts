@@ -8,7 +8,7 @@ export async function loadAlbum(fetch: typeof globalThis.fetch, path: string): P
         error(404, 'No such album');
     }
     if (!response.ok) {
-        error(response.status, `The album could not be loaded (${String(response.status)})`);
+        error(response.status, `The album could not be loaded (${response.status})`);
     }
     return parseAlbum(await response.json());
 }

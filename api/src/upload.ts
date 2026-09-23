@@ -148,14 +148,14 @@ async function store(env: UploadEnv, { placement, object, body, caption, video }
  * Time-sortable, URL-safe id standing in for S3's versionId. The same event always yields the same id, so a
  * redelivered message repeats the same work instead of adding a copy.
  */
-async function versionIdFor(event: R2EventMessage): Promise<string> {
+export async function versionIdFor(event: R2EventMessage): Promise<string> {
     const identity = [event.object.key, event.object.eTag ?? '', event.eventTime].join('\n');
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', ENCODER.encode(identity)));
     return Date.parse(event.eventTime).toString(36).padStart(9, '0') + digest.toHex().slice(0, 16);
 }
 
 /** The IPTC title and description, where Lightroom and Photos put them. */
-function readCaption(bytes: ArrayBuffer, key: string): { title: string | null; description: string | null } {
+export function readCaption(bytes: ArrayBuffer, key: string): { title: string | null; description: string | null } {
     let tags: ExifReader.Tags | undefined;
     try {
         tags = ExifReader.load(bytes, { expanded: false });

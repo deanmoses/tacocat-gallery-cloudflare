@@ -22,7 +22,7 @@ export function cookie(
     options: { maxAge: number; path: string; sameSite?: 'Lax' | 'Strict' },
 ): string {
     const attributes = [
-        `Max-Age=${String(options.maxAge)}`,
+        `Max-Age=${options.maxAge}`,
         `Path=${options.path}`,
         'HttpOnly',
         'Secure',

@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { type Column, and, eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { orm, schema, upsertItem } from '../src/db';
-import { callAsAdmin, callForJson, putItem } from './helpers';
+import { orm, schema, upsertItem } from '../../src/db';
+import { callAsAdmin, callForJson, putItem } from '../helpers';
 
 interface SearchResponse {
     count: number;
@@ -63,8 +63,6 @@ describe('saving an item', () => {
 });
 
 describe('search', () => {
-    // Storage is shared by the tests in a file, and /api/seed titles items with words like "taco", so this searches
-    // for one the seed never writes.
     it('finds an item by a word in its title, with a snippet from its description', async () => {
         await putItem({
             parentPath: '/2024/07-01/',
@@ -106,15 +104,13 @@ describe('search', () => {
 describe('backup', () => {
     it('writes every item to R2 as JSON', async () => {
         await putItem({ parentPath: '/2024/08-01/', itemName: 'c.jpg', itemType: 'image' });
+        await putItem({ parentPath: '/2024/08-01/', itemName: 'd.jpg', itemType: 'image' });
         const response = await callAsAdmin('/api/backup', { method: 'POST' });
         const { key, rows } = await response.json<{ key: string; rows: number }>();
-        const count = await env.DB.prepare('SELECT count(*) AS n FROM item').first<number>('n');
         const object = await env.MEDIA.get(key);
         const dump = await object?.json<{ rows: { itemName: string }[] }>();
 
-        // Storage is shared by the tests in a file, so count against the table rather than a fixed number.
-        expect(rows).toBe(count);
-        expect(dump?.rows).toHaveLength(rows);
-        expect(dump?.rows.map((row) => row.itemName)).toContain('c.jpg');
+        expect(rows).toBe(2);
+        expect(dump?.rows.map((row) => row.itemName)).toStrictEqual(['c.jpg', 'd.jpg']);
     });
 });

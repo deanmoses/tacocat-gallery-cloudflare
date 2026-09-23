@@ -324,6 +324,16 @@ export default defineConfig(
             'vitest/unbound-method': 'error',
             // Asymmetric matchers such as expect.any(String) are typed any, and an expected object is where they belong.
             '@typescript-eslint/no-unsafe-assignment': 'off',
+            // A one-line callback in a table of cases shows its type in its body; named functions still declare theirs.
+            '@typescript-eslint/explicit-function-return-type': ['error', { allowExpressions: true }],
+        },
+    },
+    {
+        name: 'test setup',
+        files: ['api/test/setup.ts'],
+        rules: {
+            // Hooks here sit at the top level so that they run around every test in every file.
+            'vitest/require-top-level-describe': 'off',
         },
     },
 
@@ -363,13 +373,28 @@ export default defineConfig(
             // `void promise;` marks a promise deliberately left running, which is how no-floating-promises is
             // satisfied; every other use of void stays an error.
             'no-void': ['error', { allowAsStatement: true }],
-            // Property names are API: `q` in a search response, `x` and `y` in a JWK.
-            'id-length': ['error', { properties: 'never' }],
+            // A number prints the same way everywhere, so it needs no String(). The strict preset's other refusals
+            // stand: null, undefined, booleans and objects in a template string are usually a bug.
+            '@typescript-eslint/restrict-template-expressions': [
+                'error',
+                {
+                    allowAny: false,
+                    allowBoolean: false,
+                    allowNever: false,
+                    allowNullish: false,
+                    allowNumber: true,
+                    allowRegExp: false,
+                },
+            ],
+            // Property names are API: `q` in a search response, `x` and `y` in a JWK. `_` names a parameter that is
+            // there only to reach the next one.
+            'id-length': ['error', { properties: 'never', exceptions: ['_'] }],
             // Keeps member order inside one import sorted; the order of import lines is left alone.
             'sort-imports': ['error', { ignoreDeclarationSort: true }],
             '@typescript-eslint/naming-convention': [
                 'error',
                 { selector: 'default', format: ['camelCase'] },
+                { selector: 'parameter', format: ['camelCase'], leadingUnderscore: 'allow' },
                 { selector: 'import', format: ['camelCase', 'PascalCase'] },
                 // Module constants in UPPER_CASE; destructured classes in PascalCase.
                 { selector: 'variable', modifiers: ['const'], format: ['camelCase', 'UPPER_CASE', 'PascalCase'] },
@@ -392,6 +417,9 @@ export default defineConfig(
             // With promise-function-async, every function that returns a promise is async, so one with nothing to
             // await is deliberate.
             '@typescript-eslint/require-await': 'off',
+            // A copy of @typescript-eslint/require-array-sort-compare, which is on, without type information: it cannot
+            // tell a string array, whose default sort is the one wanted, from a number array.
+            'unicorn/require-array-sort-compare': 'off',
             // Deprecated in favour of no-navigation-without-resolve, which is on. resolve() already applies the base path,
             // and this rule cannot see that, so the two cannot both pass.
             'svelte/no-navigation-without-base': 'off',

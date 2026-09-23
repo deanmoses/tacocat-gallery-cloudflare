@@ -150,7 +150,7 @@ async function globalping(env: Env, locations: ProbeFrom, request: ProbeStep): P
     });
     if (!created.ok) {
         const text = await created.text();
-        throw new Error(`globalping create ${String(created.status)}: ${text.slice(0, 300)}`);
+        throw new Error(`globalping create ${created.status}: ${text.slice(0, 300)}`);
     }
     const { id } = await created.json<{ id: string }>();
     return pollMeasurement(id, 60);
@@ -195,7 +195,7 @@ function probeRow(
 }
 
 /** What the Worker said about itself in its response headers: where it ran, how long, and where D1 answered. */
-function workerReport(headers: Record<string, string | string[]>): {
+export function workerReport(headers: Record<string, string | string[]>): {
     workerColo: string | undefined;
     workerMs: number | null;
     d1Region: string | undefined;

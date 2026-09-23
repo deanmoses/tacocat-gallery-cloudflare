@@ -1,8 +1,8 @@
 import { createExecutionContext, createScheduledController, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
-import worker from '../src/index';
-import type { R2EventMessage } from '../src/upload';
+import worker from '../../src/index';
+import type { R2EventMessage } from '../../src/upload';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
 const handler: ExportedHandler<Env, R2EventMessage> = worker;
@@ -51,13 +51,11 @@ function stubGlobalping(): Request[] {
 }
 
 describe('nightly cron', () => {
-    // Storage is shared by the tests in a file, so the count is relative to what was there.
     it('writes a dump to R2', async () => {
-        const before = await env.MEDIA.list({ prefix: 'backups/d1/' });
         await runCron('17 9 * * *');
-        const after = await env.MEDIA.list({ prefix: 'backups/d1/' });
+        const backups = await env.MEDIA.list({ prefix: 'backups/d1/' });
 
-        expect(after.objects).toHaveLength(before.objects.length + 1);
+        expect(backups.objects).toHaveLength(1);
     });
 
     it('purges upload errors older than a day and keeps newer ones', async () => {
@@ -91,9 +89,7 @@ describe('idle latency probe cron', () => {
     it('records one row per location and step, from Globalping results', async () => {
         stubGlobalping();
         await runCron('23 0,1,3,7,15 * * *');
-        const { results } = await env.DB.prepare(
-            'SELECT * FROM probe_result WHERE run_at = (SELECT max(run_at) FROM probe_result) ORDER BY location, seq',
-        ).all();
+        const { results } = await env.DB.prepare('SELECT * FROM probe_result ORDER BY location, seq').all();
 
         expect(results).toHaveLength(12);
         expect(results.at(0)).toMatchObject({

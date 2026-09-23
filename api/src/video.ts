@@ -61,7 +61,7 @@ export async function transcodeVideo(
         return { ok: false, error: failureMessage(text) };
     }
     if (!response.ok) {
-        throw new Error(`transcode failed ${String(response.status)}: ${text}`);
+        throw new Error(`transcode failed ${response.status}: ${text}`);
     }
     const result = valibot.parse(TRANSCODE_RESULT, JSON.parse(text));
     console.info({ event: 'video_transcoded', sourceKey, wallMs: Date.now() - started, ...result });
@@ -100,7 +100,7 @@ export async function media(request: Request, env: Env): Promise<Response> {
     if (request.headers.has('range') && object.range && 'offset' in object.range) {
         const start = object.range.offset ?? 0;
         const end = start + (object.range.length ?? object.size - start) - 1;
-        headers.set('content-range', `bytes ${String(start)}-${String(end)}/${String(object.size)}`);
+        headers.set('content-range', `bytes ${start}-${end}/${object.size}`);
         return new Response(object.body, { status: 206, headers });
     }
     return new Response(object.body, { headers });

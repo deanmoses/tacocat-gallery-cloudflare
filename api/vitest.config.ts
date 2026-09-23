@@ -30,9 +30,12 @@ export default defineConfig({
                         },
                     })),
                 ],
+                // Three tiers, by what a test touches: unit/ only the code under test, db/ D1 through the query
+                // functions, integration/ the Worker's fetch, queue and scheduled handlers. Run one with its directory,
+                // as in `vitest run test/db`.
                 test: {
                     name: 'worker',
-                    include: ['test/*.test.ts'],
+                    include: ['test/{unit,db,integration}/*.test.ts'],
                     setupFiles: ['./test/setup.ts'],
                 },
             },

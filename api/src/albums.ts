@@ -34,7 +34,7 @@ const ROW = valibot.object({
 const ROWS = valibot.array(ROW);
 type Row = valibot.InferOutput<typeof ROW>;
 
-interface Rows {
+export interface Rows {
     rows: Row[];
     meta: D1Meta;
 }
@@ -78,7 +78,8 @@ function withTrailingSlash(path: string): string {
     return path.endsWith('/') ? path : `${path}/`;
 }
 
-async function childrenOf(database: Orm, path: string): Promise<Rows> {
+/** Every item directly inside the album at `path`, in name order. */
+export async function childrenOf(database: Orm, path: string): Promise<Rows> {
     const { item } = schema;
     const result = await database.select().from(item).where(eq(item.parentPath, path)).orderBy(item.itemName).run();
     return { rows: valibot.parse(ROWS, result.results), meta: result.meta };

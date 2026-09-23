@@ -1,8 +1,7 @@
 import { type Album, parseAlbum } from 'tacocat-gallery-shared';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { call, callAsAdmin, putItem } from './helpers';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { call, callAsAdmin, putItem } from '../helpers';
 
-// A year no other test file writes to, since storage is shared by the tests in a file.
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
 
@@ -12,7 +11,7 @@ async function album(path: string, asAdmin = false): Promise<Album> {
 }
 
 describe('an album', () => {
-    beforeAll(async () => {
+    beforeEach(async () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1981', itemType: 'album', published: true }),
             putItem({ parentPath: YEAR, itemName: '01-01', itemType: 'album', title: 'New year', published: true }),
