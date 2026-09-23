@@ -15,7 +15,10 @@ probe() {
     done
 }
 
+# The web app's index.html, served without running the Worker.
 probe 'edge floor' "$base/"
+# The Worker with no D1 or R2 call: it only checks the session cookie.
+probe 'Worker floor' "$base/api/auth/status"
 probe 'album via replica' "$base/api/album/2001/"
 probe 'album via primary' "$base/api/album/2001/?consistency=primary"
 probe 'search' "$base/api/search?q=marseille"

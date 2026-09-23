@@ -1,0 +1,9 @@
+{
+    // These tests run in Node and drive the local stack from outside, so they get the Node side's types rather than
+    // the Worker's.
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "tsBuildInfoFile": "../../../node_modules/.cache/tsc/api-stack.tsbuildinfo"
+    },
+    "include": ["."]
+}

@@ -8,6 +8,29 @@
     "observability": { "enabled": true },
     // Stack traces in logs and `wrangler tail` point at the TypeScript source instead of the bundle.
     "upload_source_maps": true,
+    "assets": {
+        // The SvelteKit app's build. The dev and deploy scripts in package.json rebuild it first; a bare `wrangler
+        // deploy` ships whatever is there. Wrangler's `build` option would rebuild it too, but `wrangler types` runs
+        // that as well, so a type check running beside the tests rewrote the files the tests were serving.
+        "directory": "../web/build",
+        "binding": "ASSETS",
+        // Paths the app routes in the browser (/2001/06-15) have no file, so they get the app's index.html.
+        "not_found_handling": "single-page-application",
+        // Every path the Worker serves, and only those; the rest are the app's files. Once this is a list, a request it
+        // does not match never reaches the Worker, navigation or not, so a new route here has to be added to it.
+        "run_worker_first": [
+            "/api/*",
+            "/login",
+            "/invite/*",
+            "/upload-test",
+            "/upload/*",
+            "/raw/*",
+            "/v/*",
+            "/i/*",
+            "/i2/*",
+            "/debug/*",
+        ],
+    },
     "secrets": { "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"] },
     "d1_databases": [
         {

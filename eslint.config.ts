@@ -132,6 +132,7 @@ export default defineConfig(
             'api/*.ts',
             'api/scripts/**/*.ts',
             'api/transcoder/**/*.ts',
+            'api/test/stack/**/*.ts',
             'web/*.ts',
             'web/*.js',
         ],
@@ -145,6 +146,7 @@ export default defineConfig(
     {
         name: 'worker',
         files: ['api/src/**/*.ts', 'api/test/**/*.ts'],
+        ignores: ['api/test/stack/**'],
         languageOptions: { globals: globals.serviceworker },
     },
     {

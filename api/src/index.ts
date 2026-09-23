@@ -57,13 +57,9 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     if (auth) {
         return auth;
     }
-    const { pathname } = new URL(request.url);
     const { method } = request;
     if (method === 'POST' || method === 'PUT') {
         return routeWrite(request, env);
-    }
-    if (pathname === '/') {
-        return json({ colo: request.cf?.colo, country: request.cf?.country });
     }
     return method === 'GET' ? routeRead(request, env, ctx) : notFound();
 }
