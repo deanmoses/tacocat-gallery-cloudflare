@@ -14,13 +14,96 @@ import globals from 'globals';
 import ts from 'typescript-eslint';
 import svelteConfig from './web/svelte.config.js';
 
-// Every rule of every plugin is on, via each one's `all` preset, so a rule added upstream is enforced as soon as the
-// dependency is upgraded, except unicorn (see UNICORN_BUG_RULES). Rules come off only in the "reconfigured" and
-// "turned off" blocks, each with the reason.
+// Every plugin's recommended rules are on, so a rule its maintainers add to them arrives with the upgrade. Rules beyond
+// that come on only by name (PICKED_RULES, UNICORN_BUG_RULES, the tests block), because the rest of each plugin's
+// `all` preset is mostly house style. Plugins whose every rule is about their own subject (svelte, regexp, n, json,
+// eslint-comments) run all of them. Rules come off only in the "turned off" block, each with the reason.
 
 const CODE = ['**/*.ts', '**/*.mjs', '**/*.js', '**/*.svelte'];
 // Components, and modules whose `.svelte.` infix lets them use runes.
 const SVELTE = ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'];
+
+/** Core and typescript-eslint rules beyond their recommended sets. */
+const PICKED_RULES: Record<string, 'error'> = Object.fromEntries(
+    [
+        // Bugs the type checker cannot see
+        'array-callback-return',
+        'default-case-last',
+        'eqeqeq',
+        'guard-for-in',
+        'no-caller',
+        'no-constructor-return',
+        'no-eval',
+        'no-extend-native',
+        'no-implicit-coercion',
+        'no-labels',
+        'no-lone-blocks',
+        'no-multi-assign',
+        'no-new',
+        'no-new-func',
+        'no-new-wrappers',
+        'no-param-reassign',
+        'no-promise-executor-return',
+        'no-proto',
+        'no-return-assign',
+        'no-script-url',
+        'no-self-compare',
+        'no-sequences',
+        'no-template-curly-in-string',
+        'no-unmodified-loop-condition',
+        'no-unreachable-loop',
+        'radix',
+        'require-atomic-updates',
+        'symbol-description',
+        '@typescript-eslint/no-unsafe-type-assertion',
+        '@typescript-eslint/strict-boolean-expressions',
+        '@typescript-eslint/strict-void-return',
+        '@typescript-eslint/switch-exhaustiveness-check',
+        '@typescript-eslint/require-array-sort-compare',
+        '@typescript-eslint/promise-function-async',
+        '@typescript-eslint/consistent-return',
+        '@typescript-eslint/default-param-last',
+        '@typescript-eslint/no-loop-func',
+        '@typescript-eslint/no-shadow',
+
+        // Modern equivalents and leftovers, all fixed automatically
+        'arrow-body-style',
+        'logical-assignment-operators',
+        'no-else-return',
+        'no-lonely-if',
+        'no-nested-ternary',
+        'no-object-constructor',
+        'no-undef-init',
+        'no-unneeded-ternary',
+        'no-useless-call',
+        'no-useless-computed-key',
+        'no-useless-concat',
+        'no-useless-rename',
+        'no-useless-return',
+        'object-shorthand',
+        'operator-assignment',
+        'prefer-arrow-callback',
+        'prefer-exponentiation-operator',
+        'prefer-object-has-own',
+        'prefer-object-spread',
+        'prefer-regex-literals',
+        'prefer-template',
+        'yoda',
+
+        // TypeScript house style: imports that erase cleanly, and signatures a reader can see
+        '@typescript-eslint/consistent-type-exports',
+        '@typescript-eslint/consistent-type-imports',
+        '@typescript-eslint/explicit-function-return-type',
+        '@typescript-eslint/init-declarations',
+        '@typescript-eslint/method-signature-style',
+        '@typescript-eslint/no-import-type-side-effects',
+        '@typescript-eslint/no-unnecessary-qualifier',
+        '@typescript-eslint/no-useless-empty-export',
+        '@typescript-eslint/parameter-properties',
+        '@typescript-eslint/prefer-enum-initializers',
+        '@typescript-eslint/prefer-readonly',
+    ].map((rule) => [rule, 'error']),
+);
 
 /**
  * unicorn's rules that catch bugs but sit outside its `unopinionated` preset, which the code uses. Its other presets
@@ -64,7 +147,7 @@ function allRules(
 }
 
 /**
- * The presets with every rule they set to warn raised to error. Some `all` presets warn, and a warning shows yellow in
+ * The presets with every rule they set to warn raised to error. Some presets warn, and a warning shows yellow in
  * the editor and lets a bare `eslint` run pass, where scripts/lint.sh's --max-warnings 0 fails it.
  */
 function asErrors(...presets: (Linter.Config | Linter.Config[])[]): Linter.Config[] {
@@ -99,11 +182,18 @@ export default defineConfig(
     {
         name: 'code',
         files: CODE,
-        extends: asErrors(js.configs.all, ts.configs.all, unicorn.configs.unopinionated, regexp.configs.all),
+        extends: asErrors(
+            js.configs.recommended,
+            ts.configs.strictTypeChecked,
+            ts.configs.stylisticTypeChecked,
+            unicorn.configs.unopinionated,
+            regexp.configs.all,
+        ),
         plugins: { '@eslint-community/eslint-comments': comments },
         rules: {
             // No `all` preset for eslint-comments; no-use and no-restricted-disable are lists to fill in, not checks.
             ...allRules('@eslint-community/eslint-comments', comments, ['no-use', 'no-restricted-disable']),
+            ...PICKED_RULES,
             ...UNICORN_BUG_RULES,
         },
         languageOptions: {
@@ -163,13 +253,74 @@ export default defineConfig(
     {
         name: 'tests',
         files: ['api/test/**/*.ts', 'web/src/**/*.test.ts'],
-        extends: asErrors(vitest.configs.all),
+        // The recommended set plus the rules below, the same as tacocat-gallery-sveltekit's. Vitest's `all` preset is
+        // mostly test-structure opinion, such as banning beforeAll and afterEach outright.
+        extends: asErrors(vitest.configs.recommended),
+        // Lets prefer-describe-function-title resolve a describe title through the type checker.
+        settings: { vitest: { typecheck: true } },
         rules: {
-            // For tests whose assertions sit in callbacks that might never run. Every test here awaits its work,
-            // and no-floating-promises catches one that doesn't.
-            'vitest/prefer-expect-assertions': 'off',
-            // A cap of five pushes assertions into arrays, which makes a failure message say less, not more.
-            'vitest/max-expects': 'off',
+            // Weak assertions that pass when they shouldn't
+            'vitest/require-to-throw-message': 'error',
+            'vitest/prefer-called-with': 'error',
+            'vitest/no-test-return-statement': 'error',
+            'vitest/no-conditional-in-test': 'error',
+
+            // Vitest runtime errors, caught at lint time instead
+            'vitest/hoisted-apis-on-top': 'error',
+            'vitest/require-awaited-expect-poll': 'error',
+
+            // Mocking correctness
+            'vitest/prefer-spy-on': 'error',
+            'vitest/prefer-vi-mocked': 'error',
+            'vitest/prefer-mock-promise-shorthand': 'error',
+            'vitest/prefer-mock-return-shorthand': 'error',
+            'vitest/require-mock-type-parameters': 'error',
+            'vitest/prefer-import-in-mock': 'error',
+            'vitest/prefer-called-once': 'error',
+            'vitest/prefer-expect-resolves': 'error',
+            'vitest/no-duplicate-hooks': 'error',
+
+            // Matchers that produce a useful diff on failure
+            'vitest/prefer-equality-matcher': 'error',
+            'vitest/prefer-comparison-matcher': 'error',
+            'vitest/prefer-to-be': 'error',
+            'vitest/prefer-to-contain': 'error',
+            'vitest/prefer-to-have-length': 'error',
+            'vitest/prefer-strict-equal': 'error',
+            'vitest/prefer-strict-boolean-matchers': 'error',
+            'vitest/prefer-expect-type-of': 'error',
+
+            // Typos and leftovers
+            'vitest/no-alias-methods': 'error',
+            'vitest/no-test-prefixes': 'error',
+            'vitest/prefer-todo': 'error',
+
+            // Naming and imports: globals are off, so a bare `describe` would be undefined at runtime.
+            'vitest/consistent-test-it': 'error',
+            'vitest/consistent-test-filename': 'error',
+            'vitest/prefer-describe-function-title': 'error',
+            'vitest/prefer-importing-vitest-globals': 'error',
+            'vitest/consistent-vitest-vi': 'error',
+
+            // Structure: no conditionally defined tests, no callback-style async, hooks first and in lifecycle order.
+            'vitest/no-conditional-tests': 'error',
+            'vitest/no-done-callback': 'error',
+            'vitest/prefer-hooks-on-top': 'error',
+            'vitest/prefer-hooks-in-order': 'error',
+            'vitest/max-nested-describe': 'error',
+            'vitest/prefer-each': 'error',
+            'vitest/consistent-each-for': 'error',
+            'vitest/require-hook': 'error',
+            'vitest/require-top-level-describe': 'error',
+            'vitest/padding-around-all': 'error',
+
+            // Snapshots small enough to review, and named when a test takes more than one.
+            'vitest/no-large-snapshots': 'error',
+            'vitest/prefer-snapshot-hint': 'error',
+
+            // The vitest variant also understands `expect(obj.method)`.
+            '@typescript-eslint/unbound-method': 'off',
+            'vitest/unbound-method': 'error',
         },
     },
 
@@ -193,10 +344,10 @@ export default defineConfig(
     },
 
     {
-        name: 'reconfigured',
+        name: 'house style',
         files: CODE,
         rules: {
-            // `all` asks for one declaration per scope; this codebase, like typescript-eslint's own, does the opposite.
+            // One declaration per statement, as in typescript-eslint's own code.
             'one-var': ['error', 'never'],
             // Function declarations, with arrows for callbacks and one-liners.
             'func-style': ['error', 'declaration', { allowArrowFunctions: true }],
@@ -235,29 +386,11 @@ export default defineConfig(
         name: 'turned off',
         files: CODE,
         rules: {
-            // Status codes, byte sizes and time spans read more clearly inline than as named constants.
-            '@typescript-eslint/no-magic-numbers': 'off',
-            // Key order carries meaning here: JSON responses, SQL column lists, log fields.
-            'sort-keys': 'off',
-            // Request, Env, D1Database and the rest of the platform types are mutable, so nearly every parameter fails.
-            '@typescript-eslint/prefer-readonly-parameter-types': 'off',
-            // `undefined` is how TypeScript spells "absent", and exactOptionalPropertyTypes makes it deliberate.
-            'no-undefined': 'off',
-            // No-nested-ternary still applies; a single conditional expression is fine.
-            'no-ternary': 'off',
-            // Console is the logging API: Workers Logs collects it, and scripts print to it.
-            'no-console': 'off',
             // Top-level await is standard ESM, and the scripts use it.
             'n/no-top-level-await': 'off',
-            // Complexity and max-lines-per-function already bound a function's size.
-            'max-statements': 'off',
             // With promise-function-async, every function that returns a promise is async, so one with nothing to
             // await is deliberate.
             '@typescript-eslint/require-await': 'off',
-            // Superseded by @typescript-eslint/naming-convention, which is configured above.
-            camelcase: 'off',
-            // Forces "Ffmpeg" for a tool spelled ffmpeg; a comment that starts with a name keeps the name's case.
-            'capitalized-comments': 'off',
         },
     },
 
