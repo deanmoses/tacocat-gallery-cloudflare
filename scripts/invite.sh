@@ -4,7 +4,10 @@
 set -euo pipefail
 
 name="${1:?admin name required}"
-[[ "$name" =~ ^[A-Za-z0-9\ ._-]+$ ]] || { echo "admin name may only contain letters, digits, spaces, . _ -" >&2; exit 1; }
+[[ "$name" =~ ^[A-Za-z0-9\ ._-]+$ ]] || {
+    echo "admin name may only contain letters, digits, spaces, . _ -" >&2
+    exit 1
+}
 
 if [[ "${2:-}" == "--local" ]]; then
     where=--local

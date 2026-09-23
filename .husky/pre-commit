@@ -9,10 +9,12 @@ else
     echo "Install with: brew install gitleaks"
 fi
 
-# Formats and lints staged files only. ESLint checks without --fix: two vitest rules have fixers that change what an
-# assertion means (toBeTruthy() to toBe(true), toHaveBeenCalled() to toHaveBeenCalledWith()).
+# Formats staged files with Prettier, which cannot change what code means. Other fixes stay manual:
+# `npm run format` for shell and OpenTofu, `npm run lint:fix` for ESLint, whose fixers sometimes can.
 npx lint-staged
 
-# Whole-project checks: types across all three tsconfigs, and the tests inside workerd.
+# The same checks CI runs, scoped to what is staged: per-file lint checks see only staged files, and only the tests
+# that import them run. CI runs all of it over the whole repo. Types are always checked across the whole project.
+scripts/lint.sh --staged
 npm run check
-npm test
+scripts/test.sh --staged

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import comments from '@eslint-community/eslint-plugin-eslint-comments';
 import js from '@eslint/js';
+import json from '@eslint/json';
 import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import node from 'eslint-plugin-n';
@@ -11,11 +12,27 @@ import globals from 'globals';
 import ts from 'typescript-eslint';
 
 // Every rule of every plugin is on, via each one's `all` preset, so a rule added upstream is enforced as soon as the
-// Dependency is upgraded. Rules come off only in the "Turned off" block at the end, each with the reason.
+// dependency is upgraded. Rules come off only in the "reconfigured" and "turned off" blocks, each with the reason.
+
+const CODE = ['**/*.ts', '**/*.mjs', '**/*.js'];
+
+/** Every rule a plugin exports, for plugins with no `all` preset, minus the ones named in `except`. */
+function allRules(
+    prefix: string,
+    plugin: { rules?: Record<string, unknown> },
+    except: string[] = [],
+): Record<string, 'error'> {
+    return Object.fromEntries(
+        Object.keys(plugin.rules ?? {})
+            .filter((rule) => !except.includes(rule))
+            .map((rule) => [`${prefix}/${rule}`, 'error']),
+    );
+}
 
 export default defineConfig(
     includeIgnoreFile(path.resolve(import.meta.dirname, '.gitignore')),
-    { ignores: ['worker-configuration.d.ts', 'infra/'] },
+    // Generated: Wrangler's types and drizzle-kit's migration snapshots.
+    { ignores: ['worker-configuration.d.ts', 'infra/', 'migrations/meta/', 'package-lock.json'] },
     {
         linterOptions: {
             reportUnusedDisableDirectives: 'error',
@@ -23,21 +40,13 @@ export default defineConfig(
         },
     },
 
-    js.configs.all,
-    ts.configs.all,
-    unicorn.configs.all,
-    regexp.configs.all,
     {
-        // No `all` preset, so every rule it exports, minus the two that are lists to fill in rather than checks.
-        name: 'eslint-comments',
+        name: 'code',
+        files: CODE,
+        extends: [js.configs.all, ts.configs.all, unicorn.configs.all, regexp.configs.all],
         plugins: { '@eslint-community/eslint-comments': comments },
-        rules: Object.fromEntries(
-            Object.keys(comments.rules)
-                .filter((rule) => !['no-use', 'no-restricted-disable'].includes(rule))
-                .map((rule) => [`@eslint-community/eslint-comments/${rule}`, 'error']),
-        ),
-    },
-    {
+        // No `all` preset for eslint-comments; no-use and no-restricted-disable are lists to fill in, not checks.
+        rules: allRules('@eslint-community/eslint-comments', comments, ['no-use', 'no-restricted-disable']),
         languageOptions: {
             parserOptions: {
                 // Each file is checked against its nearest tsconfig.json: the Worker, its tests, or the Node side.
@@ -49,7 +58,7 @@ export default defineConfig(
 
     {
         name: 'node',
-        files: ['*.ts', 'scripts/**', 'transcoder/**'],
+        files: ['*.ts', 'scripts/**/*.ts', 'transcoder/**/*.ts'],
         extends: [node.configs['flat/all']],
         languageOptions: { globals: globals.node },
         rules: {
@@ -59,12 +68,12 @@ export default defineConfig(
     },
     {
         name: 'worker',
-        files: ['src/**', 'test/**'],
+        files: ['src/**/*.ts', 'test/**/*.ts'],
         languageOptions: { globals: globals.serviceworker },
     },
     {
         name: 'tests',
-        files: ['test/**'],
+        files: ['test/**/*.ts'],
         extends: [vitest.configs.all],
         rules: {
             // For tests whose assertions sit in callbacks that might never run. Every test here awaits its work,
@@ -74,7 +83,27 @@ export default defineConfig(
     },
 
     {
+        name: 'json',
+        files: ['**/*.json', '**/*.jsonc'],
+        plugins: { json },
+        language: 'json/json',
+        rules: {
+            ...allRules('json', json),
+            // Key order is the reader's: name and scripts first in package.json, compilerOptions before include.
+            'json/sort-keys': 'off',
+        },
+    },
+    {
+        // JSON with comments and trailing commas: tsconfigs, wrangler.jsonc and the linters' own configs.
+        name: 'jsonc',
+        files: ['**/*.jsonc', '**/tsconfig*.json'],
+        language: 'json/jsonc',
+        languageOptions: { allowTrailingCommas: true },
+    },
+
+    {
         name: 'reconfigured',
+        files: CODE,
         rules: {
             // `all` asks for one declaration per scope; this codebase, like typescript-eslint's own, does the opposite.
             'one-var': ['error', 'never'],
@@ -120,6 +149,7 @@ export default defineConfig(
     },
     {
         name: 'turned off',
+        files: CODE,
         rules: {
             // Status codes, byte sizes and time spans read more clearly inline than as named constants.
             '@typescript-eslint/no-magic-numbers': 'off',
@@ -160,5 +190,5 @@ export default defineConfig(
     },
 
     // Last, so formatting is Prettier's alone.
-    prettier,
+    { files: CODE, extends: [prettier] },
 );

@@ -4,14 +4,13 @@
     "description": "Throwaway prototype to de-risk moving pix.tacocat.com to Cloudflare",
     "scripts": {
         "dev": "wrangler dev --local-upstream localhost:8787",
-        "test": "vitest run",
+        "test": "scripts/test.sh",
         "test:watch": "vitest",
         "types": "wrangler types",
         "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test",
-        "lint": "prettier --check . && eslint . --max-warnings 0 && markdownlint-cli2 && knip --no-progress && npm run lint:shell && npm run lint:infra",
-        "lint:shell": "shellcheck scripts/*.sh .husky/pre-commit",
-        "lint:infra": "tofu -chdir=infra fmt -check -recursive",
-        "format": "prettier --write --log-level warn .",
+        "lint": "scripts/lint.sh",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write --log-level warn . && shfmt --write scripts/*.sh .husky/pre-commit && tofu -chdir=infra fmt -recursive",
         "quality": "npm run format && npm run lint && npm run check && npm test",
         "prepare": "husky",
         "db:generate": "drizzle-kit generate",
@@ -29,6 +28,7 @@
         "@cloudflare/vitest-plugin": "^1.2.3",
         "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
         "@eslint/js": "^10.0.1",
+        "@eslint/json": "^2.1.0",
         "@levischuck/tiny-cbor": "^0.3.6",
         "@types/node": "^24.13.6",
         "@vitest/eslint-plugin": "^1.6.27",
@@ -63,15 +63,8 @@
         "node": ">=24.2.0"
     },
     "lint-staged": {
-        "*.{ts,mjs,js}": [
-            "prettier --write",
-            "eslint --max-warnings 0 --no-warn-ignored"
-        ],
-        "*.{json,jsonc,md,yml,yaml}": [
+        "*.{ts,mjs,js,json,jsonc,md,yml,yaml}": [
             "prettier --write"
-        ],
-        "*.md": [
-            "markdownlint-cli2"
         ]
     }
 }

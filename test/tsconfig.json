@@ -2,6 +2,9 @@
     // Tests run inside workerd, so they get the Worker's types plus the cloudflare:test module.
     "extends": "../src/tsconfig.json",
     "compilerOptions": {
+        // Reuses the last run's results for files that have not changed.
+        "incremental": true,
+        "tsBuildInfoFile": "../node_modules/.cache/tsc/test.tsbuildinfo",
         "types": ["node", "@cloudflare/vitest-plugin/types"]
     },
     "include": [".", "../src", "../worker-configuration.d.ts"]

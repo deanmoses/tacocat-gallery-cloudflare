@@ -61,11 +61,12 @@ The FTS5 search table and its triggers are raw SQL (`migrations/0002_fts_by_rowi
 
 ## Development
 
-`npm run quality` formats, lints, type-checks and tests; the pre-commit hook runs the same checks on what is staged, plus a gitleaks scan.
+`npm run quality` formats, lints, type-checks and tests. Every lint check is in `scripts/lint.sh` (`npm run lint`) and the tests are run by `scripts/test.sh` (`npm test`). CI runs both over the whole repo, plus `npm run check`. The pre-commit hook runs the same scripts with `--staged`: the per-file lint checks see only staged files, and only the tests whose imports reach a staged file run, or all of them when the staged change is to config, migrations or dependencies. Types are always checked across the whole project. Typed ESLint rules look across files, so a staged change can break an unstaged file in a way only CI's full run sees. The hook also scans for secrets with gitleaks and formats staged files with Prettier; it fixes nothing else. Run `npm run format` for shell and OpenTofu, and `npm run lint:fix` for ESLint and review the diff, because some ESLint fixers change what code means (two vitest ones turn `toBeTruthy()` into `toBe(true)` and `toHaveBeenCalled()` into `toHaveBeenCalledWith()`). A missing system tool is skipped with a warning locally and fails in CI.
 
 - **TypeScript 6**, every strictness flag on (`tsconfig.base.json`). Three projects: `src/` (the Worker, typed by `worker-configuration.d.ts`, which `npm run types` regenerates from `wrangler.jsonc`), `test/` (the Worker plus `cloudflare:test`), and the root (Node: configs, `scripts/`, `transcoder/`).
 - **ESLint**: the `all` preset of every plugin (core, typescript-eslint, unicorn, regexp, n, vitest, eslint-comments), so new upstream rules apply on upgrade. Rules are removed or reconfigured only in `eslint.config.ts`, each with its reason. There are no `eslint-disable` comments; fix the code instead.
-- **Prettier**, the same settings as `tacocat-gallery-sveltekit`. Also markdownlint, knip, shellcheck and `tofu fmt`.
+- **Prettier**, the same settings as `tacocat-gallery-sveltekit`, for code, JSON and Markdown. JSON is also linted by `@eslint/json` (every rule but key sorting), Markdown by markdownlint, shell scripts by shellcheck and formatted by shfmt, `infra/` by `tofu fmt` and `tofu validate`, the Dockerfile by hadolint, and unused files, exports and dependencies by knip.
+- **System tools** the checks need: `brew install gitleaks shellcheck shfmt hadolint opentofu`.
 - **Tests** run inside workerd through `@cloudflare/vitest-plugin`, with the D1 migrations applied and local D1, R2 and Queue bindings; `remoteBindings` is off, so a test never reaches the account.
 - **Untrusted JSON** is validated with Valibot (`transcoder/` has no dependencies, so it uses small typed accessors instead).
 

@@ -3,6 +3,9 @@
     // its tests are test/tsconfig.json; each directory's nearest tsconfig.json is the one editors and ESLint use.
     "extends": "./tsconfig.base.json",
     "compilerOptions": {
+        // Reuses the last run's results for files that have not changed.
+        "incremental": true,
+        "tsBuildInfoFile": "node_modules/.cache/tsc/node.tsbuildinfo",
         "module": "nodenext",
         "moduleResolution": "nodenext",
         "rewriteRelativeImportExtensions": true,

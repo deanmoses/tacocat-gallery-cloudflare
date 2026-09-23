@@ -4,9 +4,13 @@
     // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
     "entry": ["scripts/passkey-selftest.ts", "transcoder/server.ts"],
 
-    // cloudflare:test and cloudflare:workers are modules of the workerd runtime, not npm packages.
-    "ignoreDependencies": ["cloudflare"],
+    "ignoreDependencies": [
+        // cloudflare:test and cloudflare:workers are modules of the workerd runtime, not npm packages.
+        "cloudflare",
+        // Run by scripts/lint.sh, and knip does not read shell scripts.
+        "markdownlint-cli2",
+    ],
 
-    // System tools, deliberately not npm dependencies
-    "ignoreBinaries": ["shellcheck", "tofu"],
+    // System tools, deliberately not npm dependencies (npm run format runs these two)
+    "ignoreBinaries": ["shfmt", "tofu"],
 }

@@ -3,6 +3,9 @@
     // from wrangler.jsonc. `node` is there for nodejs_compat, as Cloudflare documents.
     "extends": "../tsconfig.base.json",
     "compilerOptions": {
+        // Reuses the last run's results for files that have not changed.
+        "incremental": true,
+        "tsBuildInfoFile": "../node_modules/.cache/tsc/worker.tsbuildinfo",
         // Uint8Array base64 and hex, which workerd has.
         "lib": ["es2025", "esnext.typedarrays"],
         "types": ["node"]
