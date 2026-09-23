@@ -15,6 +15,13 @@
       "when": 1790132605754,
       "tag": "20260923030325_admin_passkeys",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790143085473,
+      "tag": "20260923055805_upload_error",
+      "breakpoints": true
     }
   ]
 }

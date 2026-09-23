@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import jpgDataUrl from '../fixtures/FullMetadata.jpg?inline';
 import { describe, expect, it } from 'vitest';
 import worker from '../src/index';
-import type { R2EventMessage } from '../src/upload';
+import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../src/upload';
 import { call, callAsAdmin } from './helpers';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
@@ -11,21 +11,37 @@ const handler: ExportedHandler<Env, R2EventMessage> = worker;
 
 const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1));
 
-async function deliverUpload(key: string): Promise<string[]> {
+function uploadEvent(key: string): R2EventMessage {
     const now = new Date();
+    return { action: 'PutObject', bucket: 'tacocat-proto-media', object: { key }, eventTime: now.toISOString() };
+}
+
+/** Delivers one upload event through the queue and reports whether the consumer acked it. */
+async function deliverUpload(key: string): Promise<string[]> {
     const batch = createMessageBatch<R2EventMessage>('tacocat-proto-uploads', [
-        {
-            id: '1',
-            timestamp: now,
-            attempts: 1,
-            body: { action: 'PutObject', bucket: 'tacocat-proto-media', object: { key }, eventTime: now.toISOString() },
-        },
+        { id: '1', timestamp: new Date(), attempts: 1, body: uploadEvent(key) },
     ]);
     const ctx = createExecutionContext();
     await handler.queue?.(batch, env, ctx);
     await waitOnExecutionContext(ctx);
     const result = await getQueueResult(batch, ctx);
     return result.explicitAcks;
+}
+
+/** The bindings with the transcoder container replaced by something that answers every request with `respond`. */
+function withTranscoder(respond: () => Promise<Response>): UploadEnv {
+    return { ...env, TRANSCODER: { getByName: () => ({ fetch: respond }) } };
+}
+
+/** What the container reports for a portrait iPhone clip: landscape frames with a quarter-turn display matrix. */
+const TRANSCODED = { output: { codedWidth: 1920, codedHeight: 1080, rotation: -90, durationSeconds: 9.6 } };
+
+async function rejecting(): Promise<Response> {
+    return Response.json({ error: 'ffmpeg exited 1: moov atom not found' }, { status: 422 });
+}
+
+async function transcoding(): Promise<Response> {
+    return Response.json(TRANSCODED);
 }
 
 describe('upload pipeline', () => {
@@ -63,6 +79,86 @@ describe('upload pipeline', () => {
     });
 });
 
+describe('video uploads', () => {
+    it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/broken.mov', new Uint8Array(10));
+        await processUploadEvent(uploadEvent('inbox/2024/06-15/broken.mov'), withTranscoder(rejecting));
+        const item = await env.DB.prepare('SELECT * FROM item WHERE item_name = ?').bind('broken.mov').first();
+        const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/broken.mov/' });
+        const inbox = await env.MEDIA.head('inbox/2024/06-15/broken.mov');
+        const listed = await callAsAdmin('/api/errors', {
+            method: 'POST',
+            body: JSON.stringify({ paths: ['/2024/06-15/broken.mov', '/2024/06-15/fine.mov'] }),
+        });
+        const { errors } = await listed.json<{ errors: Record<string, { message: string }> }>();
+
+        expect(item).toBeNull();
+        expect(originals.objects).toHaveLength(0);
+        expect(inbox).toBeNull();
+        expect(Object.keys(errors)).toStrictEqual(['/2024/06-15/broken.mov']);
+        expect(errors['/2024/06-15/broken.mov']?.message).toBe('ffmpeg exited 1: moov atom not found');
+    });
+
+    it('clears the error once a later upload of the same path succeeds', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/again.mov', new Uint8Array(10));
+        await processUploadEvent(uploadEvent('inbox/2024/06-15/again.mov'), withTranscoder(rejecting));
+        await env.MEDIA.put('inbox/2024/06-15/again.mov', new Uint8Array(10));
+        await processUploadEvent(uploadEvent('inbox/2024/06-15/again.mov'), withTranscoder(transcoding));
+        const remaining = await env.DB.prepare('SELECT count(*) AS n FROM upload_error WHERE path = ?')
+            .bind('/2024/06-15/again.mov')
+            .first<number>('n');
+
+        expect(remaining).toBe(0);
+    });
+});
+
+describe('video upload retries', () => {
+    it('leaves the upload in the inbox when the transcoder cannot be reached', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/later.mov', new Uint8Array(10));
+        const down = withTranscoder(async () => {
+            throw new Error('container unreachable');
+        });
+        const attempt = processUploadEvent(uploadEvent('inbox/2024/06-15/later.mov'), down);
+
+        await expect(attempt).rejects.toThrow('container unreachable');
+        await expect(env.MEDIA.head('inbox/2024/06-15/later.mov')).resolves.not.toBeNull();
+        await expect(env.MEDIA.list({ prefix: 'originals/2024/06-15/later.mov/' })).resolves.toMatchObject({
+            objects: [],
+        });
+    });
+
+    it('does the same event twice without a second original', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/clip.mov', new Uint8Array(10), {
+            httpMetadata: { contentType: 'video/quicktime' },
+        });
+        const event = uploadEvent('inbox/2024/06-15/clip.mov');
+        await processUploadEvent(event, withTranscoder(transcoding));
+        // Redelivered after success, as Queues may do, with the inbox object gone.
+        await processUploadEvent(event, withTranscoder(transcoding));
+        const item = await env.DB.prepare('SELECT * FROM item WHERE item_name = ?').bind('clip.mov').first();
+        const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/clip.mov/' });
+
+        expect(item).toMatchObject({ item_type: 'video', width: 1080, height: 1920, duration_seconds: 9.6 });
+        expect(originals.objects.map((object) => object.key)).toStrictEqual([
+            `originals/2024/06-15/clip.mov/${String(item?.['version_id'])}`,
+        ]);
+    });
+});
+
+describe('upload errors', () => {
+    it('needs an admin', async () => {
+        const response = await call('/api/errors', { method: 'POST', body: JSON.stringify({ paths: ['/x'] }) });
+
+        expect(response.status).toBe(401);
+    });
+
+    it('rejects a body without paths', async () => {
+        const response = await callAsAdmin('/api/errors', { method: 'POST', body: JSON.stringify({}) });
+
+        expect(response.status).toBe(400);
+    });
+});
+
 describe('serving media', () => {
     it('serves a byte range', async () => {
         await env.MEDIA.put('clip.mp4', new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
@@ -81,6 +177,16 @@ describe('serving media', () => {
 
         expect(response.headers.get('content-type')).toBe('image/jpeg');
         expect(body.byteLength).toBe(jpg.byteLength);
+    });
+
+    it('makes a video thumbnail from its poster', async () => {
+        await env.MEDIA.put('derived/2024/06-15/clip.mov/v1/poster.jpg', jpg);
+        const response = await call('/i/2024/06-15/clip.mov/v1?size=200x200');
+        const stored = await env.DERIVED.head('derived/2024/06-15/clip.mov/v1/200x200-jpeg');
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-derived')).toBe('generated');
+        expect(stored).not.toBeNull();
     });
 
     it('generates a derivative once, then serves it from the cache', async () => {

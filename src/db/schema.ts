@@ -59,6 +59,13 @@ export const probeResult = sqliteTable(
     (table) => [index('probe_result_run_at').on(table.runAt)],
 );
 
+// What an admin sees when an upload could not be processed. Rows are purged after a day; the log has the rest.
+export const uploadError = sqliteTable('upload_error', {
+    path: text('path').primaryKey(),
+    message: text('message').notNull(),
+    createdAt: text('created_at').notNull().default(now),
+});
+
 export const adminPasskey = sqliteTable('admin_passkey', {
     credentialId: text('credential_id').primaryKey(),
     adminName: text('admin_name').notNull(),

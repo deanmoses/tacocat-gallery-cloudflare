@@ -44,6 +44,14 @@ const FIT = String.raw`scale=w=min(iw\,1920):h=min(ih\,1920):force_original_aspe
 const TONE_MAP =
     'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv';
 
+/** Ffmpeg or ffprobe rejected the file, so the same file would fail the same way again. */
+class MediaError extends Error {
+    public constructor(message: string, options?: ErrorOptions) {
+        super(message, options);
+        this.name = 'MediaError';
+    }
+}
+
 async function run(command: string, argv: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
         const child = spawn(command, argv);
@@ -59,7 +67,7 @@ async function run(command: string, argv: string[]): Promise<string> {
             if (code === 0) {
                 resolve(stdout);
             } else {
-                reject(new Error(`${command} exited ${String(code)}: ${stderr.slice(-2000)}`));
+                reject(new MediaError(`${command} exited ${String(code)}: ${stderr.slice(-2000)}`));
             }
         });
     });
@@ -235,7 +243,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
         const result = await transcode(readRequest(JSON.parse(body)));
         response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result));
     } catch (error) {
-        response.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(error) }));
+        // 422 tells the Worker not to retry; anything else (network, storage) is worth another attempt.
+        const status = error instanceof MediaError ? 422 : 500;
+        response
+            .writeHead(status, { 'content-type': 'application/json' })
+            .end(JSON.stringify({ error: String(error) }));
     }
 }
 

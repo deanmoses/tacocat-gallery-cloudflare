@@ -1,4 +1,5 @@
 import { currentAdmin, routeAuth } from './auth';
+import { purgeUploadErrors, uploadErrors } from './errors';
 import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { backupDatabase, getAlbum, putItem, readYourWrites, search, seed } from './items';
 import { html, json, notFound } from './http';
@@ -42,7 +43,12 @@ export default {
     },
 
     async scheduled(controller, env): Promise<void> {
-        await (controller.cron === BACKUP_CRON ? backupDatabase(env) : probeIdleLatency(env));
+        if (controller.cron === BACKUP_CRON) {
+            await backupDatabase(env);
+            await purgeUploadErrors(env);
+        } else {
+            await probeIdleLatency(env);
+        }
     },
 } satisfies ExportedHandler<Env, R2EventMessage>;
 
@@ -79,6 +85,9 @@ async function routeWrite(request: Request, env: Env): Promise<Response> {
     }
     if (pathname === '/api/upload-url') {
         return uploadUrl(request, env);
+    }
+    if (pathname === '/api/errors') {
+        return uploadErrors(request, env);
     }
     return pathname.startsWith('/upload/') ? upload(request, env) : notFound();
 }

@@ -28,6 +28,11 @@ const MEASUREMENT = {
     ],
 };
 
+function hoursAgo(hours: number): string {
+    const at = new Date(Date.now() - hours * 3_600_000);
+    return at.toISOString();
+}
+
 async function runCron(cron: string): Promise<void> {
     const ctx = createExecutionContext();
     await handler.scheduled?.(createScheduledController({ cron, scheduledTime: Date.now() }), env, ctx);
@@ -45,12 +50,26 @@ function stubGlobalping(): Request[] {
     return requests;
 }
 
-describe('nightly backup cron', () => {
+describe('nightly cron', () => {
+    // Storage is shared by the tests in a file, so the count is relative to what was there.
     it('writes a dump to R2', async () => {
+        const before = await env.MEDIA.list({ prefix: 'backups/d1/' });
         await runCron('17 9 * * *');
-        const { objects } = await env.MEDIA.list({ prefix: 'backups/d1/' });
+        const after = await env.MEDIA.list({ prefix: 'backups/d1/' });
 
-        expect(objects).toHaveLength(1);
+        expect(after.objects).toHaveLength(before.objects.length + 1);
+    });
+
+    it('purges upload errors older than a day and keeps newer ones', async () => {
+        const insert = env.DB.prepare('INSERT INTO upload_error (path, message, created_at) VALUES (?, ?, ?)');
+        await env.DB.batch([
+            insert.bind('/old.mov', 'stale', hoursAgo(25)),
+            insert.bind('/new.mov', 'fresh', hoursAgo(23)),
+        ]);
+        await runCron('17 9 * * *');
+        const { results } = await env.DB.prepare('SELECT path FROM upload_error ORDER BY path').all<{ path: string }>();
+
+        expect(results.map((row) => row.path)).toStrictEqual(['/new.mov']);
     });
 });
 

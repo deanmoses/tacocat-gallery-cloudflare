@@ -1,4 +1,5 @@
 import { json, notFound, pathAfter } from './http';
+import { isVideoName } from './media';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const DERIVED_ORIGIN = 'https://img.deanmoses.com';
@@ -88,9 +89,12 @@ async function derivedImage(env: Env, url: URL, prefix: string): Promise<Derivat
         return { body: stored.body, format, how: 'stored' };
     }
 
-    const original = await env.MEDIA.get(`originals${rest}`);
+    // A video's stills come from the poster the transcoder wrote beside its MP4.
+    const itemName = rest.split('/').at(-2) ?? '';
+    const sourceKey = isVideoName(itemName) ? `derived${rest}/poster.jpg` : `originals${rest}`;
+    const original = await env.MEDIA.get(sourceKey);
     if (!original) {
-        return json({ error: 'original not found', key: `originals${rest}` }, 404);
+        return json({ error: 'source not found', key: sourceKey }, 404);
     }
 
     const [width, height] = size.split('x', 2).map((part) => (part === '' ? undefined : Number(part)));

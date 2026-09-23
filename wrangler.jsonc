@@ -41,7 +41,7 @@
     },
     "triggers": {
         "crons": [
-            // Daily D1 backup. src/index.ts picks the job by this exact string (BACKUP_CRON), so change both together.
+            // Daily D1 backup and upload-error purge. src/index.ts picks the job by this exact string (BACKUP_CRON), so change both together.
             "17 9 * * *",
             // Idle-latency probes (src/probes.ts) at doubling gaps; every cron other than BACKUP_CRON runs these.
             "23 0,1,3,7,15 * * *",
