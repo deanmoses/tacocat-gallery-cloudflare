@@ -3,7 +3,7 @@ import * as valibot from 'valibot';
 import { notFound, pathAfter } from './http';
 import { presign } from './s3';
 
-/** Ffmpeg in a container; see transcoder/server.ts. */
+/** ffmpeg in a container; see transcoder/server.ts. */
 export class Transcoder extends Container {
     public override defaultPort = 8080;
     public override sleepAfter = '10s';

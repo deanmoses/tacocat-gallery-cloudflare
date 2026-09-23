@@ -44,7 +44,7 @@ const FIT = String.raw`scale=w=min(iw\,1920):h=min(ih\,1920):force_original_aspe
 const TONE_MAP =
     'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv';
 
-/** Ffmpeg or ffprobe rejected the file, so the same file would fail the same way again. */
+/** ffmpeg or ffprobe rejected the file, so the same file would fail the same way again. */
 class MediaError extends Error {
     public constructor(message: string, options?: ErrorOptions) {
         super(message, options);

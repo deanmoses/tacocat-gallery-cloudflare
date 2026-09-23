@@ -102,6 +102,8 @@ export default defineConfig(
             // For tests whose assertions sit in callbacks that might never run. Every test here awaits its work,
             // and no-floating-promises catches one that doesn't.
             'vitest/prefer-expect-assertions': 'off',
+            // A cap of five pushes assertions into arrays, which makes a failure message say less, not more.
+            'vitest/max-expects': 'off',
         },
     },
 
@@ -146,8 +148,6 @@ export default defineConfig(
             // `void promise;` marks a promise deliberately left running, which is how no-floating-promises is
             // satisfied; every other use of void stays an error.
             'no-void': ['error', { allowAsStatement: true }],
-            // A comment wrapped over several lines continues in lower case.
-            'capitalized-comments': ['error', 'always', { ignoreConsecutiveComments: true }],
             // Property names are API: `q` in a search response, `x` and `y` in a JWK.
             'id-length': ['error', { properties: 'never' }],
             // Keeps member order inside one import sorted; the order of import lines is left alone.
@@ -209,6 +209,12 @@ export default defineConfig(
             // Contradicts arrow-body-style whenever Prettier breaks a returned object over several lines;
             // arrow-body-style stays.
             'unicorn/consistent-arrow-return-style': 'off',
+            // Forces "Ffmpeg" for a tool spelled ffmpeg; a comment that starts with a name keeps the name's case.
+            'capitalized-comments': 'off',
+            // Splits `new Date().toISOString()` into two statements for nothing.
+            'unicorn/no-unreadable-new-expression': 'off',
+            // Fires on every Drizzle query: `where(and(inArray(...), gt(...)))` is the query builder's idiom.
+            'unicorn/max-nested-calls': 'off',
         },
     },
 
