@@ -6,17 +6,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-The pix.tacocat.com photo gallery, moving from AWS to Cloudflare. Three npm workspaces: `shared/` holds the album schema and path helpers both sides agree on, `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has the risk register, the budget, and how to run and restore; read it before anything that touches the account.
+A prototype to decide whether to move the pix.tacocat.com photo gallery from AWS to Cloudflare. The main goal is a site that feels faster to its readers than it does on AWS; the goals and the comparison with Bunny.net, the other candidate, are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo.
 
-## The Cloudflare account costs money
+The work is burning down `docs/Risks.md`: take a risk that is failing or open, test it against the real account (see Spending), and record what was found in its row, with the numbers and a status. A risk that fails is a finding, not a setback; write it down as plainly as a success. Performance is judged in real browsers against the AWS site, as `docs/Perf.md` describes, and its measurements and experiments are logged there.
 
-An FTS trigger that scanned the whole index on every write once read 37.7M D1 rows in a day and took the whole site down.
+## The AWS site
 
-- **Ask before consuming more than 1% of a monthly allowance** in the README's Budget table, or anything billed outside it (a larger container instance, Stream, transformations past the free 5,000). Estimate before you run: a query's `rows_read` locally, a transcode's vCPU-minutes from the instance size and the last run's time. Under 1%, go ahead and say what it used. Local work (`npm run dev --workspace api`, tests, `--local` D1) needs no approval.
-- **Never deploy unless asked.**
-- **Watch rows read**, not rows returned: check `meta.rows_read` locally before shipping a new query or trigger.
-- **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
-- **Never print, commit or paste secrets** from `api/.dev.vars` or the Worker's secrets.
+The site this prototype has to beat runs on AWS from four repos, checked out beside this one (`../<repo>`, and on GitHub under `deanmoses`). `docs/Ecosystem.md` in `tacocat-gallery-sveltekit` maps how they fit together.
+
+| Repo                          | What it is                                                                        | Read first                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `tacocat-gallery-sam`         | The back end: DynamoDB, Lambdas, API Gateway, S3 media, the image CDN             | `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` (the move), `docs/plans/EdgeCachedAlbums.md`, `docs/Architecture.md` |
+| `tacocat-gallery-sveltekit`   | The SvelteKit single-page app that `web/` replaces                                | `docs/plans/Observability.md` (AWS performance, measured), `docs/Observability.md` (`npm run perf`), `docs/Ecosystem.md`         |
+| `tacocat-gallery-hosting-aws` | The S3 bucket and CloudFront distribution that serve the app on `pix.tacocat.com` | `template.yaml`                                                                                                                  |
+| `tacocat-gallery-auth`        | Cognito login, which the passkey login here replaces                              | `template.yaml`                                                                                                                  |
+
+Search is Redis Labs, configured by hand in its dashboard, with no repo.
+
+## This repo
+
+Three npm workspaces: `shared/` holds the album schema and path helpers both sides agree on, `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has how to run, deploy and restore.
+
+## Spending
+
+The account is on Workers Paid ($5/month), so going past an allowance costs money rather than taking the site down, and at this site's scale that is usually cents.
+
+- **Ask before anything likely to cost more than $1 beyond the plan, and always before using Stream**, whose pricing is unchecked. Anything smaller needs no approval; say what it used, from `npx wrangler d1 info tacocat-proto` in `api/` for D1 and the dashboard for the rest. What can cost more than $1:
+    - **Images transformations** past 5,000 unique a month, $0.50 per 1,000 after that, as in a backfill of derived images.
+    - **A container larger than `lite`** left running. The transcoder is parked on `lite` (1/16 vCPU, 256 MiB), one instance at most, stopping 10 s after its last request; that is too small for real video, so size it up for a video test and back down afterwards. Tune ffmpeg in local Docker first (`docker build -t tacocat-transcoder api/transcoder`), where iteration is free.
+    - **Bulk copies into R2**: storage past 10 GB-month is $0.015 per GB-month, and writes past 1M a month $4.50 per million.
+- **Deploy whenever testing a risk needs it**, with `npm run deploy --workspace api -- --containers-rollout=none` unless the transcoder changed, and say what went out. Requests to the site in the hour before an idle-probe run (00:23, 01:23, 03:23, 07:23 and 15:23 UTC) make that run less idle; avoid those hours or note it in `docs/Perf.md`.
+- **Check `meta.rows_read` locally** before shipping a new query or trigger: a query that scans a table is slow as well as costly. An FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
 
 ## Design rules the code doesn't spell out
 
@@ -27,6 +47,8 @@ An FTS trigger that scanned the whole index on every write once read 37.7M D1 ro
 
 ## Rules
 
+- **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
+- **Never print, commit or paste secrets** from `api/.dev.vars` or the Worker's secrets.
 - **Tests.** Never change production behavior without a test that fails without the change. Read `docs/Testing.md` before writing one.
 - **No `eslint-disable` comments.** Fix the code, or ask the user if you can turn the rule off in `eslint.config.ts` with the reason.
 - `npm run lint:fix` fixers can change what code means; review the diff.
@@ -37,7 +59,7 @@ An FTS trigger that scanned the whole index on every write once read 37.7M D1 ro
 
 Comments exist ONLY to explain what the code cannot. Never restate the code. See `docs/CodeComments.md`.
 
-- **No planning ephemera.** Never reference plan docs, risk numbers from the README, or phase/step labels. Describe the actual rationale instead.
+- **No planning ephemera.** Never reference plan docs, risk numbers from `docs/Risks.md`, or phase/step labels. Describe the actual rationale instead.
 - **No opposition to prior state.** Don't write "This does NOT do X"; no future reader knows about X. Exceptions: regression tests, and changes a naive reader would plausibly revert.
 - **Don't name consumers.** "Used by Z" is instant doc rot.
 - **Don't restate the signature.** Strict TypeScript already says what a function takes and returns.
