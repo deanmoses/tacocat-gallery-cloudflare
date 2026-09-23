@@ -10,12 +10,12 @@
 
     interface Props {
         /** Callback to be called when the user confirms */
-        onConfirm?: () => void;
+        onConfirm?: () => void | undefined;
     }
 
     let { onConfirm }: Props = $props();
 
-    let dialog = $state() as Dialog;
+    let dialog = $state()!;
 
     export function show() {
         dialog.show();

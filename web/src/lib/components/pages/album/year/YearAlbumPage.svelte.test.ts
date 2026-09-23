@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import YearAlbumPage from './YearAlbumPage.svelte';
@@ -21,7 +21,9 @@ const ROOT = albumRecord({
 });
 
 describe(YearAlbumPage, () => {
-    beforeEach(() => resetAlbumState());
+    beforeEach(() => {
+        resetAlbumState();
+    });
 
     // Years are paged through newest first, so prev is the later year
     it('links prev to the later year and next to the earlier one', async () => {

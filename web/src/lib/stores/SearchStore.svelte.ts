@@ -34,10 +34,12 @@ class SearchStore {
         // Get or create the writable version of the search
         const searchEntry = this.#getOrCreateWritableStore(query);
         // I don't have a copy in memory.  Go get it
-        if (SearchLoadStatus.NOT_LOADED === searchEntry.status) {
-            this.#setLoadStatus(query, SearchLoadStatus.LOADING);
-            this.#fetchFromServer(query);
+        if (SearchLoadStatus.NOT_LOADED !== searchEntry.status) {
+            return;
         }
+
+        this.#setLoadStatus(query, SearchLoadStatus.LOADING);
+        this.#fetchFromServer(query);
     }
 
     /**
@@ -73,7 +75,7 @@ class SearchStore {
     #fetchFromServer(query: SearchQuery, startAt = 0): void {
         const pageSize = 30;
         fetch(searchUrl(query, startAt, pageSize))
-            .then((response: Response) => {
+            .then(async (response: Response) => {
                 if (!response.ok) {
                     throw new Error(response.statusText);
                 }
@@ -82,7 +84,7 @@ class SearchStore {
             .then((json) => {
                 console.log(`Search`, query, `fetched from server`, json);
                 const searchResults = this.#toSearchResults(json);
-                console.log(`Transformed search results `, searchResults);
+                console.log(`Transformed search results`, searchResults);
                 // Calculate next offset based on server response size, not filtered size
                 const serverItemCount = searchResults.items?.length ?? 0;
                 searchResults.nextStartAt = startAt + serverItemCount;
@@ -109,7 +111,7 @@ class SearchStore {
     }
 
     #handleFetchError(query: SearchQuery, error: string): void {
-        console.error(`Search error fetching from server: `, query, error);
+        console.error(`Search error fetching from server:`, query, error);
         const status = this.#getLoadStatus(query);
         switch (status) {
             case SearchLoadStatus.LOADING:
@@ -154,7 +156,7 @@ class SearchStore {
 
     #getLoadStatus(query: SearchQuery): SearchLoadStatus {
         const search = this.#searches.get(query);
-        return !!search ? search.status : SearchLoadStatus.NOT_LOADED;
+        return search ? search.status : SearchLoadStatus.NOT_LOADED;
     }
 
     /**
@@ -168,7 +170,7 @@ class SearchStore {
 
         // If the search wasn't found in memory
         if (!searchEntry) {
-            console.log(`Search not found in memory `, query);
+            console.log(`Search not found in memory`, query);
             // Create blank entry so that consumers have some object
             // to which they can subscribe to changes
             searchEntry = {
@@ -222,7 +224,7 @@ class SearchStore {
 }
 export const searchStore: SearchStore = new SearchStore();
 
-type ServerSearchResults = {
+interface ServerSearchResults {
     total: number;
     items: GalleryRecord[];
-};
+}

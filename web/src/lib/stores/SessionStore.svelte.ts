@@ -99,17 +99,14 @@ class SessionStore {
     #handleErrors(response: Response): void {
         if (!response.ok) {
             const msg = `Response not OK fetching authentication status: ${response.statusText}`;
-            throw Error(msg);
+            throw new Error(msg);
         } else if (response.status !== 200) {
             const msg = `Non-200 response (${response.status}) fetching authentication status`;
-            throw Error(msg);
-        } else if (
-            !response.headers.get('content-type') ||
-            !response.headers.get('content-type')?.startsWith('application/json')
-        ) {
+            throw new Error(msg);
+        } else if (!response.headers.get('content-type')?.startsWith('application/json')) {
             const ctnt = response.headers.get('content-type');
             const msg = `Expected response to be in JSON.  Instead got ${ctnt}. ${response.statusText}`;
-            throw Error(msg);
+            throw new Error(msg);
         }
     }
 
@@ -117,7 +114,7 @@ class SessionStore {
         const hasBeenLoggedIn = await getFromIdb(HasBeenLoggedInIDBKey);
         if (hasBeenLoggedIn) this.#hasBeenLoggedInSuccess();
         else {
-            console.log(`user has never been logged in before: `, hasBeenLoggedIn);
+            console.log(`user has never been logged in before:`, hasBeenLoggedIn);
         }
     }
 }

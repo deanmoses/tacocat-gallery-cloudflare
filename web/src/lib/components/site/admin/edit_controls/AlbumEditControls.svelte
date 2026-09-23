@@ -9,12 +9,12 @@
 
     interface Props {
         /** Whether album is published or not */
-        published?: boolean;
+        published?: boolean | undefined;
 
         /** Show the summary field.  Should only be shown on day albums, not year albums */
-        showSummary?: boolean;
+        showSummary?: boolean | undefined;
 
-        summary?: string;
+        summary?: string | undefined;
     }
 
     let { published = false, showSummary = false, summary = '' }: Props = $props();
@@ -32,11 +32,11 @@
     {#snippet rightControls()}
         {#if showSummary}
             <div>
-                <input type="text" name="text" value={summary ?? ''} oninput={onSummaryChange} />
+                <input name="text" oninput={onSummaryChange} type="text" value={summary ?? ''} />
             </div>
         {/if}
         <div>
-            <input type="checkbox" name="check" checked={published} onchange={onPublishedChange} /> published
+            <input name="check" checked={published} onchange={onPublishedChange} type="checkbox" /> published
         </div>
     {/snippet}
 </BaseEditControls>

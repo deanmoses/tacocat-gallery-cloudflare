@@ -13,7 +13,7 @@ import { VIDEO_EXTENSIONS } from './galleryPathUtils';
 
 const heicHandler: FileFormatHandler = {
     extensions: ['heic', 'heif'],
-    getMediaPath: (uploadPath) => uploadPath.replace(/\.(heic|heif)$/i, '.jpg'),
+    getMediaPath: (uploadPath) => uploadPath.replace(/\.(heic|heif)$/iv, '.jpg'),
     browserCanDisplay: false,
 };
 
@@ -21,7 +21,7 @@ const videoHandler: FileFormatHandler = {
     extensions: VIDEO_EXTENSIONS,
     getMediaPath: (uploadPath) => uploadPath, // No rename
     browserCanDisplay: false, // Can't validate in <img>
-    processingTimeoutMs: 180000, // 3 minutes for video transcoding
+    processingTimeoutMs: 180_000, // 3 minutes for video transcoding
 };
 
 const handlers: FileFormatHandler[] = [heicHandler, videoHandler];
@@ -31,7 +31,7 @@ const handlers: FileFormatHandler[] = [heicHandler, videoHandler];
  * Each handler knows whether it applies to a file, how the server will rename it,
  * and whether browsers can validate it.
  */
-type FileFormatHandler = {
+interface FileFormatHandler {
     /**
      * File extensions this handler applies to (without dots, lowercase)
      */
@@ -51,12 +51,12 @@ type FileFormatHandler = {
      * Custom timeout for processing (videos take longer than images)
      */
     processingTimeoutMs?: number;
-};
+}
 
 /** Returns true if the filename ends with one of the given extensions */
 function hasExtension(fileName: string, extensions: string[]): boolean {
     const extPattern = extensions.join('|');
-    const regex = new RegExp(`\\.(${extPattern})$`, 'i');
+    const regex = new RegExp(String.raw`\.(${extPattern})$`, 'i');
     return regex.test(fileName);
 }
 
@@ -98,4 +98,4 @@ export function getProcessingTimeout(fileNameOrPath: string): number {
 }
 
 /** Default processing timeout for images (15 seconds) */
-const DEFAULT_PROCESSING_TIMEOUT_MS = 15000;
+const DEFAULT_PROCESSING_TIMEOUT_MS = 15_000;

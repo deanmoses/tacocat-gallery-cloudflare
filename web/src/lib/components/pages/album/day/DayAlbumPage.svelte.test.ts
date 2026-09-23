@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import DayAlbumPage from './DayAlbumPage.svelte';
@@ -23,7 +23,9 @@ const PARENT = albumRecord({
 const OLDER = shortDate(new Date(2001, 11, 30));
 
 describe(DayAlbumPage, () => {
-    beforeEach(() => resetAlbumState());
+    beforeEach(() => {
+        resetAlbumState();
+    });
 
     it('links next to the older sibling, and has nothing newer to link prev to', async () => {
         seedLoadedAlbum(PARENT);

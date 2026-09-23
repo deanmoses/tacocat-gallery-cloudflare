@@ -5,8 +5,8 @@
 -->
 <script lang="ts">
     interface Props {
-        width?: string;
-        height?: string;
+        width?: string | undefined;
+        height?: string | undefined;
     }
 
     let { width = '1em', height = '1em' }: Props = $props();
@@ -16,7 +16,7 @@
     const viewBox = '0 0 1196 1081.166748046875';
 </script>
 
-<svg {width} {height} {viewBox}><path {d} /></svg>
+<svg {height} {viewBox} {width}><path {d} /></svg>
 
 <style>
     path {

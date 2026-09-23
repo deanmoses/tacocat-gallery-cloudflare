@@ -13,7 +13,7 @@
 
     let path: string = $derived(page.url.pathname);
     let show: boolean = $derived(isValidMediaPath(path)); // Show this button only on media pages
-    let dialog = $state() as SetYearThumbnailConfirmDialog;
+    let dialog = $state()!;
 
     function onclick(): void {
         dialog.show();
@@ -27,6 +27,6 @@
 </script>
 
 {#if show}
-    <ControlStripButton title="Set thumbnail for year" {onclick}><StarIcon />Year</ControlStripButton>
+    <ControlStripButton {onclick} title="Set thumbnail for year"><StarIcon />Year</ControlStripButton>
     <SetYearThumbnailConfirmDialog bind:this={dialog} {onConfirm} />
 {/if}

@@ -12,12 +12,12 @@
 
     interface Props {
         path: string;
-        href?: string;
-        thumbnailUrlInfo?: ThumbnailUrlInfo;
-        title?: string;
-        summary?: string;
-        published?: boolean;
-        selectionControls?: Snippet;
+        href?: string | undefined;
+        thumbnailUrlInfo?: ThumbnailUrlInfo | undefined;
+        title?: string | undefined;
+        summary?: string | undefined;
+        published?: boolean | undefined;
+        selectionControls?: Snippet | undefined;
     }
     let { path, href, thumbnailUrlInfo, title, summary, published, selectionControls }: Props = $props();
     let creating: boolean = $derived(CreateStatus.IN_PROGRESS === albumState.albumCreates.get(path)?.status);
@@ -26,13 +26,13 @@
 </script>
 
 <Thumbnail
-    {title}
-    {thumbnailUrlInfo}
-    {summary}
+    {creating}
+    {deleting}
     {href}
     {published}
-    {deleting}
     {renaming}
-    {creating}
     {selectionControls}
+    {summary}
+    {thumbnailUrlInfo}
+    {title}
 />

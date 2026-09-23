@@ -43,6 +43,6 @@ export abstract class ThumbableBaseImpl implements Thumbable {
 
     get published(): boolean {
         // TODO: all images are published=false by this logic
-        return 'published' in this.json ? !!this.json.published : false;
+        return 'published' in this.json ? Boolean(this.json.published) : false;
     }
 }

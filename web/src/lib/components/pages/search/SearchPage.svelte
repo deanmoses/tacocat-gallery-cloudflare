@@ -11,18 +11,18 @@
     import { localSearchUrl } from '$lib/utils/config';
 
     interface Props {
-        searchTerms?: string;
-        returnPath?: string;
-        title?: string;
-        children?: Snippet;
+        searchTerms?: string | undefined;
+        returnPath?: string | undefined;
+        title?: string | undefined;
+        children?: Snippet | undefined;
     }
 
     let { searchTerms = $bindable(''), returnPath = '', title = '', children }: Props = $props();
 
-    let searchInput = $state() as HTMLInputElement;
+    let searchInput = $state()!;
 
     let pageTitle = $derived(searchTerms ? `Search for ${searchTerms}` : title || 'Search The Moses Family');
-    let disabled = $derived(3 > searchTerms.length);
+    let disabled = $derived(searchTerms.length < 3);
 
     function autofocus(formInput: HTMLInputElement) {
         formInput.focus();
@@ -36,9 +36,9 @@
         e.preventDefault();
         const terms = searchInput.value;
         if (terms) {
-            const oldestYear = toInt((document.getElementById('oldestYear') as HTMLInputElement)?.value);
-            const newestYear = toInt((document.getElementById('newestYear') as HTMLInputElement)?.value);
-            const oldestFirst = toBool((document.getElementById('oldestFirst') as HTMLInputElement)?.checked);
+            const oldestYear = toInt((document.getElementById('oldestYear') as HTMLInputElement).value);
+            const newestYear = toInt((document.getElementById('newestYear') as HTMLInputElement).value);
+            const oldestFirst = toBool((document.getElementById('oldestFirst') as HTMLInputElement).checked);
             goto(localSearchUrl({ terms, oldestYear, newestYear, oldestFirst }, returnPath));
         }
     }
@@ -61,16 +61,16 @@
         <a href={returnPath}><ReturnIcon /></a>
         <form onsubmit={onSubmit}>
             <input
-                name="searchTerms"
-                type="text"
-                placeholder="search"
-                autocapitalize="off"
-                value={searchTerms}
-                oninput={onInput}
                 bind:this={searchInput}
+                name="searchTerms"
+                autocapitalize="off"
+                oninput={onInput}
+                placeholder="search"
+                type="text"
+                value={searchTerms}
                 use:autofocus
             />
-            <button type="submit" class="btn" {disabled}> Search </button>
+            <button class="btn" {disabled} type="submit"> Search </button>
         </form>
     </header>
     {@render children?.()}

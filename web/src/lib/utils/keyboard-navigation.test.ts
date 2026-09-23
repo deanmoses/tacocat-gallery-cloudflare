@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { handleKeyboardNavigation } from './keyboard-navigation';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
@@ -22,7 +22,11 @@ const IN_MEMORY = new Map<string, Album>([
 ]);
 const getAlbum = (path: string) => IN_MEMORY.get(path);
 
-type Case = { key: string; from: string; goesTo: string | null };
+interface Case {
+    key: string;
+    from: string;
+    goesTo: string | null;
+}
 
 // Albums are paged through newest first, so the right arrow goes to the older one
 const CASES: Case[] = [

@@ -7,13 +7,13 @@
     import Icon from './Icon.svelte';
 
     interface Props {
-        width?: string;
-        height?: string;
-        title?: string;
-        bottom?: string;
+        width?: string | undefined;
+        height?: string | undefined;
+        title?: string | undefined;
+        bottom?: string | undefined;
     }
 
-    let { width = '1em', height = '1em', title = undefined, bottom }: Props = $props();
+    let { width = '1em', height = '1em', title, bottom }: Props = $props();
 
     // Play triangle: equilateral proportions, optically centered (shifted right ~6 units)
     // Left corners use quadratic bezier curves for rounding, right point stays sharp
@@ -21,4 +21,4 @@
     const viewBox = '0 0 100 100';
 </script>
 
-<Icon {width} {height} {viewBox} {title} {d} {bottom} />
+<Icon {bottom} {d} {height} {title} {viewBox} {width} />

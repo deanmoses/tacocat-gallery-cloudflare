@@ -3,7 +3,7 @@
     import BlankSearchPageLayout from '$lib/components/pages/search/BlankSearchPageLayout.svelte';
     import SearchLoadingPage from '$lib/components/pages/search/SearchLoadingPage.svelte';
     import SearchResultsPage from '$lib/components/pages/search/SearchResultsPage.svelte';
-    import { SearchLoadStatus, type Search, type SearchResults } from '$lib/models/search';
+    import { type Search, SearchLoadStatus, type SearchResults } from '$lib/models/search';
     import { searchStore } from '$lib/stores/SearchStore.svelte';
 
     let { data }: PageProps = $props();
@@ -16,15 +16,15 @@
 </script>
 
 {#if SearchLoadStatus.NOT_LOADED === status}
-    <SearchLoadingPage {searchTerms} {returnPath} />
+    <SearchLoadingPage {returnPath} {searchTerms} />
 {:else if SearchLoadStatus.LOADING === status}
-    <SearchLoadingPage {searchTerms} {returnPath} />
+    <SearchLoadingPage {returnPath} {searchTerms} />
 {:else if SearchLoadStatus.ERROR_LOADING === status}
-    <BlankSearchPageLayout {searchTerms} {returnPath}>There was an error searching</BlankSearchPageLayout>
+    <BlankSearchPageLayout {returnPath} {searchTerms}>There was an error searching</BlankSearchPageLayout>
 {:else if SearchLoadStatus.LOADED === status || SearchLoadStatus.LOADING_MORE_RESULTS === status || SearchLoadStatus.ERROR_LOADING_MORE_RESULTS === status}
-    <SearchResultsPage {returnPath} {query} {status} {results} />
+    <SearchResultsPage {query} {results} {returnPath} {status} />
 {:else}
-    <BlankSearchPageLayout {searchTerms} {returnPath}>
+    <BlankSearchPageLayout {returnPath} {searchTerms}>
         Unhandled status: <div>{status}</div>
     </BlankSearchPageLayout>
 {/if}

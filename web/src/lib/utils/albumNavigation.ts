@@ -3,12 +3,12 @@ import { shortDate } from './date-utils';
 import { albumPathToDate, isValidDayAlbumPath } from './galleryPathUtils';
 
 /** Where an album page's prev and next buttons lead */
-export type AlbumNav = {
+export interface AlbumNav {
     prevHref: string | undefined;
     nextHref: string | undefined;
     prevTitle: string | undefined;
     nextTitle: string | undefined;
-};
+}
 
 /**
  * An album's neighbours are the children on either side of it in its parent.
@@ -20,8 +20,8 @@ export type AlbumNav = {
 export function albumNav(albumPath: string, parent: Album | undefined): AlbumNav {
     const siblings = parent?.albums ?? [];
     const index = siblings.findIndex((sibling) => sibling.path === albumPath);
-    const prev = index < 0 ? undefined : siblings[index - 1];
-    const next = index < 0 ? undefined : siblings[index + 1];
+    const prev = index === -1 ? undefined : siblings[index - 1];
+    const next = index === -1 ? undefined : siblings[index + 1];
     return {
         prevHref: prev?.href,
         nextHref: next?.href,

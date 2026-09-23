@@ -34,9 +34,9 @@
     }
 </script>
 
-<DayAlbumPageLayout title={album.title} published={album.published}>
+<DayAlbumPageLayout published={album.published} title={album.title}>
     {#snippet editControls()}
-        <AlbumEditControls showSummary summary={album.summary} published={album.published} />
+        <AlbumEditControls published={album.published} showSummary summary={album.summary} />
     {/snippet}
 
     {#snippet nav()}
@@ -60,29 +60,29 @@
             {#each album.media as media (media.path)}
                 {#if okToNavigate}
                     <MediaThumbnail
-                        path={media.path}
-                        mediaType={media.mediaType}
-                        title={media.title}
-                        summary={media.summary}
                         href={media.path}
+                        mediaType={media.mediaType}
+                        path={media.path}
+                        summary={media.summary}
                         thumbnailUrlInfo={media.thumbnailUrlInfo}
+                        title={media.title}
                     >
                         {#snippet selectionControls()}
                             <SelectableStar
                                 albumThumbPath={album.thumbnailPath}
-                                path={media.path}
                                 onSelected={albumThumbnailSelected}
+                                path={media.path}
                             />
                         {/snippet}
                     </MediaThumbnail>
                 {:else}
                     <div title="💾 Save changes before navigating">
                         <MediaThumbnail
-                            path={media.path}
                             mediaType={media.mediaType}
-                            title={media.title}
+                            path={media.path}
                             summary={media.summary}
                             thumbnailUrlInfo={media.thumbnailUrlInfo}
+                            title={media.title}
                         />
                     </div>
                 {/if}

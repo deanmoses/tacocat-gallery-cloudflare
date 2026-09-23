@@ -4,7 +4,7 @@
  */
 export function portal(node: HTMLElement) {
     // Move this element from where it is in the DOM to be a child of <body>
-    document.body.appendChild(node);
+    document.body.append(node);
 
     return {
         destroy() {

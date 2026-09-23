@@ -1,16 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { isAlbumRecord, isMediaRecord, isImageRecord, isVideoRecord } from './server';
+import { describe, expect, it } from 'vitest';
+import { isAlbumRecord, isImageRecord, isMediaRecord, isVideoRecord } from './server';
 import type { GalleryRecord } from './server';
 import { albumRecord, imageRecord, videoRecord } from '$lib/test-support/records';
 
-type GuardCase = {
+interface GuardCase {
     description: string;
     record: GalleryRecord;
     isAlbum: boolean;
     isMedia: boolean;
     isImage: boolean;
     isVideo: boolean;
-};
+}
 
 const CASES: GuardCase[] = [
     { description: 'album', record: albumRecord(), isAlbum: true, isMedia: false, isImage: false, isVideo: false },

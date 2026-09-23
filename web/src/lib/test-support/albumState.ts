@@ -1,5 +1,5 @@
 import { albumState } from '$lib/stores/AlbumState.svelte';
-import { AlbumLoadStatus, type AlbumEntry } from '$lib/models/album';
+import { type AlbumEntry, AlbumLoadStatus } from '$lib/models/album';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { AlbumGalleryItem } from '$lib/models/impl/server';
 import type { Album } from '$lib/models/GalleryItemInterfaces';

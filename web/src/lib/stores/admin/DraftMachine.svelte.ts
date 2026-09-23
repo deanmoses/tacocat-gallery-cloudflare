@@ -104,7 +104,7 @@ class DraftMachine {
      * Throw away all draft edits; reset the store
      */
     cancel(): void {
-        console.log('canceling draft: ', $state.snapshot(this.#draft));
+        console.log('canceling draft:', $state.snapshot(this.#draft));
         this.#draft = initialState;
     }
 
@@ -157,7 +157,7 @@ class DraftMachine {
             if (originalState.content === undefined) throw 'originalState.content is undefined';
             applyChangesToDraftContent(originalState.content);
         });
-        console.log(`Update draft [${newState.path}]: `, newState.content);
+        console.log(`Update draft [${newState.path}]:`, newState.content);
         this.#draft = newState;
     }
 
@@ -173,11 +173,11 @@ class DraftMachine {
     //
 
     async #save(draft: Draft): Promise<void> {
-        if (!draft || !draft.path || !draft.content) {
+        if (!draft.path || !draft.content) {
             console.error(`Error saving [${draft.path}]: nothing to save!`);
             this.#saveError();
         } else {
-            console.log(`Saving draft [${draft.path}]: `, draft.content);
+            console.log(`Saving draft [${draft.path}]:`, draft.content);
             this.#saveStart();
             try {
                 const response = await adminApi.patch(updateUrl(draft.path), draft.content);

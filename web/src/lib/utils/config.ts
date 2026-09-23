@@ -56,7 +56,7 @@ export function videoPlaybackUrl(path: string, versionId: string): string {
  * URL to check for media processing errors
  */
 export function mediaErrorsUrl(): string {
-    return baseApiUrl() + 'errors';
+    return `${baseApiUrl()}errors`;
 }
 
 /**
@@ -64,7 +64,7 @@ export function mediaErrorsUrl(): string {
  */
 export function albumUrl(path: string): string {
     if (!isValidAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
-    return baseApiUrl() + 'album' + path;
+    return `${baseApiUrl()}album${path}`;
 }
 
 /**
@@ -72,7 +72,7 @@ export function albumUrl(path: string): string {
  * @param path path of album to create
  */
 export function createAlbumUrl(path: string): string {
-    return baseApiUrl() + 'album' + path;
+    return `${baseApiUrl()}album${path}`;
 }
 
 /**
@@ -96,7 +96,7 @@ export function deleteUrl(path: string): string {
  * @param albumPath path to an album like /2001/12-31/
  */
 export function setThumbnailUrl(albumPath: string): string {
-    return baseApiUrl() + 'album-thumb' + albumPath;
+    return `${baseApiUrl()}album-thumb${albumPath}`;
 }
 
 /**
@@ -104,7 +104,7 @@ export function setThumbnailUrl(albumPath: string): string {
  * @param albumPath path to an album like /2001/12-31/
  */
 export function getPresignedUploadUrlGenerationUrl(albumPath: string): string {
-    return baseApiUrl() + 'presigned' + albumPath;
+    return `${baseApiUrl()}presigned${albumPath}`;
 }
 
 /**
@@ -112,7 +112,7 @@ export function getPresignedUploadUrlGenerationUrl(albumPath: string): string {
  * @param mediaPath path to media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
  */
 export function recropThumbnailUrl(mediaPath: string): string {
-    return baseApiUrl() + 'thumb' + mediaPath;
+    return `${baseApiUrl()}thumb${mediaPath}`;
 }
 
 /**
@@ -120,7 +120,7 @@ export function recropThumbnailUrl(mediaPath: string): string {
  * @param albumPath path to an album like /2001/12-31/
  */
 export function renameAlbumUrl(albumPath: string): string {
-    return baseApiUrl() + 'album-rename' + albumPath;
+    return `${baseApiUrl()}album-rename${albumPath}`;
 }
 
 /**
@@ -128,21 +128,21 @@ export function renameAlbumUrl(albumPath: string): string {
  * @param mediaPath path to media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
  */
 export function renameMediaUrl(mediaPath: string): string {
-    return baseApiUrl() + 'media-rename' + mediaPath;
+    return `${baseApiUrl()}media-rename${mediaPath}`;
 }
 
 /**
  * URL to send HTTP GET to search for the specified terms
  */
 export function searchUrl(q: SearchQuery, startAt: number, pageSize: number): string {
-    let url = baseApiUrl() + 'search/' + encodeURIComponent(q.terms);
+    let url = `${baseApiUrl()}search/${encodeURIComponent(q.terms)}`;
     const params: string[] = [];
-    if (q.oldestYear) params.push('oldest=' + q.oldestYear);
-    if (q.newestYear) params.push('newest=' + q.newestYear);
-    if (q.oldestFirst) params.push('oldestFirst=' + q.oldestFirst);
-    if (startAt) params.push('startAt=' + startAt);
-    if (pageSize) params.push('pageSize=' + pageSize);
-    if (params) url += '?' + params.join('&');
+    if (q.oldestYear) params.push(`oldest=${q.oldestYear}`);
+    if (q.newestYear) params.push(`newest=${q.newestYear}`);
+    if (q.oldestFirst) params.push(`oldestFirst=${q.oldestFirst}`);
+    if (startAt) params.push(`startAt=${startAt}`);
+    if (pageSize) params.push(`pageSize=${pageSize}`);
+    if (params) url += `?${params.join('&')}`;
     return url;
 }
 
@@ -150,13 +150,13 @@ export function searchUrl(q: SearchQuery, startAt: number, pageSize: number): st
  * Relative URL to the search page within the Sveltekit app
  */
 export function localSearchUrl(q: SearchQuery, returnPath: string): string {
-    let url = '/search/' + encodeURIComponent(ensureDumbQuotes(q.terms));
+    let url = `/search/${encodeURIComponent(ensureDumbQuotes(q.terms))}`;
     const params: string[] = [];
-    params.push('returnPath=' + returnPath);
-    if (q.oldestYear) params.push('oldest=' + q.oldestYear);
-    if (q.newestYear) params.push('newest=' + q.newestYear);
-    if (q.oldestFirst) params.push('oldestFirst=' + q.oldestFirst);
-    if (params) url += '?' + params.join('&');
+    params.push(`returnPath=${returnPath}`);
+    if (q.oldestYear) params.push(`oldest=${q.oldestYear}`);
+    if (q.newestYear) params.push(`newest=${q.newestYear}`);
+    if (q.oldestFirst) params.push(`oldestFirst=${q.oldestFirst}`);
+    if (params) url += `?${params.join('&')}`;
     return url;
 }
 
@@ -166,14 +166,14 @@ export function localSearchUrl(q: SearchQuery, returnPath: string): string {
  * Turn them into dumb quotes.
  */
 function ensureDumbQuotes(searchTerms: string): string {
-    return searchTerms.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+    return searchTerms.replaceAll(/[\u{2018}\u{2019}]/gv, "'").replaceAll(/[\u{201C}\u{201D}]/gv, '"');
 }
 
 /**
  * URL to check user's authentication status
  */
 export function checkAuthenticationUrl(): string {
-    return baseApiUrl() + 'auth/status';
+    return `${baseApiUrl()}auth/status`;
 }
 
 /**

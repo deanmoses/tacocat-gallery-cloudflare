@@ -60,4 +60,4 @@
         {/key}
     {/snippet}
 </MediaPageLayout>
-<FullScreenDropZone mediaPath={media.path} versionId={media.versionId} allowDrop={okToNavigate} />
+<FullScreenDropZone allowDrop={okToNavigate} mediaPath={media.path} versionId={media.versionId} />

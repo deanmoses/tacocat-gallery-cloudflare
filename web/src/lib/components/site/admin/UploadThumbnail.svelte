@@ -17,7 +17,7 @@
 
     // Create object URL that tracks upload.file changes and cleans up properly
     // For HEIC files, tests if browser can display them (Safari can, others can't)
-    let urlForTemplate = $state<string | undefined>(undefined);
+    let urlForTemplate = $state<string | undefined>();
     $effect(() => {
         let active = true;
         let currentUrl = '';
@@ -32,15 +32,17 @@
         });
         return () => {
             active = false;
-            if (currentUrl) {
-                console.info(`UploadThumbnail: revoking object URL for ${upload.file.name}`);
-                URL.revokeObjectURL(currentUrl);
+            if (!currentUrl) {
+                return;
             }
+
+            console.info(`UploadThumbnail: revoking object URL for ${upload.file.name}`);
+            URL.revokeObjectURL(currentUrl);
         };
     });
 </script>
 
-<Thumbnail title={upload.file.name} src={urlForTemplate} summary={upload.status}>
+<Thumbnail src={urlForTemplate} summary={upload.status} title={upload.file.name}>
     {#snippet selectionControls()}
         <div><WaitingIcon height="100px" width="100px" /></div>
     {/snippet}

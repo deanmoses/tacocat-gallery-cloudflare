@@ -6,7 +6,7 @@
 <script lang="ts">
     import BigImage from '../image/BigImage.svelte';
     import VideoPlayer from '../video/VideoPlayer.svelte';
-    import type { Media, Image, Video } from '$lib/models/GalleryItemInterfaces';
+    import type { Image, Media, Video } from '$lib/models/GalleryItemInterfaces';
 
     interface Props {
         media: Media;

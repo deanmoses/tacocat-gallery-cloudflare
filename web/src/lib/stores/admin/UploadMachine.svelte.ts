@@ -1,17 +1,17 @@
 import { toast } from '@zerodevx/svelte-toast';
-import { UploadState, type MediaItemToUpload } from '$lib/models/album';
+import { type MediaItemToUpload, UploadState } from '$lib/models/album';
 import { albumState, getUploadsForAlbum } from '../AlbumState.svelte';
 import {
-    sanitizeMediaFilename,
-    getParentFromPath,
-    isValidMediaPath,
-    hasValidMediaExtension,
     deduplicateMediaPaths,
+    getParentFromPath,
+    hasValidMediaExtension,
+    isValidMediaPath,
+    sanitizeMediaFilename,
 } from '$lib/utils/galleryPathUtils';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
-import { uploadToS3, fetchPresignedUrls } from '$lib/utils/s3Upload';
+import { fetchPresignedUrls, uploadToS3 } from '$lib/utils/s3Upload';
 import { getMediaPath, getProcessingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 
@@ -229,7 +229,6 @@ class UploadMachine {
                 this.#uploadComplete(mediaItemToUpload.uploadPath);
             }
             toast.push(`${e}`);
-            return;
         }
     }
 
@@ -310,7 +309,7 @@ class UploadMachine {
 }
 export const uploadMachine = new UploadMachine();
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 //
 // Utils for working with machine

@@ -14,7 +14,7 @@
 
     interface Props {
         title: string;
-        children?: Snippet;
+        children?: Snippet | undefined;
     }
 
     let { title, children }: Props = $props();

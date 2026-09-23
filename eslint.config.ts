@@ -271,6 +271,20 @@ export default defineConfig(
         rules: {
             // The preset's default wants no `lang` at all; every script here is TypeScript.
             'svelte/block-lang': ['error', { script: 'ts' }],
+            // Classes the web app's stylesheets define, which a component uses without a rule of its own.
+            'svelte/no-unused-class-name': [
+                'error',
+                {
+                    allowedClassNames: [
+                        'caption',
+                        'hidden-sm',
+                        'hidden-xs',
+                        'hidden-xxs',
+                        'visible-xs',
+                        'site-container',
+                    ],
+                },
+            ],
         },
     },
 
@@ -573,6 +587,29 @@ export default defineConfig(
             'svelte/no-navigation-without-base': 'off',
             // {@const} is how a value derived inside an {#each} block gets a name; the rule is the preset's taste, not a check.
             'svelte/no-at-const-tags': 'off',
+            // The app has no base path, so resolve() would add nothing to hrefs that are gallery paths built by the
+            // models, and the same goes for goto().
+            'svelte/no-navigation-without-resolve': 'off',
+            'svelte/no-goto-without-base': 'off',
+            // Album and media descriptions are rich text admins write in Quill, rendered as HTML by design.
+            'svelte/no-at-html-tags': 'off',
+            // A style directive is how a dynamic size or position reaches an element; there is no class for a value
+            // computed at runtime.
+            'svelte/no-inline-styles': 'off',
+            // Prefers the element's tag over its class in a selector. A class says what the element is for; the tag
+            // says what it happens to be.
+            'svelte/consistent-selector-style': 'off',
+            // Wants every function prop named on*. The app's function props are predicates and transforms a parent
+            // injects, such as which files a drop zone accepts, and an on* name would present them as events.
+            'svelte/require-event-prefix': 'off',
+        },
+    },
+    {
+        name: 'web house style',
+        files: ['web/src/**/*'],
+        rules: {
+            // `d` is the SVG path attribute the icon components take as a prop.
+            'id-length': ['error', { properties: 'never', exceptions: ['_', 'd'] }],
         },
     },
 

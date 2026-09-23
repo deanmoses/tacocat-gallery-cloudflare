@@ -12,7 +12,7 @@
     <picture>
         <source srcset={logoWebp} type="image/webp" />
         <source srcset={logoPng} type="image/png" />
-        <img src={logoPng} width="102" height="19" alt="" draggable="false" decoding="async" />
+        <img alt="" decoding="async" draggable="false" height="19" src={logoPng} width="102" />
     </picture>
 </footer>
 

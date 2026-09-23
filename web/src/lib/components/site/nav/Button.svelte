@@ -7,17 +7,17 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        href?: string;
+        href?: string | undefined;
         title: string;
-        children?: Snippet;
+        children?: Snippet | undefined;
     }
 
     let { href = '', title, children }: Props = $props();
 
-    let ariaDisabled: boolean | null = $derived(!href ? true : null);
+    let ariaDisabled: boolean | null = $derived(href ? null : true);
 </script>
 
-<a {title} {href} aria-disabled={ariaDisabled}><span>{@render children?.()}</span></a>
+<a aria-disabled={ariaDisabled} {href} {title}><span>{@render children?.()}</span></a>
 
 <style>
     a {

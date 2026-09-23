@@ -11,7 +11,7 @@
     interface Props {
         path: string;
         albumThumbPath: string | undefined;
-        onSelected?: (path: string) => void;
+        onSelected?: (path: string) => void | undefined;
     }
 
     let { path, albumThumbPath, onSelected }: Props = $props();
@@ -21,7 +21,7 @@
     let selecting: boolean = $state(false);
     $effect(() => {
         // Reference 'selected' so that $effect is triggered every time it changes
-        void selected;
+        selected;
         selecting = false;
     });
 

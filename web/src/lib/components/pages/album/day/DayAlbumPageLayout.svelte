@@ -16,10 +16,10 @@
     interface Props {
         title: string;
         published: boolean;
-        editControls?: Snippet;
-        nav?: Snippet;
-        caption?: Snippet;
-        thumbnails?: Snippet;
+        editControls?: Snippet | undefined;
+        nav?: Snippet | undefined;
+        caption?: Snippet | undefined;
+        thumbnails?: Snippet | undefined;
     }
 
     let { title = '', published = false, editControls, nav, caption, thumbnails }: Props = $props();
@@ -51,7 +51,7 @@
             </section>
             {#if unpublished}
                 <div class="unpublished">
-                    <UnpublishedIcon width="3em" height="3em" />
+                    <UnpublishedIcon height="3em" width="3em" />
                 </div>
             {/if}
         </MainContent>

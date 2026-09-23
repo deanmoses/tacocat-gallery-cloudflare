@@ -8,11 +8,11 @@ export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp
 const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].join('|');
 
 /** Regex for validating media file extensions */
-const VALID_MEDIA_EXT_REGEX = new RegExp(`^.+\\.(${MEDIA_EXT_PATTERN})$`, 'i');
+const VALID_MEDIA_EXT_REGEX = new RegExp(String.raw`^.+\.(${MEDIA_EXT_PATTERN})$`, 'i');
 
 /** Regex for validating full media paths like /2001/12-31/image.jpg */
 const VALID_MEDIA_PATH_REGEX = new RegExp(
-    `^/\\d\\d\\d\\d/(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])/[a-zA-Z0-9_-]+\\.(${MEDIA_EXT_PATTERN})$`,
+    String.raw`^/\d\d\d\d/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/[a-zA-Z0-9_-]+\.(${MEDIA_EXT_PATTERN})$`,
     'i',
 );
 
@@ -55,21 +55,21 @@ export function isValidMediaPath(path: string): boolean {
  * like / or /2001/ or /2001/12-31/
  */
 export function isValidAlbumPath(path: string): boolean {
-    return /^(\/\d\d\d\d(\/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))?)?\/$/.test(path);
+    return /^(\/\d{4}(\/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))?)?\/$/v.test(path);
 }
 
 /**
  * Return true if specified string is a valid year album path like /2001/
  */
 export function isValidYearAlbumPath(path: string): boolean {
-    return /^\/\d\d\d\d\/$/.test(path);
+    return /^\/\d{4}\/$/v.test(path);
 }
 
 /**
  * Return true if specified string is a valid day album path like /2001/12-31/
  */
 export function isValidDayAlbumPath(path: string): boolean {
-    return /^\/\d\d\d\d\/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\/$/i.test(path);
+    return /^\/\d{4}\/(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\/$/v.test(path);
 }
 
 /**
@@ -82,7 +82,7 @@ export function isValidMediaNameWithoutExtensionStrict(filename: string): boolea
     // Pattern: alphanumeric start, then optional groups of (single underscore + alphanumeric)
     // ReDoS-safe because _ and [a-z0-9] are disjoint character classes (no ambiguity)
     // Old vulnerable pattern: /^[a-z0-9]+([a-z0-9_]*[a-z0-9]+)*$/
-    return /^[a-z0-9]+(_[a-z0-9]+)*$/.test(filename);
+    return /^[0-9a-z]+(_[0-9a-z]+)*$/v.test(filename);
 }
 
 /**
@@ -93,9 +93,9 @@ export function isValidMediaNameWithoutExtensionStrict(filename: string): boolea
 export function sanitizeMediaNameWithoutExtension(name: string): string {
     return (name || '')
         .toLowerCase()
-        .replace(/[^a-z0-9_]+/g, '_') // any invalid chars to _
-        .replace(/_+/g, '_') // multiple _ to _
-        .replace(/^_/, ''); // remove leading underscore
+        .replaceAll(/[^0-9_a-z]+/g, '_') // any invalid chars to _
+        .replaceAll(/_+/gv, '_') // multiple _ to _
+        .replace(/^_/v, ''); // remove leading underscore
     // Note: trailing underscores are NOT removed here to allow underscores
     // while the user is in the middle of typing a new name.
     // The strict validator will reject trailing underscores on submit.
@@ -105,7 +105,7 @@ export function sanitizeMediaNameWithoutExtension(name: string): string {
  * Return sanitized extension: lowercase, jpeg -> jpg
  */
 function sanitizeMediaExtension(ext: string): string {
-    return (ext || '').toLowerCase().replace(/^jpeg$/, 'jpg');
+    return (ext || '').toLowerCase().replace(/^jpeg$/v, 'jpg');
 }
 
 /**
@@ -122,17 +122,17 @@ export function sanitizeMediaFilename(filename: string): string {
     const dotIndex = filename.lastIndexOf('.');
     if (dotIndex === -1) return sanitizeMediaNameWithoutExtension(filename);
     let name = sanitizeMediaNameWithoutExtension(filename.slice(0, dotIndex));
-    name = name.replace(/_$/, ''); // remove trailing underscore before extension
+    name = name.replace(/_$/v, ''); // remove trailing underscore before extension
     const ext = sanitizeMediaExtension(filename.slice(dotIndex + 1));
     return `${name}.${ext}`;
 }
 
 export function sanitizeDayAlbumName(albumName: string): string {
     return (albumName || '')
-        .replace(/[a-zA-Z]+/g, '') // letters to nothing
-        .replace(/[^0-9-]+/g, '-') // any other invalid chars to -
-        .replace(/-+/g, '-') // multple - to single -
-        .replace(/^-/g, ''); // remove leading -
+        .replaceAll(/[A-Za-z]+/gv, '') // letters to nothing
+        .replaceAll(/[^-0-9]+/g, '-') // any other invalid chars to -
+        .replaceAll(/-+/gv, '-') // multple - to single -
+        .replaceAll(/^-/gv, ''); // remove leading -
 }
 
 /**
@@ -154,7 +154,7 @@ export function getParentAndNameFromPath(path: string): { parent: string; name: 
     if (!isValidPath(path)) throw new Error(`Invalid path: [${path}]`);
     if (path === '/') return { parent: '', name: '' };
     const pathParts = path.split('/'); // split the path apart
-    if (!pathParts[pathParts.length - 1]) pathParts.pop(); // if the path ended in a "/", remove the blank path part at the end
+    if (!pathParts.at(-1)) pathParts.pop(); // if the path ended in a "/", remove the blank path part at the end
     const name = pathParts.pop(); // remove leaf of path
     // Unreachable. Every valid path starts with a slash, so split() yields a
     // leading '' plus at least one segment: 3 parts minimum for a non-root path
@@ -164,11 +164,11 @@ export function getParentAndNameFromPath(path: string): { parent: string; name: 
     // fail loudly instead of quietly yielding an empty name.
     if (name === undefined) throw new Error(`Invalid path: [${path}]`);
     path = pathParts.join('/');
-    if (!path.endsWith('/')) path = path + '/';
-    if (!path.startsWith('/')) path = '/' + path;
+    if (!path.endsWith('/')) path += '/';
+    if (!path.startsWith('/')) path = `/${path}`;
     return {
         parent: path,
-        name: name,
+        name,
     };
 }
 
@@ -220,10 +220,10 @@ export function albumPathToDate(albumPath: string): Date {
     if (albumPath === '/') {
         return new Date(1826, 0, 1); // Date of first surviving photograph
     }
-    const m = /^\/(?<year>\d\d\d\d)\/((?<month>\d\d)-(?<day>\d\d)\/)?$/i.exec(albumPath);
+    const m = /^\/(?<year>\d{4})\/((?<month>\d{2})-(?<day>\d{2})\/)?$/v.exec(albumPath);
     if (!m?.groups?.year) throw new Error(`Error matching`);
     const year = Number.parseInt(m.groups.year, 10);
-    if (!!m?.groups?.month && !!m?.groups?.day) {
+    if (Boolean(m?.groups?.month) && Boolean(m?.groups?.day)) {
         const month = Number.parseInt(m.groups.month, 10) - 1;
         const day = Number.parseInt(m.groups.day, 10);
         return new Date(year, month, day);

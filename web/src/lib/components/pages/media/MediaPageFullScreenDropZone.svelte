@@ -14,15 +14,15 @@
     interface Props {
         mediaPath: string;
         /** Current versionId of the media being replaced (for detecting when replacement is complete) */
-        versionId?: string;
+        versionId?: string | undefined;
         /** So that the edit page can tell me whether it allows dropping */
-        allowDrop?: boolean;
+        allowDrop?: boolean | undefined;
     }
 
     let { mediaPath, versionId, allowDrop = true }: Props = $props();
 
     function isDropAllowed(e: DragEvent): boolean {
-        return allowDrop && sessionStore.isAdmin && !!e.dataTransfer?.types.includes('Files');
+        return allowDrop && sessionStore.isAdmin && Boolean(e.dataTransfer?.types.includes('Files'));
     }
 
     async function onDrop(e: DragEvent): Promise<void> {

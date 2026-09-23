@@ -9,15 +9,15 @@
 
     interface Props {
         onIntersect: () => void;
-        disabled?: boolean;
-        rootMargin?: string;
+        disabled?: boolean | undefined;
+        rootMargin?: string | undefined;
     }
     let { onIntersect, disabled = false, rootMargin = '200px' }: Props = $props();
 
     let sentinel: HTMLElement;
     let hasTriggered = $state(false);
     let isCurrentlyIntersecting = $state(false);
-    let prevDisabled: boolean | undefined = $state(undefined);
+    let prevDisabled: boolean | undefined = $state();
 
     // When disabled changes from true to false while intersecting, trigger again
     // This handles the case where new results don't push sentinel out of viewport
@@ -42,15 +42,19 @@
                 }
 
                 // Only trigger once per intersection, and only if not disabled
-                if (isCurrentlyIntersecting && !disabled && !hasTriggered) {
-                    hasTriggered = true;
-                    onIntersect();
+                if (!isCurrentlyIntersecting || disabled || hasTriggered) {
+                    return;
                 }
+
+                hasTriggered = true;
+                onIntersect();
             },
             { rootMargin },
         );
         observer.observe(sentinel);
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+        };
     });
 </script>
 

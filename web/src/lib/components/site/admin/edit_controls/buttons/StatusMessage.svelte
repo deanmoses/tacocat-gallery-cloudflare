@@ -7,7 +7,7 @@
     import { DraftStatus } from '$lib/models/draft';
 
     interface Props {
-        status?: DraftStatus;
+        status?: DraftStatus | undefined;
     }
 
     let { status }: Props = $props();

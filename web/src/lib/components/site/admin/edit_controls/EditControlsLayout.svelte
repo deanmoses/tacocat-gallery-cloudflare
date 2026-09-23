@@ -7,9 +7,9 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        leftControls?: Snippet;
-        status?: Snippet;
-        rightControls?: Snippet;
+        leftControls?: Snippet | undefined;
+        status?: Snippet | undefined;
+        rightControls?: Snippet | undefined;
     }
 
     let { leftControls, status, rightControls }: Props = $props();

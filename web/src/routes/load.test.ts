@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { load } from './+page';
 import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
 

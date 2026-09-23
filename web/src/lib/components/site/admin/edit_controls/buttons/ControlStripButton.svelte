@@ -7,17 +7,17 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        disabled?: boolean;
+        disabled?: boolean | undefined;
         /** Alt text*/
-        title?: string;
-        children?: Snippet;
-        onclick?: (event: MouseEvent) => void;
+        title?: string | undefined;
+        children?: Snippet | undefined;
+        onclick?: (event: MouseEvent) => void | undefined;
     }
 
-    let { disabled = false, title = undefined, children, onclick }: Props = $props();
+    let { disabled = false, title, children, onclick }: Props = $props();
 </script>
 
-<button {onclick} {disabled} {title} type="button">{@render children?.()}</button>
+<button {disabled} {onclick} {title} type="button">{@render children?.()}</button>
 
 <style>
     button {

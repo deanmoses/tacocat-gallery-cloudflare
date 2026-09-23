@@ -1,4 +1,4 @@
-import { UploadState, type MediaItemToUpload, type UploadEntry } from '$lib/models/album';
+import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { getMediaPath, isRenamedOnServer } from './fileFormats';
 
@@ -24,10 +24,9 @@ export function getReplacementExtensionError(existingPath: string, newFileName: 
     const existingIsJpg = ['jpg', 'jpeg'].includes(existingExt);
     if (existingIsJpg && jpgOrHeic.includes(newExt)) return undefined;
 
-    if (existingIsJpg) {
-        return 'Cannot replace: file must be JPG/JPEG or HEIC/HEIF';
-    }
-    return `Cannot replace: file must be .${existingExt}`;
+    return existingIsJpg
+        ? 'Cannot replace: file must be JPG/JPEG or HEIC/HEIF'
+        : `Cannot replace: file must be .${existingExt}`;
 }
 
 /**
@@ -42,23 +41,23 @@ export function getUploadPathForReplacement(targetPath: string, fileName: string
         return targetPath;
     }
     // JPG and JPEG are equivalent - keep target path exactly to ensure replacement
-    const jpgExtensions = ['jpg', 'jpeg'];
-    if (jpgExtensions.includes(targetExt) && jpgExtensions.includes(sourceExt)) {
+    const jpgExtensions = new Set(['jpg', 'jpeg']);
+    if (jpgExtensions.has(targetExt) && jpgExtensions.has(sourceExt)) {
         return targetPath;
     }
     // Replace target extension with source extension (e.g., HEIC replacing JPG)
-    return targetPath.replace(/\.[^.]+$/, '.' + sourceExt);
+    return targetPath.replace(/\.[^.]+$/v, `.${sourceExt}`);
 }
 
 /**
  * Result of checking which uploads have been processed by the server
  */
-export type ProcessedUploadsResult = {
+export interface ProcessedUploadsResult {
     /** Image paths that have been fully processed and are now in the album */
     processed: string[];
     /** Whether all uploads have been processed */
     allProcessed: boolean;
-};
+}
 
 /**
  * Checks which uploads have been processed by comparing upload entries
@@ -117,14 +116,12 @@ function isUploadComplete(upload: UploadEntry, albumVersionId: string | undefine
         if (upload.previousVersionId) {
             // Replacement: wait for versionId to change from the previous one
             return albumVersionId !== undefined && albumVersionId !== upload.previousVersionId;
-        } else {
-            // New upload: just needs to exist in album
-            return albumVersionId !== undefined;
         }
-    } else {
-        // File keeps same name, so versionId should match exactly
-        return albumVersionId === upload.versionId;
+        // New upload: just needs to exist in album
+        return albumVersionId !== undefined;
     }
+    // File keeps same name, so versionId should match exactly
+    return albumVersionId === upload.versionId;
 }
 
 /**

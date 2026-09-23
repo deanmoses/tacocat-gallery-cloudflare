@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { browserCanDisplay, getMediaPath, getProcessingTimeout, isRenamedOnServer } from './fileFormats';
 import { VIDEO_EXTENSIONS } from './galleryPathUtils';
 
-type FormatCase = {
+interface FormatCase {
     /** Path as uploaded, before the server processes it */
     uploadPath: string;
     /** Path the file will have in the album once the server is done with it */
@@ -13,13 +13,13 @@ type FormatCase = {
     canDisplay: boolean;
     /** How long to wait for the server to finish processing */
     timeoutMs: number;
-};
+}
 
 /** fileFormats' default, for files the server stores as it receives them */
-const IMAGE_TIMEOUT_MS = 15000;
+const IMAGE_TIMEOUT_MS = 15_000;
 
 /** Longer than an image's, because the server transcodes video */
-const VIDEO_TIMEOUT_MS = 180000;
+const VIDEO_TIMEOUT_MS = 180_000;
 
 /** Formats no handler claims, which therefore take the defaults */
 const PASSTHROUGH_CASES: FormatCase[] = [

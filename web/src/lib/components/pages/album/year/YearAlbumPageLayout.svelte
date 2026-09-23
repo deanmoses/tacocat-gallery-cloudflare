@@ -14,10 +14,10 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        editControls?: Snippet;
-        nav?: Snippet;
-        caption?: Snippet;
-        thumbnails?: Snippet;
+        editControls?: Snippet | undefined;
+        nav?: Snippet | undefined;
+        caption?: Snippet | undefined;
+        thumbnails?: Snippet | undefined;
     }
 
     let { editControls, nav, caption, thumbnails }: Props = $props();

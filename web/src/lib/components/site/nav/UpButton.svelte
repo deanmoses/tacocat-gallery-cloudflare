@@ -8,8 +8,8 @@
     import HomeIcon from '../icons/HomeIcon.svelte';
 
     interface Props {
-        href?: string;
-        title?: string;
+        href?: string | undefined;
+        title?: string | undefined;
     }
 
     let { href = '', title = '' }: Props = $props();

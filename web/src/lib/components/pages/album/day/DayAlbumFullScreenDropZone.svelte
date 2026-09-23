@@ -7,7 +7,7 @@
     import FullScreenDropZone from '$lib/components/site/admin/FullScreenDropZone.svelte';
     import UploadReplaceConfirmDialog from '$lib/components/site/admin/toggle/toggle_buttons/UploadReplaceConfirmDialog.svelte';
     import { getDroppedFiles } from '$lib/stores/admin/DragDropUtils';
-    import { uploadMachine, getSanitizedFiles } from '$lib/stores/admin/UploadMachine.svelte';
+    import { getSanitizedFiles, uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
     import type { MediaItemToUpload } from '$lib/models/album';
     import { sessionStore } from '$lib/stores/SessionStore.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
@@ -16,23 +16,23 @@
     interface Props {
         albumPath: string;
         /** So that the edit page can tell me whether it allows dropping */
-        allowDrop?: boolean;
+        allowDrop?: boolean | undefined;
     }
 
     let { albumPath, allowDrop = true }: Props = $props();
 
-    let dialog = $state() as UploadReplaceConfirmDialog;
+    let dialog = $state()!;
 
     let imagesToUpload: MediaItemToUpload[] = $state([]);
 
     function isDropAllowed(e: DragEvent): boolean {
-        return allowDrop && sessionStore.isAdmin && !!e.dataTransfer?.types.includes('Files');
+        return allowDrop && sessionStore.isAdmin && Boolean(e.dataTransfer?.types.includes('Files'));
     }
 
     async function onDrop(e: DragEvent): Promise<void> {
         const files = await getDroppedFiles(e);
         imagesToUpload = getSanitizedFiles(files, albumPath);
-        if (!imagesToUpload || !imagesToUpload.length) return;
+        if (!imagesToUpload.length) return;
         const album = albumState.albums.get(albumPath)?.album;
         const collidingNames = enrichWithPreviousVersionIds(imagesToUpload, album);
         if (collidingNames.length > 0) {

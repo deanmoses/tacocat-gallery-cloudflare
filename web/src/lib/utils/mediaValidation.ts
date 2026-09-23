@@ -2,10 +2,10 @@ import type { MediaItemToUpload } from '$lib/models/album';
 import { browserCanDisplay } from './fileFormats';
 
 /** Result of validating a batch of files */
-export type MediaValidationResult = {
+export interface MediaValidationResult {
     valid: MediaItemToUpload[];
     invalid: string[]; // uploadPaths that failed validation
-};
+}
 
 /**
  * Validates that files are valid media.
@@ -15,7 +15,7 @@ export type MediaValidationResult = {
  * @returns Valid files and list of invalid filenames
  */
 export async function validateMediaBatch(files: MediaItemToUpload[]): Promise<MediaValidationResult> {
-    const results = await Promise.all(files.map((file) => validateMediaItem(file)));
+    const results = await Promise.all(files.map(async (file) => validateMediaItem(file)));
 
     const valid: MediaItemToUpload[] = [];
     const invalid: string[] = [];
@@ -66,11 +66,15 @@ async function validateMediaItem(mediaItemToUpload: MediaItemToUpload): Promise<
  *
  * @returns true if image loads successfully, false otherwise
  */
-function loadImage(url: string): Promise<boolean> {
+async function loadImage(url: string): Promise<boolean> {
     return new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
+        img.addEventListener('load', () => {
+            resolve(true);
+        });
+        img.addEventListener('error', () => {
+            resolve(false);
+        });
         img.src = url;
     });
 }

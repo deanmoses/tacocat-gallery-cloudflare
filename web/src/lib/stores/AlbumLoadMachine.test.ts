@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { albumLoadMachine, FRESH_AFTER_CHANGE_MS } from './AlbumLoadMachine.svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FRESH_AFTER_CHANGE_MS, albumLoadMachine } from './AlbumLoadMachine.svelte';
 import { albumState } from './AlbumState.svelte';
 import { AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
-import { clear as clearDisk, get as getFromDisk, keys as diskKeys, set as setOnDisk } from 'idb-keyval';
+import { clear as clearDisk, keys as diskKeys, get as getFromDisk, set as setOnDisk } from 'idb-keyval';
 import { fakeServer, jsonResponse, notFound, serverError } from '$lib/test-support/http';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord, mediaPath } from '$lib/test-support/records';
@@ -41,7 +41,7 @@ const loadStatus = (path = PATH): AlbumLoadStatus | undefined => albumState.albu
  * more event-loop turns than this, on a machine under load more still. Wait on
  * the end state the work reaches instead.
  */
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('albumLoadMachine', () => {
     beforeEach(async () => {
@@ -51,7 +51,9 @@ describe('albumLoadMachine', () => {
 
     describe('fetch', () => {
         it.each(['/2001/12-31', '/2001', 'nonsense', '/2001/13-01/'])('refuses to fetch %s', (path) => {
-            expect(() => albumLoadMachine.fetch(path)).toThrow(`Invalid album path [${path}]`);
+            expect(() => {
+                albumLoadMachine.fetch(path);
+            }).toThrow(`Invalid album path [${path}]`);
         });
 
         it('falls through to the server when the album is not on disk, and caches what came back', async () => {
@@ -60,7 +62,9 @@ describe('albumLoadMachine', () => {
 
             albumLoadMachine.fetch(PATH);
 
-            await vi.waitFor(() => expect(loadStatus()).toBe(AlbumLoadStatus.LOADED));
+            await vi.waitFor(() => {
+                expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
+            });
 
             expect(albumState.albums.get(PATH)?.album?.media.map((m) => m.path)).toStrictEqual([IMAGE_PATH]);
             expect(server.calls).toStrictEqual([{ method: 'GET', pathname: ROUTE, body: undefined }]);
@@ -90,7 +94,9 @@ describe('albumLoadMachine', () => {
 
             albumLoadMachine.fetch(PATH);
 
-            await vi.waitFor(() => expect(loadStatus()).toBe(AlbumLoadStatus.LOADED));
+            await vi.waitFor(() => {
+                expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
+            });
 
             expect(albumState.albums.get(PATH)?.album?.media.map((m) => m.path)).toStrictEqual([IMAGE_PATH]);
             expect(server.calls).toHaveLength(1);
@@ -103,8 +109,12 @@ describe('albumLoadMachine', () => {
 
             albumLoadMachine.fetch(PATH);
 
-            await vi.waitFor(() => expect(loadStatus()).toBe(AlbumLoadStatus.LOADED));
-            await vi.waitFor(() => expect(server.calls).toHaveLength(1));
+            await vi.waitFor(() => {
+                expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
+            });
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(1);
+            });
         });
 
         it('leaves an album that is already being loaded alone', async () => {
@@ -117,7 +127,9 @@ describe('albumLoadMachine', () => {
             // Waiting for the load to finish is what makes the count final: by
             // the time the album is LOADED, a second request would have been
             // sent already if the machine were going to send one
-            await vi.waitFor(() => expect(loadStatus()).toBe(AlbumLoadStatus.LOADED));
+            await vi.waitFor(() => {
+                expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
+            });
 
             expect(server.calls).toHaveLength(1);
         });
@@ -146,7 +158,9 @@ describe('albumLoadMachine', () => {
             expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
             expect(albumState.albumUpdates.get(PATH)).toBe(ReloadStatus.RELOADING);
 
-            await vi.waitFor(() => expect(albumState.albumUpdates.get(PATH)).toBe(ReloadStatus.NOT_RELOADING));
+            await vi.waitFor(() => {
+                expect(albumState.albumUpdates.get(PATH)).toBe(ReloadStatus.NOT_RELOADING);
+            });
 
             expect(server.calls).toHaveLength(1);
         });
@@ -180,10 +194,14 @@ describe('albumLoadMachine', () => {
             await albumLoadMachine.reloadAfterChange(PATH);
 
             albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => expect(server.calls).toHaveLength(2));
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(2);
+            });
             vi.advanceTimersByTime(FRESH_AFTER_CHANGE_MS);
             albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => expect(server.calls).toHaveLength(3));
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(3);
+            });
 
             expect(searches(server)).toStrictEqual(['?fresh', '?fresh', '']);
         });
@@ -196,7 +214,9 @@ describe('albumLoadMachine', () => {
 
             albumLoadMachine.updateAlbumEntry(entry);
             albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => expect(server.calls).toHaveLength(1));
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(1);
+            });
 
             expect(searches(server)).toStrictEqual(['?fresh']);
         });
@@ -206,7 +226,9 @@ describe('albumLoadMachine', () => {
             server.get(ROUTE, jsonResponse(record()));
 
             albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => expect(server.calls).toHaveLength(1));
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(1);
+            });
 
             expect(searches(server)).toStrictEqual(['']);
         });
@@ -290,7 +312,9 @@ describe('albumLoadMachine', () => {
             const entry = { loadStatus: AlbumLoadStatus.LOADED, album: seedLoadedAlbum(record()).album };
             albumState.albums.clear();
 
-            expect(() => albumLoadMachine.updateAlbumEntry(entry)).toThrow('albumEntryStore is null');
+            expect(() => {
+                albumLoadMachine.updateAlbumEntry(entry);
+            }).toThrow('albumEntryStore is null');
         });
     });
 
@@ -315,7 +339,7 @@ describe('albumLoadMachine', () => {
     describe('albumExists', () => {
         it.each([
             { where: 'memory', seed: async () => void seedLoadedAlbum(record()), expected: true },
-            { where: 'disk', seed: () => setOnDisk(PATH, record()), expected: true },
+            { where: 'disk', seed: async () => setOnDisk(PATH, record()), expected: true },
         ])('finds an album in $where without asking the server', async ({ seed, expected }) => {
             await seed();
             const server = fakeServer();

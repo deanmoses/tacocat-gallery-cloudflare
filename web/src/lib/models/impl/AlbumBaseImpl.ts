@@ -72,20 +72,21 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
     }
 
     get media(): Media[] {
-        if (!this.json?.children) return [];
         return this.json?.children
-            .filter((child) => child && isMediaRecord(child))
-            .map((record) => toMedia(record, this));
+            ? this.json?.children
+                  .filter((child) => child && isMediaRecord(child))
+                  .map((record) => toMedia(record, this))
+            : [];
     }
 
     get albums(): Thumbable[] {
-        if (!this.json?.children) return [];
-        return this.json?.children.filter((child) => child && isAlbumRecord(child)).map((record) => toAlbum(record));
+        return this.json?.children
+            ? this.json?.children.filter((child) => child && isAlbumRecord(child)).map((record) => toAlbum(record))
+            : [];
     }
 
     getMedia(mediaPath: string): Media | undefined {
         const record = this.json?.children?.find((child: GalleryRecord) => child.path === mediaPath);
-        if (!record || !isMediaRecord(record)) return undefined;
-        return toMedia(record, this);
+        return !record || !isMediaRecord(record) ? undefined : toMedia(record, this);
     }
 }

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { validateMediaBatch, createPreviewUrl } from './mediaValidation';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPreviewUrl, validateMediaBatch } from './mediaValidation';
 import type { MediaItemToUpload } from '$lib/models/album';
 
 /**
@@ -24,16 +24,19 @@ let decodeAttempts: string[];
 
 /** Stands in for the browser's Image element, which no test environment implements */
 class FakeImage {
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
+    readonly #listeners = new Map<string, () => void>();
+
+    addEventListener(type: string, listener: () => void): void {
+        this.#listeners.set(type, listener);
+    }
 
     set src(url: string) {
         decodeAttempts.push(url);
-        const handler = url.includes(CORRUPT) ? () => this.onerror?.() : () => this.onload?.();
+        const event = url.includes(CORRUPT) ? 'error' : 'load';
 
         // Browsers decode asynchronously, so a caller must not assume the
         // handler has run by the time the assignment returns
-        setTimeout(handler, 0);
+        setTimeout(() => this.#listeners.get(event)?.(), 0);
     }
 }
 

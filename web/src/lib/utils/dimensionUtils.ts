@@ -18,10 +18,7 @@ export function getDetailWidth(width: number, height: number, maxSize = DEFAULT_
     }
     // Scale so the longer dimension is at most maxSize
     const maxDim = Math.max(width, height);
-    if (maxDim <= maxSize) {
-        return width;
-    }
-    return Math.round(maxSize * (width / maxDim));
+    return maxDim <= maxSize ? width : Math.round(maxSize * (width / maxDim));
 }
 
 /**
@@ -34,8 +31,5 @@ export function getDetailHeight(width: number, height: number, maxSize = DEFAULT
     }
     // Scale so the longer dimension is at most maxSize
     const maxDim = Math.max(width, height);
-    if (maxDim <= maxSize) {
-        return height;
-    }
-    return Math.round(maxSize * (height / maxDim));
+    return maxDim <= maxSize ? height : Math.round(maxSize * (height / maxDim));
 }

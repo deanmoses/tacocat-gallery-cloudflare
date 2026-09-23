@@ -17,7 +17,6 @@ const JSON_HEADERS = {
 export const adminApi = {
     async get(url: string): Promise<Response> {
         return fetch(url, {
-            method: 'GET',
             headers: JSON_HEADERS,
         });
     },

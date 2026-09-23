@@ -3,36 +3,38 @@ import type { Album } from './GalleryItemInterfaces';
 /**
  * Types of albums
  */
-export enum AlbumType {
-    ROOT = 'ROOT',
-    YEAR = 'YEAR',
-    DAY = 'DAY',
-}
+export const AlbumType = {
+    ROOT: 'ROOT',
+    YEAR: 'YEAR',
+    DAY: 'DAY',
+} as const;
+export type AlbumType = (typeof AlbumType)[keyof typeof AlbumType];
 
 /**
  * An entry in the album store
  */
-export type AlbumEntry = {
+export interface AlbumEntry {
     loadStatus: AlbumLoadStatus;
     renameEntry?: RenameEntry;
     album?: Album;
-};
+}
 
 /**
  * Status of the initial load of the album
  */
-export enum AlbumLoadStatus {
+export const AlbumLoadStatus = {
     /** The album has never been loaded and nobody's asked for it */
-    NOT_LOADED = 'NOT_LOADED',
+    NOT_LOADED: 'NOT_LOADED',
     /** The album has never been loaded but it's being retrieved */
-    LOADING = 'LOADING',
+    LOADING: 'LOADING',
     /** The album has never been loaded because there was an error loading the album. */
-    ERROR_LOADING = 'ERROR_LOADING',
+    ERROR_LOADING: 'ERROR_LOADING',
     /** The album definitely does not exist */
-    DOES_NOT_EXIST = 'DOES_NOT_EXIST',
+    DOES_NOT_EXIST: 'DOES_NOT_EXIST',
     /** The album has been loaded */
-    LOADED = 'LOADED',
-}
+    LOADED: 'LOADED',
+} as const;
+export type AlbumLoadStatus = (typeof AlbumLoadStatus)[keyof typeof AlbumLoadStatus];
 
 /**
  * Status of subsequent reload to the album
@@ -40,38 +42,40 @@ export enum AlbumLoadStatus {
  * Reload status is different than load status:
  * reloads are AFTER the initial album has loaded.
  */
-export enum ReloadStatus {
-    NOT_RELOADING = 'NOT_RELOADING',
-    RELOADING = 'RELOADING',
-    ERROR_RELOADING = 'ERROR_RELOADING',
-}
+export const ReloadStatus = {
+    NOT_RELOADING: 'NOT_RELOADING',
+    RELOADING: 'RELOADING',
+    ERROR_RELOADING: 'ERROR_RELOADING',
+} as const;
+export type ReloadStatus = (typeof ReloadStatus)[keyof typeof ReloadStatus];
 
 /**
  * Represents an album being created
  */
-export type CreateEntry = {
+export interface CreateEntry {
     status: CreateStatus;
-};
-
-export enum CreateStatus {
-    IN_PROGRESS = 'In Progress',
 }
+
+export const CreateStatus = {
+    IN_PROGRESS: 'In Progress',
+} as const;
+export type CreateStatus = (typeof CreateStatus)[keyof typeof CreateStatus];
 
 /**
  * Input data for uploading a media item (before upload starts)
  */
-export type MediaItemToUpload = {
+export interface MediaItemToUpload {
     file: File;
     /** Path used for S3 upload (e.g., /2024/01-01/photo.heic) */
     uploadPath: string;
     /** For replacements: the S3 versionId of the media item being replaced */
     previousVersionId?: string;
-};
+}
 
 /**
  * Represents a single media item being uploaded
  */
-export type UploadEntry = {
+export interface UploadEntry {
     file: File;
     /** Path used for S3 upload (e.g., /2024/01-01/photo.heic) */
     uploadPath: string;
@@ -86,52 +90,61 @@ export type UploadEntry = {
      * For file formats that get converted to a different format on the server (like HEIC -> JPG),
      * detecting when the versionId is no longer this is how we determine the new media item has been converted and is ready to use */
     previousVersionId?: string;
-};
+}
 
 /**
  * Status of of the upload of a single media item
  */
-export enum UploadState {
-    UPLOAD_NOT_STARTED = 'Not Started',
-    UPLOADING = 'Uploading',
-    PROCESSING = 'Processing',
-}
+export const UploadState = {
+    UPLOAD_NOT_STARTED: 'Not Started',
+    UPLOADING: 'Uploading',
+    PROCESSING: 'Processing',
+} as const;
+export type UploadState = (typeof UploadState)[keyof typeof UploadState];
 
 /**
  * Represents a single album or media item being renamed
  */
-export type RenameEntry = {
+export interface RenameEntry {
     oldPath: string;
     newPath: string;
     status: RenameStatus;
-};
-
-export enum RenameStatus {
-    IN_PROGRESS = 'In Progress',
 }
+
+export const RenameStatus = {
+    IN_PROGRESS: 'In Progress',
+} as const;
+export type RenameStatus = (typeof RenameStatus)[keyof typeof RenameStatus];
 
 /**
  * Represents a single album or media item being deleted
  */
-export type DeleteEntry = {
+export interface DeleteEntry {
     status: DeleteStatus;
-};
-
-export enum DeleteStatus {
-    IN_PROGRESS = 'In Progress',
 }
+
+export const DeleteStatus = {
+    IN_PROGRESS: 'In Progress',
+} as const;
+export type DeleteStatus = (typeof DeleteStatus)[keyof typeof DeleteStatus];
 
 /**
  * Represents the state of a thumbnail being cropped
  */
-export type CropEntry = {
+export interface CropEntry {
     mediaPath: string;
     crop: Crop;
     status: CropStatus;
-};
-
-export type Crop = { x: number; y: number; height: number; width: number };
-
-export enum CropStatus {
-    IN_PROGRESS = 'In Progress',
 }
+
+export interface Crop {
+    x: number;
+    y: number;
+    height: number;
+    width: number;
+}
+
+export const CropStatus = {
+    IN_PROGRESS: 'In Progress',
+} as const;
+export type CropStatus = (typeof CropStatus)[keyof typeof CropStatus];

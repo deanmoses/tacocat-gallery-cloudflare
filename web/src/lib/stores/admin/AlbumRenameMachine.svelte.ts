@@ -32,8 +32,8 @@ class AlbumRenameMachine {
 
     #renameStarted(oldPath: string, newPath: string): void {
         albumState.albumRenames.set(oldPath, {
-            oldPath: oldPath,
-            newPath: newPath,
+            oldPath,
+            newPath,
             status: RenameStatus.IN_PROGRESS,
         });
     }

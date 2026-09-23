@@ -10,5 +10,5 @@ export function currentYearAlbumPath(): string {
  * unpublished albums too; they are skipped so that both see the same one.
  */
 export function latestAlbum(year: Album | undefined): Thumbable | undefined {
-    return year?.albums.filter((album) => album.published).at(-1);
+    return year?.albums.findLast((album) => album.published);
 }

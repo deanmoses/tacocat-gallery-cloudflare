@@ -43,15 +43,15 @@
 </script>
 
 {#key video.path}
-    <div class="video-container" style="aspect-ratio: {video.detailWidth} / {video.detailHeight};">
+    <div style:aspect-ratio="{video.detailWidth} / {video.detailHeight}" class="video-container">
         {#if isPlaying}
             <!-- svelte-ignore a11y_media_has_caption -->
-            <video bind:this={videoElement} src={videoUrl} controls autoplay onended={handleEnded}>
+            <video bind:this={videoElement} autoplay controls onended={handleEnded} src={videoUrl}>
                 Your browser does not support video playback.
             </video>
         {:else}
-            <button type="button" onclick={handlePlay} aria-label="Play video: {video.title}">
-                <img src={video.detailUrl} alt={video.title} draggable="false" onload={() => (posterLoaded = true)} />
+            <button aria-label="Play video: {video.title}" onclick={handlePlay} type="button">
+                <img alt={video.title} draggable="false" onload={() => (posterLoaded = true)} src={video.detailUrl} />
                 {#if posterLoaded}
                     <div class="play-overlay">
                         <PlayButtonIcon size="5em" />

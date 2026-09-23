@@ -15,10 +15,10 @@
     <div>
         <h2>Latest Album</h2>
         <Thumbnail
-            title={thumb.title}
-            summary={thumb.summary}
             href={thumb.href}
+            summary={thumb.summary}
             thumbnailUrlInfo={thumb.thumbnailUrlInfo}
+            title={thumb.title}
         />
     </div>
 {/if}

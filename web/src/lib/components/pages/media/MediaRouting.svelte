@@ -17,7 +17,7 @@
         albumPath: string;
         mediaPath: string;
         media: Media | undefined;
-        loaded?: Snippet;
+        loaded?: Snippet | undefined;
     }
     let { albumPath, mediaPath, media, loaded }: Props = $props();
 

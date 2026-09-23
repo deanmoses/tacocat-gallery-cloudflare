@@ -16,7 +16,7 @@
     import { editModeMachine } from '$lib/stores/admin/EditModeMachine.svelte';
 
     interface Props {
-        rightControls?: Snippet;
+        rightControls?: Snippet | undefined;
     }
     let { rightControls }: Props = $props();
 
@@ -40,7 +40,7 @@
         // I guess the only reason to do it here is that when you're
         // NOT in edit mode, there's no need to listen to it.
         if (path === undefined) throw new Error(`path is undefined`);
-        const backEndPath = isValidMediaPath(path) ? path : path + '/';
+        const backEndPath = isValidMediaPath(path) ? path : `${path}/`;
         draftMachine.init(backEndPath);
     }
 
@@ -75,6 +75,6 @@
 
     {#snippet rightControls()}
         {@render rightControls_render?.()}
-        <SaveButton onclick={onSaveButtonClick} {hasUnsavedChanges} />
+        <SaveButton {hasUnsavedChanges} onclick={onSaveButtonClick} />
     {/snippet}
 </EditControlsLayout>

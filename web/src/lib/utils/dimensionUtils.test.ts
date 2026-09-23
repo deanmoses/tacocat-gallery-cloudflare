@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { getDetailWidth, getDetailHeight } from './dimensionUtils';
+import { describe, expect, it } from 'vitest';
+import { getDetailHeight, getDetailWidth } from './dimensionUtils';
 
-type DimensionCase = {
+interface DimensionCase {
     description: string;
     width: number;
     height: number;
@@ -9,7 +9,7 @@ type DimensionCase = {
     maxSize?: number;
     expectedWidth: number;
     expectedHeight: number;
-};
+}
 
 const CASES: DimensionCase[] = [
     // Media that already fits is returned untouched, whichever side is longer

@@ -14,7 +14,7 @@
     import TextDialog from './TextDialog.svelte';
 
     let show: boolean = $derived(page.url.pathname === '/'); // Show this button only on root album
-    let dialog = $state() as TextDialog;
+    let dialog = $state()!;
 
     function yearAlbumName(): string {
         const d = new Date();
@@ -26,13 +26,13 @@
     }
 
     function onNewAlbumName(newAlbumName: string) {
-        const newAlbumPath = '/' + newAlbumName + '/';
+        const newAlbumPath = `/${newAlbumName}/`;
         albumCreateMachine.createAlbum(newAlbumPath);
         goto(newAlbumPath);
     }
 
     async function validateYearAlbumName(albumName: string): Promise<string | undefined> {
-        const newAlbumPath = '/' + albumName + '/';
+        const newAlbumPath = `/${albumName}/`;
         if (!isValidYearAlbumPath(newAlbumPath)) return 'not a year, bruh';
         if (await albumLoadMachine.albumExists(newAlbumPath)) return 'already exists';
         return undefined; // name is valid
@@ -42,11 +42,11 @@
 {#if show}
     <ControlStripButton onclick={onButtonClick}><CreateIcon />New Year Album</ControlStripButton>
     <TextDialog
-        label="New Year!"
         bind:this={dialog}
+        initialValue={yearAlbumName()}
+        label="New Year!"
         onNewValue={onNewAlbumName}
         sanitizor={sanitizeDayAlbumName}
         validator={validateYearAlbumName}
-        initialValue={yearAlbumName()}
     />
 {/if}

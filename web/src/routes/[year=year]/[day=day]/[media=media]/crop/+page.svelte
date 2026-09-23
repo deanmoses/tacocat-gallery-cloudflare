@@ -10,7 +10,7 @@
     let media = $derived(albumState.albums.get(albumPath)?.album?.getMedia(mediaPath));
 </script>
 
-<MediaRouting {albumPath} {mediaPath} {media}>
+<MediaRouting {albumPath} {media} {mediaPath}>
     {#snippet loaded()}
         {#if media}
             <CropPage {media} />

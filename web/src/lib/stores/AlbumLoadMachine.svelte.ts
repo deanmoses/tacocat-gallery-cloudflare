@@ -1,6 +1,6 @@
 import { produce } from 'immer';
-import { get as getFromIdb, set as setToIdb, del as delFromIdb } from 'idb-keyval';
-import { AlbumLoadStatus, ReloadStatus, type AlbumEntry } from '$lib/models/album';
+import { del as delFromIdb, get as getFromIdb, set as setToIdb } from 'idb-keyval';
+import { type AlbumEntry, AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import { isValidAlbumPath } from '$lib/utils/galleryPathUtils';
 import type { AlbumRecord } from '$lib/models/impl/server';
@@ -74,7 +74,7 @@ class AlbumLoadMachine {
      * keep re-reading it that way for a while: the edge serves the old copy
      * until the album's version catches up with the change.
      */
-    reloadAfterChange(path: string): Promise<void> {
+    async reloadAfterChange(path: string): Promise<void> {
         albumState.albumChangedAt.set(path, Date.now());
         return this.fetchFromServer(path, true);
     }
@@ -119,7 +119,7 @@ class AlbumLoadMachine {
      * @param message error message
      */
     #erroredFetching(path: string, message: string): void {
-        console.error(`Album [${path}] error fetching from server: `, message);
+        console.error(`Album [${path}] error fetching from server:`, message);
         const status = this.#getLoadStatus(path);
         switch (status) {
             case AlbumLoadStatus.LOADING:
@@ -186,13 +186,13 @@ class AlbumLoadMachine {
             if (response.status === 404) {
                 this.#notFound(path);
                 this.#removeFromDisk(path); // Delete album from local disk
-            } else if (!response.ok) {
-                throw new Error(response.statusText);
-            } else {
+            } else if (response.ok) {
                 const json = await response.json();
                 console.log(`Album [${path}] fetched from server`, json);
                 this.#found(path, json); // Put album in memory
                 this.#writeToDisk(path, json); // Put album on local disk
+            } else {
+                throw new Error(response.statusText);
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -280,8 +280,12 @@ class AlbumLoadMachine {
         // TODO: maybe don't write it if the value is unchanged?
         // Or maybe refresh some sort of last_fetched timestamp?
         setToIdb(idbKey, album)
-            .then(() => console.log(`Album [${path}] stored in idb`))
-            .catch((e) => console.error(`Album [${path}] error storing in idb`, e));
+            .then(() => {
+                console.log(`Album [${path}] stored in idb`);
+            })
+            .catch((e) => {
+                console.error(`Album [${path}] error storing in idb`, e);
+            });
     }
 
     /**
@@ -290,8 +294,12 @@ class AlbumLoadMachine {
     #removeFromDisk(path: string): void {
         const idbKey = this.#idbKey(path);
         delFromIdb(idbKey)
-            .then(() => console.log(`Album [${path}] removed from idb`))
-            .catch((e) => console.error(`Album [${path}] error removing from idb`, e));
+            .then(() => {
+                console.log(`Album [${path}] removed from idb`);
+            })
+            .catch((e) => {
+                console.error(`Album [${path}] error removing from idb`, e);
+            });
     }
 
     /**

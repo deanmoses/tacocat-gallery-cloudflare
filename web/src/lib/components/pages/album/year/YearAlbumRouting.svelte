@@ -13,7 +13,7 @@
 
     interface Props {
         albumPath: string;
-        loaded?: Snippet;
+        loaded?: Snippet | undefined;
     }
     let { albumPath, loaded }: Props = $props();
     let loadStatus = $derived(albumState.albums.get(albumPath)?.loadStatus);

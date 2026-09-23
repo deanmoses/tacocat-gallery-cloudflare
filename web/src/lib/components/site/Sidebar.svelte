@@ -7,7 +7,7 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        children?: Snippet;
+        children?: Snippet | undefined;
     }
 
     let { children }: Props = $props();

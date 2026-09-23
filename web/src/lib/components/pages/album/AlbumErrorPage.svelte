@@ -8,13 +8,13 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        title?: string;
-        children?: Snippet;
+        title?: string | undefined;
+        children?: Snippet | undefined;
     }
 
     let { title = 'Error', children }: Props = $props();
 </script>
 
-<BlankAlbumPageLayout {title} hideFooter>
+<BlankAlbumPageLayout hideFooter {title}>
     {@render children?.()}
 </BlankAlbumPageLayout>

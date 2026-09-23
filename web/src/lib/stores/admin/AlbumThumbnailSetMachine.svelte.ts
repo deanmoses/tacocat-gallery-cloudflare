@@ -9,18 +9,19 @@ import { getParentFromPath, isValidYearAlbumPath } from '$lib/utils/galleryPathU
 /**
  * Album thumbnail set machine
  */
-export type AlbumThumbnailSetEntry = {
+export interface AlbumThumbnailSetEntry {
     albumPath: string;
     newThumbnailImagePath: string;
     status: AlbumThumbnailSetStatus;
-};
+}
 
 /**
  * Status of setting the album's thumbnail
  */
-export enum AlbumThumbnailSetStatus {
-    IN_PROGRESS = 'In Progress',
-}
+export const AlbumThumbnailSetStatus = {
+    IN_PROGRESS: 'In Progress',
+} as const;
+export type AlbumThumbnailSetStatus = (typeof AlbumThumbnailSetStatus)[keyof typeof AlbumThumbnailSetStatus];
 
 /**
  * Store of album thumbnail set states

@@ -2,7 +2,7 @@ import type { MediaRecord, Rectangle } from './server';
 import type { Album, Media, MediaType, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 import { ThumbableBaseImpl } from './ThumbableBaseImpl';
 import { detailImageUrl } from '$lib/utils/config';
-import { getDetailWidth, getDetailHeight } from '$lib/utils/dimensionUtils';
+import { getDetailHeight, getDetailWidth } from '$lib/utils/dimensionUtils';
 import { toTitleFromFilename } from '$lib/utils/titleUtils';
 
 /**
@@ -66,7 +66,7 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
     get detailUrl(): string {
         const width = this.detailWidth;
         const height = this.detailHeight;
-        const sizing = width > height ? width.toString() : 'x' + height.toString();
+        const sizing = width > height ? width.toString() : `x${height.toString()}`;
         return detailImageUrl(this.json.path, this.json.versionId, sizing);
     }
 

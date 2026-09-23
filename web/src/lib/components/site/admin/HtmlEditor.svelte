@@ -9,10 +9,10 @@
 
     interface Props {
         /** The HTML content to be made editable */
-        htmlContent?: string;
+        htmlContent?: string | undefined;
 
         /** Callback to be called every time the content changes */
-        onChange?: (newHtml: string) => void;
+        onChange?: (newHtml: string) => void | undefined;
     }
 
     let { htmlContent = '', onChange }: Props = $props();
@@ -37,7 +37,7 @@
                         // Custom link handler that allows editing existing links
                         // instead of Quill's default behavior of removing them.
                         // See: https://github.com/slab/quill/issues/1380
-                        link: function (this: { quill: Quill }, value: boolean) {
+                        link(this: { quill: Quill }, value: boolean) {
                             const quillInstance = this.quill;
                             const selection = quillInstance.getSelection();
                             if (!selection) return;
@@ -76,7 +76,7 @@
             if (quill && onChange) {
                 // TODO: remove the replaceAll() workaround once Quill fixes this bug: https://github.com/slab/quill/issues/4509
                 //onChange(quill.getSemanticHTML());
-                onChange(quill.getSemanticHTML().replaceAll(/((?:&nbsp;)*)&nbsp;/g, '$1 '));
+                onChange(quill.getSemanticHTML().replaceAll(/((?:&nbsp;)*)&nbsp;/gv, '$1 '));
             }
         });
     }

@@ -45,56 +45,56 @@
     }
 </script>
 
-<SearchPage {searchTerms} {returnPath}>
+<SearchPage {returnPath} {searchTerms}>
     <section>
-        <h2 style="display:none">Search Controls</h2>
+        <h2 style:display="none">Search Controls</h2>
         <label
             ><input
-                class="yearInput"
-                type="number"
-                name="oldestYear"
                 id="oldestYear"
-                min="1964"
+                name="oldestYear"
+                class="yearInput"
                 max={new Date().getFullYear()}
+                min="1964"
                 placeholder="oldest year"
+                type="number"
                 value={oldestYear}
             /></label
         >
         <label
             ><input
-                class="yearInput"
-                type="number"
-                name="newestYear"
                 id="newestYear"
-                min="1964"
+                name="newestYear"
+                class="yearInput"
                 max={new Date().getFullYear()}
+                min="1964"
                 placeholder="newest year"
+                type="number"
                 value={newestYear}
             /></label
         >
-        <label>Oldest first: <input type="checkbox" name="oldestFirst" id="oldestFirst" checked={oldestFirst} /></label>
+        <label>Oldest first: <input id="oldestFirst" name="oldestFirst" checked={oldestFirst} type="checkbox" /></label>
         {#if results?.total}
             <span class="result-count">({results.total} results)</span>
         {/if}
     </section>
     <section class:noResults>
-        <h2 style="display:none">Search Results</h2>
+        <h2 style:display="none">Search Results</h2>
         <Thumbnails>
             {#if results?.items}
                 {#each results.items as item (item.path)}
                     <Thumbnail
                         href={item.href}
+                        isVideo={item.mediaType === 'video'}
+                        summary={item.summary}
                         thumbnailUrlInfo={item.thumbnailUrlInfo}
                         title={item.title}
-                        summary={item.summary}
-                        isVideo={item.mediaType === 'video'}
                     />
                 {/each}
                 {#if moreResultsOnServer || loadingMore}
                     {#if errorLoadingMore}
                         <div class="load-status">Error loading more results</div>
                     {:else}
-                        <InfiniteScrollSentinel onIntersect={getMoreResults} disabled={loadingMore} />
+                        <InfiniteScrollSentinel disabled={loadingMore} onIntersect={getMoreResults} />
                         {#if loadingMore}
                             <div class="load-status">Loading...</div>
                         {/if}

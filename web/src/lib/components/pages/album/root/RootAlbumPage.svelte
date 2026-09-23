@@ -33,7 +33,7 @@
 <AdminToggle />
 <SiteLayout>
     <Header hideSiteTitle>
-        <ResponsiveTitle title={siteTitle()} shortTitle={siteShortTitle()} />
+        <ResponsiveTitle shortTitle={siteShortTitle()} title={siteTitle()} />
     </Header>
     <PageContent>
         <Sidebar>
@@ -43,8 +43,8 @@
             <Thumbnails>
                 {#each sortedAlbums as childAlbum (childAlbum.path)}
                     <AlbumThumbnail
-                        path={childAlbum.path}
                         href={childAlbum.href}
+                        path={childAlbum.path}
                         thumbnailUrlInfo={childAlbum.thumbnailUrlInfo}
                         title={childAlbum.title}
                     />

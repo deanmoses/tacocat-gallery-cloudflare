@@ -8,8 +8,8 @@
     import PrevIcon from '../icons/PrevIcon.svelte';
 
     interface Props {
-        href?: string;
-        title?: string;
+        href?: string | undefined;
+        title?: string | undefined;
     }
 
     let { href = '', title = '' }: Props = $props();

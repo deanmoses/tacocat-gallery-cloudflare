@@ -7,14 +7,14 @@
     import PlayIcon from './PlayIcon.svelte';
 
     interface Props {
-        size?: string;
+        size?: string | undefined;
     }
 
     let { size = '3em' }: Props = $props();
 </script>
 
-<div class="play-button" style="width: {size}; height: {size};">
-    <PlayIcon width="50%" height="50%" bottom="0" />
+<div style:width={size} style:height={size} class="play-button">
+    <PlayIcon bottom="0" height="50%" width="50%" />
 </div>
 
 <style>

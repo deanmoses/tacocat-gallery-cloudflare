@@ -18,7 +18,7 @@
     let albumPath = $derived(getParentFromPath(mediaPath));
     let media = $derived(albumState.albums.get(albumPath)?.album?.getMedia(mediaPath));
 
-    let fileInput = $state() as HTMLInputElement;
+    let fileInput = $state()!;
 
     async function onUploadButtonClick() {
         fileInput.click();
@@ -26,7 +26,7 @@
 
     function onFileSelected() {
         const files = fileInput.files;
-        if (!files || !files.length) return;
+        if (!files?.length) return;
         // this error should never happen
         if (files.length > 1) throw new Error('Only one file can be uploaded at a time');
         const file = files[0];
@@ -46,10 +46,10 @@
     >
     <input
         bind:this={fileInput}
+        id="fileInput"
+        style:display="none"
+        accept={validMediaExtensionsString()}
         onchange={onFileSelected}
         type="file"
-        id="fileInput"
-        accept={validMediaExtensionsString()}
-        style="display:none"
     />
 {/if}

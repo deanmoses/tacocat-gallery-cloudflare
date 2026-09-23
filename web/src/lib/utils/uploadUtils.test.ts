@@ -1,11 +1,11 @@
-import { it, expect, describe } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
     enrichWithPreviousVersionIds,
     findProcessedUploads,
     getReplacementExtensionError,
     getUploadPathForReplacement,
 } from './uploadUtils';
-import { UploadState, type MediaItemToUpload, type UploadEntry } from '$lib/models/album';
+import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import { getMediaPath } from './fileFormats';
 import { dayAlbum, imageRecord, mediaPath, videoRecord } from '$lib/test-support/records';
 
@@ -15,7 +15,7 @@ import { dayAlbum, imageRecord, mediaPath, videoRecord } from '$lib/test-support
  * if it is. They share one table so a combination cannot be answered on one
  * question and left unanswered on the other.
  */
-type ReplacementCase = {
+interface ReplacementCase {
     /** Path of the media already in the album */
     targetPath: string;
     /** Name of the file being dropped onto it */
@@ -28,7 +28,7 @@ type ReplacementCase = {
      * path for it would fix behaviour no caller depends on.
      */
     uploadPath?: string;
-};
+}
 
 /** What an admin is told when a JPG is replaced by something the server cannot convert */
 const JPG_ERROR = 'Cannot replace: file must be JPG/JPEG or HEIC/HEIF';
@@ -117,13 +117,13 @@ function upload(fields: {
     return { file: new File([], 'test.jpg'), mediaPath: getMediaPath(fields.uploadPath), ...fields };
 }
 
-type UploadCase = {
+interface UploadCase {
     description: string;
     upload: UploadEntry;
     /** versionId the album reports at the upload's mediaPath; undefined means it is not there yet */
     albumVersionId: string | undefined;
     processed: boolean;
-};
+}
 
 const UPLOAD_CASES: UploadCase[] = [
     // A file the server stores under the name it arrived with is done when the
@@ -259,7 +259,7 @@ describe(findProcessedUploads, () => {
     );
 
     it('reports nothing to do for an empty batch', () => {
-        const result = findProcessedUploads([], () => undefined);
+        const result = findProcessedUploads([], () => {});
 
         expect(result.processed).toStrictEqual([]);
         expect(result.allProcessed).toBe(true);

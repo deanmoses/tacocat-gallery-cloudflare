@@ -14,11 +14,11 @@
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import UploadReplaceConfirmDialog from './UploadReplaceConfirmDialog.svelte';
 
-    let albumPath = $derived(page.url.pathname + '/');
+    let albumPath = $derived(`${page.url.pathname}/`);
     let show = $derived(isValidDayAlbumPath(albumPath)); // Show this button only on day ablums
 
-    let fileInput = $state() as HTMLInputElement;
-    let dialog = $state() as UploadReplaceConfirmDialog;
+    let fileInput = $state()!;
+    let dialog = $state()!;
     let imagesToUpload: MediaItemToUpload[] = $state([]);
 
     function onUploadButtonClick() {
@@ -48,11 +48,11 @@
     <ControlStripButton onclick={onUploadButtonClick}><UploadIcon />Upload</ControlStripButton>
     <input
         bind:this={fileInput}
+        style:display="none"
+        accept={validMediaExtensionsString()}
+        multiple
         onchange={onFilesSelected}
         type="file"
-        multiple
-        accept={validMediaExtensionsString()}
-        style="display:none"
     />
     <UploadReplaceConfirmDialog bind:this={dialog} {onConfirm} />
 {/if}

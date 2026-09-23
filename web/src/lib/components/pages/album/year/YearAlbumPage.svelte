@@ -33,7 +33,6 @@
     {/snippet}
 
     {#snippet caption()}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -- Rich text authored by admins via Quill; not user-supplied -->
         {@html album.description}
     {/snippet}
 

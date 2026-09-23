@@ -29,7 +29,7 @@
 
         if (albums) {
             // iterate over the albums, putting them into the correct month
-            albums.forEach((album) => {
+            for (const album of albums) {
                 const albumDate = albumPathToDate(album.path);
                 const month: number = albumDate.getMonth();
                 if (!albumsByMonth[month]) {
@@ -42,11 +42,11 @@
                     };
                 }
                 albumsByMonth[month].albums.unshift(album);
-            });
+            }
         }
 
         // remove empty months
-        albumsByMonth = albumsByMonth.filter((month) => month);
+        albumsByMonth = albumsByMonth.filter(Boolean);
 
         return albumsByMonth.reverse();
     }
@@ -63,12 +63,12 @@
         <Thumbnails>
             {#each month.albums as childAlbum (childAlbum.path)}
                 <AlbumThumbnail
-                    path={childAlbum.path}
                     href={childAlbum.href}
+                    path={childAlbum.path}
+                    published={childAlbum.published}
+                    summary={childAlbum.summary}
                     thumbnailUrlInfo={childAlbum.thumbnailUrlInfo}
                     title={getTitle(childAlbum.path)}
-                    summary={childAlbum.summary}
-                    published={childAlbum.published}
                 />
             {/each}
         </Thumbnails>

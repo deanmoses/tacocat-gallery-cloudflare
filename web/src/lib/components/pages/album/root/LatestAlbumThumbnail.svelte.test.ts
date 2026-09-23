@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import LatestAlbumThumbnail from './LatestAlbumThumbnail.svelte';
@@ -34,7 +34,9 @@ function year(newerPublished: boolean) {
 }
 
 describe(LatestAlbumThumbnail, () => {
-    beforeEach(() => resetAlbumState());
+    beforeEach(() => {
+        resetAlbumState();
+    });
 
     it('shows the newest published album of the current year', async () => {
         seedLoadedAlbum(year(false));

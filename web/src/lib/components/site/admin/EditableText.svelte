@@ -8,25 +8,25 @@
 
     interface Props {
         /** The text content to be made editable */
-        textContent?: string;
+        textContent?: string | undefined;
     }
 
     let { textContent = '' }: Props = $props();
 
-    let div = $state() as HTMLElement;
+    let div = $state()!;
 
     function onInput() {
         let editedText = div.innerText;
         // I'm having a problem with a /n being added at some point where I'm
         // then not able to remove it.  This is a blunt intstrument, but maybe
         // converting any whitespace to a regular space and then trimming it all.
-        editedText = editedText.replace(/\s/g, ' ');
+        editedText = editedText.replaceAll(/\s/gv, ' ');
         editedText = editedText.trim();
         draftMachine.setTitle(editedText);
     }
 </script>
 
-<div contenteditable bind:this={div} oninput={onInput}>{textContent}</div>
+<div bind:this={div} contenteditable oninput={onInput}>{textContent}</div>
 
 <style>
     div[contenteditable] {

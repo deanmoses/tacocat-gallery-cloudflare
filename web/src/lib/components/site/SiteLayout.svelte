@@ -9,9 +9,9 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        hideFooter?: boolean;
-        editControls?: Snippet;
-        children?: Snippet;
+        hideFooter?: boolean | undefined;
+        editControls?: Snippet | undefined;
+        children?: Snippet | undefined;
     }
 
     let { hideFooter = false, editControls, children }: Props = $props();

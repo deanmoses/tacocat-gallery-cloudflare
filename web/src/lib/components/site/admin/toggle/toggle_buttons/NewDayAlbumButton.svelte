@@ -13,15 +13,15 @@
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
 
-    let albumPath: string = $derived(page.url.pathname + '/');
+    let albumPath: string = $derived(`${page.url.pathname}/`);
     let show: boolean = $derived(isValidYearAlbumPath(albumPath)); // Show this button only on year albums
 
-    let dialog = $state() as TextDialog;
+    let dialog = $state()!;
 
     function todayAlbumName(): string {
         const d = new Date();
-        const month = ('0' + (d.getMonth() + 1)).slice(-2);
-        const day = ('0' + d.getDate()).slice(-2);
+        const month = `0${d.getMonth() + 1}`.slice(-2);
+        const day = `0${d.getDate()}`.slice(-2);
         const month_day = `${month}-${day}`;
         return month_day;
     }
@@ -44,18 +44,18 @@
     }
 
     function albumNameToPath(albumName: string): string {
-        return albumPath + albumName + '/';
+        return `${albumPath + albumName}/`;
     }
 </script>
 
 {#if show}
     <ControlStripButton onclick={onButtonClick}><CreateIcon />New Album</ControlStripButton>
     <TextDialog
-        label="New Album Name"
         bind:this={dialog}
+        initialValue={todayAlbumName()}
+        label="New Album Name"
         onNewValue={onNewAlbumName}
         sanitizor={sanitizeDayAlbumName}
         validator={validateDayAlbumName}
-        initialValue={todayAlbumName()}
     />
 {/if}

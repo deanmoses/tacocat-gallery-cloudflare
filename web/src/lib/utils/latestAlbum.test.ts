@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { currentYearAlbumPath, latestAlbum } from './latestAlbum';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
@@ -9,7 +9,10 @@ import { albumRecord } from '$lib/test-support/records';
  * holds only published albums; an admin's holds all of them, so the published
  * flag is what these rows vary.
  */
-type Day = { name: string; published: boolean };
+interface Day {
+    name: string;
+    published: boolean;
+}
 
 function yearAlbum(days: Day[]): Album {
     return toAlbum(
@@ -21,7 +24,11 @@ function yearAlbum(days: Day[]): Album {
     );
 }
 
-type Case = { name: string; year: Album | undefined; latest: string | undefined };
+interface Case {
+    name: string;
+    year: Album | undefined;
+    latest: string | undefined;
+}
 
 const CASES: Case[] = [
     {

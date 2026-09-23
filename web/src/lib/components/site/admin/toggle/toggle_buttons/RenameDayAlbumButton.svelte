@@ -18,9 +18,9 @@
     import TextDialog from './TextDialog.svelte';
     import { albumRenameMachine } from '$lib/stores/admin/AlbumRenameMachine.svelte';
 
-    let albumPath: string = $derived(page.url.pathname + '/');
+    let albumPath: string = $derived(`${page.url.pathname}/`);
     let show: boolean = $derived(isValidDayAlbumPath(albumPath)); // Show this button only on day albums
-    let dialog = $state() as TextDialog;
+    let dialog = $state()!;
 
     function originalName(): string {
         return getNameFromPath(albumPath);
@@ -44,18 +44,18 @@
     }
 
     function albumNameToPath(albumName: string): string {
-        return getParentFromPath(albumPath) + albumName + '/';
+        return `${getParentFromPath(albumPath) + albumName}/`;
     }
 </script>
 
 {#if show}
     <ControlStripButton onclick={onButtonClick} title="Rename album on disk"><RenameIcon />Rename</ControlStripButton>
     <TextDialog
-        label="New Album Name"
         bind:this={dialog}
+        initialValue={originalName()}
+        label="New Album Name"
         onNewValue={onNewAlbumName}
         sanitizor={sanitizeDayAlbumName}
         validator={validateDayAlbumName}
-        initialValue={originalName()}
     />
 {/if}

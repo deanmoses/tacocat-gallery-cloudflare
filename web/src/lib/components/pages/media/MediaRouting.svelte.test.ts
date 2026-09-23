@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import { createRawSnippet } from 'svelte';
@@ -31,7 +31,10 @@ const MEDIA_CONTENT = 'the media itself';
 const NO_TITLE = '';
 
 /** Where a seed lands: a load status on the album, a processing state on the item */
-type Target = { albumPath: string; mediaPath: string };
+interface Target {
+    albumPath: string;
+    mediaPath: string;
+}
 const THIS: Target = { albumPath: ALBUM_PATH, mediaPath: MEDIA_PATH };
 /** A second album, and a second item in this one, to say which one a page is reading */
 const OTHER: Target = { albumPath: '/2001/12-30/', mediaPath: mediaPath('other.jpg') };
@@ -44,7 +47,11 @@ function show(overrides: { media?: Media | undefined } = {}) {
 }
 
 type Seed = (target: Target) => void;
-type Case = { state: string; seed: Seed; title: string };
+interface Case {
+    state: string;
+    seed: Seed;
+    title: string;
+}
 type MessageCase = Case & { message: string };
 
 const setStatus =

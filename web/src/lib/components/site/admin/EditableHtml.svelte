@@ -9,7 +9,7 @@
 
     interface Props {
         /** The HTML content to be made editable */
-        htmlContent?: string;
+        htmlContent?: string | undefined;
     }
 
     let { htmlContent = '' }: Props = $props();

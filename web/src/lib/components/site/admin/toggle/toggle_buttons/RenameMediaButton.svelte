@@ -21,17 +21,17 @@
 
     let mediaPath: string = $derived(page.url.pathname);
     let show: boolean = $derived(isValidMediaPath(mediaPath)); // Show this button on media (images and videos)
-    let dialog = $state() as TextDialog;
+    let dialog = $state()!;
 
     function originalMediaName(): string {
         const mediaName = getNameFromPath(mediaPath);
-        const mediaNameWithoutExtension = mediaName.split('.')[0];
+        const mediaNameWithoutExtension = mediaName.split('.', 1)[0];
         return mediaNameWithoutExtension;
     }
 
     function fileExtension(): string {
         const mediaName = getNameFromPath(mediaPath);
-        const extension = '.' + mediaName.split('.')[1];
+        const extension = `.${mediaName.split('.', 2)[1]}`;
         return extension;
     }
 
@@ -51,7 +51,7 @@
         const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
         const albumPath = getParentFromPath(newMediaPath);
         const album = albumState.albums.get(albumPath);
-        if (!album || !album.album) return undefined; // album not loaded, cannot check for collision
+        if (!album?.album) return undefined; // album not loaded, cannot check for collision
         const media = album.album.getMedia(newMediaPath);
         if (media) return 'file already exists';
         return undefined; // name is valid
@@ -66,12 +66,12 @@
 {#if show}
     <ControlStripButton onclick={onButtonClick} title="Change name on disk"><RenameIcon />Rename</ControlStripButton>
     <TextDialog
-        label="New Filename"
         bind:this={dialog}
+        extension={fileExtension()}
+        initialValue={originalMediaName()}
+        label="New Filename"
         onNewValue={onNewMediaName}
         sanitizor={sanitizeMediaNameWithoutExtension}
         validator={validateMediaName}
-        initialValue={originalMediaName()}
-        extension={fileExtension()}
     />
 {/if}

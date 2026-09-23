@@ -11,4 +11,4 @@
     const viewBox = '0 0 1218 1012';
 </script>
 
-<Icon {viewBox} {d} />
+<Icon {d} {viewBox} />

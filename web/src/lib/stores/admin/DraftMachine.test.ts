@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { draftMachine } from './DraftMachine.svelte';
 import { DraftStatus } from '$lib/models/draft';
 
@@ -48,23 +48,51 @@ describe('draftMachine', () => {
         });
 
         it.each(['/2001/12-31', '/2001', 'nonsense', '/2001/13-01/'])('refuses to start on %s', (path) => {
-            expect(() => draftMachine.init(path)).toThrow(`Invalid path [${path}]`);
+            expect(() => {
+                draftMachine.init(path);
+            }).toThrow(`Invalid path [${path}]`);
         });
     });
 
     describe('editing', () => {
         it.each([
-            { field: 'title', edit: () => draftMachine.setTitle('A Title'), expected: 'A Title' },
+            {
+                field: 'title',
+                edit: () => {
+                    draftMachine.setTitle('A Title');
+                },
+                expected: 'A Title',
+            },
             {
                 field: 'description',
-                edit: () => draftMachine.setDescription('A Description'),
+                edit: () => {
+                    draftMachine.setDescription('A Description');
+                },
                 expected: 'A Description',
             },
-            { field: 'summary', edit: () => draftMachine.setSummary('A Summary'), expected: 'A Summary' },
-            { field: 'published', edit: () => draftMachine.setPublished(true), expected: true },
+            {
+                field: 'summary',
+                edit: () => {
+                    draftMachine.setSummary('A Summary');
+                },
+                expected: 'A Summary',
+            },
+            {
+                field: 'published',
+                edit: () => {
+                    draftMachine.setPublished(true);
+                },
+                expected: true,
+            },
             // Stored rather than treated as "no value", which is the difference
             // between unpublishing an album and silently leaving it published
-            { field: 'published', edit: () => draftMachine.setPublished(false), expected: false },
+            {
+                field: 'published',
+                edit: () => {
+                    draftMachine.setPublished(false);
+                },
+                expected: false,
+            },
         ])('setting $field records $expected and marks the draft unsaved', ({ field, edit, expected }) => {
             edit();
 

@@ -16,8 +16,8 @@
 
     interface Props {
         title: string;
-        hideFooter?: boolean;
-        children?: Snippet;
+        hideFooter?: boolean | undefined;
+        children?: Snippet | undefined;
     }
 
     let { title, hideFooter = false, children }: Props = $props();

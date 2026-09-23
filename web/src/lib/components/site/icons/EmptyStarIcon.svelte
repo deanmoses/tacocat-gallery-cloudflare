@@ -5,9 +5,9 @@
 -->
 <script lang="ts">
     interface Props {
-        width?: string;
-        height?: string;
-        onclick?: (event: MouseEvent) => void;
+        width?: string | undefined;
+        height?: string | undefined;
+        onclick?: (event: MouseEvent) => void | undefined;
     }
 
     let { width = '1em', height = '1em', onclick }: Props = $props();
@@ -19,7 +19,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svg {onclick} {width} {height} {viewBox}><path {d} /></svg>
+<svg {height} {onclick} {viewBox} {width}><path {d} /></svg>
 
 <style>
     path {

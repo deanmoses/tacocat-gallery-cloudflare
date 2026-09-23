@@ -13,4 +13,4 @@
     }
 </script>
 
-<ControlStripButton {onclick}><LoginIcon width=".9em" height=".9em" />Login</ControlStripButton>
+<ControlStripButton {onclick}><LoginIcon height=".9em" width=".9em" />Login</ControlStripButton>

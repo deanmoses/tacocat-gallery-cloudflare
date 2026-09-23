@@ -9,12 +9,12 @@
 
     interface Props {
         hasUnsavedChanges: boolean;
-        onclick?: (event: MouseEvent) => void;
+        onclick?: (event: MouseEvent) => void | undefined;
     }
 
     let { hasUnsavedChanges, onclick }: Props = $props();
 </script>
 
-<ControlStripButton {onclick} disabled={!hasUnsavedChanges}>
+<ControlStripButton disabled={!hasUnsavedChanges} {onclick}>
     <SaveIcon /> Save{#if hasUnsavedChanges}*{/if}
 </ControlStripButton>

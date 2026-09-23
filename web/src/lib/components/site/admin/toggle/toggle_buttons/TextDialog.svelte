@@ -11,17 +11,15 @@
     interface Props {
         label: string;
         initialValue: string;
-        extension?: string;
-        // eslint-disable-next-line svelte/require-event-prefix -- a transform the parent injects, not an event handler
+        extension?: string | undefined;
         sanitizor: (n: string) => string;
-        // eslint-disable-next-line svelte/require-event-prefix -- a validation function the parent injects, not an event handler
         validator: (n: string) => Promise<string | undefined>;
         onNewValue: (n: string) => void;
     }
 
     let { label, initialValue, extension = '', sanitizor, validator, onNewValue }: Props = $props();
-    let dialog = $state() as Dialog;
-    let textfield = $state() as HTMLInputElement;
+    let dialog = $state()!;
+    let textfield = $state()!;
     let errorMsg: string | undefined = $state();
 
     export function show(): void {
@@ -75,12 +73,12 @@
         <label>
             <div class="label">{label}</div>
             <input
-                type="text"
-                name="text"
                 bind:this={textfield}
-                value={initialValue}
+                name="text"
                 oninput={onTextChange}
                 required
+                type="text"
+                value={initialValue}
             />{extension}
             {#if errorMsg}
                 <div class="errorMsg">{errorMsg}</div>

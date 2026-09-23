@@ -19,14 +19,14 @@ export function handleKeyboardNavigation(
     path: string,
     getAlbum: GetAlbumFunction,
 ): string | null {
-    if (isValidAlbumPath(path + '/')) path += '/';
+    if (isValidAlbumPath(`${path}/`)) path += '/';
 
     // get URL to navigate to
     let newPath = getUrlToNavigateTo(key, path, getAlbum);
 
     // make sure there's a / at root
     if (newPath != null && !newPath.startsWith('/')) {
-        newPath = '/' + newPath;
+        newPath = `/${newPath}`;
     }
 
     return newPath;
@@ -58,10 +58,11 @@ function getUrlToNavigateTo(key: KeyboardEvent['key'], path: string, getAlbum: G
     }
 }
 
-enum Direction {
-    Next = 'Next',
-    Prev = 'Prev',
-}
+const Direction = {
+    Next: 'Next',
+    Prev: 'Prev',
+} as const;
+type Direction = (typeof Direction)[keyof typeof Direction];
 
 /**
  * Return URL to next or prev photo
@@ -92,13 +93,13 @@ function navigateToPeer(path: string, getAlbum: GetAlbumFunction, direction: Dir
                     return newPath;
                 }
             } else {
-                console.log('Did not find media [' + path + '] on album [' + albumPath + ']');
+                console.log(`Did not find media [${path}] on album [${albumPath}]`);
             }
         } else {
-            console.log('No album found at path: ' + path);
+            console.log(`No album found at path: ${path}`);
         }
     } else {
-        console.warn('Path is neither a media item nor an album: ' + path);
+        console.warn(`Path is neither a media item nor an album: ${path}`);
     }
 
     return null;
@@ -120,9 +121,8 @@ function navigateToParent(path: string): string | null {
     else if (isValidAlbumPath(path)) {
         const parentAlbumPath: string = getParentFromPath(path);
         return parentAlbumPath;
-    } else {
-        console.warn('Path is neither a media item nor an album: ' + path);
     }
+    console.warn(`Path is neither a media item nor an album: ${path}`);
 
     return null;
 }
@@ -138,16 +138,16 @@ function navigateToFirstChild(path: string, getAlbum: GetAlbumFunction): string 
         const album = getAlbum(path);
         if (album) {
             // If we're on an album with media items, go to first media item
-            if (!!album.media && album.media.length > 0) {
+            if (Boolean(album.media) && album.media.length > 0) {
                 return album.media[0].path;
             }
             // Else we're on an album with no media items, but subalbums.
             // Go to first subalbum.
-            else if (!!album.albums && album.albums.length > 0) {
+            else if (Boolean(album.albums) && album.albums.length > 0) {
                 return album.albums[0].path;
             }
         } else {
-            console.log('No album found at path: ' + path);
+            console.log(`No album found at path: ${path}`);
         }
     }
 

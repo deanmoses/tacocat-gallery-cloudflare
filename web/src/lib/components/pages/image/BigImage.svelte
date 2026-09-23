@@ -19,15 +19,17 @@
 	Wrapping the image in a #key block seems to make this problem go away.
 -->
 {#key image.path}
-    <a href={image.originalUrl} aria-label="View full-size image: {image.title}">
+    <a aria-label="View full-size image: {image.title}" href={image.originalUrl}>
         <img
-            src={image.detailUrl}
-            style="max-width: {image.detailWidth}px; max-height: {image.detailHeight}px; aspect-ratio: {image.detailWidth} / {image.detailHeight};"
+            style:max-width="{image.detailWidth}px"
+            style:max-height="{image.detailHeight}px"
+            style:aspect-ratio="{image.detailWidth} / {image.detailHeight}"
             alt={image.title}
-            loading="eager"
             decoding="async"
-            fetchpriority="high"
             draggable="false"
+            fetchpriority="high"
+            loading="eager"
+            src={image.detailUrl}
         />
     </a>
 {/key}

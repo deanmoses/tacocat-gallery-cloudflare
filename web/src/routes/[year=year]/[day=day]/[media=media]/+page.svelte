@@ -11,15 +11,15 @@
     let media = $derived(album?.getMedia(mediaPath));
 </script>
 
-<MediaRouting {albumPath} {mediaPath} {media}>
+<MediaRouting {albumPath} {media} {mediaPath}>
     {#snippet loaded()}
         {#if media && album}
             {#if albumState.editMode}
                 {#await import('$lib/components/pages/media/MediaEditPage.svelte') then { default: MediaEditPage }}
-                    <MediaEditPage {media} {album} />
+                    <MediaEditPage {album} {media} />
                 {/await}
             {:else}
-                <MediaPage {media} {album} />
+                <MediaPage {album} {media} />
             {/if}
         {/if}
     {/snippet}

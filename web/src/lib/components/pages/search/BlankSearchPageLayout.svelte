@@ -9,16 +9,16 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        title?: string;
+        title?: string | undefined;
         searchTerms: string;
-        returnPath?: string;
-        children?: Snippet;
+        returnPath?: string | undefined;
+        children?: Snippet | undefined;
     }
 
-    let { title = undefined, searchTerms, returnPath, children }: Props = $props();
+    let { title, searchTerms, returnPath, children }: Props = $props();
 </script>
 
-<SearchPage {searchTerms} {returnPath} {title}>
+<SearchPage {returnPath} {searchTerms} {title}>
     <FullPageMessage>
         {@render children?.()}
     </FullPageMessage>

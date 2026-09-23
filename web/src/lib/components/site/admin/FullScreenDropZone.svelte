@@ -7,10 +7,9 @@
     import type { Snippet } from 'svelte';
 
     interface Props {
-        // eslint-disable-next-line svelte/require-event-prefix -- a predicate the parent injects, not an event handler
         isDropAllowed: (e: DragEvent) => boolean;
         onDrop: (e: DragEvent) => Promise<void>;
-        children?: Snippet;
+        children?: Snippet | undefined;
     }
 
     let { isDropAllowed, onDrop, children }: Props = $props();

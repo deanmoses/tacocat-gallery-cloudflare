@@ -22,7 +22,7 @@
     let mediaTitle: string = $derived(media.title);
     let cropStatus: CropStatus | undefined = $derived(albumState.crops.get(media.path)?.status);
     let disableButtons: boolean = $derived(cropStatus === CropStatus.IN_PROGRESS);
-    let cropper = $state() as CropThumbnail;
+    let cropper = $state()!;
 
     function onCancel() {
         goto(media.path);
@@ -36,8 +36,8 @@
 
 <MediaPageLayout title={mediaTitle}>
     {#snippet caption()}
-        <button onclick={onCancel} disabled={disableButtons}><CancelIcon /> Cancel</button>
-        <button onclick={onSave} disabled={disableButtons}><SaveIcon /> Save</button>
+        <button disabled={disableButtons} onclick={onCancel}><CancelIcon /> Cancel</button>
+        <button disabled={disableButtons} onclick={onSave}><SaveIcon /> Save</button>
     {/snippet}
 
     {#snippet imageHtml()}

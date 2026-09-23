@@ -27,10 +27,10 @@
 
 <svelte:head>
     {#if nextMedia}
-        <link rel="preload" as="image" href={nextMedia.detailUrl} />
+        <link as="image" href={nextMedia.detailUrl} rel="preload" />
     {/if}
     {#if prevMedia}
-        <link rel="preload" as="image" href={prevMedia.detailUrl} />
+        <link as="image" href={prevMedia.detailUrl} rel="preload" />
     {/if}
 </svelte:head>
 
@@ -40,7 +40,6 @@
     {/snippet}
 
     {#snippet caption()}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -- Rich text authored by admins via Quill; not user-supplied -->
         {@html media.description}
     {/snippet}
 

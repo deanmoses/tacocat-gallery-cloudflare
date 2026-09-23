@@ -7,13 +7,13 @@
     import Icon from './Icon.svelte';
 
     interface Props {
-        title?: string;
+        title?: string | undefined;
     }
 
-    let { title = undefined }: Props = $props();
+    let { title }: Props = $props();
 
     const d = 'M749 198L397 551l352 353-197 198L0 550 552 0z';
     const viewBox = '0 0 749 1102';
 </script>
 
-<Icon {viewBox} {title} {d} />
+<Icon {d} {title} {viewBox} />

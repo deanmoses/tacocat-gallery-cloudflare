@@ -8,8 +8,8 @@
     import NextIcon from '../icons/NextIcon.svelte';
 
     interface Props {
-        href?: string;
-        title?: string;
+        href?: string | undefined;
+        title?: string | undefined;
     }
 
     let { href = '', title = '' }: Props = $props();

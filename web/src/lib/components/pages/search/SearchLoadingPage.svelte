@@ -15,6 +15,6 @@
     let { searchTerms, returnPath }: Props = $props();
 </script>
 
-<BlankSearchPageLayout {searchTerms} {returnPath}>
+<BlankSearchPageLayout {returnPath} {searchTerms}>
     <WaitingSpinner />
 </BlankSearchPageLayout>

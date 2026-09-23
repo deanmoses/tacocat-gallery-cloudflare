@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import { createRawSnippet } from 'svelte';
@@ -34,7 +34,11 @@ function show() {
 }
 
 type Seed = (path: string) => void;
-type Case = { state: string; seed: Seed; title: string };
+interface Case {
+    state: string;
+    seed: Seed;
+    title: string;
+}
 type MessageCase = Case & { message: string };
 
 const setStatus =

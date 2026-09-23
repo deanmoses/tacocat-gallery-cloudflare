@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import type { Locator } from 'vitest/browser';
@@ -16,7 +16,9 @@ const BROKEN_IMAGE = 'data:image/gif;base64,not-a-gif';
 /** An overlay is absent before the image settles as well as after, so absence only means something once it has. */
 async function settles(image: Locator): Promise<void> {
     const img = image.element() as HTMLImageElement;
-    await vi.waitFor(() => expect(img.complete).toBe(true));
+    await vi.waitFor(() => {
+        expect(img.complete).toBe(true);
+    });
 }
 
 describe(Thumbnail, () => {

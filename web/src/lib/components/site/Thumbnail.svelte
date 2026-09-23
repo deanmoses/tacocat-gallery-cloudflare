@@ -16,21 +16,21 @@
 
     interface Props {
         /** Data needed to construct thumbnail URL */
-        thumbnailUrlInfo?: ThumbnailUrlInfo;
+        thumbnailUrlInfo?: ThumbnailUrlInfo | undefined;
         /** Direct src URL (used by UploadThumbnail for blob URLs) */
-        src?: string;
+        src?: string | undefined;
         /** Where the thumbnail links to */
-        href?: string;
-        title?: string;
-        summary?: string;
-        published?: boolean;
-        creating?: boolean;
-        deleting?: boolean;
-        renaming?: boolean;
-        cropping?: boolean;
+        href?: string | undefined;
+        title?: string | undefined;
+        summary?: string | undefined;
+        published?: boolean | undefined;
+        creating?: boolean | undefined;
+        deleting?: boolean | undefined;
+        renaming?: boolean | undefined;
+        cropping?: boolean | undefined;
         /** Whether this thumbnail represents a video */
-        isVideo?: boolean;
-        selectionControls?: Snippet;
+        isVideo?: boolean | undefined;
+        selectionControls?: Snippet | undefined;
     }
     let {
         thumbnailUrlInfo,
@@ -58,30 +58,30 @@
 
     // Reset imageLoaded when imgSrc changes to avoid showing play icon over stale image
     $effect(() => {
-        void imgSrc;
+        imgSrc;
         imageLoaded = false;
     });
 </script>
 
 <div class="thumbnail" data-testid="thumbnail">
-    <a {href} aria-hidden="true" tabindex="-1"
+    <a aria-hidden="true" {href} tabindex="-1"
         >{#if imgSrc}<img
-                src={imgSrc}
                 alt=""
                 data-testid="thumbnail-image"
-                draggable="false"
                 decoding="async"
+                draggable="false"
                 onload={() => (imageLoaded = true)}
+                src={imgSrc}
             />{:else}<div class="no-image"></div>{/if}{#if creating}<div class="icon-overlay">
-                <CreateIcon width="10em" height="10em" />
+                <CreateIcon height="10em" width="10em" />
             </div>{:else if deleting}<div class="icon-overlay">
-                <DeleteIcon width="10em" height="10em" />
+                <DeleteIcon height="10em" width="10em" />
             </div>{:else if renaming}<div class="icon-overlay">
-                <RenameIcon width="7em" height="7em" />
+                <RenameIcon height="7em" width="7em" />
             </div>{:else if cropping}<div class="icon-overlay">
-                <CropIcon width="10em" height="10em" />
+                <CropIcon height="10em" width="10em" />
             </div>{:else if unpublished}<div class="icon-overlay">
-                <UnpublishedIcon width="3em" height="3em" />
+                <UnpublishedIcon height="3em" width="3em" />
             </div>{/if}{#if isVideo && imageLoaded}<div class="play-overlay" data-testid="play-overlay">
                 <PlayButtonIcon size="3em" />
             </div>{/if}</a

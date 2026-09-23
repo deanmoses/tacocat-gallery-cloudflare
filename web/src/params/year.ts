@@ -1,3 +1,3 @@
 export function match(param: string): boolean {
-    return /^\d\d\d\d$/.test(param);
+    return /^\d{4}$/v.test(param);
 }

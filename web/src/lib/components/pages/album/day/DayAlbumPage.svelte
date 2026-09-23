@@ -26,7 +26,7 @@
     );
 </script>
 
-<DayAlbumPageLayout title={album.title} published={album.published}>
+<DayAlbumPageLayout published={album.published} title={album.title}>
     {#snippet editControls()}
         <AdminToggle />
     {/snippet}
@@ -43,7 +43,6 @@
                 <UploadStatus {uploads} />
             {/await}
         {:else}
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -- Rich text authored by admins via Quill; not user-supplied -->
             {@html album.description}
         {/if}
     {/snippet}
@@ -52,12 +51,12 @@
         {#if album.media?.length}
             {#each album.media as media (media.path)}
                 <MediaThumbnail
-                    title={media.title}
-                    thumbnailUrlInfo={media.thumbnailUrlInfo}
-                    summary={media.summary}
                     href={media.href}
-                    path={media.path}
                     mediaType={media.mediaType}
+                    path={media.path}
+                    summary={media.summary}
+                    thumbnailUrlInfo={media.thumbnailUrlInfo}
+                    title={media.title}
                 />
             {/each}
         {:else if !album.published && !uploads?.length}

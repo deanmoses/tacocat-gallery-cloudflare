@@ -1,23 +1,23 @@
-import { it, expect, describe } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-    sanitizeMediaFilename,
-    sanitizeMediaNameWithoutExtension,
-    sanitizeDayAlbumName,
-    deduplicateMediaPaths,
-    hasValidMediaExtension,
-    validMediaExtensionsString,
-    isValidPath,
-    isValidAlbumPath,
-    isValidYearAlbumPath,
-    isValidDayAlbumPath,
-    isValidMediaPath,
-    isValidMediaNameWithoutExtensionStrict,
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
     albumPathToDate,
+    deduplicateMediaPaths,
+    getNameFromPath,
     getParentAndNameFromPath,
     getParentFromPath,
-    getNameFromPath,
+    hasValidMediaExtension,
+    isValidAlbumPath,
+    isValidDayAlbumPath,
+    isValidMediaNameWithoutExtensionStrict,
+    isValidMediaPath,
+    isValidPath,
+    isValidYearAlbumPath,
+    sanitizeDayAlbumName,
+    sanitizeMediaFilename,
+    sanitizeMediaNameWithoutExtension,
+    validMediaExtensionsString,
 } from './galleryPathUtils';
 
 /** Every extension the gallery accepts, in the order the module lists them */
@@ -75,14 +75,14 @@ describe(validMediaExtensionsString, () => {
  * Validation here is syntactic. A path is well-formed or not; whether the date
  * it names exists in the calendar is not this module's question.
  */
-type PathCase = {
+interface PathCase {
     path: string;
     isPath: boolean;
     isAlbum: boolean;
     isYear: boolean;
     isDay: boolean;
     isMedia: boolean;
-};
+}
 
 /** Builds a row, defaulting every predicate to false so a row states only what it accepts */
 function pathCase(path: string, accepted: Partial<Omit<PathCase, 'path'>> = {}): PathCase {
@@ -373,7 +373,11 @@ describe(isValidMediaNameWithoutExtensionStrict, () => {
  * against the combined function, and would have gone on passing if either half
  * had stopped delegating.
  */
-type SplitCase = { path: string; parent: string; name: string };
+interface SplitCase {
+    path: string;
+    parent: string;
+    name: string;
+}
 
 const SPLIT_CASES: SplitCase[] = [
     { path: '/2001/12-31/image.jpg', parent: '/2001/12-31/', name: 'image.jpg' },
@@ -398,7 +402,7 @@ const INVALID_SPLIT_CASES = [
     { path: '/2001/image.jpg', error: 'Invalid path: [/2001/image.jpg]' },
     // An empty path is called out separately, since there is no path to name
     { path: '', error: 'Invalid path: cannot be empty' },
-    { path: '   ', error: 'Invalid path: cannot be empty' },
+    { path: ' '.repeat(3), error: 'Invalid path: cannot be empty' },
 ];
 
 describe(getParentAndNameFromPath, () => {

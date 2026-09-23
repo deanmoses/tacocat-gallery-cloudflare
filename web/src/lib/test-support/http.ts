@@ -5,7 +5,7 @@ import { vi } from 'vitest';
  * in a spec gets `text/plain`, which SessionStore rejects outright.
  */
 export function jsonResponse(body: unknown, status = 200): Response {
-    return new Response(JSON.stringify(body), {
+    return Response.json(body, {
         status,
         headers: { 'Content-Type': 'application/json' },
     });
@@ -22,12 +22,19 @@ export function serverError(statusText = 'Internal Server Error'): Response {
 /** A reply, or a function that produces one -- a thrown error stands for the network being down */
 export type Reply = Response | (() => Response);
 
-export type Call = { method: string; pathname: string; body: unknown };
+export interface Call {
+    method: string;
+    pathname: string;
+    body: unknown;
+}
 
 /** A call as fetch() received it, for what Call leaves out: the query string, the request options */
-export type RawCall = { url: URL; init: RequestInit | undefined };
+export interface RawCall {
+    url: URL;
+    init: RequestInit | undefined;
+}
 
-type Routes = {
+interface Routes {
     get: (pathname: string, ...replies: Reply[]) => void;
     head: (pathname: string, ...replies: Reply[]) => void;
     post: (pathname: string, ...replies: Reply[]) => void;
@@ -38,7 +45,7 @@ type Routes = {
     calls: Call[];
     /** The same calls, unreduced */
     rawCalls: RawCall[];
-};
+}
 
 /**
  * Stands in for the gallery API.

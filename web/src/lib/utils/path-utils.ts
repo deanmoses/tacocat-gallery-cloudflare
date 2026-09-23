@@ -10,6 +10,6 @@ export function getAlbumType(path: string): AlbumType {
     if (path === '/') return AlbumType.ROOT;
     else if (isValidDayAlbumPath(path)) return AlbumType.DAY;
     else if (isValidYearAlbumPath(path)) return AlbumType.YEAR;
-    else if (isValidMediaPath(path)) throw Error(`Media path, not album path [${path}]`);
-    else throw Error(`Invalid album path [${path}]`);
+    else if (isValidMediaPath(path)) throw new Error(`Media path, not album path [${path}]`);
+    else throw new Error(`Invalid album path [${path}]`);
 }

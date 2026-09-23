@@ -29,9 +29,9 @@ export async function getDroppedFiles(e: DragEvent): Promise<File[]> {
         }
     } else {
         // Use DataTransfer interface to access the file(s)
-        [...e.dataTransfer.files].forEach((file) => {
+        for (const file of e.dataTransfer.files) {
             files.push(file);
-        });
+        }
     }
     return files;
 }
@@ -77,17 +77,15 @@ const readAllDirectoryEntries = async (directory: FileSystemDirectoryEntry): Pro
 /**
  * Wrap FileSystemDirectoryReader.readEntries() in a promise to enable using await
  */
-const readEntriesPromise = async (directoryReader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> => {
-    return new Promise((resolve, reject) => {
+const readEntriesPromise = async (directoryReader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
+    new Promise((resolve, reject) => {
         directoryReader.readEntries(resolve, reject);
     });
-};
 
 /**
  * Wrap FileSystemFileEntry.file() in a promise to enable using await
  */
-const readEntryContentAsync = async (entry: FileSystemFileEntry): Promise<File> => {
-    return new Promise((resolve, reject) => {
+const readEntryContentAsync = async (entry: FileSystemFileEntry): Promise<File> =>
+    new Promise((resolve, reject) => {
         entry.file(resolve, reject);
     });
-};

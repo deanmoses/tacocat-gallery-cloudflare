@@ -4,7 +4,7 @@ import { adminApi } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
 import { getParentFromPath } from '$lib/utils/galleryPathUtils';
 import { albumState } from '../AlbumState.svelte';
-import { CropStatus, type Crop } from '$lib/models/album';
+import { type Crop, CropStatus } from '$lib/models/album';
 
 /**
  * Thumbnail crop state machine
@@ -32,7 +32,7 @@ class CropMachine {
     crop(mediaPath: string, crop: Crop): void {
         console.log(`Saving crop of [${mediaPath}]`, crop);
         albumState.crops.set(mediaPath, {
-            mediaPath: mediaPath,
+            mediaPath,
             crop,
             status: CropStatus.IN_PROGRESS,
         });

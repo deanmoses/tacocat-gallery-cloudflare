@@ -1,10 +1,10 @@
 import { mediaErrorsUrl } from './config';
 
-export type MediaErrorsResponse = {
+export interface MediaErrorsResponse {
     success: boolean;
     errors?: Record<string, string>;
     error?: string;
-};
+}
 
 /**
  * Check the backend for media processing errors.

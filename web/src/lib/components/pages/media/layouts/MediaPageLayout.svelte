@@ -12,11 +12,11 @@
 
     interface Props {
         title: string;
-        titleEditor?: Snippet;
-        caption?: Snippet;
-        imageHtml?: Snippet;
-        nav?: Snippet;
-        editControls?: Snippet;
+        titleEditor?: Snippet | undefined;
+        caption?: Snippet | undefined;
+        imageHtml?: Snippet | undefined;
+        nav?: Snippet | undefined;
+        editControls?: Snippet | undefined;
     }
 
     let { title, titleEditor, caption, imageHtml, nav, editControls }: Props = $props();
@@ -29,11 +29,11 @@
 <SiteLayout>
     {@render editControls?.()}
     {#if titleEditor}
-        <Header hideSiteTitle hideSearch hideWhenSmall>
+        <Header hideSearch hideSiteTitle hideWhenSmall>
             {@render titleEditor?.()}
         </Header>
     {:else if title}
-        <Header hideSiteTitle hideSearch hideWhenSmall>
+        <Header hideSearch hideSiteTitle hideWhenSmall>
             {title}
         </Header>
     {/if}

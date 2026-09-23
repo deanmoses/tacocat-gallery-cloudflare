@@ -12,4 +12,4 @@
     let status: AlbumLoadStatus | undefined = $derived(albumEntry?.loadStatus);
 </script>
 
-<RootAlbumRouting {status} {album} />
+<RootAlbumRouting {album} {status} />

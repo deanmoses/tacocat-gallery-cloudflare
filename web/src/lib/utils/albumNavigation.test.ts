@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { albumNav } from './albumNavigation';
 import { shortDate } from './date-utils';
 import toAlbum from '$lib/models/impl/AlbumCreator';
@@ -38,7 +38,7 @@ const JAN_1 = shortDate(new Date(2001, 0, 1));
 const JUN_15 = shortDate(new Date(2001, 5, 15));
 const DEC_31 = shortDate(new Date(2001, 11, 31));
 
-type Case = {
+interface Case {
     name: string;
     albumPath: string;
     parent: Album | undefined;
@@ -46,7 +46,7 @@ type Case = {
     nextHref?: string;
     prevTitle?: string;
     nextTitle?: string;
-};
+}
 
 const CASES: Case[] = [
     {

@@ -11,18 +11,18 @@
 
     interface Props {
         /** Hide the header on small viewports */
-        hideWhenSmall?: boolean;
+        hideWhenSmall?: boolean | undefined;
 
         /** Don't show the bottom border of the header.  Which you don't when there's nav buttons below the header. */
-        hideBottomBorder?: boolean;
+        hideBottomBorder?: boolean | undefined;
 
         /** Don't show the search icon */
-        hideSearch?: boolean;
+        hideSearch?: boolean | undefined;
 
         /** Don't show the site's title (this is different than the page title)*/
-        hideSiteTitle?: boolean;
+        hideSiteTitle?: boolean | undefined;
 
-        children?: Snippet;
+        children?: Snippet | undefined;
     }
 
     let {
@@ -42,7 +42,7 @@
             <span class="site-title hidden-xs">{siteTitle()}</span>
         {/if}
         {#if !hideSearch}
-            <a href="/search?returnPath={page.url.pathname}" class="hidden-xxs" title="Search">
+            <a class="hidden-xxs" href="/search?returnPath={page.url.pathname}" title="Search">
                 <SearchIcon />
             </a>
         {/if}

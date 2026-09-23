@@ -7,7 +7,12 @@
     import Cropper, { type OnCropCompleteEvent } from 'svelte-easy-crop';
     import type { Media } from '$lib/models/GalleryItemInterfaces';
 
-    type Crop = { x: number; y: number; height: number; width: number };
+    interface Crop {
+        x: number;
+        y: number;
+        height: number;
+        width: number;
+    }
     interface Props {
         media: Media;
     }
@@ -26,7 +31,7 @@
 </script>
 
 <div class="cropContainer">
-    <Cropper image={media.detailUrl} aspect={1} showGrid={false} oncropcomplete={onCropChange} />
+    <Cropper aspect={1} image={media.detailUrl} oncropcomplete={onCropChange} showGrid={false} />
 </div>
 
 <style>

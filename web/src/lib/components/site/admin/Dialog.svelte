@@ -8,13 +8,13 @@
     import { portal } from '$lib/actions/portal';
 
     interface Props {
-        content?: Snippet;
-        buttons?: Snippet;
-        onkeydown?: (e: KeyboardEvent) => void;
+        content?: Snippet | undefined;
+        buttons?: Snippet | undefined;
+        onkeydown?: (e: KeyboardEvent) => void | undefined;
     }
 
     let { content, buttons, onkeydown }: Props = $props();
-    let dialog = $state() as HTMLDialogElement;
+    let dialog = $state()!;
 
     export function show(): void {
         dialog.showModal();

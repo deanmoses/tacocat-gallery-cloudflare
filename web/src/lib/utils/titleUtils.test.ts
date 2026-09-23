@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { toTitleFromFilename } from './titleUtils';
 
 /**
  * A media item with no title of its own is displayed under one made from its
  * filename, so this runs over whatever a camera, a phone or an export wrote.
  */
-type TitleCase = { fileName: string; title: string };
+interface TitleCase {
+    fileName: string;
+    title: string;
+}
 
 const CASES: TitleCase[] = [
     // Only the last extension is dropped, whatever it is
