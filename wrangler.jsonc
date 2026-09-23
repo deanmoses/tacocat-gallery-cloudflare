@@ -20,4 +20,14 @@
         "consumers": [{ "queue": "tacocat-proto-uploads", "max_batch_size": 10, "max_batch_timeout": 1 }],
     },
     "triggers": { "crons": ["17 9 * * *"] },
+    "containers": [
+        {
+            "class_name": "Transcoder",
+            "image": "./transcoder/Dockerfile",
+            "instance_type": "standard-4",
+            "max_instances": 2,
+        },
+    ],
+    "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
+    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
 }

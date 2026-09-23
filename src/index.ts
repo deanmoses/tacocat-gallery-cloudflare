@@ -1,3 +1,4 @@
+import { Container } from '@cloudflare/containers';
 import { AwsClient } from 'aws4fetch';
 import ExifReader from 'exifreader';
 
@@ -7,6 +8,13 @@ interface Env {
     IMAGES: ImagesBinding;
     R2_ACCESS_KEY_ID: string;
     R2_SECRET_ACCESS_KEY: string;
+    TRANSCODER: DurableObjectNamespace<Transcoder>;
+}
+
+/** ffmpeg in a container; see transcoder/server.mjs. */
+export class Transcoder extends Container {
+    defaultPort = 8080;
+    sleepAfter = '2m';
 }
 
 const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com/tacocat-proto-media';
@@ -28,6 +36,9 @@ type ItemInput = {
     tags?: string;
     versionId?: string;
     published?: boolean;
+    width?: number;
+    height?: number;
+    durationSeconds?: number;
 };
 
 const BOOKMARK_HEADER = 'x-d1-bookmark';
@@ -73,6 +84,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (pathname === '/api/upload-url' && request.method === 'POST') return uploadUrl(request, env);
     if (pathname === '/upload-test') return new Response(UPLOAD_TEST_PAGE, { headers: { 'content-type': 'text/html' } });
     if (pathname.startsWith('/raw/')) return raw(env, url);
+    if (pathname.startsWith('/v/')) return media(request, env, url);
     if (pathname.startsWith('/upload/') && request.method === 'PUT') return upload(request, env, url);
     if (pathname.startsWith('/debug/image/')) return debugImage(env, url);
     if (pathname.startsWith('/i/') && request.method === 'GET') return derivedImage(env, url);
@@ -123,11 +135,13 @@ async function putItem(request: Request, env: Env): Promise<Response> {
 function upsertItem(db: D1Database | D1DatabaseSession, item: ItemInput): D1PreparedStatement {
     return db
         .prepare(
-            `INSERT INTO item (parent_path, item_name, item_type, title, description, tags, version_id, published)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            `INSERT INTO item (parent_path, item_name, item_type, title, description, tags, version_id, published,
+                width, height, duration_seconds)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT (parent_path, item_name) DO UPDATE SET
                 title = excluded.title, description = excluded.description, tags = excluded.tags,
                 version_id = excluded.version_id, published = excluded.published,
+                width = excluded.width, height = excluded.height, duration_seconds = excluded.duration_seconds,
                 updated_on = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
         )
         .bind(
@@ -139,6 +153,9 @@ function upsertItem(db: D1Database | D1DatabaseSession, item: ItemInput): D1Prep
             item.tags ?? null,
             item.versionId ?? null,
             item.published ? 1 : 0,
+            item.width ?? null,
+            item.height ?? null,
+            item.durationSeconds ?? null,
         );
 }
 
@@ -247,24 +264,45 @@ async function upload(request: Request, env: Env, url: URL): Promise<Response> {
 /** Presigned PUT straight to R2's S3 endpoint, so upload bytes never pass through the Worker. */
 async function uploadUrl(request: Request, env: Env): Promise<Response> {
     const { path, contentType } = (await request.json()) as { path: string; contentType: string };
+    const url = await presign(env, 'PUT', `inbox/${path.replace(/^\//, '')}`, contentType);
+    return json({ url, contentType });
+}
+
+/** Presigned S3 URL, so upload and transcode bytes never pass through the Worker. */
+async function presign(env: Env, method: 'GET' | 'PUT', key: string, contentType?: string): Promise<string> {
     const client = new AwsClient({
         accessKeyId: env.R2_ACCESS_KEY_ID,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY,
         service: 's3',
         region: 'auto',
     });
-    const target = new URL(`${R2_S3_ENDPOINT}/inbox/${path.replace(/^\//, '')}`);
-    target.searchParams.set('X-Amz-Expires', '900');
-    const signed = await client.sign(new Request(target, { method: 'PUT', headers: { 'content-type': contentType } }), {
-        aws: { signQuery: true },
-    });
-    return json({ url: signed.url, contentType });
+    const target = new URL(`${R2_S3_ENDPOINT}/${key.split('/').map(encodeURIComponent).join('/')}`);
+    target.searchParams.set('X-Amz-Expires', '3600');
+    const headers = contentType ? { 'content-type': contentType } : undefined;
+    const signed = await client.sign(new Request(target, { method, headers }), { aws: { signQuery: true } });
+    return signed.url;
 }
 
 async function raw(env: Env, url: URL): Promise<Response> {
     const obj = await env.MEDIA.get(decodeURIComponent(url.pathname.slice('/raw/'.length)));
     if (!obj) return json({ error: 'not found' }, 404);
     return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'application/octet-stream' } });
+}
+
+/** Byte-range serving, which video playback and seeking depend on. */
+async function media(request: Request, env: Env, url: URL): Promise<Response> {
+    const key = decodeURIComponent(url.pathname.slice('/v/'.length));
+    const obj = await env.MEDIA.get(key, { range: request.headers });
+    if (!obj) return json({ error: 'not found' }, 404);
+    const headers = new Headers({ 'accept-ranges': 'bytes', etag: obj.httpEtag });
+    obj.writeHttpMetadata(headers);
+    if (request.headers.has('range') && obj.range && 'offset' in obj.range) {
+        const start = obj.range.offset ?? 0;
+        const end = start + (obj.range.length ?? obj.size - start) - 1;
+        headers.set('content-range', `bytes ${start}-${end}/${obj.size}`);
+        return new Response(obj.body, { status: 206, headers });
+    }
+    return new Response(obj.body, { headers });
 }
 
 /** Moves an inbox upload to its immutable key and records it, mirroring processMediaUpload. */
@@ -289,18 +327,48 @@ async function processUploadEvent(event: R2EventMessage, env: Env): Promise<void
     const title = tagText(tags?.['Headline']) ?? tagText(tags?.['title']) ?? tagText(tags?.['ObjectName']);
     const description = tagText(tags?.['ImageDescription']) ?? tagText(tags?.['Caption/Abstract']);
 
-    await env.MEDIA.put(`originals${galleryPath}/${versionId}`, bytes, { httpMetadata: obj.httpMetadata });
+    const originalKey = `originals${galleryPath}/${versionId}`;
+    await env.MEDIA.put(originalKey, bytes, { httpMetadata: obj.httpMetadata });
+    const isVideo = /\.(mp4|mov|m4v|avi)$/i.test(itemName);
+    const video = isVideo ? await transcodeVideo(env, originalKey, `derived${galleryPath}/${versionId}`) : undefined;
     await upsertItem(env.DB, {
         parentPath,
         itemName,
-        itemType: /\.(mp4|mov|m4v|avi)$/i.test(itemName) ? 'video' : 'image',
+        itemType: isVideo ? 'video' : 'image',
         title,
         description,
         versionId,
         published: false,
+        ...video,
     }).run();
     await env.MEDIA.delete(key);
     console.info({ event: 'upload_processed', galleryPath, versionId, title, description, eventTime: event.eventTime });
+}
+
+interface TranscodeResult {
+    source: Record<string, unknown>;
+    output: { codedWidth: number; codedHeight: number; rotation: number; durationSeconds: number } & Record<string, unknown>;
+    ms: Record<string, number>;
+}
+
+async function transcodeVideo(env: Env, originalKey: string, derivedPrefix: string) {
+    const body = JSON.stringify({
+        src: await presign(env, 'GET', originalKey),
+        mp4Put: await presign(env, 'PUT', `${derivedPrefix}/video.mp4`, 'video/mp4'),
+        posterPut: await presign(env, 'PUT', `${derivedPrefix}/poster.jpg`, 'image/jpeg'),
+    });
+    const started = Date.now();
+    const res = await env.TRANSCODER.getByName('transcoder').fetch('http://transcoder/transcode', { method: 'POST', body });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`transcode failed ${res.status}: ${text}`);
+    const result = JSON.parse(text) as TranscodeResult;
+    console.info({ event: 'video_transcoded', originalKey, wallMs: Date.now() - started, ...result });
+    const quarterTurn = Math.abs(result.output.rotation) % 180 === 90;
+    return {
+        width: quarterTurn ? result.output.codedHeight : result.output.codedWidth,
+        height: quarterTurn ? result.output.codedWidth : result.output.codedHeight,
+        durationSeconds: result.output.durationSeconds,
+    };
 }
 
 function tagText(tag: unknown): string | undefined {
