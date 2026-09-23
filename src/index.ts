@@ -66,6 +66,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (pathname === '/api/seed' && request.method === 'POST') return seed(env, url);
     if (pathname === '/api/backup' && request.method === 'POST') return json(await backupDatabase(env));
     if (pathname.startsWith('/upload/') && request.method === 'PUT') return upload(request, env, url);
+    if (pathname.startsWith('/debug/image/')) return debugImage(env, url);
     if (pathname.startsWith('/i/') && request.method === 'GET') return derivedImage(env, url);
     return json({ error: 'not found' }, 404);
 }
@@ -308,6 +309,37 @@ async function derivedImage(env: Env, url: URL): Promise<Response> {
     const bytes = await out.response().arrayBuffer();
     await env.MEDIA.put(derivedKey, bytes, { httpMetadata: { contentType: format } });
     return new Response(bytes, { headers: { ...headers, 'content-type': format, 'x-derived': 'generated' } });
+}
+
+/** Isolates Images binding failures from how the bytes reach it: R2 stream, buffered stream, and each step. */
+async function debugImage(env: Env, url: URL): Promise<Response> {
+    const key = decodeURIComponent(url.pathname.slice('/debug/image/'.length));
+    const head = await env.MEDIA.get(key);
+    if (!head) return json({ error: 'not found', key }, 404);
+    const bytes = new Uint8Array(await head.arrayBuffer());
+    const buffered = () => new Blob([bytes]).stream();
+    const attempt = async (fn: () => Promise<unknown>) => {
+        try {
+            return { ok: true, value: await fn() };
+        } catch (e) {
+            return { ok: false, error: String(e) };
+        }
+    };
+    return json({
+        key,
+        size: bytes.length,
+        magic: new TextDecoder().decode(bytes.slice(4, 12)),
+        infoFromR2Stream: await attempt(async () => env.IMAGES.info((await env.MEDIA.get(key))!.body)),
+        infoBuffered: await attempt(() => env.IMAGES.info(buffered())),
+        jpegNoTransform: await attempt(async () => {
+            const r = (await env.IMAGES.input(buffered()).output({ format: 'image/jpeg' })).response();
+            return { status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength };
+        }),
+        jpegWidth512: await attempt(async () => {
+            const r = (await env.IMAGES.input(buffered()).transform({ width: 512 }).output({ format: 'image/jpeg' })).response();
+            return { status: r.status, bytes: (await r.arrayBuffer()).byteLength };
+        }),
+    });
 }
 
 /** Nightly dump of the canonical table to R2; the FTS index is derived data and is rebuilt on restore. */
