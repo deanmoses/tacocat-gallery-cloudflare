@@ -1,5 +1,6 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
+import { TEST_SECRETS } from './test/secrets.ts';
 
 export default defineConfig({
     test: {
@@ -26,10 +27,7 @@ export default defineConfig({
                         miniflare: {
                             bindings: {
                                 TEST_MIGRATIONS: await readD1Migrations('./migrations'),
-                                SESSION_SECRET: 'test-session-secret',
-                                R2_ACCESS_KEY_ID: 'test-access-key',
-                                R2_SECRET_ACCESS_KEY: 'test-secret-key',
-                                GLOBALPING_TOKEN: 'test-globalping-token',
+                                ...TEST_SECRETS,
                             },
                         },
                     })),

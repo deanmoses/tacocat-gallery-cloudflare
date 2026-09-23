@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import type { TestProject } from 'vitest/node';
 import { unstable_startWorker } from 'wrangler';
+import { TEST_SECRETS } from '../secrets.ts';
 
 declare module 'vitest' {
     export interface ProvidedContext {
@@ -11,12 +12,16 @@ declare module 'vitest' {
 
 /**
  * Starts what `wrangler dev` runs, entirely local: the web app's build, the asset router, and the Worker with
- * throwaway bindings. Once for the whole run, since the build alone takes seconds.
+ * throwaway bindings and the test secrets. Once for the whole run, since the build alone takes seconds.
  */
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
     await buildWebApp();
     const stack = await unstable_startWorker({
         config: fileURLToPath(new URL('../../wrangler.jsonc', import.meta.url)),
+        // A secret binding passed here wins over the same name in .dev.vars.
+        bindings: Object.fromEntries(
+            Object.entries(TEST_SECRETS).map(([name, value]) => [name, { type: 'secret_text', value }]),
+        ),
         dev: {
             server: { port: 0 },
             inspector: false,

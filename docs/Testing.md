@@ -17,7 +17,7 @@ Run one tier from `api/` with its directory, as in `npx vitest run test/db`, or 
 
 ## Real bindings, fakes only at the edges
 
-D1, R2, the Queue and the Images binding are Miniflare's local versions, built from `api/wrangler.jsonc` with `remoteBindings: false`, and the database is migrated from `api/migrations/`. So queries run as real SQLite, FTS5 triggers included, and objects really land in a bucket. No test reaches the Cloudflare account, and none needs `api/.dev.vars`.
+D1, R2, the Queue and the Images binding are Miniflare's local versions, built from `api/wrangler.jsonc` with `remoteBindings: false`, and the database is migrated from `api/migrations/`. So queries run as real SQLite, FTS5 triggers included, and objects really land in a bucket. No test reaches the Cloudflare account. The Worker's secrets come from `api/test/secrets.ts` in every tier, the stack included, so no test needs `api/.dev.vars` or sees what is in it.
 
 Fake only what cannot run locally or would reach outside:
 
