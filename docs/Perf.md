@@ -42,7 +42,7 @@ The two sites have to serve the same page for the comparison to mean anything, w
 ### Before the first run
 
 1. The Cloudflare database holds made-up albums (60 a year, 20 images each), not real photos. Copy one real day album into it, originals through R2's S3 API so the upload pipeline makes its derived images, and check its page renders every thumbnail.
-2. The Cloudflare site's `web/` app was written from scratch and lacks what the AWS app does, such as preloading the next and previous photo (see _How readers use the site_). Compare only once `web/` is a port of the AWS app, so the two sites run the same app and the comparison measures the platforms.
+2. ~~The Cloudflare site's `web/` app was written from scratch and lacks what the AWS app does, such as preloading the next and previous photo.~~ Done 2026-09-24: `web/` is a port of the AWS app, so the two sites run the same app and the comparison measures the platforms.
 
 ## What is known
 
@@ -87,6 +87,7 @@ CloudFront serves an album page through its error response for the single-page a
 ## Log
 
 - **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument. Static assets probed from Paris and Baton Rouge: served locally on Cloudflare from the first request. The AWS logs show photo clicks outnumbering album opens about ten to one, so the scenario is now the email reader's visit. `web/` turned out to be a from-scratch rewrite missing the AWS app's photo preloading; the comparison waits for a port.
+- **2026-09-24:** `web/` replaced by a port of the AWS app (`docs/Risks.md` row 5), so both sites now run the same app with the same photo preloading, and the Worker answers in the AWS API's shapes. The comparison still waits on a real day album in the Cloudflare database (_Before the first run_, step 1).
 
 ## Open questions
 

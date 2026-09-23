@@ -6,7 +6,9 @@
         "tsBuildInfoFile": "../node_modules/.cache/tsc/e2e.tsbuildinfo",
         "module": "preserve",
         "moduleResolution": "bundler",
-        "allowImportingTsExtensions": true
+        "allowImportingTsExtensions": true,
+        // The callbacks page.evaluate() runs in the browser see its document.
+        "lib": ["es2025", "dom", "dom.iterable"]
     },
     "include": ["."]
 }

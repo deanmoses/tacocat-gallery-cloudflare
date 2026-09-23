@@ -51,13 +51,13 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 
 ## The web app
 
-`web/`'s tests sit beside the code as `*.test.ts`, and all of them run in headless Chromium through Vitest's browser mode, so a component's effects run and the DOM is the real one. Run them from `web/` with `npx vitest run`.
+`web/`'s tests sit beside the code as `*.test.ts`. Which runtime a test gets is decided by its name: `*.svelte.test.ts` compiles runes in the test itself and runs in headless Chromium through Vitest's browser mode, so a component's effects run and the DOM is the real one; every other test runs in Node, on `fake-indexeddb`, so `idb-keyval` itself runs and a test covers what the cache can hold. Run them from `web/` with `npx vitest run`, or one project with `--project node` or `--project browser`.
 
-- Mount a component with `render` from `$lib/test-support/render.ts` and find what it shows with `page` from `vitest/browser`. `render` runs the first render's effects before it returns, so a plain `expect` right after it sees them, such as the title `<svelte:head>` sets.
+- Mount a component with `render` from `$lib/test-support/render.svelte.ts` and find what it shows with `page` from `vitest/browser`. `render` runs the first render's effects before it returns, so a plain `expect` right after it sees them, such as the title `<svelte:head>` sets, and hands back `rerender` for a prop change.
 - `expect.element` retries until its assertion holds or the test times out: use it for anything that arrives later, such as what an image's `load` event shows. A test times out after 3 seconds, since nothing here waits on a network.
 - Find elements the way a reader does, with `getByRole` and the accessible name. Fall back to `getByTestId` only where the markup offers nothing a user could perceive, and first consider giving the element a role or a label.
 - Tests run at a desktop width, 1280×800. A test about what a phone shows sets its own viewport and says so.
-- Code that fetches takes `fetch` as an argument, as a SvelteKit `load` does, so a test passes a function that answers with a fixture from `$lib/test-support/fixtures.ts`. The fixtures are built complete from the types in `shared/`, so a new field there breaks a fixture instead of leaving it a shape the Worker never sends. `$lib/test-support/setup.ts` makes the global `fetch` throw, naming the URL, so code that calls it fails loudly instead of reaching a real server.
+- The stores call the global `fetch`, so a test stands the server in with `fakeServer()` from `$lib/test-support/http.ts`, which answers by method and path with a fixture built by `$lib/test-support/records.ts`. The fixtures are built complete from the record types in `shared/`, so a new field there breaks a fixture instead of leaving it a shape the Worker never sends. `$lib/test-support/setup.ts` makes any other `fetch` throw, naming the URL, so code that reaches a route no test stubbed fails loudly instead of reaching a real server. `resetAlbumState()` in `$lib/test-support/albumState.ts` empties the one album store every test writes to.
 
 ## End to end
 

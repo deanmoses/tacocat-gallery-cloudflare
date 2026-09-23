@@ -35,7 +35,7 @@ interface MediaFacts extends Size {
     durationSeconds: number | null;
 }
 
-export interface ImageFacts extends Size {
+interface ImageFacts extends Size {
     title: string | null;
     description: string | null;
 }
