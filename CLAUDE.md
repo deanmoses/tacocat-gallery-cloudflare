@@ -6,7 +6,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-The pix.tacocat.com photo gallery, moving from AWS to Cloudflare: one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has the risk register, the budget, and how to run, deploy and restore; read it before anything that touches the account.
+The pix.tacocat.com photo gallery, moving from AWS to Cloudflare: one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has the risk register, the budget, and how to run and restore; read it before anything that touches the account.
 
 ## The Cloudflare account costs money
 
