@@ -1,7 +1,7 @@
 {
     "name": "tacocat-gallery-cloudflare",
-    "version": "1.0.0",
-    "description": "Throwaway prototype to de-risk moving pix.tacocat.com to Cloudflare",
+    "version": "0.0.1",
+    "description": "Prototype to de-risk moving pix.tacocat.com to Cloudflare",
     "scripts": {
         "dev": "wrangler dev --local-upstream localhost:8787",
         "test": "scripts/test.sh",
