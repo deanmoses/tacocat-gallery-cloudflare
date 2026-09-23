@@ -29,6 +29,13 @@
       "when": 1790155388237,
       "tag": "20260923092308_album_thumbnails",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790182400904,
+      "tag": "20260923165320_spent_challenge",
+      "breakpoints": true
     }
   ]
 }

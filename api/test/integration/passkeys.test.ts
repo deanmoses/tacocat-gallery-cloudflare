@@ -124,6 +124,21 @@ describe('registering a passkey through an invite', () => {
         await expect(storedPasskeys()).resolves.toHaveLength(1);
     });
 
+    it('refuses an answer to another challenge, without saying why', async () => {
+        await invite('Dean');
+        const browser = new Browser();
+        await browser.post('/api/auth/register/options', { token: TOKEN });
+        const authenticator = await SoftwareAuthenticator.create();
+        const response = await browser.post('/api/auth/register/verify', {
+            token: TOKEN,
+            response: await authenticator.register(ORIGIN, 'another-challenge'),
+        });
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toStrictEqual({ error: 'Passkey could not be verified.' });
+        await expect(storedPasskeys()).resolves.toStrictEqual([]);
+    });
+
     it('refuses an expired invite', async () => {
         await invite('Dean', new Date(Date.now() - 1000));
         const response = await new Browser().post('/api/auth/register/options', { token: TOKEN });
@@ -192,7 +207,8 @@ describe('logging in with a passkey', () => {
         await browser.post('/api/auth/login/options');
         const response = await browser.post('/api/auth/login/verify', await authenticator.assert(ORIGIN, earlier));
 
-        expect(response.ok).toBe(false);
+        expect(response.status).toBe(401);
+        await expect(response.json()).resolves.toStrictEqual({ error: 'Passkey could not be verified.' });
         await expect(browser.admin()).resolves.toBeNull();
     });
 
@@ -206,17 +222,23 @@ describe('logging in with a passkey', () => {
         await expect(browser.admin()).resolves.toBeNull();
     });
 
-    // The challenge cookie is signed but not recorded, so it stays valid for its five minutes; the stored sign count is
-    // what stops a second use.
-    it('refuses a login replayed with its challenge cookie', async () => {
+    // Someone who copied both the assertion and the challenge cookie, within the cookie's five minutes.
+    it.each([
+        { what: 'counts its uses', counts: true },
+        { what: 'reports a sign count of 0 every time', counts: false },
+    ])('refuses a login replayed with its challenge cookie, from a passkey that $what', async ({ counts }) => {
+        const passkey = await SoftwareAuthenticator.create({ counts });
+        await invite('Ana', undefined, 'third-invite-token');
+        await register(new Browser(), passkey, 'third-invite-token');
         const browser = new Browser();
         const options = await browser.post('/api/auth/login/options');
-        const assertion = await authenticator.assert(ORIGIN, await challenge(options));
+        const assertion = await passkey.assert(ORIGIN, await challenge(options));
         const thief = browser.copy();
-        await browser.post('/api/auth/login/verify', assertion);
+        const first = await browser.post('/api/auth/login/verify', assertion);
         const replayed = await thief.post('/api/auth/login/verify', assertion);
 
-        expect(replayed.ok).toBe(false);
+        expect(first.status).toBe(200);
+        expect(replayed.status).toBe(401);
         await expect(thief.admin()).resolves.toBeNull();
     });
 });

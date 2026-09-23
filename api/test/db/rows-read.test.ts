@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { childrenOf, setThumbnail } from '../../src/albums';
+import { purgeSpentChallenges, spendChallenge } from '../../src/auth';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/items';
 import { inSequence } from '../../src/sequence';
@@ -125,5 +126,44 @@ describe('rows read on a gallery-sized table', () => {
 
         expect(found.results).toHaveLength(50);
         expect(found.meta.rows_read).toBeLessThanOrEqual(found.results.length * 3 + OVERHEAD);
+    });
+});
+
+describe('rows read on spent login challenges', () => {
+    const EXPIRED = 5;
+    let database: Orm;
+
+    // A thousand live challenges is far more than a day of logins, so a scan shows up.
+    beforeEach(async () => {
+        database = orm(env.DB);
+        const now = Date.now();
+        const rows = Array.from({ length: 1000 }, (_, index) => ({
+            challenge: `challenge-${index}`,
+            expiresAt: new Date(now + (index < EXPIRED ? -60_000 : 60_000)).toISOString(),
+        }));
+        // Fifty rows an insert, since D1 binds at most 100 parameters to a statement.
+        const [first, ...rest] = Array.from({ length: 20 }, (_, index) =>
+            database.insert(schema.spentChallenge).values(rows.slice(index * 50, (index + 1) * 50)),
+        );
+        if (first) {
+            await database.batch([first, ...rest]);
+        }
+    });
+
+    it.each([
+        { what: 'a new challenge', challenge: 'fresh' },
+        { what: 'one already spent', challenge: 'challenge-500' },
+    ])('spending $what reads a few rows', async ({ challenge }) => {
+        const result = await spendChallenge(database, challenge);
+
+        expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    it('purging reads only the expired challenges', async () => {
+        vi.spyOn(console, 'info').mockReturnValue();
+        const result = await purgeSpentChallenges(database);
+
+        expect(result.meta.changes).toBe(EXPIRED);
+        expect(result.meta.rows_read).toBeLessThanOrEqual(EXPIRED + OVERHEAD);
     });
 });

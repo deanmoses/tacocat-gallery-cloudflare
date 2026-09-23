@@ -9,12 +9,18 @@ export class SoftwareAuthenticator {
     readonly credentialId = crypto.getRandomValues(new Uint8Array(16));
     private signCount = 0;
     private readonly key: SigningKey;
+    private readonly counts: boolean;
 
-    private constructor(key: SigningKey) {
+    private constructor(key: SigningKey, counts: boolean) {
         this.key = key;
+        this.counts = counts;
     }
 
-    static async create(): Promise<SoftwareAuthenticator> {
+    /**
+     * A new passkey. One that doesn't count reports a sign count of 0 on every use, as iCloud Keychain and other synced
+     * passkeys do, which leaves the relying party nothing to detect a replay with.
+     */
+    static async create({ counts = true } = {}): Promise<SoftwareAuthenticator> {
         const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
         if (!('privateKey' in keys)) {
             throw new Error('ECDSA generated a single key rather than a pair');
@@ -24,12 +30,15 @@ export class SoftwareAuthenticator {
             throw new Error('The public key exported without its x and y coordinates');
         }
         const { privateKey } = keys;
-        return new SoftwareAuthenticator({
-            x: fromBase64url(jwk.x),
-            y: fromBase64url(jwk.y),
-            sign: async (data) =>
-                new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privateKey, data)),
-        });
+        return new SoftwareAuthenticator(
+            {
+                x: fromBase64url(jwk.x),
+                y: fromBase64url(jwk.y),
+                sign: async (data) =>
+                    new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privateKey, data)),
+            },
+            counts,
+        );
     }
 
     get id(): string {
@@ -75,7 +84,9 @@ export class SoftwareAuthenticator {
 
     /** What navigator.credentials.get() resolves to on `origin` for the Worker's login options. */
     async assert(origin: string, challenge: string, userHandle?: string): Promise<AuthenticationResponseJSON> {
-        this.signCount += 1;
+        if (this.counts) {
+            this.signCount += 1;
+        }
         const count = this.signCount;
         // Flags 0x05: user present, user verified. Then the sign count, big-endian.
         const authData = concat(

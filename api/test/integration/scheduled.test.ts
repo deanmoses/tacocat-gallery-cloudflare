@@ -72,6 +72,19 @@ describe('nightly cron', () => {
 
         expect(kept).toStrictEqual([{ path: '/new.mov' }]);
     });
+
+    it('purges spent login challenges once they have expired', async () => {
+        const { spentChallenge } = schema;
+        const database = orm(env.DB);
+        await database.insert(spentChallenge).values([
+            { challenge: 'expired', expiresAt: hoursAgo(1) },
+            { challenge: 'live', expiresAt: hoursAgo(-1) },
+        ]);
+        await runCron('17 9 * * *');
+        const kept = await database.select({ challenge: spentChallenge.challenge }).from(spentChallenge);
+
+        expect(kept).toStrictEqual([{ challenge: 'live' }]);
+    });
 });
 
 describe('idle latency probe cron', () => {

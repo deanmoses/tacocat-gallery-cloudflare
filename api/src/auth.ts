@@ -6,9 +6,9 @@ import {
     verifyAuthenticationResponse,
     verifyRegistrationResponse,
 } from '@simplewebauthn/server';
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
-import { orm, schema } from './db';
+import { type Orm, orm, schema } from './db';
 import { html, json, notFound } from './http';
 import { INVITE_PAGE, LOGIN_PAGE } from './pages/auth';
 import { type SignedCookie, cookie, readSigned, sign } from './session';
@@ -26,6 +26,7 @@ const CHALLENGE = {
     payload: valibot.object({ challenge: valibot.string() }),
 } satisfies SignedCookie<valibot.GenericSchema>;
 const SESSION_DAYS = 30;
+const CHALLENGE_MS = 5 * 60_000;
 const NOW = sql`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
 const ENCODER = new TextEncoder();
 const TO_BASE64URL = { alphabet: 'base64url', omitPadding: true } as const;
@@ -85,6 +86,27 @@ export async function routeAuth(request: Request, env: AuthEnv): Promise<Respons
     }
 }
 
+/** Records a login challenge as used, changing no row if it already was. */
+export async function spendChallenge(database: Orm, challenge: string): Promise<D1Result> {
+    const { spentChallenge } = schema;
+    return database
+        .insert(spentChallenge)
+        .values({ challenge, expiresAt: new Date(Date.now() + CHALLENGE_MS).toISOString() })
+        .onConflictDoNothing()
+        .run();
+}
+
+/** Forgets spent challenges whose cookies have expired, and with them any chance of a replay. */
+export async function purgeSpentChallenges(database: Orm): Promise<D1Result> {
+    const { spentChallenge } = schema;
+    const purged = await database
+        .delete(spentChallenge)
+        .where(lt(spentChallenge.expiresAt, new Date().toISOString()))
+        .run();
+    console.info({ event: 'spent_challenges_purged', rows: purged.meta.changes });
+    return purged;
+}
+
 /** The logged-in admin's name, or null for a guest. */
 export async function currentAdmin(request: Request, env: AuthEnv): Promise<string | null> {
     const session = await readSigned(request, env, SESSION);
@@ -131,14 +153,16 @@ async function registerVerify(request: Request, env: AuthEnv, site: URL): Promis
         return json({ error: 'This invite link is invalid, used or expired.' }, 400);
     }
 
-    const result = await verifyRegistrationResponse({
-        response,
-        expectedChallenge,
-        expectedOrigin: site.origin,
-        expectedRPID: site.hostname,
-        requireUserVerification: false,
-    });
-    if (!result.verified) {
+    const result = await unlessThrown(
+        verifyRegistrationResponse({
+            response,
+            expectedChallenge,
+            expectedOrigin: site.origin,
+            expectedRPID: site.hostname,
+            requireUserVerification: false,
+        }),
+    );
+    if (result?.verified !== true) {
         return json({ error: 'Passkey could not be verified.' }, 400);
     }
 
@@ -188,20 +212,28 @@ async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<R
         return json({ error: 'This passkey is not registered here.' }, 401);
     }
 
-    const result = await verifyAuthenticationResponse({
-        response,
-        expectedChallenge,
-        expectedOrigin: site.origin,
-        expectedRPID: site.hostname,
-        requireUserVerification: false,
-        credential: {
-            id: response.id,
-            publicKey: Uint8Array.fromBase64(passkey.publicKey, FROM_BASE64URL),
-            counter: passkey.counter,
-            ...transportsOf(passkey.transports),
-        },
-    });
-    if (!result.verified) {
+    const result = await unlessThrown(
+        verifyAuthenticationResponse({
+            response,
+            expectedChallenge,
+            expectedOrigin: site.origin,
+            expectedRPID: site.hostname,
+            requireUserVerification: false,
+            credential: {
+                id: response.id,
+                publicKey: Uint8Array.fromBase64(passkey.publicKey, FROM_BASE64URL),
+                counter: passkey.counter,
+                ...transportsOf(passkey.transports),
+            },
+        }),
+    );
+    if (result?.verified !== true) {
+        return json({ error: 'Passkey could not be verified.' }, 401);
+    }
+    // Only after verifying, so a request without a valid signature writes nothing.
+    const spent = await spendChallenge(orm(env.DB), expectedChallenge);
+    if (spent.meta.changes !== 1) {
+        console.warn({ event: 'passkey_replayed', admin: passkey.adminName });
         return json({ error: 'Passkey could not be verified.' }, 401);
     }
     await orm(env.DB)
@@ -210,6 +242,20 @@ async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<R
         .where(eq(adminPasskey.credentialId, response.id));
     console.info({ event: 'admin_logged_in', admin: passkey.adminName });
     return loggedIn(env, passkey.adminName);
+}
+
+/**
+ * The verification's result, or null if SimpleWebAuthn threw, as it does for most mismatches: another challenge, origin
+ * or RP ID, or a sign count that went backwards. Its messages name what the server expected, so they go to the log
+ * rather than the response.
+ */
+async function unlessThrown<T>(verification: Promise<T>): Promise<T | null> {
+    try {
+        return await verification;
+    } catch (error) {
+        console.warn({ event: 'passkey_rejected', error: String(error) });
+        return null;
+    }
 }
 
 /** The stored transports, as the optional field SimpleWebAuthn takes: absent rather than null when unknown. */
@@ -242,8 +288,8 @@ async function findInvite(env: AuthEnv, token: string): Promise<{ tokenHash: str
 }
 
 async function challengeCookie(env: AuthEnv, challenge: string): Promise<string> {
-    const value = await sign(env, { challenge, exp: Date.now() + 5 * 60_000 });
-    return cookie(CHALLENGE_COOKIE, value, { maxAge: 300, path: '/api/auth/', sameSite: 'Strict' });
+    const value = await sign(env, { challenge, exp: Date.now() + CHALLENGE_MS });
+    return cookie(CHALLENGE_COOKIE, value, { maxAge: CHALLENGE_MS / 1000, path: '/api/auth/', sameSite: 'Strict' });
 }
 
 async function readChallenge(request: Request, env: AuthEnv): Promise<string | null> {

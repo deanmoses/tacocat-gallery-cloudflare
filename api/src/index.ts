@@ -1,5 +1,6 @@
 import { getAlbum, setAlbumThumbnail } from './albums';
-import { currentAdmin, routeAuth } from './auth';
+import { currentAdmin, purgeSpentChallenges, routeAuth } from './auth';
+import { orm } from './db';
 import { purgeUploadErrors, uploadErrors } from './errors';
 import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { backupDatabase, putItem, readYourWrites, search, seed } from './items';
@@ -47,6 +48,7 @@ export default {
         if (controller.cron === BACKUP_CRON) {
             await backupDatabase(env);
             await purgeUploadErrors(env);
+            await purgeSpentChallenges(orm(env.DB));
         } else {
             await probeIdleLatency(env);
         }

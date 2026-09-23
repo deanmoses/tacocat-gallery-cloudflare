@@ -89,5 +89,17 @@ export const adminInvite = sqliteTable('admin_invite', {
     usedAt: text('used_at'),
 });
 
+// A login challenge that has already let someone in, kept until its cookie expires so the same answer cannot be sent
+// again. Synced passkeys report a sign count of 0 on every use, so the count cannot catch a replay.
+export const spentChallenge = sqliteTable(
+    'spent_challenge',
+    {
+        challenge: text('challenge').primaryKey(),
+        expiresAt: text('expires_at').notNull(),
+    },
+    // The nightly purge reads only what it deletes.
+    (table) => [index('spent_challenge_expires_at').on(table.expiresAt)],
+);
+
 export type Item = typeof item.$inferSelect;
 export type NewItem = typeof item.$inferInsert;
