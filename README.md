@@ -47,9 +47,7 @@ The container is parked on `lite` (1/16 vCPU, 256 MiB), one instance at most, st
 
 ## Running it
 
-Node 24 LTS, the version in `.nvmrc`. `.npmrc` sets `engine-strict`, so `npm install` refuses any other major. [fnm](https://github.com/Schniz/fnm) with `eval "$(fnm env --use-on-cd)"` in the shell profile switches to it on `cd`.
-
-`npm run dev` reads the Worker's secrets from `.dev.vars` (gitignored, one `NAME=value` per line): `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` to sign uploads, `GLOBALPING_TOKEN` for the idle probes, `SESSION_SECRET` for admin sessions, and `CLOUDFLARE_TERRAFORM_API_TOKEN` for `infra/`. Tests do not need it: `vitest.config.ts` supplies stand-ins.
+`npm run dev` needs a `.dev.vars` (gitignored) holding the secrets `wrangler.jsonc` lists under `secrets.required`. Tests do not need it.
 
 ```bash
 fnm use  # or nvm use
@@ -66,26 +64,9 @@ The FTS5 search table and its triggers are raw SQL (`migrations/0002_fts_by_rowi
 
 ## Development
 
-`npm run quality` formats, lints, type-checks and tests. Every lint check is in `scripts/lint.sh` (`npm run lint`) and the tests are run by `scripts/test.sh` (`npm test`). There is no CI workflow yet. When there is, it runs both over the whole repo plus `npm run check`, with `CI` set so that a missing system tool fails instead of being skipped with a warning as it is locally. The pre-commit hook runs the same scripts with `--staged`: the per-file lint checks see only staged files, and only the tests whose imports reach a staged file run, or all of them when the staged change is to config, migrations or dependencies. Types are always checked across the whole project. Typed ESLint rules look across files, so a staged change can break an unstaged file in a way only a full `npm run lint` sees. The hook also scans for secrets with gitleaks and formats staged files with Prettier; it fixes nothing else. Run `npm run format` for shell and OpenTofu, and `npm run lint:fix` for ESLint and review the diff, because some ESLint fixers change what code means (two vitest ones turn `toBeTruthy()` into `toBe(true)` and `toHaveBeenCalled()` into `toHaveBeenCalledWith()`).
+`npm run quality` formats, lints, type-checks and tests; the pre-commit hook runs the same checks on what is staged. The checks need `brew install gitleaks shellcheck shfmt hadolint opentofu`, and skip a missing one with a warning.
 
-- **TypeScript 6**, every strictness flag on (`tsconfig.base.json`). Three projects: `src/` (the Worker, typed by `worker-configuration.d.ts`, which `npm run types` regenerates from `wrangler.jsonc`), `test/` (the Worker plus `cloudflare:test`), and the root (Node: configs, `scripts/`, `transcoder/`).
-- **ESLint**: the `all` preset of every plugin (core, typescript-eslint, unicorn, regexp, n, vitest, eslint-comments), so new upstream rules apply on upgrade. Rules are removed or reconfigured only in `eslint.config.ts`, each with its reason. There are no `eslint-disable` comments; fix the code instead.
-- **Prettier**, the same settings as `tacocat-gallery-sveltekit`, for code, JSON and Markdown. JSON is also linted by `@eslint/json` (every rule but key sorting), Markdown by markdownlint, shell scripts by shellcheck and formatted by shfmt, `infra/` by `tofu fmt` and `tofu validate`, the Dockerfile by hadolint, and unused files, exports and dependencies by knip.
-- **Node 24 LTS** everywhere: `.nvmrc`, `engines` (`>=24.2.0 <25`, enforced by `engine-strict` in `.npmrc`), `@types/node` 24, and the transcoder's `node:24-alpine` image. eslint-plugin-n reads `engines`, so it flags a Node API newer than 24.2.
-- **System tools** the checks need: `brew install gitleaks shellcheck shfmt hadolint opentofu`.
-- **Tests** run inside workerd through `@cloudflare/vitest-plugin`, with the D1 migrations applied and local D1, R2 and Queue bindings; `remoteBindings` is off, so a test never reaches the account.
-- **Untrusted JSON** is validated with Valibot (`transcoder/` has no dependencies, so it uses small typed accessors instead).
-
-## VS Code
-
-`.vscode/` recommends one extension per check in `scripts/lint.sh`, so the editor flags what the hook would reject, and formats on save with the same tools as `npm run format`: Prettier, shfmt for shell and OpenTofu's formatter for `infra/`. The editor uses TypeScript from `node_modules`. `worker-configuration.d.ts` and `migrations/meta/` are read-only because they are generated.
-
-- **Cmd+Shift+B** runs `npm run check` and puts every type error in the Problems panel. `Quality` and `Regenerate Worker types` are under Run Task.
-- **Debugging** (Run and Debug): `Worker: npm run dev` starts the dev server in a debug terminal, or `Worker: attach to npm run dev` attaches to one already running. `Debug Worker tests` runs Vitest one file at a time and attaches to workerd, so breakpoints stop in tests and in the Worker code they call. `Script: passkey self-test` asks for an invite link and runs `scripts/passkey-selftest.ts`. The Worker and the tests share inspector port 9229, so debug one at a time.
-
-## AI agents
-
-`CLAUDE.md` and `AGENTS.md` are generated from `docs/AGENTS.src.md` by `npm run agent-docs`; edit the source, never the outputs. The pre-commit hook regenerates them when the source is staged, and `npm run lint` fails if they don't match it. `.claude/skills/` holds the `/branch`, `/commit` and `/pr` skills, the same conventions as the other tacocat-gallery repos: Conventional Commits and `type/short-description` branches. On Claude Code on the web, `.claude/hooks/session-start.sh` selects Node 24 through the image's nvm and runs `npm install`.
+ESLint runs the `all` preset of every plugin. There are no `eslint-disable` comments: fix the code, or turn the rule off in `eslint.config.ts` with the reason. Review the diff after `npm run lint:fix`, because some fixers change what code means (two vitest ones turn `toBeTruthy()` into `toBe(true)` and `toHaveBeenCalled()` into `toHaveBeenCalledWith()`).
 
 ## Admin login
 
@@ -108,34 +89,11 @@ cd infra
 CLOUDFLARE_API_TOKEN=$(grep '^CLOUDFLARE_TERRAFORM_API_TOKEN=' ../.dev.vars | cut -d= -f2-) tofu plan
 ```
 
-The commands below are how the first resources were made, before `infra/` existed.
+On a new account, R2 has to be enabled once in the dashboard before `tofu apply` can create a bucket.
 
-## Deploying to your account
-
-`cloudflared` is the Tunnel client; everything here uses `wrangler`, installed as a dev dependency.
-
-The prototype lives in its own Cloudflare account, "Tacocat" (`account_id` in `wrangler.jsonc`), so its free-tier quotas and billing are separate from other projects. A wrangler auth profile bound to this directory keeps commands here from reaching any other account:
+A wrangler auth profile bound to this directory keeps Wrangler commands here from reaching any other account:
 
 ```bash
 npx wrangler auth create tacocat        # choose only the Tacocat account
 npx wrangler auth activate tacocat .
-```
-
-R2 has to be enabled once in the dashboard before a bucket can be created.
-
-```bash
-npx wrangler d1 create tacocat-proto --location wnam   # paste the database_id into wrangler.jsonc
-npx wrangler r2 bucket create tacocat-proto-media --location wnam
-npx wrangler queues create tacocat-proto-uploads
-npx wrangler r2 bucket notification create tacocat-proto-media --event-type object-create --queue tacocat-proto-uploads --prefix inbox/
-npm run db:migrate
-npm run deploy
-```
-
-Read replication is off by default and there is no wrangler command for it:
-
-```bash
-curl -X PUT "https://api.cloudflare.com/client/v4/accounts/ed3ca575118099486baeb129959697c8/d1/database/<database_id>" \
-    -H "Authorization: Bearer $(npx wrangler auth token | tail -1)" -H "Content-Type: application/json" \
-    -d '{"read_replication":{"mode":"auto"}}'
 ```
