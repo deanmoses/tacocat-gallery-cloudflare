@@ -37,7 +37,7 @@ The pix.tacocat.com photo gallery, moving from AWS to Cloudflare: one Worker wit
 
 An FTS trigger that scanned the whole index on every write once read 37.7M D1 rows in a day and took the whole site down.
 
-- **Ask before anything that touches the account**: deploys, `--remote` D1 queries or migrations, R2 reads and writes, queue traffic, container runs, image transforms, requests to the deployed Worker, `tofu apply`. Say what it costs against the allowances in the README's Budget section. Local work (`npm run dev`, tests, `--local` D1) needs no approval.
+- **Ask before consuming more than 1% of a monthly allowance** in the README's Budget table, or anything billed outside it (a larger container instance, Stream, transformations past the free 5,000). Estimate before you run: a query's `rows_read` locally, a transcode's vCPU-minutes from the instance size and the last run's time. Under 1%, go ahead and say what it used. Local work (`npm run dev`, tests, `--local` D1) needs no approval.
 - **Never deploy unless asked.**
 - **Watch rows read**, not rows returned: check `meta.rows_read` locally before shipping a new query or trigger.
 - **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
