@@ -5,6 +5,7 @@ import ExifReader from 'exifreader';
 interface Env {
     DB: D1Database;
     MEDIA: R2Bucket;
+    DERIVED: R2Bucket;
     IMAGES: ImagesBinding;
     R2_ACCESS_KEY_ID: string;
     R2_SECRET_ACCESS_KEY: string;
@@ -46,12 +47,12 @@ const BOOKMARK_HEADER = 'x-d1-bookmark';
 const BACKUP_CRON = '17 9 * * *';
 
 export default {
-    async fetch(request, env): Promise<Response> {
+    async fetch(request, env, ctx): Promise<Response> {
         const started = performance.now();
         const url = new URL(request.url);
         let res: Response;
         try {
-            res = await route(request, env, url);
+            res = await route(request, env, url, ctx);
         } catch (e) {
             console.error({ event: 'server_exception', path: url.pathname, error: String(e) });
             res = json({ error: String(e) }, 500);
@@ -75,7 +76,7 @@ export default {
     },
 } satisfies ExportedHandler<Env>;
 
-async function route(request: Request, env: Env, url: URL): Promise<Response> {
+async function route(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = url;
     if (pathname === '/') return json({ colo: request.cf?.colo, country: request.cf?.country });
     if (pathname.startsWith('/api/album/') && request.method === 'GET') return getAlbum(request, env, url);
@@ -90,7 +91,8 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (pathname.startsWith('/v/')) return media(request, env, url);
     if (pathname.startsWith('/upload/') && request.method === 'PUT') return upload(request, env, url);
     if (pathname.startsWith('/debug/image/')) return debugImage(env, url);
-    if (pathname.startsWith('/i/') && request.method === 'GET') return derivedImage(env, url);
+    if (pathname.startsWith('/i/') && request.method === 'GET') return derivedViaCacheApi(request, env, url, ctx);
+    if (pathname.startsWith('/i2/') && request.method === 'GET') return derivedViaCdn(env, url);
     return json({ error: 'not found' }, 404);
 }
 
@@ -380,23 +382,14 @@ function tagText(tag: unknown): string | undefined {
 }
 
 /**
- * /i/<path>/<versionId>?size=200x200&crop=x,y,w,h — generated once with the Images binding, stored in R2,
- * served from R2 afterwards. Mirrors generateDerivedImage's crop-then-cover semantics.
+ * /i/<path>/<versionId>?size=200x200&crop=x,y,w,h — generated once with the Images binding, stored in the derived
+ * bucket, served from it afterwards. Mirrors generateDerivedImage's crop-then-cover semantics.
  */
-async function derivedImage(env: Env, url: URL): Promise<Response> {
-    const rest = url.pathname.slice('/i'.length); // "/2024/06-15/photo.jpg/<versionId>"
-    const size = url.searchParams.get('size') ?? '1024';
-    const crop = url.searchParams.get('crop');
-    const format = (url.searchParams.get('format') ?? 'image/jpeg') as ImageOutputOptions['format'];
-    const derivedKey = `derived${rest}/${size}${crop ? `-${crop}` : ''}-${format.split('/')[1]}`;
-    const headers = { 'cache-control': 'public, max-age=31536000, immutable' };
+async function derivedImage(env: Env, url: URL, prefix: string): Promise<{ body: ArrayBuffer | ReadableStream; format: string; how: 'stored' | 'generated' } | Response> {
+    const { rest, size, crop, format, key } = derivedKey(url, prefix);
 
-    const stored = await env.MEDIA.get(derivedKey);
-    if (stored) {
-        return new Response(stored.body, {
-            headers: { ...headers, 'content-type': format, 'x-derived': 'stored' },
-        });
-    }
+    const stored = await env.DERIVED.get(key);
+    if (stored) return { body: stored.body, format, how: 'stored' };
 
     const original = await env.MEDIA.get(`originals${rest}`);
     if (!original) return json({ error: 'original not found', key: `originals${rest}` }, 404);
@@ -410,8 +403,56 @@ async function derivedImage(env: Env, url: URL): Promise<Response> {
     t = t.transform({ width: w, height: h, fit: w && h ? 'cover' : 'scale-down' });
     const out = await t.output({ format, quality: 85 });
     const bytes = await out.response().arrayBuffer();
-    await env.MEDIA.put(derivedKey, bytes, { httpMetadata: { contentType: format } });
-    return new Response(bytes, { headers: { ...headers, 'content-type': format, 'x-derived': 'generated' } });
+    await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
+    return { body: bytes, format, how: 'generated' };
+}
+
+function derivedKey(url: URL, prefix: string) {
+    const rest = url.pathname.slice(prefix.length); // "/2024/06-15/photo.jpg/<versionId>"
+    const size = url.searchParams.get('size') ?? '1024';
+    const crop = url.searchParams.get('crop');
+    const format = (url.searchParams.get('format') ?? 'image/jpeg') as ImageOutputOptions['format'];
+    return { rest, size, crop, format, key: `derived${rest}/${size}${crop ? `-${crop}` : ''}-${format.split('/')[1]}` };
+}
+
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+const DERIVED_ORIGIN = 'https://img.deanmoses.com';
+
+/** Worker in front, per-colo Cache API: a hit never reaches R2, but every colo fills from R2 on its own. */
+async function derivedViaCacheApi(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
+    const cache = caches.default;
+    const hit = await cache.match(request);
+    if (hit) {
+        const res = new Response(hit.body, hit);
+        res.headers.set('x-derived', 'cache-api-hit');
+        return res;
+    }
+    const d = await derivedImage(env, url, '/i');
+    if (d instanceof Response) return d;
+    const res = new Response(d.body, { headers: { 'cache-control': IMMUTABLE, 'content-type': d.format } });
+    ctx.waitUntil(cache.put(request, res.clone()));
+    res.headers.set('x-derived', d.how);
+    return res;
+}
+
+/**
+ * Worker fetches the derivative through the derived bucket's custom domain, so it goes through the CDN cache and
+ * Tiered Cache like any origin fetch. Generates on a 404.
+ */
+async function derivedViaCdn(env: Env, url: URL): Promise<Response> {
+    const { key } = derivedKey(url, '/i2');
+    // Only successes are cached: a 404 from before the derivative was generated would otherwise stick for a year.
+    const upstream = await fetch(`${DERIVED_ORIGIN}/${key}`, {
+        cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31536000, '400-599': -1 } },
+    });
+    if (upstream.ok) {
+        const res = new Response(upstream.body, upstream);
+        res.headers.set('x-derived', `cdn-${upstream.headers.get('cf-cache-status')?.toLowerCase() ?? 'unknown'}`);
+        return res;
+    }
+    const d = await derivedImage(env, url, '/i2');
+    if (d instanceof Response) return d;
+    return new Response(d.body, { headers: { 'cache-control': IMMUTABLE, 'content-type': d.format, 'x-derived': d.how } });
 }
 
 /** Isolates Images binding failures from how the bytes reach it: R2 stream, buffered stream, and each step. */

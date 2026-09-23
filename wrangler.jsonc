@@ -14,7 +14,12 @@
             "migrations_dir": "migrations",
         },
     ],
-    "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "tacocat-proto-media" }],
+    "r2_buckets": [
+        { "binding": "MEDIA", "bucket_name": "tacocat-proto-media" },
+        { "binding": "DERIVED", "bucket_name": "tacocat-proto-derived" },
+    ],
+    "workers_dev": true,
+    "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
     "images": { "binding": "IMAGES" },
     "queues": {
         "consumers": [{ "queue": "tacocat-proto-uploads", "max_batch_size": 10, "max_batch_timeout": 1 }],
