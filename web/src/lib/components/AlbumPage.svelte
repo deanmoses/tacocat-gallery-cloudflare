@@ -1,8 +1,8 @@
 <script lang="ts">
     import type { Album } from 'tacocat-gallery-shared';
     import { albumTitle } from '$lib/album';
-    import { albumHref } from '$lib/urls';
     import AlbumNav from './AlbumNav.svelte';
+    import AlbumThumb from './AlbumThumb.svelte';
     import MediaThumb from './MediaThumb.svelte';
 
     let { album }: { album: Album } = $props();
@@ -25,10 +25,7 @@
         {#each album.children as child (child.path)}
             <li>
                 {#if child.itemType === 'album'}
-                    <a href={albumHref(child.path)}>{albumTitle(child)}</a>
-                    {#if !child.published}
-                        <em>unpublished</em>
-                    {/if}
+                    <AlbumThumb album={child} />
                 {:else}
                     <MediaThumb media={child} />
                 {/if}

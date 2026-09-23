@@ -1,11 +1,11 @@
 <script lang="ts">
     import type { MediaChild } from 'tacocat-gallery-shared';
     import { mediaTitle } from '$lib/album';
-    import { mediaHref, thumbnailUrl } from '$lib/urls';
+    import { mediaHref, ownThumbnail, thumbnailUrl } from '$lib/urls';
 
     let { media }: { media: MediaChild } = $props();
     const caption = $derived(mediaTitle(media));
-    const url = $derived(thumbnailUrl(media));
+    const url = $derived(thumbnailUrl(ownThumbnail(media)));
 </script>
 
 <a href={mediaHref(media.path)}>

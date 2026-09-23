@@ -64,9 +64,8 @@ describe(mediaKey, () => {
         expect(mediaKey('/2001/06-15/felix.jpg')).toStrictEqual({ parentPath: '/2001/06-15/', itemName: 'felix.jpg' });
     });
 
-    it('gives an album path no key', () => {
-        expect(mediaKey('/2001/06-15/')).toBeNull();
-        expect(mediaKey('felix.jpg')).toBeNull();
+    it.each(['/2001/06-15/', 'felix.jpg', '/2001/felix.jpg', '/2001/06-15/notes'])('gives %s no key', (path) => {
+        expect(mediaKey(path)).toBeNull();
     });
 });
 

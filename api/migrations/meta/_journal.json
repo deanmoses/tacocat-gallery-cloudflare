@@ -22,6 +22,13 @@
       "when": 1790143085473,
       "tag": "20260923055805_upload_error",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790155388237,
+      "tag": "20260923092308_album_thumbnails",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { childrenOf } from '../../src/albums';
+import { childrenOf, setThumbnail } from '../../src/albums';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/items';
 import { inSequence } from '../../src/sequence';
@@ -43,6 +43,11 @@ async function seedGallery(database: Orm): Promise<void> {
                         description: 'Tacos on the beach',
                     }),
                 ),
+            setThumbnail(
+                database,
+                { parentPath: '/2001/', itemName: day.name },
+                { parentPath: day.path, itemName: 'img_0.jpg' },
+            ),
         ]),
     );
 }
@@ -76,11 +81,23 @@ describe('rows read on a gallery-sized table', () => {
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
 
-    it.each([dayPath(4), '/2001/'])('reading the album %s reads only its children', async (path) => {
-        const { rows, meta } = await childrenOf(database, path);
+    it.each([dayPath(4), '/2001/'])(
+        'reading the album %s reads only its children and their thumbnails',
+        async (path) => {
+            const { rows, meta } = await childrenOf(database, path);
+            const thumbnails = rows.filter((row) => row.thumb_item_name !== null).length;
 
-        expect(rows.length).toBeGreaterThan(0);
-        expect(meta.rows_read).toBeLessThanOrEqual(rows.length + OVERHEAD);
+            expect(rows.length).toBeGreaterThan(0);
+            expect(meta.rows_read).toBeLessThanOrEqual(rows.length + thumbnails + OVERHEAD);
+        },
+    );
+
+    it('setting an album thumbnail reads a few rows', async () => {
+        const album = { parentPath: '/2001/', itemName: dayName(4) };
+        const result = await setThumbnail(database, album, { parentPath: dayPath(4), itemName: 'img_7.jpg' }).run();
+
+        expect(result.meta.changes).toBeGreaterThan(0);
+        expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
 
     it.each([

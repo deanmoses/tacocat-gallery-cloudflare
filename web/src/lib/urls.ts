@@ -1,6 +1,6 @@
 import { resolve } from '$app/paths';
 import type { ResolvedPathname } from '$app/types';
-import { type MediaChild, albumKey, mediaKey } from 'tacocat-gallery-shared';
+import { type MediaChild, type Thumbnail, albumKey, mediaKey } from 'tacocat-gallery-shared';
 
 /** The page for an album, from its gallery path: `/2001/06-15/` is shown at `/2001/06-15`. */
 export function albumHref(path: string): ResolvedPathname {
@@ -30,9 +30,18 @@ export function mediaHref(path: string): ResolvedPathname {
 const THUMBNAIL_SIZE = '200x200';
 const DETAIL_SIZE = 1024;
 
-/** The thumbnail the Worker derives from the current original, or null for a media row that has no file yet. */
-export function thumbnailUrl(media: MediaChild): string | null {
-    return media.versionId === null ? null : `/i${media.path}/${media.versionId}?size=${THUMBNAIL_SIZE}`;
+/** A media item as its own thumbnail. */
+export function ownThumbnail(media: MediaChild): Thumbnail {
+    return { path: media.path, versionId: media.versionId, crop: media.thumbnailCrop };
+}
+
+/** The square the Worker cuts and derives from the current original, or null for a media row that has no file yet. */
+export function thumbnailUrl({ path, versionId, crop }: Thumbnail): string | null {
+    if (versionId === null) {
+        return null;
+    }
+    const cropped = crop === null ? '' : `&crop=${crop.x},${crop.y},${crop.width},${crop.height}`;
+    return `/i${path}/${versionId}?size=${THUMBNAIL_SIZE}${cropped}`;
 }
 
 /**

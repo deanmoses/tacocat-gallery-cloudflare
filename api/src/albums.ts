@@ -1,22 +1,34 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, exists, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
 import {
     type Album,
     type Child,
     type ItemKey,
     type NavInfo,
+    type Thumbnail,
     albumKey,
     albumPath,
     isAlbumPath,
+    mediaKey,
     mediaPath,
+    rectangleSchema,
+    setThumbnailSchema,
 } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
 import { currentAdmin } from './auth';
-import { type Orm, orm, schema } from './db';
+import { NOW, type Orm, orm, schema } from './db';
 import { d1Header } from './db/timing';
 import { BOOKMARK_HEADER, json, notFound, pathAfter } from './http';
 
-// A row of `item` as D1 returns it, under its SQL column names: run() is the query method that returns D1's meta, and
-// its rows are untyped.
+// A crop as the column stores it, JSON text.
+const CROP = valibot.pipe(
+    valibot.string(),
+    valibot.transform((text): unknown => JSON.parse(text)),
+    rectangleSchema,
+);
+
+// A row of `item` joined to its thumbnail's row, as D1 returns it under SQL column names: run() is the query method
+// that returns D1's meta, and its rows are untyped.
 const ROW = valibot.object({
     parent_path: valibot.string(),
     item_name: valibot.string(),
@@ -30,6 +42,11 @@ const ROW = valibot.object({
     width: valibot.nullable(valibot.number()),
     height: valibot.nullable(valibot.number()),
     duration_seconds: valibot.nullable(valibot.number()),
+    thumbnail_crop: valibot.nullable(CROP),
+    thumb_parent_path: valibot.nullable(valibot.string()),
+    thumb_item_name: valibot.nullable(valibot.string()),
+    thumb_version_id: valibot.nullable(valibot.string()),
+    thumb_crop: valibot.nullable(CROP),
 });
 const ROWS = valibot.array(ROW);
 type Row = valibot.InferOutput<typeof ROW>;
@@ -38,6 +55,15 @@ export interface Rows {
     rows: Row[];
     meta: D1Meta;
 }
+
+interface AlbumRead {
+    album: Album | null;
+    meta: D1Meta;
+    rowsRead: number;
+    d1Ms: number;
+}
+
+const THUMB = alias(schema.item, 'thumb');
 
 /**
  * Reads through the Sessions API so a nearby replica can answer. A client that just wrote passes the bookmark it got
@@ -55,7 +81,82 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
         request.headers.get(BOOKMARK_HEADER) ??
         (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
     const session = env.DB.withSession(constraint);
+    const read = await readAlbum(orm(session), path, admin);
+    return read.album === null
+        ? notFound()
+        : json(read.album, 200, {
+              [BOOKMARK_HEADER]: session.getBookmark() ?? '',
+              'x-d1': d1Header(read.meta, read.d1Ms, read.rowsRead),
+          });
+}
+
+/**
+ * `POST /api/album/<path>/thumbnail` with `{ path }` of a media item makes that the album's thumbnail, and answers
+ * with the album as the admin now sees it.
+ */
+export async function setAlbumThumbnail(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    const path = `/${pathAfter(url, '/api/album/').slice(0, -'thumbnail'.length)}`;
+    if (!isAlbumPath(path)) {
+        return notFound();
+    }
+    const album = albumKey(path);
+    if (album === null) {
+        return json({ error: 'the root album has no thumbnail' }, 400);
+    }
+    const body = valibot.safeParse(setThumbnailSchema, await request.json());
+    const media = body.success ? mediaKey(body.output.path) : null;
+    if (media === null) {
+        return json({ error: 'expected { path } of a media item, such as /2001/06-15/felix.jpg' }, 400);
+    }
+    const session = env.DB.withSession('first-primary');
     const database = orm(session);
+    const set = await setThumbnail(database, album, media).run();
+    if (set.meta.changes === 0) {
+        return notFound({ album: path, media: mediaPath(media.parentPath, media.itemName) });
+    }
+    const read = await readAlbum(database, path, true);
+    return json(read.album, 200, {
+        [BOOKMARK_HEADER]: session.getBookmark() ?? '',
+        'x-d1': d1Header(read.meta, read.d1Ms, set.meta.rows_read + read.rowsRead),
+    });
+}
+
+/**
+ * Points `album` at `media` as its thumbnail. Changes no row unless both exist, or, with `onlyIfNone`, if the album
+ * already has one.
+ */
+export function setThumbnail(
+    database: Orm,
+    album: ItemKey,
+    media: ItemKey,
+    { onlyIfNone = false }: { onlyIfNone?: boolean } = {},
+): SQLiteUpdate<typeof schema.item, 'async', D1Result> {
+    const { item } = schema;
+    const mediaId = database
+        .select({ id: item.id })
+        .from(item)
+        .where(and(eq(item.parentPath, media.parentPath), eq(item.itemName, media.itemName)));
+    return database
+        .update(item)
+        .set({ thumbnailId: sql`(${mediaId})`, updatedOn: NOW })
+        .$dynamic()
+        .where(
+            and(
+                eq(item.parentPath, album.parentPath),
+                eq(item.itemName, album.itemName),
+                exists(mediaId),
+                ...(onlyIfNone ? [isNull(item.thumbnailId)] : []),
+            ),
+        );
+}
+
+function withTrailingSlash(path: string): string {
+    return path.endsWith('/') ? path : `${path}/`;
+}
+
+/** The album at `path` with its children and neighbours, as `admin` or a guest sees it. */
+async function readAlbum(database: Orm, path: string, admin: boolean): Promise<AlbumRead> {
     const key = albumKey(path);
     const started = performance.now();
     // The parent's children hold the album's own row and the neighbours prev and next point at.
@@ -64,24 +165,30 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
         key === null ? null : childrenOf(database, key.parentPath),
     ]);
     const d1Ms = performance.now() - started;
-    const rowsRead = children.meta.rows_read + (family?.meta.rows_read ?? 0);
-    const album = assemble(path, key, children.rows, family?.rows ?? null, admin);
-    return album === null
-        ? notFound()
-        : json(album, 200, {
-              [BOOKMARK_HEADER]: session.getBookmark() ?? '',
-              'x-d1': d1Header(children.meta, d1Ms, rowsRead),
-          });
+    return {
+        album: assemble(path, key, children.rows, family?.rows ?? null, admin),
+        meta: children.meta,
+        rowsRead: children.meta.rows_read + (family?.meta.rows_read ?? 0),
+        d1Ms,
+    };
 }
 
-function withTrailingSlash(path: string): string {
-    return path.endsWith('/') ? path : `${path}/`;
-}
-
-/** Every item directly inside the album at `path`, in name order. */
+/** Every item directly inside the album at `path`, in name order, each with its thumbnail's row beside it. */
 export async function childrenOf(database: Orm, path: string): Promise<Rows> {
     const { item } = schema;
-    const result = await database.select().from(item).where(eq(item.parentPath, path)).orderBy(item.itemName).run();
+    const result = await database
+        .select({
+            ...getTableColumns(item),
+            thumb_parent_path: sql`${THUMB.parentPath}`.as('thumb_parent_path'),
+            thumb_item_name: sql`${THUMB.itemName}`.as('thumb_item_name'),
+            thumb_version_id: sql`${THUMB.versionId}`.as('thumb_version_id'),
+            thumb_crop: sql`${THUMB.thumbnailCrop}`.as('thumb_crop'),
+        })
+        .from(item)
+        .leftJoin(THUMB, eq(THUMB.id, item.thumbnailId))
+        .where(eq(item.parentPath, path))
+        .orderBy(item.itemName)
+        .run();
     return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
 }
 
@@ -102,6 +209,7 @@ function assemble(
             description: null,
             published: true,
             updatedOn: null,
+            thumbnail: null,
             prev: null,
             next: null,
             children: shown,
@@ -119,6 +227,7 @@ function assemble(
         description: self.description,
         published: self.published === 1,
         updatedOn: self.updated_on,
+        thumbnail: toThumbnail(self),
         prev: toNav(peers[at - 1]),
         next: toNav(peers[at + 1]),
         children: shown,
@@ -127,6 +236,16 @@ function assemble(
 
 function toNav(row: Row | undefined): NavInfo | null {
     return row === undefined ? null : { path: albumPath(row.parent_path, row.item_name), title: row.title };
+}
+
+function toThumbnail(row: Row): Thumbnail | null {
+    return row.thumb_parent_path === null || row.thumb_item_name === null
+        ? null
+        : {
+              path: mediaPath(row.thumb_parent_path, row.thumb_item_name),
+              versionId: row.thumb_version_id,
+              crop: row.thumb_crop,
+          };
 }
 
 function toChild(row: Row): Child {
@@ -142,6 +261,7 @@ function toChild(row: Row): Child {
             path: albumPath(row.parent_path, row.item_name),
             ...shared,
             published: row.published === 1,
+            thumbnail: toThumbnail(row),
         };
     }
     return {
@@ -153,5 +273,6 @@ function toChild(row: Row): Child {
         width: row.width,
         height: row.height,
         durationSeconds: row.duration_seconds,
+        thumbnailCrop: row.thumbnail_crop,
     };
 }

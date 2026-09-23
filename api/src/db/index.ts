@@ -45,6 +45,9 @@ export function upsertItem(database: Orm, values: schema.NewItem): ItemUpsert {
         .onConflictDoUpdate({ target: [item.parentPath, item.itemName], set: ITEM_UPSERT_SET });
 }
 
+/** SQLite's clock in the format the schema defaults to. */
+export const NOW = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
+
 // Built from the table so a column added to `item` is overwritten by an upsert without anyone remembering to list it.
 // The id and path identify the row, so they stay.
 const KEPT_ON_UPSERT = new Set(['id', 'parentPath', 'itemName', 'updatedOn']);
@@ -54,7 +57,7 @@ const ITEM_UPSERT_SET = {
             .filter(([key]) => !KEPT_ON_UPSERT.has(key))
             .map(([key, column]) => [key, sql`excluded.${sql.identifier(column.name)}`]),
     ),
-    updatedOn: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+    updatedOn: NOW,
 };
 
 /** Creates an album unless one exists; an existing album keeps every field, whatever it was given here. */

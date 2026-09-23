@@ -1,4 +1,4 @@
-import { getAlbum } from './albums';
+import { getAlbum, setAlbumThumbnail } from './albums';
 import { currentAdmin, routeAuth } from './auth';
 import { purgeUploadErrors, uploadErrors } from './errors';
 import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
@@ -85,6 +85,9 @@ async function routeWrite(request: Request, env: Env): Promise<Response> {
     }
     if (pathname === '/api/errors') {
         return uploadErrors(request, env);
+    }
+    if (pathname.startsWith('/api/album/') && pathname.endsWith('/thumbnail')) {
+        return setAlbumThumbnail(request, env);
     }
     return pathname.startsWith('/upload/') ? upload(request, env) : notFound();
 }

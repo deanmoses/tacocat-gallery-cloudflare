@@ -1,5 +1,6 @@
 import ExifReader from 'exifreader';
 import { albumsEnclosing } from 'tacocat-gallery-shared';
+import { setThumbnail } from './albums';
 import { insertAlbumIfMissing, orm, upsertItem } from './db';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 import { json, pathAfter } from './http';
@@ -123,6 +124,9 @@ async function place(event: R2EventMessage): Promise<Placement> {
 /** Records the item, then the original under its immutable key, then lets go of the inbox copy. */
 async function store(env: UploadEnv, { placement, object, body, caption, video }: Stored): Promise<void> {
     const database = orm(env.DB);
+    const albums = albumsEnclosing(placement.parentPath);
+    const day = albums.at(-1);
+    const media = { parentPath: placement.parentPath, itemName: placement.itemName };
     await database.batch([
         upsertItem(database, {
             parentPath: placement.parentPath,
@@ -134,7 +138,9 @@ async function store(env: UploadEnv, { placement, object, body, caption, video }
             ...video,
         }),
         // The year and day albums the upload lands in, so it has a page to appear on.
-        ...albumsEnclosing(placement.parentPath).map((key) => insertAlbumIfMissing(database, key)),
+        ...albums.map((key) => insertAlbumIfMissing(database, key)),
+        // The first upload into a day becomes its thumbnail; an admin can pick another later.
+        ...(day === undefined ? [] : [setThumbnail(database, day, media, { onlyIfNone: true })]),
         uploadErrorDelete(database, placement.galleryPath),
     ]);
     await env.MEDIA.put(`originals${placement.galleryPath}/${placement.versionId}`, body, {

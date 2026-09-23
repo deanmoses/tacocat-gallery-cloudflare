@@ -11,6 +11,7 @@ export function albumChild(path: string, overrides: Partial<AlbumChild> = {}): A
         description: null,
         updatedOn: UPDATED_ON,
         published: true,
+        thumbnail: null,
         ...overrides,
     };
 }
@@ -28,6 +29,7 @@ export function mediaChild(path: string, overrides: Partial<MediaChild> = {}): M
         width: 4032,
         height: 3024,
         durationSeconds: null,
+        thumbnailCrop: null,
         ...overrides,
     };
 }
@@ -39,6 +41,7 @@ export function album(path: string, overrides: Partial<Album> = {}): Album {
         description: null,
         published: true,
         updatedOn: path === '/' ? null : UPDATED_ON,
+        thumbnail: null,
         prev: null,
         next: null,
         children: [],

@@ -36,8 +36,7 @@ export function isDayAlbumPath(path: string): boolean {
 
 /** Whether `path` is a media item in a day album: `/2001/06-15/felix.jpg`. */
 export function isMediaPath(path: string): boolean {
-    const key = mediaKey(path);
-    return key !== null && isDayAlbumPath(key.parentPath) && isMediaName(key.itemName);
+    return mediaKey(path) !== null;
 }
 
 /** How the database identifies an item: the album it is in, and its name there. */
@@ -55,12 +54,11 @@ export function albumKey(path: string): ItemKey | null {
     return { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1, -1) };
 }
 
-/** A media item's key: `/2001/06-15/felix.jpg` is `felix.jpg` in `/2001/06-15/`. */
+/** A media item's key: `/2001/06-15/felix.jpg` is `felix.jpg` in `/2001/06-15/`. Anything but a media path has none. */
 export function mediaKey(path: string): ItemKey | null {
     const cut = path.lastIndexOf('/');
-    return !path.startsWith('/') || cut === path.length - 1
-        ? null
-        : { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1) };
+    const key = { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1) };
+    return isDayAlbumPath(key.parentPath) && isMediaName(key.itemName) ? key : null;
 }
 
 export function parentAlbumPath(path: string): string | null {

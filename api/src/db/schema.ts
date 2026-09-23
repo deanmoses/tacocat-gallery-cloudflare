@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+import type { Rectangle } from 'tacocat-gallery-shared';
 
 // The FTS5 table `item_fts` and the triggers that keep it in sync with `item` are raw SQL in migrations/, because
 // Drizzle does not model virtual tables or triggers. drizzle-kit leaves them alone.
@@ -23,6 +24,10 @@ export const item = sqliteTable(
         width: integer('width'),
         height: integer('height'),
         durationSeconds: real('duration_seconds'),
+        // The media item an album shows as its thumbnail, by row id so a rename of the media does not lose it.
+        thumbnailId: integer('thumbnail_id'),
+        // The rectangle of a media item, in its EXIF-oriented pixels, that its thumbnail is cut from.
+        thumbnailCrop: text('thumbnail_crop', { mode: 'json' }).$type<Rectangle>(),
     },
     (table) => [
         unique().on(table.parentPath, table.itemName),

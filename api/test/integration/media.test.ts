@@ -129,6 +129,20 @@ describe('upload pipeline', () => {
             { parentPath: '/1999/', itemName: '03-03', title: 'Kept', published: true },
         ]);
     });
+
+    it('becomes the thumbnail of a day that has none, and leaves one that has', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/first.jpg', jpg);
+        await env.MEDIA.put('inbox/2024/06-15/second.jpg', jpg);
+        await deliverUpload('inbox/2024/06-15/first.jpg');
+        await deliverUpload('inbox/2024/06-15/second.jpg');
+        const [day, first] = await Promise.all([
+            storedItem('/2024/', '06-15'),
+            storedItem('/2024/06-15/', 'first.jpg'),
+        ]);
+
+        expect(first?.id).toBeDefined();
+        expect(day?.thumbnailId).toBe(first?.id);
+    });
 });
 
 describe('a batch of uploads', () => {
