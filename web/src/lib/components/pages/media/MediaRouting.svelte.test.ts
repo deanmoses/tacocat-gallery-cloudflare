@@ -36,7 +36,7 @@ const THIS: Target = { albumPath: ALBUM_PATH, mediaPath: MEDIA_PATH };
 /** A second album, and a second item in this one, to say which one a page is reading */
 const OTHER: Target = { albumPath: '/2001/12-30/', mediaPath: mediaPath('other.jpg') };
 
-const media = dayAlbum([imageRecord({ itemType: 'image', path: MEDIA_PATH, itemName: 'image.jpg' })]).media[0];
+const media = dayAlbum([imageRecord({ path: MEDIA_PATH, itemName: 'image.jpg' })]).media[0];
 const item = createRawSnippet(() => ({ render: () => `<p>${MEDIA_CONTENT}</p>` }));
 
 function show(overrides: { media?: Media | undefined } = {}) {

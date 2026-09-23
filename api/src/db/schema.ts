@@ -27,6 +27,9 @@ export const item = sqliteTable(
         mediaType: text('media_type', { enum: mediaTypeSchema.options }),
         title: text('title'),
         description: text('description'),
+        // An album's caption on its thumbnail, a line long; its date is its title.
+        summary: text('summary'),
+        // Comma-separated.
         tags: text('tags'),
         versionId: text('version_id'),
         published: integer('published', { mode: 'boolean' }).notNull().default(false),

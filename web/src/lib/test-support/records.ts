@@ -25,6 +25,7 @@ export function mediaPath(fileName: string): string {
 }
 
 const BASE_MEDIA = {
+    itemType: 'media' as const,
     path: mediaPath('item.jpg'),
     parentPath: DAY_ALBUM_PATH,
     itemName: 'item.jpg',
@@ -41,16 +42,12 @@ const BASE_ALBUM: AlbumGalleryItem = {
     updatedOn: '2001-12-31T00:00:00.000Z',
 };
 
-/**
- * itemType is required rather than defaulted, because both sides of the
- * server's migration are in the wild and a fixture has to say which one it is.
- */
-export function imageRecord(fields: Partial<ImageRecord> & Pick<ImageRecord, 'itemType'>): ImageRecord {
-    return { ...BASE_MEDIA, ...fields };
+export function imageRecord(fields: Partial<ImageRecord> = {}): ImageRecord {
+    return { ...BASE_MEDIA, mediaType: 'image', ...fields };
 }
 
-export function videoRecord(fields: Partial<VideoRecord> & Pick<VideoRecord, 'itemType'>): VideoRecord {
-    return { ...BASE_MEDIA, mediaType: 'video', id: 'video-1', duration: 12, ...fields };
+export function videoRecord(fields: Partial<VideoRecord> = {}): VideoRecord {
+    return { ...BASE_MEDIA, mediaType: 'video', duration: 12, ...fields };
 }
 
 export function albumRecord(fields: Partial<AlbumGalleryItem> = {}): AlbumGalleryItem {

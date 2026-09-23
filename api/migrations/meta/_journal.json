@@ -57,6 +57,20 @@
       "when": 1790202654432,
       "tag": "20260923223054_fts_triggers_after_rebuild",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790203807628,
+      "tag": "20260923225007_album_summary",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790203809209,
+      "tag": "20260923225009_fts_indexes_summary",
+      "breakpoints": true
     }
   ]
 }

@@ -26,10 +26,7 @@ export abstract class ThumbableBaseImpl implements Thumbable {
     }
 
     get itemType(): ItemType {
-        const serverType = this.json.itemType;
-        if (serverType === 'album') return 'album';
-        if (serverType === 'media' || serverType === 'image') return 'media';
-        throw new Error(`Unknown itemType: ${serverType}`);
+        return this.json.itemType;
     }
 
     get description(): string {

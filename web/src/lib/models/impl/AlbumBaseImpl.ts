@@ -55,7 +55,7 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
         // TODO: fix TypeScript error - thumbnail.versionId is required
         // The Drafts system should probably not be saving to this object,
         // but instead some intermediate object...
-        // @ts-expect-error Incomplete thumbnail - versionId and fileUpdatedOn set by server
+        // @ts-expect-error Incomplete thumbnail - versionId set by server
         this.json.thumbnail = {
             path: imagePath,
         };

@@ -1,8 +1,12 @@
+import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
-import { describe, expect, it, vi } from 'vitest';
-import { type R2EventMessage, readCaption, versionIdFor } from '../../src/upload';
+import turnedDataUrl from '../../fixtures/PortraitOrientation6.jpg?inline';
+import { describe, expect, it } from 'vitest';
+import { type R2EventMessage, readImage, versionIdFor } from '../../src/upload';
 
-const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1));
+function bytes(dataUrl: string): ArrayBuffer {
+    return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1)).buffer;
+}
 
 function uploadEvent(eventTime: string, eTag = 'etag-1'): R2EventMessage {
     return { action: 'PutObject', bucket: 'media', object: { key: 'inbox/2024/06-15/a.jpg', eTag }, eventTime };
@@ -36,18 +40,27 @@ describe(versionIdFor, () => {
     });
 });
 
-describe(readCaption, () => {
-    it('reads the IPTC title and description', () => {
-        expect(readCaption(jpg.buffer, 'a.jpg')).toStrictEqual({
-            title: 'My Image Title',
-            description: 'My image description',
+describe(readImage, () => {
+    it('reads the size and the IPTC title and description', () => {
+        expect(readImage(bytes(jpgDataUrl))).toStrictEqual({
+            ok: true,
+            facts: { width: 300, height: 225, title: 'My Image Title', description: 'My image description' },
         });
     });
 
-    it('has no caption for a file ExifReader cannot parse, and logs why', () => {
-        const logged = vi.spyOn(console, 'error').mockReturnValue();
+    // The pixels are stored landscape and shown turned a quarter, so the size is the shown one, as every crop is.
+    it('reads the size as the image is shown, turned by its EXIF orientation', () => {
+        expect(readImage(bytes(turnedDataUrl))).toMatchObject({ ok: true, facts: { width: 600, height: 800 } });
+    });
 
-        expect(readCaption(new Uint8Array(10).buffer, 'broken.jpg')).toStrictEqual({ title: null, description: null });
-        expect(logged).toHaveBeenCalledWith(expect.objectContaining({ event: 'exif_failed', key: 'broken.jpg' }));
+    it('reads the size of a HEIC from its EXIF, which is all ExifReader has for one', () => {
+        expect(readImage(bytes(heicDataUrl))).toMatchObject({ ok: true, facts: { width: 4032, height: 3024 } });
+    });
+
+    it('says why a file that is no image cannot be one', () => {
+        expect(readImage(new Uint8Array(10).buffer)).toStrictEqual({
+            ok: false,
+            error: expect.stringContaining('not a readable image'),
+        });
     });
 });

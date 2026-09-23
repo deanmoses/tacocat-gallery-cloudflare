@@ -97,6 +97,8 @@ describe('upload pipeline', () => {
             published: false,
             title: 'My Image Title',
             description: 'My image description',
+            width: 300,
+            height: 225,
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([
             `originals/2024/06-15/FullMetadata.jpg/${String(item?.versionId)}`,
@@ -144,6 +146,26 @@ describe('upload pipeline', () => {
 
         expect(first?.id).toBeDefined();
         expect(day?.thumbnailId).toBe(first?.id);
+    });
+});
+
+describe('image uploads', () => {
+    it('records a file that is no image instead of an item, and drops it', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/broken.jpg', new Uint8Array(10));
+        await processUploadEvent(uploadEvent('inbox/2024/06-15/broken.jpg'), env);
+        const item = await storedItem('/2024/06-15/', 'broken.jpg');
+        const originals = await env.MEDIA.list({ prefix: 'originals/2024/06-15/broken.jpg/' });
+        const inbox = await env.MEDIA.head('inbox/2024/06-15/broken.jpg');
+        const listed = await callAsAdmin('/api/errors', {
+            method: 'POST',
+            body: JSON.stringify({ paths: ['/2024/06-15/broken.jpg'] }),
+        });
+        const { errors } = await listed.json<{ errors: Record<string, { message: string }> }>();
+
+        expect(item).toBeUndefined();
+        expect(originals.objects).toHaveLength(0);
+        expect(inbox).toBeNull();
+        expect(errors['/2024/06-15/broken.jpg']?.message).toContain('not a readable image');
     });
 });
 

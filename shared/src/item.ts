@@ -9,24 +9,35 @@ function clearable<T extends valibot.GenericSchema>(
     return valibot.optional(valibot.nullable(schema));
 }
 
+const integer = valibot.pipe(valibot.number(), valibot.integer());
+
 const writeFields = {
     parentPath: valibot.string(),
     itemName: valibot.string(),
-    title: clearable(valibot.string()),
     description: clearable(valibot.string()),
-    tags: clearable(valibot.string()),
-    versionId: clearable(valibot.string()),
     published: valibot.optional(valibot.boolean()),
-    width: clearable(valibot.pipe(valibot.number(), valibot.integer())),
-    height: clearable(valibot.pipe(valibot.number(), valibot.integer())),
-    durationSeconds: clearable(valibot.number()),
-    thumbnailCrop: clearable(rectangleSchema),
 };
 
 // Strict, so that a misspelled field is refused rather than clearing the one it meant.
 const itemWrite = valibot.variant('itemType', [
-    valibot.strictObject({ itemType: valibot.literal('album'), ...writeFields }),
-    valibot.strictObject({ itemType: valibot.literal('media'), mediaType: mediaTypeSchema, ...writeFields }),
+    valibot.strictObject({
+        itemType: valibot.literal('album'),
+        ...writeFields,
+        summary: clearable(valibot.string()),
+    }),
+    valibot.strictObject({
+        itemType: valibot.literal('media'),
+        mediaType: mediaTypeSchema,
+        ...writeFields,
+        title: clearable(valibot.string()),
+        tags: clearable(valibot.array(valibot.string())),
+        // Every media item has a file, and the album pages need its size to lay it out.
+        versionId: valibot.string(),
+        width: integer,
+        height: integer,
+        durationSeconds: clearable(valibot.number()),
+        thumbnailCrop: clearable(rectangleSchema),
+    }),
 ]);
 
 /** The body of `PUT /api/item`, which saves every field of the item at that key: a field left out is cleared. */

@@ -26,7 +26,7 @@ function record() {
         path: PATH,
         parentPath: PARENT_PATH,
         itemName: '12-31',
-        children: [imageRecord({ itemType: 'image', path: IMAGE_PATH, itemName: 'image.jpg' })],
+        children: [imageRecord({ path: IMAGE_PATH, itemName: 'image.jpg' })],
     });
 }
 

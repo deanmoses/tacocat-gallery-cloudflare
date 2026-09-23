@@ -14,10 +14,6 @@ export class VideoImpl extends MediaBaseImpl implements Video {
         return 'video';
     }
 
-    get id(): string {
-        return this.json.id;
-    }
-
     get duration(): number {
         return this.json.duration;
     }

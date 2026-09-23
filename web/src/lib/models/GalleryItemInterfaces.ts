@@ -52,8 +52,6 @@ export interface Image extends Media {
 
 export interface Video extends Media {
     readonly mediaType: 'video';
-    /** URL-safe ID for constructing video playback URL */
-    readonly id: string;
     /** Duration in seconds */
     readonly duration: number;
 }

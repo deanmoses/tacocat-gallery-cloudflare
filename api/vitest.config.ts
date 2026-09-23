@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 import { TEST_SECRETS } from './test/secrets.ts';
 
 export default defineConfig({
+    // Fixtures a test loads with ?inline; Vite knows the image formats but not HEIC.
+    assetsInclude: ['**/*.heic'],
     test: {
         // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
         restoreMocks: true,

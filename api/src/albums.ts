@@ -1,10 +1,12 @@
 import { type SQL, and, eq, exists, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
 import {
-    type Album,
-    type Child,
+    type AlbumGalleryItem,
+    type AlbumRecord,
+    type AlbumThumbnailRecord,
+    type GalleryRecord,
     type ItemKey,
-    type Thumbnail,
+    type MediaRecord,
     albumKey,
     albumPath,
     isAlbumPath,
@@ -35,6 +37,7 @@ const ROW_FIELDS = {
     item_name: valibot.string(),
     title: valibot.nullable(valibot.string()),
     description: valibot.nullable(valibot.string()),
+    summary: valibot.nullable(valibot.string()),
     tags: valibot.nullable(valibot.string()),
     version_id: valibot.nullable(valibot.string()),
     published: valibot.number(),
@@ -54,6 +57,8 @@ const ROW = valibot.variant('item_type', [
 ]);
 const ROWS = valibot.array(ROW);
 type Row = valibot.InferOutput<typeof ROW>;
+type AlbumRow = Extract<Row, { item_type: 'album' }>;
+type MediaRow = Extract<Row, { item_type: 'media' }>;
 
 interface Rows {
     rows: Row[];
@@ -61,7 +66,7 @@ interface Rows {
 }
 
 interface AlbumRead {
-    album: Album | null;
+    album: AlbumGalleryItem | null;
     meta: D1Meta;
     rowsRead: number;
     d1Ms: number;
@@ -89,7 +94,7 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
     if (read.album === null) {
         return notFound();
     }
-    return json(read.album satisfies Album, 200, {
+    return json(read.album satisfies AlbumGalleryItem, 200, {
         [BOOKMARK_HEADER]: session.getBookmark() ?? '',
         'x-d1': d1Header(read.meta, read.d1Ms, read.rowsRead),
         // What one browser sees just after its own write is no answer for anyone else.
@@ -182,7 +187,7 @@ export async function readAlbum(database: Orm, path: string, admin: boolean): Pr
     ]);
     const d1Ms = performance.now() - started;
     return {
-        album: assemble(path, children.rows, self?.rows ?? null, admin),
+        album: assemble(children.rows, self?.rows ?? null, admin),
         meta: children.meta,
         rowsRead: children.meta.rows_read + (self?.meta.rows_read ?? 0),
         d1Ms,
@@ -212,71 +217,62 @@ async function rowsWhere(database: Orm, where: SQL | undefined): Promise<Rows> {
  * The album, or null when there is no such row or `admin` is false and it is unpublished. The root is not a row, so
  * `self` is null for it.
  */
-function assemble(path: string, children: Row[], self: Row[] | null, admin: boolean): Album | null {
+function assemble(children: Row[], self: Row[] | null, admin: boolean): AlbumGalleryItem | null {
     const visible = (row: Row): boolean => admin || row.item_type !== 'album' || row.published === 1;
-    const shown = children.filter(visible).map(toChild);
+    const shown = children.filter(visible).map(toRecord);
     if (self === null) {
-        return {
-            path,
-            title: null,
-            description: null,
-            published: true,
-            updatedOn: null,
-            thumbnail: null,
-            children: shown,
-        };
+        return { itemType: 'album', path: '/', parentPath: '', itemName: '', children: shown };
     }
     const row = self.find(visible);
-    if (row === undefined) {
-        return null;
-    }
+    return row?.item_type === 'album' ? { ...toAlbumRecord(row), children: shown } : null;
+}
+
+function toRecord(row: Row): GalleryRecord {
+    return row.item_type === 'album' ? toAlbumRecord(row) : toMediaRecord(row);
+}
+
+function toAlbumRecord(row: AlbumRow): AlbumRecord {
+    const thumbnail = toThumbnail(row);
     return {
-        path,
-        title: row.title,
-        description: row.description,
-        published: row.published === 1,
+        itemType: 'album',
+        path: albumPath(row.parent_path, row.item_name),
+        parentPath: row.parent_path,
+        itemName: row.item_name,
         updatedOn: row.updated_on,
-        thumbnail: toThumbnail(row),
-        children: shown,
+        ...(row.description !== null && { description: row.description }),
+        published: row.published === 1,
+        ...(thumbnail !== undefined && { thumbnail }),
+        ...(row.summary !== null && { summary: row.summary }),
     };
 }
 
-function toThumbnail(row: Row): Thumbnail | null {
-    return row.thumb_parent_path === null || row.thumb_item_name === null
-        ? null
+function toMediaRecord(row: MediaRow): MediaRecord {
+    const record = {
+        itemType: 'media' as const,
+        path: mediaPath(row.parent_path, row.item_name),
+        parentPath: row.parent_path,
+        itemName: row.item_name,
+        updatedOn: row.updated_on,
+        ...(row.description !== null && { description: row.description }),
+        // A media item comes with its file and its size; rows from before that was required say nothing of either.
+        versionId: row.version_id ?? '',
+        dimensions: { width: row.width ?? 0, height: row.height ?? 0 },
+        ...(row.thumbnail_crop !== null && { thumbnail: row.thumbnail_crop }),
+        ...(row.title !== null && { title: row.title }),
+        ...(row.tags !== null && { tags: row.tags.split(',') }),
+    };
+    return row.media_type === 'video'
+        ? { ...record, mediaType: 'video', duration: row.duration_seconds ?? 0 }
+        : { ...record, mediaType: 'image' };
+}
+
+/** Undefined for an album with no thumbnail, or one whose media has no file yet. */
+function toThumbnail(row: Row): AlbumThumbnailRecord | undefined {
+    return row.thumb_parent_path === null || row.thumb_item_name === null || row.thumb_version_id === null
+        ? undefined
         : {
               path: mediaPath(row.thumb_parent_path, row.thumb_item_name),
               versionId: row.thumb_version_id,
-              crop: row.thumb_crop,
+              ...(row.thumb_crop !== null && { crop: row.thumb_crop }),
           };
-}
-
-function toChild(row: Row): Child {
-    const shared = {
-        itemName: row.item_name,
-        title: row.title,
-        description: row.description,
-        updatedOn: row.updated_on,
-    };
-    if (row.item_type === 'album') {
-        return {
-            itemType: 'album',
-            path: albumPath(row.parent_path, row.item_name),
-            ...shared,
-            published: row.published === 1,
-            thumbnail: toThumbnail(row),
-        };
-    }
-    return {
-        itemType: 'media',
-        mediaType: row.media_type,
-        path: mediaPath(row.parent_path, row.item_name),
-        ...shared,
-        tags: row.tags,
-        versionId: row.version_id,
-        width: row.width,
-        height: row.height,
-        durationSeconds: row.duration_seconds,
-        thumbnailCrop: row.thumbnail_crop,
-    };
 }

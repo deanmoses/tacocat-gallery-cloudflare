@@ -18,7 +18,7 @@
     let posterLoaded = $state(false);
     let videoElement: HTMLVideoElement | undefined = $state();
 
-    let videoUrl = $derived(videoPlaybackUrl(video.path, video.id, video.versionId));
+    let videoUrl = $derived(videoPlaybackUrl(video.path, video.versionId));
 
     function formatDuration(seconds: number): string {
         const mins = Math.floor(seconds / 60);

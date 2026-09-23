@@ -3,6 +3,7 @@ import { emulateProdOnLocalhost } from './settings';
 import { isValidAlbumPath, isValidMediaPath } from './galleryPathUtils';
 import { browser } from '$app/environment';
 import type { SearchQuery } from '$lib/models/search';
+import { videoUrl } from 'tacocat-gallery-shared';
 
 /**
  * I'm in staging (aka development) when one of these is true:
@@ -68,11 +69,10 @@ export function originalMediaUrl(mediaPath: string): string {
 /**
  * URL to stream a video
  * @param path Path to video like /2001/12-31/video.mp4
- * @param id ID of media item
  * @param versionId Version of the video
  */
-export function videoPlaybackUrl(path: string, id: string, versionId: string): string {
-    return `https://${cdnDomain()}/v${path}?id=${id}&version=${versionId}`;
+export function videoPlaybackUrl(path: string, versionId: string): string {
+    return videoUrl(path, versionId);
 }
 
 /**

@@ -42,6 +42,9 @@ async function seedGallery(database: Orm): Promise<void> {
                         itemName: `img_${index}.jpg`,
                         itemType: 'media',
                         mediaType: 'image',
+                        versionId: 'v1',
+                        width: 4032,
+                        height: 3024,
                         title: `Taco ${index}`,
                         description: 'Tacos on the beach',
                     }),
@@ -89,7 +92,7 @@ describe('rows read on a gallery-sized table', () => {
         async (path) => {
             const read = await readAlbum(database, path, false);
             const children = read.album?.children ?? [];
-            const thumbnails = children.filter((child) => child.itemType === 'album' && child.thumbnail !== null);
+            const thumbnails = children.filter((child) => child.itemType === 'album' && child.thumbnail !== undefined);
 
             expect(children.length).toBeGreaterThan(0);
             expect(read.rowsRead).toBeLessThanOrEqual(children.length + thumbnails.length + OVERHEAD);

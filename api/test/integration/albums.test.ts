@@ -1,10 +1,11 @@
-import { type Album, parseAlbum } from 'tacocat-gallery-shared';
+import { type AlbumGalleryItem, parseAlbum } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { call, callAsAdmin, callForJson, parseExactly, putItem } from '../helpers';
 
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
 const CROP = { x: 10, y: 20, width: 300, height: 300 };
+const IMAGE = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 async function setThumbnail(albumPath: string, mediaPath: string, asAdmin = true): Promise<Response> {
     return (asAdmin ? callAsAdmin : call)(`/api/album${albumPath}thumbnail`, {
@@ -13,7 +14,7 @@ async function setThumbnail(albumPath: string, mediaPath: string, asAdmin = true
     });
 }
 
-async function album(path: string, asAdmin = false): Promise<Album> {
+async function album(path: string, asAdmin = false): Promise<AlbumGalleryItem> {
     return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/album${path}`), parseAlbum);
 }
 
@@ -21,7 +22,7 @@ describe('an album', () => {
     beforeEach(async () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1981', itemType: 'album', published: true }),
-            putItem({ parentPath: YEAR, itemName: '01-01', itemType: 'album', title: 'New year', published: true }),
+            putItem({ parentPath: YEAR, itemName: '01-01', itemType: 'album', summary: 'New year', published: true }),
             putItem({ parentPath: YEAR, itemName: '02-02', itemType: 'album', published: false }),
             putItem({ parentPath: YEAR, itemName: '03-03', itemType: 'album', published: true }),
             putItem({
@@ -30,6 +31,7 @@ describe('an album', () => {
                 itemType: 'media',
                 mediaType: 'image',
                 title: 'Beach',
+                tags: ['sand', 'sea'],
                 versionId: 'v1',
                 width: 40,
                 height: 30,
@@ -41,6 +43,9 @@ describe('an album', () => {
                 itemName: 'b.mov',
                 itemType: 'media',
                 mediaType: 'video',
+                versionId: 'v2',
+                width: 16,
+                height: 9,
                 durationSeconds: 9.5,
                 published: false,
             }),
@@ -48,46 +53,43 @@ describe('an album', () => {
         await setThumbnail(DAY, '/1981/01-01/a.jpg');
     });
 
-    it('is the shared type, with its media', async () => {
+    // The records the AWS API sent, which the web app parses unchanged: what a record has none of is left out.
+    it('is the AWS API record with its media', async () => {
         const day = await album(DAY);
 
         expect(day).toStrictEqual({
+            itemType: 'album',
             path: DAY,
-            title: 'New year',
-            description: null,
-            published: true,
+            parentPath: YEAR,
+            itemName: '01-01',
             updatedOn: expect.any(String),
+            published: true,
             thumbnail: { path: '/1981/01-01/a.jpg', versionId: 'v1', crop: CROP },
+            summary: 'New year',
             children: [
                 {
                     itemType: 'media',
                     mediaType: 'image',
                     path: '/1981/01-01/a.jpg',
+                    parentPath: DAY,
                     itemName: 'a.jpg',
-                    title: 'Beach',
-                    description: null,
                     updatedOn: expect.any(String),
-                    tags: null,
                     versionId: 'v1',
-                    width: 40,
-                    height: 30,
-                    durationSeconds: null,
-                    thumbnailCrop: CROP,
+                    dimensions: { width: 40, height: 30 },
+                    thumbnail: CROP,
+                    title: 'Beach',
+                    tags: ['sand', 'sea'],
                 },
                 {
                     itemType: 'media',
                     mediaType: 'video',
                     path: '/1981/01-01/b.mov',
+                    parentPath: DAY,
                     itemName: 'b.mov',
-                    title: null,
-                    description: null,
                     updatedOn: expect.any(String),
-                    tags: null,
-                    versionId: null,
-                    width: null,
-                    height: null,
-                    durationSeconds: 9.5,
-                    thumbnailCrop: null,
+                    versionId: 'v2',
+                    dimensions: { width: 16, height: 9 },
+                    duration: 9.5,
                 },
             ],
         });
@@ -96,8 +98,8 @@ describe('an album', () => {
     it('hides unpublished albums from guests and shows them to admins', async () => {
         const [guest, admin] = await Promise.all([album(YEAR), album(YEAR, true)]);
 
-        expect(guest.children.map((child) => child.itemName)).toStrictEqual(['01-01', '03-03']);
-        expect(admin.children.map((child) => child.itemName)).toStrictEqual(['01-01', '02-02', '03-03']);
+        expect(guest.children?.map((child) => child.itemName)).toStrictEqual(['01-01', '03-03']);
+        expect(admin.children?.map((child) => child.itemName)).toStrictEqual(['01-01', '02-02', '03-03']);
     });
 
     it('is not found for a guest while unpublished', async () => {
@@ -117,18 +119,25 @@ describe('an album', () => {
         expect(after).toStrictEqual(before);
     });
 
-    it('synthesizes the root from the year albums', async () => {
+    it('synthesizes the root from the year albums, as the AWS API did', async () => {
         const root = await album('/');
 
-        expect(root).toMatchObject({
+        expect(root).toStrictEqual({
+            itemType: 'album',
             path: '/',
-            published: true,
-            updatedOn: null,
-            thumbnail: null,
+            parentPath: '',
+            itemName: '',
+            children: [
+                {
+                    itemType: 'album',
+                    path: YEAR,
+                    parentPath: '/',
+                    itemName: '1981',
+                    updatedOn: expect.any(String),
+                    published: true,
+                },
+            ],
         });
-        expect(root.children).toContainEqual(
-            expect.objectContaining({ itemType: 'album', path: YEAR, itemName: '1981', published: true }),
-        );
     });
 
     it('accepts its path without the trailing slash', async () => {
@@ -179,27 +188,15 @@ describe('an album thumbnail', () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '05-05', itemType: 'album', published: true }),
-            putItem({
-                parentPath: '/1982/05-05/',
-                itemName: 'a.jpg',
-                itemType: 'media',
-                mediaType: 'image',
-                versionId: 'v1',
-            }),
-            putItem({
-                parentPath: '/1982/05-05/',
-                itemName: 'b.jpg',
-                itemType: 'media',
-                mediaType: 'image',
-                versionId: 'v2',
-            }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a.jpg', versionId: 'v1' }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b.jpg', versionId: 'v2' }),
         ]);
     });
 
     it('shows on the album and on its entry in the parent', async () => {
         const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b.jpg');
         const [day, year] = await Promise.all([album('/1982/05-05/'), album('/1982/')]);
-        const thumbnail = { path: '/1982/05-05/b.jpg', versionId: 'v2', crop: null };
+        const thumbnail = { path: '/1982/05-05/b.jpg', versionId: 'v2' };
 
         expect(set.status).toBe(204);
         expect(day.thumbnail).toStrictEqual(thumbnail);
@@ -247,7 +244,7 @@ describe('an album thumbnail', () => {
         await response.body?.cancel();
 
         expect(response.status).toBe(404);
-        expect((await album('/1982/05-05/')).thumbnail).toBeNull();
+        expect((await album('/1982/05-05/')).thumbnail).toBeUndefined();
     });
 
     it.each([

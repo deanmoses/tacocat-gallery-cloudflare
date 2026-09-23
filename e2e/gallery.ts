@@ -9,7 +9,7 @@ export const E2E_PORT = 8790;
  */
 const GALLERY = {
     year: { parentPath: '/', itemName: '2001', itemType: 'album', published: true },
-    day: { parentPath: '/2001/', itemName: '06-15', itemType: 'album', title: 'Felix turns one', published: true },
+    day: { parentPath: '/2001/', itemName: '06-15', itemType: 'album', summary: 'Felix turns one', published: true },
     nextDay: { parentPath: '/2001/', itemName: '07-04', itemType: 'album', published: true },
     cake: {
         parentPath: '/2001/06-15/',

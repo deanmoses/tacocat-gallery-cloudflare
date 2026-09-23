@@ -349,14 +349,12 @@ function mediaToUpload(fileName: string): MediaItemToUpload {
 const albumWithPhotoAndClip = () =>
     dayAlbum([
         imageRecord({
-            itemType: 'media',
             mediaType: 'image',
             path: mediaPath('photo.jpg'),
             itemName: 'photo.jpg',
             versionId: 'photo-v1',
         }),
         videoRecord({
-            itemType: 'media',
             path: mediaPath('clip.mp4'),
             itemName: 'clip.mp4',
             versionId: 'clip-v1',

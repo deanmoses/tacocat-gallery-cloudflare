@@ -1,5 +1,6 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import {
+    type ItemWrite,
     type SearchResponse,
     type SearchResult,
     albumPath,
@@ -24,8 +25,17 @@ export async function putItem(request: Request, env: Env): Promise<Response> {
     }
     const session = env.DB.withSession('first-primary');
     const started = performance.now();
-    const write = await upsertItem(orm(session), body.output).run();
+    const write = await upsertItem(orm(session), toRow(body.output)).run();
     return written(session, { 'x-d1': d1Header(write.meta, performance.now() - started) });
+}
+
+/** The row an item write describes: the same fields, with the tags as the column keeps them. */
+function toRow(item: ItemWrite): schema.NewItem {
+    if (item.itemType === 'album') {
+        return item;
+    }
+    const { tags, ...rest } = item;
+    return { ...rest, ...(tags !== undefined && { tags: tags === null ? null : tags.join(',') }) };
 }
 
 /**
@@ -116,7 +126,8 @@ interface Found {
 export async function searchItems(database: Orm, query: string, admin: boolean): Promise<Found> {
     // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
     const found = await database.run(
-        sql`SELECT i.parent_path, i.item_name, i.item_type, i.media_type, i.title,
+        sql`SELECT i.parent_path, i.item_name, i.item_type, i.media_type,
+                CASE WHEN i.item_type = 'album' THEN i.summary ELSE i.title END AS title,
                 snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
             FROM item_fts JOIN item i ON i.id = item_fts.rowid
             ${admin ? sql`` : GUEST_VISIBLE_JOIN}
@@ -191,6 +202,8 @@ function seedYear(database: Orm, yearIndex: number): ItemUpsert[] {
                     description: `A photo about ${word} on ${year}-${day}`,
                     tags: word,
                     versionId: crypto.randomUUID(),
+                    width: 4032,
+                    height: 3024,
                     published: true,
                 }),
             );

@@ -11,7 +11,7 @@ import { albumRecord, dayAlbum, imageRecord, mediaPath } from '$lib/test-support
  * album. The store is stood in for by a map, since all the handler asks of it
  * is an album by path.
  */
-const image = (name: string) => imageRecord({ itemType: 'image', path: mediaPath(name), itemName: name });
+const image = (name: string) => imageRecord({ path: mediaPath(name), itemName: name });
 const day = (name: string) => albumRecord({ path: `/2001/${name}/`, parentPath: '/2001/', itemName: name });
 const year = (name: string) => albumRecord({ path: `/${name}/`, parentPath: '/', itemName: name });
 
