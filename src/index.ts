@@ -61,6 +61,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (pathname === '/') return json({ colo: request.cf?.colo, country: request.cf?.country });
     if (pathname.startsWith('/api/album/') && request.method === 'GET') return getAlbum(request, env, url);
     if (pathname === '/api/item' && request.method === 'POST') return putItem(request, env);
+    if (pathname === '/api/ryw' && request.method === 'GET') return readYourWrites(env);
     if (pathname === '/api/search' && request.method === 'GET') return search(env, url);
     if (pathname === '/api/seed' && request.method === 'POST') return seed(env, url);
     if (pathname === '/api/backup' && request.method === 'POST') return json(await backupDatabase(env));
@@ -93,7 +94,7 @@ async function getAlbum(request: Request, env: Env, url: URL): Promise<Response>
             d1: { ...pickMeta(children.meta), roundTripMs: round(d1Ms) },
         },
         200,
-        { [BOOKMARK_HEADER]: session.getBookmark() ?? '' },
+        { [BOOKMARK_HEADER]: session.getBookmark() ?? '', 'x-d1': d1Header(children.meta, d1Ms) },
     );
 }
 
@@ -132,6 +133,38 @@ function upsertItem(db: D1Database | D1DatabaseSession, item: ItemInput): D1Prep
         );
 }
 
+/**
+ * Saves from wherever this request lands, then reads back twice: once carrying the save's bookmark (what the
+ * admin UI would do) and once in a fresh session (what another visitor nearby would see). GET so that
+ * measurement services, which only issue GETs, can trigger it from other continents.
+ */
+async function readYourWrites(env: Env): Promise<Response> {
+    const title = `ryw ${Date.now()}`;
+    const key = { parentPath: '/ryw/', itemName: crypto.randomUUID() };
+    const writer = env.DB.withSession('first-primary');
+    let t0 = performance.now();
+    const w = await upsertItem(writer, { ...key, itemType: 'image', title, published: true }).run();
+    const writeMs = performance.now() - t0;
+    const select = 'SELECT title FROM item WHERE parent_path = ? AND item_name = ?';
+
+    const reader = env.DB.withSession(writer.getBookmark() ?? 'first-primary');
+    t0 = performance.now();
+    const own = await reader.prepare(select).bind(key.parentPath, key.itemName).run<{ title: string }>();
+    const ownMs = performance.now() - t0;
+
+    const stranger = env.DB.withSession('first-unconstrained');
+    t0 = performance.now();
+    const other = await stranger.prepare(select).bind(key.parentPath, key.itemName).run<{ title: string }>();
+    const otherMs = performance.now() - t0;
+
+    const summary = [
+        `write ${d1Header(w.meta, writeMs)}`,
+        `own ${own.results[0]?.title === title} ${d1Header(own.meta, ownMs)}`,
+        `fresh ${other.results[0]?.title === title} ${d1Header(other.meta, otherMs)}`,
+    ].join('; ');
+    return json({ summary }, 200, { 'x-d1': summary });
+}
+
 async function search(env: Env, url: URL): Promise<Response> {
     const q = url.searchParams.get('q') ?? '';
     const session = env.DB.withSession('first-unconstrained');
@@ -143,12 +176,13 @@ async function search(env: Env, url: URL): Promise<Response> {
         )
         .bind(q)
         .run();
+    const searchMs = performance.now() - t0;
     return json({
         q,
         count: rows.results.length,
         results: rows.results,
-        d1: { ...pickMeta(rows.meta), roundTripMs: round(performance.now() - t0) },
-    });
+        d1: { ...pickMeta(rows.meta), roundTripMs: round(searchMs) },
+    }, 200, { 'x-d1': d1Header(rows.meta, searchMs) });
 }
 
 /** Seeds synthetic years of albums and images so reads and search run against a gallery-sized table. */
@@ -308,6 +342,10 @@ function pickMeta(meta: D1Meta) {
         sqlMs: meta.timings?.sql_duration_ms,
         rowsRead: meta.rows_read,
     };
+}
+
+function d1Header(meta: D1Meta, roundTripMs: number): string {
+    return `region=${meta.served_by_region} colo=${meta.served_by_colo} primary=${meta.served_by_primary} sql=${meta.timings?.sql_duration_ms?.toFixed(1)} rtt=${round(roundTripMs)}`;
 }
 
 /** Time-sortable, URL-safe id standing in for S3's versionId. */
