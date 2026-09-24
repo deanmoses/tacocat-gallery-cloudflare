@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Prepare a Claude Code on the web session: select the Node version .nvmrc pins, then install dependencies.
+# Prepare a Claude Code on the web session: select the Node version .nvmrc pins, install dependencies, then the lint's
+# system tools, which the cloud image lacks and a developer's machine has.
 #
 # The Node version is the point. package.json sets engines.node to >=24.2.0 <25 and .npmrc makes that strict, so on
 # the older Node the cloud image ships `npm install` refuses to run at all. Forcing it through would do quiet damage:
@@ -12,7 +13,8 @@
 # `done total=` line below creeps toward it.
 #
 # Each stage prints `[session-start] <step> elapsed=Ns`, and an ERR trap names the step on the way out, so a hang or a
-# nonzero exit is visible in the session banner instead of silent.
+# nonzero exit is visible in the session banner instead of silent. The lint tools are an extra: that step fails soft,
+# with a line saying what lint will skip, because a session without shfmt is still a session.
 
 set -eEuo pipefail
 
@@ -21,7 +23,10 @@ cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}"
 script_start=$SECONDS
 current_step="startup"
 step_t0=$SECONDS
-trap 'echo "[session-start] FAILED step=${current_step} elapsed=$((SECONDS - script_start))s exit=$?"' ERR
+on_err() {
+    echo "[session-start] FAILED step=${current_step} elapsed=$((SECONDS - script_start))s exit=$?"
+}
+trap on_err ERR
 
 step_start() {
     current_step="$1"
@@ -62,14 +67,18 @@ if [ -z "$nvm_dir" ]; then
     fi
 else
     export NVM_DIR="$nvm_dir"
-    # nvm.sh is not written to survive `set -u`, and returns non-zero on a version it has not installed yet
+    # nvm.sh is not written to survive `set -u`, and its own probing (is this version installed yet? what is
+    # current?) returns non-zero on the way to installing, which the ERR trap would report as failures that never
+    # happened. Both stay off until nvm is done.
     set +eu
+    trap - ERR
     # shellcheck disable=SC1091 # sourced from the image at runtime
     . "$NVM_DIR/nvm.sh"
     # Reads .nvmrc, so the pinned version lives in one place
     nvm install
     nvm use
     set -eu
+    trap on_err ERR
 
     # A hook runs in its own shell, so the PATH it sets is gone by the time the session starts. CLAUDE_ENV_FILE is what
     # carries it across.
@@ -91,6 +100,25 @@ step_start "npm-install"
 npm install --no-audit --no-fund
 step_done
 
+# The system tools scripts/lint.sh needs, so `npm run lint` here checks what CI checks instead of skipping six of its
+# checks with a warning. scripts/install-lint-tools.sh is CI's pinned, checksummed installer; shellcheck is the one
+# it leaves out, because GitHub's runners already have it, so the image's package manager supplies that one.
+step_start "lint-tools"
+lint_tools_missing=0
+for tool in actionlint gitleaks hadolint shellcheck shfmt tofu; do
+    command -v "$tool" >/dev/null 2>&1 || lint_tools_missing=1
+done
+if [ "$lint_tools_missing" = 1 ]; then
+    if ! command -v shellcheck >/dev/null 2>&1; then
+        if ! apt-get install -y -q shellcheck >/dev/null 2>&1; then
+            echo "Could not install shellcheck, so lint will skip its check."
+        fi
+    fi
+    if ! scripts/install-lint-tools.sh; then
+        echo "Could not install the lint tools, so lint will skip their checks."
+    fi
+fi
+step_done
+
 echo "[session-start] done total=$((SECONDS - script_start))s"
-# scripts/lint.sh skips any system tool the image lacks (gitleaks, shellcheck, shfmt, hadolint, tofu) with a warning.
 echo "Session ready: npm test, npm run lint and npm run check should all work."
