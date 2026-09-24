@@ -1,6 +1,6 @@
 import * as valibot from 'valibot';
 import { describe, expect, it } from 'vitest';
-import { readSigned, sign } from '../../src/session';
+import { readSigned, sign } from '../../src/auth/session';
 
 const ENV = { SESSION_SECRET: 'unit-test-secret' };
 const ADMIN = { name: 'admin_session', payload: valibot.object({ name: valibot.string() }) };

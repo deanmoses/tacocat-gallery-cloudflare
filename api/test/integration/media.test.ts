@@ -6,7 +6,7 @@ import { imageUrl } from 'tacocat-gallery-shared';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import worker from '../../src/index';
-import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/upload';
+import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/gallery/upload';
 import { call, callAsAdmin, storedItem } from '../helpers';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.

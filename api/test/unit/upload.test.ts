@@ -2,7 +2,8 @@ import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import turnedDataUrl from '../../fixtures/PortraitOrientation6.jpg?inline';
 import { describe, expect, it } from 'vitest';
-import { type R2EventMessage, readImage, versionIdFor } from '../../src/upload';
+import { type R2EventMessage, transcodeJob, versionIdFor } from '../../src/gallery/upload';
+import { readImage } from '../../src/media/exif';
 
 function bytes(dataUrl: string): ArrayBuffer {
     return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1)).buffer;
@@ -61,6 +62,26 @@ describe(readImage, () => {
         expect(readImage(new Uint8Array(10).buffer)).toStrictEqual({
             ok: false,
             error: expect.stringContaining('not a readable image'),
+        });
+    });
+});
+
+describe(transcodeJob, () => {
+    it('signs URLs for the source and both outputs, into the media bucket', async () => {
+        const env = {
+            R2_ACCESS_KEY_ID: 'test-access-key',
+            R2_SECRET_ACCESS_KEY: 'test-secret-key',
+            MEDIA_BUCKET: 'test-media',
+        };
+
+        const { sourceKey, ...urls } = await transcodeJob(env, 'inbox/2024/06-15/a.mov', 'derived/2024/06-15/a.mov/v1');
+        const paths = Object.fromEntries(Object.entries(urls).map(([name, url]) => [name, new URL(url).pathname]));
+
+        expect(sourceKey).toBe('inbox/2024/06-15/a.mov');
+        expect(paths).toStrictEqual({
+            src: '/test-media/inbox/2024/06-15/a.mov',
+            mp4Put: '/test-media/derived/2024/06-15/a.mov/v1/video.mp4',
+            posterPut: '/test-media/derived/2024/06-15/a.mov/v1/poster.jpg',
         });
     });
 });

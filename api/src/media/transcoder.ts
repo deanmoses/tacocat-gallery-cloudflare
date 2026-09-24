@@ -1,8 +1,5 @@
 import { Container } from '@cloudflare/containers';
 import * as valibot from 'valibot';
-import { VIDEO_FILE } from 'tacocat-gallery-shared';
-import { notFound, pathAfter } from './http';
-import { presign } from './s3';
 
 /** ffmpeg in a container; see transcoder/server.ts. */
 export class Transcoder extends Container {
@@ -25,35 +22,31 @@ const TRANSCODE_RESULT = valibot.looseObject({
     }),
 });
 
-/** What transcoding needs from the bindings, with the transcoder as anything that answers fetch. */
-export interface TranscodeEnv extends Pick<Env, 'R2_ACCESS_KEY_ID' | 'R2_SECRET_ACCESS_KEY' | 'MEDIA_BUCKET'> {
+/** The transcoder as anything that answers fetch, so a test can stand one in. */
+export interface TranscodeEnv {
     TRANSCODER: {
         getByName: (name: string) => { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
     };
+}
+
+/** Presigned URLs the container reads the source from and writes the MP4 and poster to, and the source's key for the log. */
+export interface TranscodeJob {
+    sourceKey: string;
+    src: string;
+    mp4Put: string;
+    posterPut: string;
 }
 
 export type TranscodeOutcome =
     { ok: true; width: number; height: number; durationSeconds: number } | { ok: false; error: string };
 
 /**
- * Hands the container presigned URLs for the source and both outputs, and returns the display size. A file ffmpeg
- * rejects comes back as a failed outcome, since the same file would fail again; anything else throws so the queue
- * retries it.
+ * Hands the container the job and returns the display size. A file ffmpeg rejects comes back as a failed outcome,
+ * since the same file would fail again; anything else throws so the queue retries it.
  */
-export async function transcodeVideo(
-    env: TranscodeEnv,
-    sourceKey: string,
-    derivedPrefix: string,
-): Promise<TranscodeOutcome> {
-    const body = JSON.stringify({
-        src: await presign(env, { method: 'GET', key: sourceKey }),
-        mp4Put: await presign(env, { method: 'PUT', key: `${derivedPrefix}/${VIDEO_FILE}`, contentType: 'video/mp4' }),
-        posterPut: await presign(env, {
-            method: 'PUT',
-            key: `${derivedPrefix}/poster.jpg`,
-            contentType: 'image/jpeg',
-        }),
-    });
+export async function transcodeVideo(env: TranscodeEnv, job: TranscodeJob): Promise<TranscodeOutcome> {
+    const { sourceKey, src, mp4Put, posterPut } = job;
+    const body = JSON.stringify({ src, mp4Put, posterPut });
     const started = Date.now();
     const transcoder = env.TRANSCODER.getByName('transcoder');
     const response = await transcoder.fetch('http://transcoder/transcode', { method: 'POST', body });
@@ -87,22 +80,4 @@ function parseJson(text: string): unknown {
     } catch {
         return undefined;
     }
-}
-
-/** Byte-range serving, which video playback and seeking depend on. */
-export async function media(request: Request, env: Env): Promise<Response> {
-    const key = pathAfter(new URL(request.url), '/v/');
-    const object = await env.MEDIA.get(key, { range: request.headers });
-    if (!object) {
-        return notFound();
-    }
-    const headers = new Headers({ 'accept-ranges': 'bytes', etag: object.httpEtag });
-    object.writeHttpMetadata(headers);
-    if (request.headers.has('range') && object.range && 'offset' in object.range) {
-        const start = object.range.offset ?? 0;
-        const end = start + (object.range.length ?? object.size - start) - 1;
-        headers.set('content-range', `bytes ${start}-${end}/${object.size}`);
-        return new Response(object.body, { status: 206, headers });
-    }
-    return new Response(object.body, { headers });
 }

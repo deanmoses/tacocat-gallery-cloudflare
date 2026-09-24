@@ -30,7 +30,7 @@ interface ProbeInfo {
     audio: string | null;
 }
 
-/** The container's response; src/video.ts reads output's size, rotation and duration, and logs the rest. */
+/** The container's response; src/media/transcoder.ts reads output's size, rotation and duration, and logs the rest. */
 interface TranscodeReport {
     source: ProbeInfo;
     output: ProbeInfo & { bytes: number; hdrToneMapped: boolean };

@@ -149,11 +149,11 @@
             "triggers": {
                 "crons": [
                     "17 9 * * *",
-                    // Idle-latency probes (src/probes.ts) at doubling gaps; src/index.ts runs these for every cron it does
+                    // Idle-latency probes (src/ops/probes.ts) at doubling gaps; src/index.ts runs these for every cron it does
                     // not pick by name.
                     // Production only: they measure the site readers use.
                     "23 0,1,3,7,15 * * *",
-                    // DebugBear browser runs of every page (src/browser-runs.ts), cold then warm fifteen minutes later,
+                    // DebugBear browser runs of every page (src/ops/browser-runs.ts), cold then warm fifteen minutes later,
                     // two hours from every probe run so neither finds the site just warmed by the other. src/index.ts
                     // picks the run by these exact strings, so change both together.
                     "23 5,11,19,22 * * *",

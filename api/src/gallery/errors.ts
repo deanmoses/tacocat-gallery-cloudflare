@@ -1,14 +1,10 @@
 import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
-import * as valibot from 'valibot';
-import { type Orm, orm, schema } from './db';
-import { json } from './http';
+import { type Orm, orm, schema } from '../db';
 
 // A day is long enough for the admin UI to show a failed upload; the log has the rest.
 const KEEP_HOURS = 24;
-
-const PATHS = valibot.object({ paths: valibot.array(valibot.string()) });
 
 /** Replaces any earlier error for the same path, so the record always describes the latest attempt. */
 export function uploadErrorUpsert(
@@ -32,21 +28,12 @@ export function uploadErrorDelete(database: Orm, path: string): BatchItem<'sqlit
 }
 
 /** Errors from the last day for the paths asked about, keyed by path. */
-export async function uploadErrors(request: Request, env: Pick<Env, 'DB'>): Promise<Response> {
-    const body = valibot.safeParse(PATHS, await request.json());
-    if (!body.success) {
-        return json({ error: 'expected { paths: string[] }' }, 400);
-    }
+export async function recentUploadErrors(database: Orm, paths: string[]): Promise<Record<string, string>> {
     const { uploadError } = schema;
-    const asked = inArray(uploadError.path, body.output.paths);
+    const asked = inArray(uploadError.path, paths);
     const recent = gt(uploadError.createdAt, cutoff());
-    const rows =
-        body.output.paths.length === 0
-            ? []
-            : await orm(env.DB).select().from(uploadError).where(and(asked, recent)).all();
-    return json({
-        errors: Object.fromEntries(rows.map((row) => [row.path, row.message])),
-    });
+    const rows = paths.length === 0 ? [] : await database.select().from(uploadError).where(and(asked, recent)).all();
+    return Object.fromEntries(rows.map((row) => [row.path, row.message]));
 }
 
 export async function purgeUploadErrors(env: Pick<Env, 'DB'>): Promise<void> {

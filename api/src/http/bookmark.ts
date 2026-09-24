@@ -1,35 +1,17 @@
-import { cookie } from './session';
+import { cookie, readCookie } from './cookies';
 
 /** Carries the D1 Sessions API bookmark, so a client that just wrote can read its own write. */
 export const BOOKMARK_HEADER = 'x-d1-bookmark';
 
 /** The same bookmark for a browser, which sends it back on every read without the web app handling it. */
-export const BOOKMARK_COOKIE = 'd1_bookmark';
+const BOOKMARK_COOKIE = 'd1_bookmark';
 
 // Long enough to cover replication lag and the next few pages; an old bookmark only asks for data at least that new,
 // which every replica soon has.
 const BOOKMARK_COOKIE_SECONDS = 300;
 
-/** Pretty-printed, since people read these responses in a browser or curl while measuring. */
-export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
-    return new Response(JSON.stringify(body, null, 2), {
-        status,
-        headers: { 'content-type': 'application/json', ...headers },
-    });
-}
-
-export function html(page: string): Response {
-    return new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } });
-}
-
-export function notFound(details: Record<string, unknown> = {}): Response {
-    return json({ error: 'not found', ...details }, 404);
-}
-
-/** The URL path after `prefix`, percent-decoded: `/raw/a%20b` with prefix `/raw/` is `a b`. */
-export function pathAfter(url: URL, prefix: string): string {
-    return decodeURIComponent(url.pathname.slice(prefix.length));
-}
+// The shape Time Travel documents, as in 00000085-0000024c-00004c6d-8e61117bf38d7adb71b934ebbf891683.
+const BOOKMARK = /^[\da-f]{8}-[\da-f]{8}-[\da-f]{8}-[\da-f]{32}$/v;
 
 /** A write that worked: no body, and its bookmark as a header and a cookie, so the next read sees the write. */
 export function written(session: D1DatabaseSession, headers: Record<string, string> = {}): Response {
@@ -42,4 +24,10 @@ export function written(session: D1DatabaseSession, headers: Record<string, stri
             ...headers,
         },
     });
+}
+
+/** The client's bookmark, from its header or its cookie. D1 does not say what it does with a malformed one, so it gets none. */
+export function requestBookmark(request: Request): string | null {
+    const bookmark = request.headers.get(BOOKMARK_HEADER) ?? readCookie(request, BOOKMARK_COOKIE);
+    return bookmark !== undefined && BOOKMARK.test(bookmark) ? bookmark : null;
 }
