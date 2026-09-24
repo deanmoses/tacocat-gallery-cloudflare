@@ -10,8 +10,9 @@ import { json } from './http';
 export async function health(env: Env): Promise<Response> {
     const [migration] = await Promise.all([
         env.DB.prepare('SELECT name FROM d1_migrations ORDER BY name DESC LIMIT 1').first<{ name: string }>(),
-        env.MEDIA.list({ limit: 1 }),
-        env.DERIVED.list({ limit: 1 }),
+        // A key that does not exist: the cheapest read R2 has, since this route is public.
+        env.MEDIA.head('health'),
+        env.DERIVED.head('health'),
     ]);
     return json({
         version: env.CF_VERSION_METADATA.id,

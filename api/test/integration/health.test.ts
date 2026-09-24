@@ -25,7 +25,7 @@ describe('GET /api/health', () => {
     });
 
     it('fails when a bucket does not answer', async () => {
-        vi.spyOn(env.DERIVED, 'list').mockRejectedValue(new Error('bucket unreachable'));
+        vi.spyOn(env.DERIVED, 'head').mockRejectedValue(new Error('bucket unreachable'));
 
         const response = await call('/api/health');
 
