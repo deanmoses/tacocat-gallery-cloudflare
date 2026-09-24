@@ -43,6 +43,10 @@ For an in-place undo, Time Travel restores `item` and `item_fts` consistently, b
 
 `api/scripts/invite.sh "<name>"` prints a one-time invite link for the deployed Worker; add `--local` for `npm run dev --workspace api`. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh Selftest --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
 
+## Copying an album from AWS
+
+`node api/scripts/import-album.ts /2024/12-17/` copies one day album from the AWS staging gallery into the deployed site, or from production with `--from prod`. The originals go through the upload pipeline, so the Worker records them and makes their derived images; the album's and photos' titles, descriptions, tags, crops and thumbnail then go into D1 with the account token, since the Worker has no write endpoints for them yet. Videos are left behind while the transcoder is parked on `lite`.
+
 ## Idle latency probes
 
 The probe cron runs on Cloudflare, not locally. To read the results, run `npm run probes --workspace api`. To try the probe code without waiting for the schedule, run `npx wrangler dev --test-scheduled --enable-containers=false` in `api/` and request `/__scheduled?cron=23+0,1,3,7,15+*+*+*`. That runs the handler locally against the deployed Worker and writes to the local D1.

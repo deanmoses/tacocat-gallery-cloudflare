@@ -4,12 +4,12 @@ const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarest
 
 /** Presigned S3 URL, so upload and transcode bytes never pass through the Worker. */
 export async function presign(
-    env: Pick<Env, 'R2_ACCESS_KEY_ID' | 'R2_SECRET_ACCESS_KEY'>,
+    credentials: { R2_ACCESS_KEY_ID: string; R2_SECRET_ACCESS_KEY: string },
     request: { method: 'GET' | 'PUT'; key: string; contentType?: string },
 ): Promise<string> {
     const client = new AwsClient({
-        accessKeyId: env.R2_ACCESS_KEY_ID,
-        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        accessKeyId: credentials.R2_ACCESS_KEY_ID,
+        secretAccessKey: credentials.R2_SECRET_ACCESS_KEY,
         service: 's3',
         region: 'auto',
     });
