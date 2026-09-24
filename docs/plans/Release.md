@@ -15,17 +15,12 @@ How a change reaches readers: every push to a pull request branch releases it to
 
 Verified against Cloudflare's docs while designing this: a deployment holds at most two versions; `wrangler versions upload` never publishes a container image and refuses a Durable Object lifecycle change; no rollback crosses such a change; the override header is honored only for a version in the current deployment; `--containers-rollout` applies to `wrangler deploy` only; uploading, deploying and rolling back a version need the Editor role on the Worker, and `wrangler versions deploy` creates the container application for a new container class, which is why the token also gets Containers Edit.
 
-## Left to do
+## Where it stands
 
-1. Create the API token and store it as the repository secret, as Deploying in `README.md` describes. Until it exists, every Deploy run fails at Wrangler's first call and deploys nothing.
-2. Disconnect the repository from the staging Worker in the Cloudflare dashboard (the Worker, Settings, Builds, Disconnect). Until then Workers Builds still runs its old deploy command on every merge, a plain `wrangler deploy` that puts the merge on staging beside the workflow's own release.
-3. Merge the pull request that adds the workflow. Its staging run on the pull request is the first real run; the merge's production run is the second.
+Live since 2026-09-24. The token was made from the Edit Cloudflare Workers template with D1 Write and Containers Write added and covered every call the script makes; the staging Worker was disconnected from Workers Builds; the merge that added the workflow was production's first release. Each release takes about 30 seconds on a GitHub runner, and the check at 0% answered with the new version's id within a few seconds of the deployment on both Workers.
 
-## What the first runs must confirm
+Still to see:
 
-The script has released to staging by hand once, end to end: `versions upload` uploaded without building the image, every command took `--env ''` for staging, the seven-character tag and the full-sha message were accepted, and the check at 0% answered with the new version's id within a second of the deployment. Still to see:
-
-- That the token's permissions cover every call the script makes. A 403 in the run's log names the missing one.
 - That the override header reaches the static assets of the 0% version as well as its Worker code. The app shell check passes on either build today; a release that changes the app is the first that can tell.
 - Two pushes to two branches in quick succession queue on the staging concurrency group rather than interleave.
 
