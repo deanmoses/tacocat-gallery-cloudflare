@@ -32,5 +32,6 @@ The script has released to staging by hand once, end to end, from a machine with
 
 ## After that
 
+- A GitHub Deployment per release, so the repo's Environments panel and each pull request show when a change reached staging and production. A workflow on the `check_run` event, for a completed "Workers Builds" check, can create it with the workflow's own token; no secret enters either side. Not Environments' protection rules, which only gate an Actions deploy job, and not Releases, since nothing here is versioned or downloaded.
 - An alert when production starts failing after a release: a Cloudflare notification on the Worker's error rate, or a DebugBear alert, since it visits four times a day.
 - `X-Robots-Tag: noindex` from the Worker and a `robots.txt` that allows crawling, as the AWS site sends; the app carries only the meta tag. Both environments, one change, a test each.
