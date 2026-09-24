@@ -83,7 +83,7 @@ Requests to Globalping carry the `GLOBALPING_TOKEN` Worker secret (in `api/.dev.
 
 ## Browser runs
 
-`.github/workflows/perf.yml` runs the album journey in DebugBear four times a day, and can be started by hand from the Actions tab. To start one from here, run `node api/scripts/debugbear.ts run`; to read the results, `node api/scripts/debugbear.ts report --from <YYYY-MM-DD>`. Both need a DebugBear API key as `DEBUGBEAR_API_KEY`, in `api/.dev.vars` locally and as a repository secret for the workflow. The pages, device and journey script are described in `docs/Perf.md`.
+The production Worker's cron starts the album journey in DebugBear four times a day, with the `DEBUGBEAR_API_KEY` Worker secret. `.github/workflows/perf.yml` starts a run by hand from the Actions tab; to start one from here, run `node api/scripts/debugbear.ts run`; to read the results, `node api/scripts/debugbear.ts report --from <YYYY-MM-DD>`. Both need the same key as `DEBUGBEAR_API_KEY`, in `api/.dev.vars` locally and as a repository secret for the workflow. The pages, device and journey script are described in `docs/Perf.md`.
 
 ## Infrastructure
 

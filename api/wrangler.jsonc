@@ -36,7 +36,15 @@
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,
     "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
-    "secrets": { "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"] },
+    "secrets": {
+        "required": [
+            "R2_ACCESS_KEY_ID",
+            "R2_SECRET_ACCESS_KEY",
+            "GLOBALPING_TOKEN",
+            "SESSION_SECRET",
+            "DEBUGBEAR_API_KEY",
+        ],
+    },
     "routes": [{ "pattern": "staging-pix.deanmoses.com", "custom_domain": true }],
     "vars": {
         // The site's own origin, the only one besides local development that may create or use a passkey.
@@ -97,7 +105,13 @@
             // The Worker's original name, so its custom domain, secrets, container and probe history stay where they are.
             "name": "tacocat-gallery-cloudflare",
             "secrets": {
-                "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"],
+                "required": [
+                    "R2_ACCESS_KEY_ID",
+                    "R2_SECRET_ACCESS_KEY",
+                    "GLOBALPING_TOKEN",
+                    "SESSION_SECRET",
+                    "DEBUGBEAR_API_KEY",
+                ],
             },
             "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
             "vars": {
@@ -135,9 +149,15 @@
             "triggers": {
                 "crons": [
                     "17 9 * * *",
-                    // Idle-latency probes (src/probes.ts) at doubling gaps; every cron other than BACKUP_CRON runs these.
+                    // Idle-latency probes (src/probes.ts) at doubling gaps; src/index.ts runs these for every cron it does
+                    // not pick by name.
                     // Production only: they measure the site readers use.
                     "23 0,1,3,7,15 * * *",
+                    // DebugBear browser runs of every page (src/browser-runs.ts), cold then warm fifteen minutes later,
+                    // two hours from every probe run so neither finds the site just warmed by the other. src/index.ts
+                    // picks the run by these exact strings, so change both together.
+                    "23 5,11,19,22 * * *",
+                    "38 5,11,19,22 * * *",
                 ],
             },
             "containers": [

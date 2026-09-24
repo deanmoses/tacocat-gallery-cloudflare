@@ -1,11 +1,9 @@
 name: Browser performance runs
 
-# The album journey in DebugBear's real Chrome, on this site and the AWS one, cold and then warm. The times keep two
-# hours from the idle probes' runs (00:23, 01:23, 03:23, 07:23 and 15:23 UTC) so neither kind of run finds the site
-# just warmed by the other. `node api/scripts/debugbear.ts report` prints the results.
+# The album journey in DebugBear's real Chrome, on this site and the AWS one, cold and then warm, started by hand.
+# The production Worker's cron starts the scheduled runs, since GitHub started this workflow's schedule hours late.
+# `node api/scripts/debugbear.ts report` prints the results.
 on:
-    schedule:
-        - cron: '23 5,11,19,22 * * *'
     workflow_dispatch:
 
 concurrency:
