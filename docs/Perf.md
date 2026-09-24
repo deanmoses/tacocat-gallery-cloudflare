@@ -33,7 +33,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 
 - **Locations:** France (Paris), US West CA (California) and US East (South Carolina). South Carolina stands in for Louisiana and Atlanta; DebugBear has nothing nearer.
 - **Device:** `Desktop unthrottled`, a device defined in the project with no added latency, no bandwidth cap and no CPU slowdown. The built-in `Desktop` adds 40 ms to every round trip.
-- **Visit:** DebugBear loads the album page and records its time to first byte and LCP, then runs the `Vienna Journey` setting below, which opens the first photo and steps through the next seven at readers' median 2.3 s a photo, recording each from click to photo decoded as `photo-01` to `photo-08`. With eleven photos, every Cloudflare run stopped after the tenth, about 26 s after the page started loading, where the AWS runs, whose journeys started earlier, got all eleven; eight leaves room.
+- **Visit:** DebugBear loads the album page and records its time to first byte and LCP. The `Vienna Journey` setting below starts with the page, as DebugBear runs every snippet, so it waits for the page's load event and a reader's median 2.3 s on the album before opening the first photo; clicking sooner would let the photo become the album page's LCP. It then steps through the next seven at 2.3 s a photo, recording each from click to photo decoded as `photo-01` to `photo-08`. With eleven photos, every Cloudflare run stopped after the tenth, about 26 s after the page started loading, where the AWS runs, whose journeys started earlier, got all eleven; eight leaves room.
 - **Schedule:** `.github/workflows/perf.yml` runs `node api/scripts/debugbear.ts run` at 05:23, 11:23, 19:23 and 22:23 UTC, two hours from every idle-probe run: every page once, then again as soon as all have finished. The pages have no DebugBear schedule of their own.
 - **Cold or warm:** `node api/scripts/debugbear.ts report` marks a run warm when the same page ran in the 30 minutes before it, and cold otherwise, so a run is classed by what reached the site before it rather than by which request started it. Creating or editing a page in DebugBear starts a test of its own.
 - **Background traffic:** the idle probes hit the Cloudflare site five times a day, and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California. A Paris probe can leave D1's London replica active for a Paris browser run that follows it.
@@ -41,8 +41,9 @@ So the scenario that matters most is clicking from one photo to the next, and th
 The `Vienna Journey` setting, kept here because DebugBear's API can attach a setting to a page but not create or edit one:
 
 ```js
-// Open the first photo, then step through seven more at a reader's median pace, timing each from the
-// keypress or click until the new photo has loaded and decoded.
+// DebugBear runs this as soon as the page starts loading. Once the album page has loaded and been looked at for a
+// reader's median 2.3 s, open the first photo, then step through seven more at the same pace, timing each from the
+// click or keypress until the new photo has loaded and decoded.
 const PHOTO = 'a[aria-label^="View full-size image"] img';
 const DWELL_MS = 2300;
 const PHOTOS = 8;
@@ -63,6 +64,14 @@ async function photoShown(step, previousSrc) {
     return previousSrc;
 }
 
+await new Promise((resolve) => {
+    if (document.readyState === 'complete') {
+        resolve();
+    } else {
+        window.addEventListener('load', resolve, { once: true });
+    }
+});
+await new Promise((resolve) => setTimeout(resolve, DWELL_MS));
 const firstThumbnail = await waitForElement('a[href^="/2025/09-29/"]');
 performance.mark('photo-01-start');
 firstThumbnail.click();
@@ -94,6 +103,7 @@ The first runs, 2026-09-24 at 01:53 UTC, about an hour after `/2025/09-29` was c
 
 - **Every later photo took 23 to 115 ms on both sites**, since both apps preload the next and previous photo during the reader's 2.3 s on each.
 - **Cloudflare's page arrives in 43 to 121 ms against AWS's 192 to 448 ms**, but its LCP stays near 1.6 s even warm: the app loads its JS, then the album, before any thumbnail shows.
+- **These LCPs may include the first photo.** The journey then clicked the first photo as soon as its thumbnail appeared, before the page's load event, so a run's LCP may be the photo rather than a thumbnail. The scheduled runs wait for the load event first.
 - **Cold France went to AWS**: Cloudflare's first run there took 3.2 s to the first thumbnail and 1.9 s for the first photo. One sample; the scheduled runs will say whether it holds.
 
 ### AWS today
