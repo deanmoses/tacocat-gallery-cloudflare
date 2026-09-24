@@ -13,8 +13,9 @@
 # api/transcoder/ ships with `npm run deploy --workspace api` (or deploy:production), which is also the only way to ship a
 # change to a Durable Object class.
 #
-# Workers Builds runs this from the api/ root directory on every push (staging for a pull request branch, both
-# environments for main); by hand it runs from anywhere in the repo. Both need Wrangler logged in to the account.
+# The Deploy workflow (.github/workflows/deploy.yml) runs this on every push: staging for a pull request branch, both
+# environments for main. By hand it runs from anywhere in the repo. Either way Wrangler needs the account: a login
+# here, CLOUDFLARE_API_TOKEN in the workflow.
 #
 # Usage: scripts/release.sh (staging | production)
 
@@ -40,11 +41,12 @@ production)
     ;;
 esac
 
-# Workers Builds names the commit it checked out; by hand it is whatever is checked out here, and a tree with
-# uncommitted changes says so in the version's tag, since the commit alone would not reproduce it.
-sha="${WORKERS_CI_COMMIT_SHA:-$(git rev-parse HEAD)}"
+# The version is tagged with the commit and its message is the commit's subject, which is what the dashboard shows
+# beside a deployment. A tree with uncommitted changes says so in the tag, since the commit alone would not reproduce it.
+sha=$(git rev-parse HEAD)
 short="${sha:0:7}"
-if [ -z "${WORKERS_CI_COMMIT_SHA:-}" ] && [ -n "$(git status --porcelain)" ]; then
+subject=$(git log -1 --format=%s)
+if [ -n "$(git status --porcelain)" ]; then
     short="$short-dirty"
 fi
 
@@ -120,7 +122,7 @@ npm run --silent build --workspace web
 
 step "Uploading the version"
 # The output holds the new version's id; shown as it comes, and kept to read the id out of.
-upload=$(wrangler versions upload --tag "$short" --message "release $sha" 2>&1 | tee /dev/stderr)
+upload=$(wrangler versions upload --tag "$short" --message "${subject:0:100}" 2>&1 | tee /dev/stderr)
 new=$(grep 'Worker Version ID:' <<<"$upload" | awk '{ print $NF }')
 if [ -z "$new" ]; then
     echo "could not find the uploaded version's id in Wrangler's output" >&2

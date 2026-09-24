@@ -54,6 +54,17 @@ gh api --silent -X PUT "repos/$REPO/branches/main/protection" --input - <<'JSON'
 }
 JSON
 
+# One Environment per Worker. The Deploy workflow's jobs run against them, which is what gives the repository its
+# deployment history: the Environments panel and, on each pull request, when its commits reached staging and
+# production. Production takes a deploy from a protected branch only, which is main.
+echo "Environments"
+gh api --silent -X PUT "repos/$REPO/environments/staging" --input - <<'JSON'
+{ "deployment_branch_policy": null }
+JSON
+gh api --silent -X PUT "repos/$REPO/environments/production" --input - <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": true, "custom_branch_policies": false } }
+JSON
+
 # The labels the /pr skill applies, beyond GitHub's defaults.
 echo "Labels"
 gh label create refactor --repo "$REPO" --color 'fbca04' --description 'Production code changes that do not alter behavior' --force

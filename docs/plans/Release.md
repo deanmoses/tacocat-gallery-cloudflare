@@ -1,6 +1,6 @@
 # The release
 
-How a change reaches readers: every push to a pull request branch releases it to staging, and the merge to `main` releases production, through the same script and the same blue/green sequence. `scripts/release.sh` and Deploying in `README.md` are the reference; this page records the decisions behind them, what is left to do in the dashboard, and what the first runs must confirm.
+How a change reaches readers: every push to a pull request branch releases it to staging, and the merge to `main` releases production, through the same script and the same blue/green sequence. `scripts/release.sh`, `.github/workflows/deploy.yml` and Deploying in `README.md` are the reference; this page records the decisions behind them, what is left to do, and what the first runs must confirm.
 
 ## Decisions
 
@@ -10,28 +10,26 @@ How a change reaches readers: every push to a pull request branch releases it to
 - **Nothing splits traffic by percentage.** A split would serve one version's `index.html` with the other's hashed chunks. The new version goes from 0% to 100%.
 - **Staging is one Worker, not a Preview per branch.** Worker Previews, shipped 2026-09-22, give each branch an isolated copy of the Worker with its own Durable Objects and containers, but a Preview's queue consumers and crons do not run: an upload to a Preview would be processed by whatever `main` has on staging. Two open pull requests fight over the one staging Worker, and the last push wins, which is fine for one person working mostly serially. Revisit when Previews reach the queue, or when that fight starts to hurt.
 - **Staging's database is disposable.** A branch's migrations are applied to it on every push, so an amended migration or an abandoned branch leaves it with something production never gets. Restore to the bookmark the release printed, or empty it and seed it again.
-- **Workers Builds, not a GitHub Actions deploy.** It keeps every API token out of GitHub, and with merge as the promote there is no approval step for Actions to host. Two independent connections, one per Worker, run on the same push to `main`; staging does not go first, because the tree being merged is the one its last push already released there.
+- **GitHub Actions, not Workers Builds.** Workers Builds, Cloudflare's GitHub App, was tried first for staging because it keeps every token out of GitHub. It cost more than it saved: its deploys appear nowhere in the Actions tab and create no GitHub Deployments, every one of its settings is a dashboard field with no record in the repo, and two Workers meant two connections to click through. One account API token in a repository secret buys a workflow that lives in the repo, Environments whose history GitHub keeps, and a log beside CI's.
+- **The workflow does not wait for CI.** Branch protection needs the branch up to date with `main`, so the tree a merge creates is the tree CI passed on the pull request; a second run would test it again and delay the release by its length. Releases to one Worker are serialized by a concurrency group, since a deployment holds two versions and two releases interleaved would evict each other's version from under its check.
 
-Verified against Cloudflare's docs while designing this: a deployment holds at most two versions; `wrangler versions upload` never publishes a container image and refuses a Durable Object lifecycle change; no rollback crosses such a change; the override header is honored only for a version in the current deployment; `--containers-rollout` applies to `wrangler deploy` only; Workers Builds injects `WORKERS_CI_COMMIT_SHA` and `WORKERS_CI_BRANCH`, and its image has `curl`, `git` and Node.
+Verified against Cloudflare's docs while designing this: a deployment holds at most two versions; `wrangler versions upload` never publishes a container image and refuses a Durable Object lifecycle change; no rollback crosses such a change; the override header is honored only for a version in the current deployment; `--containers-rollout` applies to `wrangler deploy` only; uploading, deploying and rolling back a version need the Editor role on the Worker, and `wrangler versions deploy` creates the container application for a new container class, which is why the token also gets Containers Edit.
 
-## Left to do in the dashboard
+## Left to do
 
-The connections cannot be made from the repo, since the GitHub App is authorized as a person. The values are in the table under Deploying in `README.md`; the changes, in order:
-
-1. On the staging Worker (`tacocat-gallery-cloudflare-staging`), Settings, Builds: set the deploy command to `../scripts/release.sh staging`, turn non-production branch builds on for every branch with the preview command `../scripts/release.sh staging`, and exclude `docs/**` and `**/*.md` in the build watch paths.
-2. Open a pull request and watch its build under the staging Worker. Fix whatever the first run finds (below), on the same branch, until a push releases to staging cleanly.
-3. On the production Worker (`tacocat-gallery-cloudflare`), Settings, Builds: connect the repository with production branch `main`, root directory `api`, the build command and variables from the table, deploy command `../scripts/release.sh production`, non-production branch builds off, and the same watch paths. The next merge to `main` releases production.
+1. Create the API token and store it as the repository secret, as Deploying in `README.md` describes. Until it exists, every Deploy run fails at Wrangler's first call and deploys nothing.
+2. Disconnect the repository from the staging Worker in the Cloudflare dashboard (the Worker, Settings, Builds, Disconnect). Until then Workers Builds still runs its old deploy command on every merge, a plain `wrangler deploy` that puts the merge on staging beside the workflow's own release.
+3. Merge the pull request that adds the workflow. Its staging run on the pull request is the first real run; the merge's production run is the second.
 
 ## What the first runs must confirm
 
-The script has released to staging by hand once, end to end, from a machine with Docker: `versions upload` warned that container changes wait for a `deploy` and uploaded without building the image, every command took `--env ''` for staging, the seven-character tag and the full-sha message were accepted, and the check at 0% answered with the new version's id within a second of the deployment. Still to see:
+The script has released to staging by hand once, end to end: `versions upload` uploaded without building the image, every command took `--env ''` for staging, the seven-character tag and the full-sha message were accepted, and the check at 0% answered with the new version's id within a second of the deployment. Still to see:
 
-- The same on Workers Builds, whose machine also has Docker.
+- That the token's permissions cover every call the script makes. A 403 in the run's log names the missing one.
 - That the override header reaches the static assets of the 0% version as well as its Worker code. The app shell check passes on either build today; a release that changes the app is the first that can tell.
-- Two pushes to two branches in quick succession: the loser's check must fail without switching traffic, since a deployment holds two versions and the second run's deployment evicts the first's 0% version.
+- Two pushes to two branches in quick succession queue on the staging concurrency group rather than interleave.
 
 ## After that
 
-- A GitHub Deployment per release, so the repo's Environments panel and each pull request show when a change reached staging and production. A workflow on the `check_run` event, for a completed "Workers Builds" check, can create it with the workflow's own token; no secret enters either side. Not Environments' protection rules, which only gate an Actions deploy job, and not Releases, since nothing here is versioned or downloaded.
 - An alert when production starts failing after a release: a Cloudflare notification on the Worker's error rate, or a DebugBear alert, since it visits four times a day.
 - `X-Robots-Tag: noindex` from the Worker and a `robots.txt` that allows crawling, as the AWS site sends; the app carries only the meta tag. Both environments, one change, a test each.

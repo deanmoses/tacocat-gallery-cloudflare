@@ -1,0 +1,76 @@
+name: Deploy
+
+# Every push releases itself through scripts/release.sh: a pull request branch to staging, a merge to main to production
+# and staging both. Not gated on CI: branch protection lets nothing onto main that did not pass CI on a branch up to
+# date with it, so the tree merged is the tree tested, and a pull request's staging release is where the branch gets
+# looked at while CI runs beside it. A run can also be started by hand, to release a commit again.
+on:
+    push:
+        branches: [main]
+        paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
+    pull_request:
+        branches: [main]
+        paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: The environment to release the chosen branch's head to
+                type: choice
+                options: [staging, production]
+                required: true
+
+permissions:
+    contents: read
+
+env:
+    HUSKY: 0
+
+jobs:
+    staging:
+        if: github.event_name != 'workflow_dispatch' || inputs.environment == 'staging'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        environment:
+            name: staging
+            url: https://staging-pix.deanmoses.com
+        # One release to a Worker at a time, in the order pushed: a deployment holds two versions, so two releases
+        # interleaved would evict each other's version from under its check.
+        concurrency:
+            group: deploy-staging
+            cancel-in-progress: false
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+                  # A pull request run would otherwise check out GitHub's merge of the branch into main, a commit no one
+                  # can look up; the branch's own head is what the version gets tagged with.
+                  ref: ${{ github.event.pull_request.head.sha || github.sha }}
+            - uses: ./.github/actions/setup
+              with:
+                  scripts: 'false'
+            - name: Release
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+              run: scripts/release.sh staging
+
+    production:
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        environment:
+            name: production
+            url: https://pix.deanmoses.com
+        concurrency:
+            group: deploy-production
+            cancel-in-progress: false
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: ./.github/actions/setup
+              with:
+                  scripts: 'false'
+            - name: Release
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+              run: scripts/release.sh production
