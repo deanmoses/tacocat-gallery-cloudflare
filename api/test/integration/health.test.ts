@@ -16,6 +16,14 @@ describe('GET /api/health', () => {
         expect(body.migration).toBe(env.TEST_MIGRATIONS.at(-1)?.name);
     });
 
+    it('names the latest migration by name, not the one applied last', async () => {
+        await env.DB.prepare("INSERT INTO d1_migrations (name) VALUES ('00000000000000_older_branch.sql')").run();
+
+        const body = await callForJson<Health>('/api/health');
+
+        expect(body.migration).toBe(env.TEST_MIGRATIONS.at(-1)?.name);
+    });
+
     it('fails when a bucket does not answer', async () => {
         vi.spyOn(env.DERIVED, 'list').mockRejectedValue(new Error('bucket unreachable'));
 

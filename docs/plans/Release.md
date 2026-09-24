@@ -21,7 +21,7 @@ Live since 2026-09-24. The token was made from the Edit Cloudflare Workers templ
 
 Still to see:
 
-- That the override header reaches the static assets of the 0% version as well as its Worker code. The app shell check passes on either build today; a release that changes the app is the first that can tell.
+- That the override header reaches the static assets of the 0% version as well as its Worker code. The check at 0% now compares `/_app/version.json` with the build just uploaded, whose version is new on every build, so the next release answers this: if the header reaches only the Worker, every release fails there with traffic untouched.
 - Two pushes to two branches in quick succession queue on the staging concurrency group rather than interleave.
 
 ## After that

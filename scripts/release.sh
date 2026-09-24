@@ -3,10 +3,12 @@
 #
 #   1. Build the web app and upload a version. It serves no traffic.
 #   2. Note the database's Time Travel bookmark, then apply the migrations. They are additive by rule (see
-#      scripts/lint.sh), so the version still serving keeps working on the new schema.
+#      scripts/lint.sh), so the version still serving should keep working on the new schema; it is checked, since a
+#      migration that breaks it has broken the site already, and the run should say so rather than go on.
 #   3. Put the new version in the deployment at 0% and check it on the live hostname through the version-override
-#      header: the health route must answer with the id just uploaded, the root album's JSON must parse, and the app
-#      shell must be the app. A miss ends the release with traffic untouched.
+#      header: the health route must answer with the id just uploaded and a migration no older than the tree's newest,
+#      the root album's JSON must parse, the app shell must be the app, and the app's files must be the build just
+#      uploaded. A miss ends the release with traffic untouched.
 #   4. Switch the new version to 100%, check it again without the header, and roll back if that fails.
 #
 # The container's image is not part of this: `wrangler versions upload` never publishes one, so a change under
@@ -65,7 +67,7 @@ step() {
 }
 
 # `fetch <path> [header]` prints the status line and body of a GET on the live hostname. The header, when given, is the
-# version override that routes the request to a version at 0%.
+# version override that routes the request to one version of the deployment, whatever its share.
 fetch() {
     local path="$1" header="${2:-}"
     local args=(--silent --show-error --max-time 30 --write-out '\n%{http_code}' "$origin$path")
@@ -75,17 +77,20 @@ fetch() {
     curl "${args[@]}"
 }
 
-# `expect_version <version> [header]` checks the health route, the root album and the app shell, retrying for a minute
-# while a fresh deployment propagates. Returns 1 once it gives up.
+# `expect_version <version> [header] [build]` checks the health route, the root album and the app shell, retrying the
+# health route for a minute while a fresh deployment propagates. Given a build, the app's version.json must be that
+# build's, which is what shows the header reached the version's static assets and not only its Worker code. Returns 1
+# once it gives up.
 expect_version() {
-    local version="$1" header="${2:-}"
-    local attempt body status
+    local version="$1" header="${2:-}" build="${3:-}"
+    local attempt body status migration
     for attempt in $(seq 1 12); do
         body=$(fetch /api/health "$header")
         status="${body##*$'\n'}"
         body="${body%$'\n'*}"
         if [ "$status" = 200 ] && [ "$(json_field d.version <<<"$body")" = "$version" ]; then
-            echo "health: version $version, migration $(json_field d.migration <<<"$body")"
+            migration=$(json_field d.migration <<<"$body")
+            echo "health: version $version, migration $migration"
             break
         fi
         if [ "$attempt" = 12 ]; then
@@ -94,6 +99,12 @@ expect_version() {
         fi
         sleep 5
     done
+
+    # Names start with a timestamp, so they sort by age. Staging can hold a newer migration from another branch.
+    if [[ "$migration" < "$newest_migration" ]]; then
+        echo "health check found migration $migration applied, older than the tree's newest, $newest_migration" >&2
+        return 1
+    fi
 
     body=$(fetch /api/album/ "$header")
     status="${body##*$'\n'}"
@@ -111,14 +122,33 @@ expect_version() {
         return 1
     fi
     echo "app shell: ok"
+
+    if [ -n "$build" ]; then
+        body=$(fetch /_app/version.json "$header")
+        status="${body##*$'\n'}"
+        body="${body%$'\n'*}"
+        if [ "$status" != 200 ] || [ "$(json_field d.version <<<"$body")" != "$build" ]; then
+            echo "app build check failed: expected build $build, got $status $body" >&2
+            return 1
+        fi
+        echo "app build: $build"
+    fi
 }
 
 step "Releasing $short to $1 ($worker)"
-previous=$(wrangler deployments list --json | json_field 'd.at(-1).versions.find((v) => v.percentage === 100).version_id')
+previous=$(wrangler deployments list --json | json_field 'd.at(-1)?.versions.find((v) => v.percentage === 100)?.version_id')
+# Anything else, a split between two versions or no deployment at all, is a state this script did not leave and should
+# not guess its way out of, and failing here is before anything has changed.
+if ! [[ "$previous" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+    echo "no single version serves 100% of $worker (found: $previous); deploy one by hand, then release again" >&2
+    exit 1
+fi
 echo "serving now: $previous"
 
 step "Building the web app"
 npm run --silent build --workspace web
+build=$(json_field d.version <web/build/_app/version.json)
+newest_migration=$(basename "$(find api/migrations -maxdepth 1 -name '*.sql' | LC_ALL=C sort | tail -1)")
 
 step "Uploading the version"
 # The output holds the new version's id; shown as it comes, and kept to read the id out of.
@@ -134,9 +164,15 @@ step "Applying migrations"
 echo "bookmark before migrating, for wrangler d1 time-travel restore: $(wrangler d1 time-travel info DB --json | json_field d.bookmark)"
 wrangler d1 migrations apply DB --remote
 
+step "Checking that $previous still works on the migrated database"
+if ! expect_version "$previous" "Cloudflare-Workers-Version-Overrides: $worker=\"$previous\""; then
+    echo "$previous is still serving and failing its check: the migrations broke it" >&2
+    exit 1
+fi
+
 step "Checking $new at 0% through the version override"
 wrangler versions deploy "$previous@100%" "$new@0%" --yes --message "release $short: $new at 0% for its check"
-if ! expect_version "$new" "Cloudflare-Workers-Version-Overrides: $worker=\"$new\""; then
+if ! expect_version "$new" "Cloudflare-Workers-Version-Overrides: $worker=\"$new\"" "$build"; then
     echo "leaving $previous serving; $new stays uploaded" >&2
     wrangler versions deploy "$previous@100%" --yes --message "release $short failed its check; $previous alone again"
     exit 1
@@ -144,6 +180,8 @@ fi
 
 step "Switching traffic to $new"
 wrangler versions deploy "$new@100%" --yes --message "release $short"
+# No build check here: until the switch has propagated, a request can still reach the previous version's files, and only
+# the health route waits for it.
 if ! expect_version "$new"; then
     echo "rolling back to $previous" >&2
     wrangler rollback "$previous" --yes --message "release $short failed its check after the switch"
