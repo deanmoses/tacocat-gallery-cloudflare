@@ -20,10 +20,13 @@ interface StackOptions {
 
 /**
  * Starts what `wrangler dev` runs, entirely local: the web app's build, the asset router, and the Worker with the test
- * secrets in place of .dev.vars.
+ * secrets in place of .dev.vars. The build is a fresh one unless WEB_BUILD_READY is set, which scripts/test.sh does
+ * after building once for every suite it runs.
  */
 export async function startStack({ port, persistTo }: StackOptions): Promise<Stack> {
-    await buildWebApp();
+    if (process.env['WEB_BUILD_READY'] === undefined) {
+        await buildWebApp();
+    }
     if (persistTo !== undefined) {
         await migrate(persistTo);
     }

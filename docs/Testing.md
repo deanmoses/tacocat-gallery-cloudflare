@@ -61,7 +61,7 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 
 ## End to end
 
-`e2e/*.e2e.ts` run in Playwright against the whole site on this machine: the web app's build, the asset router and the Worker, on a D1 database migrated into `.wrangler/e2e/`. Nothing reaches the Cloudflare account. `npm run test:e2e` from the root runs them; `npm test` runs them after the workspaces' tests, and the pre-commit hook does not run them.
+`e2e/*.e2e.ts` run in Playwright against the whole site on this machine: the web app's build, the asset router and the Worker, on a D1 database migrated into `.wrangler/e2e/`. Nothing reaches the Cloudflare account. `npm run test:e2e` from the root runs them; `npm test` runs them after the workspaces' tests, and the pre-commit hook does not run them. `scripts/test.sh` takes suite names, `shared`, `api`, `web` and `e2e`, to run some of them, and builds the web app once for those that start the site.
 
 - Playwright starts `e2e/server.ts`, which builds the web app, starts the Worker on port 8790 with the test secrets, and writes the gallery in `e2e/gallery.ts` through the Worker's own `PUT /api/item`. Tests start once the last album of it answers.
 - Every test shares that gallery, and tests run in parallel, within a file too. Treat it as read-only, which is what lets a test assert exact titles and links; a test that writes makes an album no other test reads.
