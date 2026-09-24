@@ -35,7 +35,7 @@ export default {
             response.headers.set('x-auth-status', admin === null ? 'guest' : 'admin');
         }
         response.headers.set('x-worker-colo', request.cf?.colo ?? 'local');
-        response.headers.set('server-timing', `worker;dur=${(performance.now() - started).toFixed(1)}`);
+        response.headers.append('server-timing', `worker;dur=${(performance.now() - started).toFixed(1)}`);
         return response;
     },
 

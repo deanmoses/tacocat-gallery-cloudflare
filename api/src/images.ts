@@ -20,6 +20,9 @@ const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
     'rgba',
 ];
 
+/** How long each step of serving a derivative took, in milliseconds, keyed by its Server-Timing name. */
+type Steps = Record<string, number>;
+
 interface Derivative {
     body: ArrayBuffer | ReadableStream;
     format: ImageOutputOptions['format'];
@@ -36,16 +39,19 @@ export async function raw(request: Request, env: Env): Promise<Response> {
     });
 }
 
-/** Worker in front, per-colo Cache API: a hit never reaches R2, but every colo fills from R2 on its own. */
+/**
+ * Worker in front, per-colo Cache API: a hit never reaches R2, but every colo fills from R2 on its own. Each response
+ * says how long its steps took, in Server-Timing and a log line, since a colo's first request is the slow one.
+ */
 export async function derivedViaCacheApi(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const cache = caches.default;
-    const hit = await cache.match(request);
+    const steps: Steps = {};
+    const hit = await timed(steps, 'cache', async () => cache.match(request));
     if (hit) {
         const response = new Response(hit.body, hit);
-        response.headers.set('x-derived', 'cache-api-hit');
-        return response;
+        return reported(request, response, 'cache-api-hit', steps);
     }
-    const derivative = await derivedImage(env, new URL(request.url), '/i');
+    const derivative = await derivedImage(env, new URL(request.url), '/i', steps);
     if (derivative instanceof Response) {
         return derivative;
     }
@@ -53,7 +59,30 @@ export async function derivedViaCacheApi(request: Request, env: Env, ctx: Execut
         headers: { 'cache-control': IMMUTABLE, 'content-type': derivative.format },
     });
     ctx.waitUntil(cache.put(request, response.clone()));
-    response.headers.set('x-derived', derivative.how);
+    return reported(request, response, derivative.how, steps);
+}
+
+async function timed<T>(steps: Steps, name: string, work: () => Promise<T>): Promise<T> {
+    const started = performance.now();
+    try {
+        return await work();
+    } finally {
+        steps[name] = performance.now() - started;
+    }
+}
+
+function reported(request: Request, response: Response, how: string, steps: Steps): Response {
+    response.headers.set('x-derived', how);
+    for (const [name, ms] of Object.entries(steps)) {
+        response.headers.append('server-timing', `${name};dur=${ms.toFixed(1)}`);
+    }
+    console.info({
+        event: 'derived_image',
+        colo: request.cf?.colo,
+        how,
+        path: new URL(request.url).pathname,
+        ...steps,
+    });
     return response;
 }
 
@@ -77,7 +106,7 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
         response.headers.set('x-derived', `cdn-${cacheStatus}`);
         return response;
     }
-    const derivative = await derivedImage(env, url, '/i2');
+    const derivative = await derivedImage(env, url, '/i2', {});
     if (derivative instanceof Response) {
         return derivative;
     }
@@ -90,14 +119,14 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
  * /i/<path>/<versionId>?size=200x200&crop=x,y,w,h — generated once with the Images binding, stored in the derived
  * bucket, served from it afterwards. Mirrors generateDerivedImage's crop-then-cover semantics.
  */
-async function derivedImage(env: Env, url: URL, prefix: string): Promise<Derivative | Response> {
+async function derivedImage(env: Env, url: URL, prefix: string, steps: Steps): Promise<Derivative | Response> {
     const wanted = derivedKey(url, prefix);
     if (wanted === null) {
         return badImageUrl();
     }
     const { request, format, key } = wanted;
 
-    const stored = await env.DERIVED.get(key);
+    const stored = await timed(steps, 'r2', async () => env.DERIVED.get(key));
     if (stored) {
         return { body: stored.body, format, how: 'stored' };
     }
