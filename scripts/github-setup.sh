@@ -34,7 +34,7 @@ echo "Dependabot alerts and security updates"
 gh api --silent -X PUT "repos/$REPO/vulnerability-alerts"
 gh api --silent -X PUT "repos/$REPO/automated-security-fixes"
 
-# Every change reaches main through a pull request whose `checks` job passed on a branch up to date with main. No
+# Every change reaches main through a pull request whose `merge-ok` check passed on a branch up to date with main. No
 # approvals are required, since one person maintains this. Admins are held to it too, so the pull request is the only
 # path, and no one can force-push or delete main.
 echo "Branch protection on main"
@@ -42,7 +42,7 @@ gh api --silent -X PUT "repos/$REPO/branches/main/protection" --input - <<'JSON'
 {
     "required_status_checks": {
         "strict": true,
-        "checks": [{ "context": "checks", "app_id": 15368 }]
+        "checks": [{ "context": "merge-ok", "app_id": 15368 }]
     },
     "enforce_admins": true,
     "required_pull_request_reviews": { "required_approving_review_count": 0 },

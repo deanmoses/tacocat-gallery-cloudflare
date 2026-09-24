@@ -251,6 +251,11 @@ export default defineConfig(
                 // Each file is checked against its nearest tsconfig.json: the Worker, its tests, or the Node side.
                 projectService: true,
                 tsconfigRootDir: import.meta.dirname,
+                // One project service serves every file, and it reloads every project whenever this list differs from
+                // the previous file's. So it is set here, for .ts and .svelte files alike, rather than in the svelte
+                // block below: there, a run alternating between the two kinds rebuilt the web app's whole program on
+                // every switch, which was most of the lint's time.
+                extraFileExtensions: ['.svelte'],
             },
         },
     },
@@ -264,7 +269,6 @@ export default defineConfig(
                 // The <script lang="ts"> inside a component goes to the TypeScript parser, with the type information
                 // the `code` block sets up.
                 parser: ts.parser,
-                extraFileExtensions: ['.svelte'],
                 svelteConfig,
             },
         },
