@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workerReport } from '../../src/probes';
+import { workerReport } from '../../src/ops/probes';
 
 describe(workerReport, () => {
     it('reads where the Worker and D1 ran, and how long each took', () => {

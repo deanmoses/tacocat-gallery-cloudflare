@@ -2,7 +2,7 @@ import { applyD1Migrations, reset } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { searchItems } from '../../src/items';
+import { searchItems } from '../../src/gallery/search';
 
 // The migration that moved the kind of media out of item_type by rebuilding the table.
 const RESHAPE = '20260923223051_two_level_item_type';

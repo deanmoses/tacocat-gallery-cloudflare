@@ -11,7 +11,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
-import { presign } from '../src/s3.ts';
+import { presign } from '../src/storage/presign.ts';
 
 const API_DIR = fileURLToPath(new URL('..', import.meta.url));
 // Where the album goes. Staging is wrangler.jsonc's top-level environment, so Wrangler reaches it without --env.

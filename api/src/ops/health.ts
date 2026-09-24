@@ -1,4 +1,4 @@
-import { json } from './http';
+import { json } from '../http/responses';
 
 /**
  * `GET /api/health`: 200 once the database and both buckets answer, with the running version's id and the latest-named

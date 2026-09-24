@@ -1,7 +1,7 @@
 import { max } from 'drizzle-orm';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
-import { type Orm, orm, schema } from './db';
-import { round } from './db/timing';
+import { type Orm, orm, schema } from '../db';
+import { round } from '../db/timing';
 
 type ProbeFrom = string | Record<string, string>[];
 

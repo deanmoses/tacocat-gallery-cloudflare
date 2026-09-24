@@ -1,18 +1,25 @@
-import { getAlbum, setAlbumThumbnail } from './albums';
-import { currentAdmin, purgeSpentChallenges, routeAuth } from './auth';
+import { currentAdmin, purgeSpentChallenges, routeAuth } from './auth/passkeys';
 import { orm } from './db';
-import { purgeUploadErrors, uploadErrors } from './errors';
-import { health } from './health';
-import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
-import { startBrowserRuns } from './browser-runs';
-import { backupDatabase, putItem, readYourWrites, search, seed } from './items';
-import { json, notFound } from './http';
-import { probeIdleLatency } from './probes';
-import { inSequence } from './sequence';
-import { type R2EventMessage, processUploadEvent, upload, uploadUrl } from './upload';
-import { media } from './video';
+import { purgeUploadErrors } from './gallery/errors';
+import { type R2EventMessage, processUploadEvent } from './gallery/upload';
+import { json, notFound } from './http/responses';
+import { backupDatabase } from './ops/backup';
+import { startBrowserRuns } from './ops/browser-runs';
+import { health } from './ops/health';
+import { probeIdleLatency } from './ops/probes';
+import { readYourWrites } from './ops/ryw';
+import { seed } from './ops/seed';
+import { getAlbum, setAlbumThumbnail } from './routes/albums';
+import { debugImage } from './routes/debug';
+import { uploadErrors } from './routes/errors';
+import { derivedViaCacheApi, derivedViaCdn, raw } from './routes/images';
+import { putItem } from './routes/items';
+import { search } from './routes/search';
+import { upload, uploadUrl } from './routes/upload';
+import { media } from './routes/video';
+import { inSequence } from './util/sequence';
 
-export { Transcoder } from './video';
+export { Transcoder } from './media/transcoder';
 
 const BACKUP_CRON = '17 9 * * *';
 const BROWSER_COLD_CRON = '23 5,11,19,22 * * *';

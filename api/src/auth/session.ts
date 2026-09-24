@@ -2,6 +2,7 @@
 // rotating SESSION_SECRET logs every admin out.
 
 import * as valibot from 'valibot';
+import { readCookie } from '../http/cookies';
 
 export type SessionEnv = Pick<Env, 'SESSION_SECRET'>;
 
@@ -15,21 +16,6 @@ const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
 const TO_BASE64URL = { alphabet: 'base64url', omitPadding: true } as const;
 const FROM_BASE64URL = { alphabet: 'base64url' } as const;
-
-export function cookie(
-    name: string,
-    value: string,
-    options: { maxAge: number; path: string; sameSite?: 'Lax' | 'Strict' },
-): string {
-    const attributes = [
-        `Max-Age=${options.maxAge}`,
-        `Path=${options.path}`,
-        'HttpOnly',
-        'Secure',
-        `SameSite=${options.sameSite ?? 'Lax'}`,
-    ];
-    return [`${name}=${value}`, ...attributes].join('; ');
-}
 
 /** The payload of a cookie this Worker signed, if it is intact, has the expected shape and is not past its `exp`. */
 export async function readSigned<TPayload extends valibot.GenericSchema>(
@@ -54,17 +40,6 @@ export async function sign(env: SessionEnv, payload: { exp: number } & Record<st
     const body = ENCODER.encode(JSON.stringify(payload)).toBase64(TO_BASE64URL);
     const signature = new Uint8Array(await crypto.subtle.sign('HMAC', await hmacKey(env), ENCODER.encode(body)));
     return `${body}.${signature.toBase64(TO_BASE64URL)}`;
-}
-
-export function readCookie(request: Request, name: string): string | undefined {
-    const header = request.headers.get('cookie') ?? '';
-    for (const part of header.split(';')) {
-        const [key, ...value] = part.trim().split('=');
-        if (key === name) {
-            return value.join('=');
-        }
-    }
-    return undefined;
 }
 
 async function unsign(env: SessionEnv, value: string): Promise<string | null> {

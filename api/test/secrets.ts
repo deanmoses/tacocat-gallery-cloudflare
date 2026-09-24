@@ -13,7 +13,7 @@ export const TEST_SECRETS = {
 const ENCODER = new TextEncoder();
 
 /**
- * A session cookie signed the way the Worker signs one, built independently of src/session.ts so a change to the
+ * A session cookie signed the way the Worker signs one, built independently of src/auth/session.ts so a change to the
  * cookie format fails a test.
  */
 export async function adminCookie(

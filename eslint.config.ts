@@ -4,6 +4,8 @@ import js from '@eslint/js';
 import json from '@eslint/json';
 import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
+import importX from 'eslint-plugin-import-x';
 import node from 'eslint-plugin-n';
 import playwright from 'eslint-plugin-playwright';
 import regexp from 'eslint-plugin-regexp';
@@ -204,6 +206,44 @@ const TEST_SUPPORT: Forbidden = {
 
 const WEB_TESTS = ['web/src/**/*.test.ts', 'web/src/lib/test-support/**'];
 
+const WEB_CODE: Forbidden = {
+    group: ['tacocat-gallery-web', 'tacocat-gallery-web/*', '**/web/src', '**/web/src/**'],
+    message: 'Move what both sides need into shared/.',
+};
+
+/**
+ * The Worker's layers, each a directory under api/src. A layer imports only the layers named here, shared/ and util/,
+ * and nothing imports index.ts, the composition root that wires the layers together. Each rule is a block below.
+ */
+const WORKER_LAYERS = ['routes', 'gallery', 'auth', 'ops', 'http', 'db', 'storage', 'media', 'util'] as const;
+type WorkerLayer = (typeof WORKER_LAYERS)[number];
+
+/** The imports a Worker layer may not make: every other layer but the ones in `mayImport` and util/, and index.ts. */
+function workerLayer(layer: WorkerLayer, mayImport: WorkerLayer[], message: string): Linter.Config {
+    const forbidden = WORKER_LAYERS.filter(
+        (other) => other !== layer && other !== 'util' && !mayImport.includes(other),
+    );
+    return {
+        name: `worker ${layer}/ layer`,
+        files: [`api/src/${layer}/**/*.ts`],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        WEB_CODE,
+                        { regex: String.raw`^(\.\./)+(${forbidden.join('|')})(/|$)`, message },
+                        {
+                            regex: String.raw`^(\.\./)+index$`,
+                            message: 'index.ts wires the layers; no layer reaches back into it.',
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+}
+
 /**
  * The imports `files` may not make: the Worker's code, which no part of the app sees, test support, and what the
  * layer forbids. Tests are exempt from the layers and get a block of their own. ESLint takes the last block that
@@ -352,19 +392,49 @@ export default defineConfig(
     {
         name: 'worker imports no web code',
         files: ['api/**/*.ts'],
-        rules: {
-            'no-restricted-imports': [
-                'error',
-                {
-                    patterns: [
-                        {
-                            group: ['tacocat-gallery-web', 'tacocat-gallery-web/*', '**/web/src', '**/web/src/**'],
-                            message: 'Move what both sides need into shared/.',
-                        },
-                    ],
-                },
+        rules: { 'no-restricted-imports': ['error', { patterns: [WEB_CODE] }] },
+    },
+    // The Worker's layers. Tests are outside api/src and so exempt.
+    workerLayer('routes', ['gallery', 'auth', 'ops', 'http', 'db', 'storage', 'media'], 'Nothing imports routes/.'),
+    workerLayer(
+        'gallery',
+        ['db', 'storage', 'media'],
+        'gallery/ is the operations: it knows nothing of HTTP or of login, and learns who is asking as a boolean.',
+    ),
+    workerLayer('auth', ['db', 'http'], 'auth/ is login and sessions; it knows nothing of the gallery.'),
+    workerLayer(
+        'ops',
+        ['gallery', 'db', 'storage', 'http'],
+        'ops/ is measurement and operations: it uses the gallery and the bindings, never login or the media tools.',
+    ),
+    workerLayer('http', [], 'http/ shapes responses and reads requests; it imports only shared/.'),
+    workerLayer('db', [], 'db/ is the schema and the ORM; it imports only shared/.'),
+    workerLayer('storage', [], 'storage/ is R2 keys and presigning; it imports only shared/.'),
+    workerLayer(
+        'media',
+        [],
+        'media/ wraps ExifReader, the Images binding and the transcoder; it imports only shared/.',
+    ),
+    workerLayer('util', [], 'util/ is helpers with no layer; it imports nothing of the Worker.'),
+    {
+        // A cycle between modules is a layering bug the rules above cannot see when it stays inside one layer. The web
+        // app is not covered: its album models cycle (AlbumBaseImpl imports AlbumCreator, which imports the subclasses
+        // of AlbumBaseImpl), as they did in the AWS app it was copied from, and untangling that is a change to the app.
+        name: 'no import cycles',
+        files: ['api/**/*.ts', 'shared/src/**/*.ts'],
+        plugins: { 'import-x': importX },
+        settings: {
+            // Without this the plugin follows only .js imports, and a cycle through a .ts file goes unseen.
+            'import-x/extensions': ['.ts', '.js', '.mjs'],
+            'import-x/resolver-next': [
+                createTypeScriptImportResolver({
+                    project: ['api/src', 'api/test', 'shared'],
+                    // Three projects is the layout, not a mistake to warn about on every run.
+                    noWarnOnMultipleProjects: true,
+                }),
             ],
         },
+        rules: { 'import-x/no-cycle': 'error' },
     },
     {
         // Runs in both the Worker and the browser, so anything tied to one of them, Node included, breaks the other.

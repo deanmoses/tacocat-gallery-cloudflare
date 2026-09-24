@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readAlbum, setThumbnail } from '../../src/albums';
-import { purgeSpentChallenges, spendChallenge } from '../../src/auth';
+import { readAlbum, setThumbnail } from '../../src/gallery/albums';
+import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
-import { searchItems } from '../../src/items';
-import { inSequence } from '../../src/sequence';
+import { searchItems } from '../../src/gallery/search';
+import { inSequence } from '../../src/util/sequence';
 
 // D1 bills by rows read, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
 // Local D1 counts the rows a trigger reads in the meta of the statement that fired it, so a query that scans instead of
