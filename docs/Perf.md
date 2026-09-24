@@ -21,30 +21,80 @@ So the scenario that matters most is clicking from one photo to the next, and th
 
 ## Instruments
 
-| Instrument                                         | What it measures                                                                                                          | What it cannot say                                                                                       |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| WebPageTest, first view in real Chrome             | A page load from a chosen city, with the browser's own connection handling. The verdict.                                  | Only as many samples as can be run by hand; the free plan has 300 runs a month and no API or scheduling. |
-| Idle probes (`api/src/probes.ts`, Globalping)      | One request at a time from San Jose, Los Angeles, Paris and Baton Rouge, after idle gaps of 1 to 9 hours set by the cron. | Anything about a page: each request is on a fresh connection, with no page around it.                    |
-| The Worker's own headers (`x-d1`, `server-timing`) | Where the Worker ran, how long it spent, and which D1 instance answered and how long it took. Exact, whatever the client. | Anything outside the Worker.                                                                             |
+| Instrument                                          | What it measures                                                                                                          | What it cannot say                                                                                |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| DebugBear browser runs (`api/scripts/debugbear.ts`) | The email reader's visit in real, headful Chrome from Paris, California and South Carolina, on both sites. The verdict.   | Louisiana: no location nearer than South Carolina. Only what the journey script times, per photo. |
+| Idle probes (`api/src/probes.ts`, Globalping)       | One request at a time from San Jose, Los Angeles, Paris and Baton Rouge, after idle gaps of 1 to 9 hours set by the cron. | Anything about a page: each request is on a fresh connection, with no page around it.             |
+| The Worker's own headers (`x-d1`, `server-timing`)  | Where the Worker ran, how long it spent, and which D1 instance answered and how long it took. Exact, whatever the client. | Anything outside the Worker.                                                                      |
 
-## WebPageTest protocol
+## Browser runs
 
-The two sites have to serve the same page for the comparison to mean anything, which today they do not (see _Before the first run_).
+[DebugBear](https://www.debugbear.com) runs the visit in real Chrome with its window open, so connection hints, HTTP/3 and connection reuse behave as they do for readers. Its project holds six pages, one per site per location, each on `/2025/09-29` (30 photos copied from AWS production with `api/scripts/import-album.ts --from prod`), so the two sites serve the same album from the same app.
 
-- **Visit:** what an email reader does, scripted in WebPageTest: open one day album with real photos, the same on both sites (`https://pix.tacocat.com/<year>/<day>` against `https://pix.deanmoses.com/<year>/<day>`), open its first photo, then click next through ten more. Whether the free plan runs scripted multi-step tests is unchecked.
-- **Locations:** Paris for France and Los Angeles for California. The free plan has nothing in the US South (its North American locations are Los Angeles, Salt Lake City and Toronto), so Louisiana has no page-load verdict; the idle probes time its steps only.
-- **Settings:** Chrome, desktop, native connection (no throttling), first view only, one run per test. Repeat view measures the browser's own cache, which both sites set the same way.
-- **Cold:** run only when both sites have been idle for at least an hour, and record how long. Warm is the same test again a minute later, still in a fresh browser, so the site has just served that page. The idle probes hit the Cloudflare site five times a day at fixed times (00:23, 01:23, 03:23, 07:23 and 15:23 UTC), and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California; that is each site's real background traffic and is left alone.
-- **Order:** the two sites back to back from the same location, alternating which goes first.
-- **Record:** the album page's LCP, and for each click the time until the photo is on screen; together they decide the scenario, with the photo clicks weighing most. Also the page's time to first byte, the album JSON request's start and end, and each photo's request from the waterfall, to explain it. Keep the test URLs.
-- **Budget:** each site cold then warm is four runs per location, eight a session for Paris and Los Angeles. 300 runs a month is about 37 sessions.
+- **Locations:** France (Paris), US West CA (California) and US East (South Carolina). South Carolina stands in for Louisiana and Atlanta; DebugBear has nothing nearer.
+- **Device:** `Desktop unthrottled`, a device defined in the project with no added latency, no bandwidth cap and no CPU slowdown. The built-in `Desktop` adds 40 ms to every round trip.
+- **Visit:** DebugBear loads the album page and records its time to first byte and LCP, then runs the `Vienna Journey` setting below, which opens the first photo and steps through the next seven at readers' median 2.3 s a photo, recording each from click to photo decoded as `photo-01` to `photo-08`. With eleven photos, every Cloudflare run stopped after the tenth, about 26 s after the page started loading, where the AWS runs, whose journeys started earlier, got all eleven; eight leaves room.
+- **Schedule:** `.github/workflows/perf.yml` runs `node api/scripts/debugbear.ts run` at 05:23, 11:23, 19:23 and 22:23 UTC, two hours from every idle-probe run: every page once, then again as soon as all have finished. The pages have no DebugBear schedule of their own.
+- **Cold or warm:** `node api/scripts/debugbear.ts report` marks a run warm when the same page ran in the 30 minutes before it, and cold otherwise, so a run is classed by what reached the site before it rather than by which request started it. Creating or editing a page in DebugBear starts a test of its own.
+- **Background traffic:** the idle probes hit the Cloudflare site five times a day, and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California. A Paris probe can leave D1's London replica active for a Paris browser run that follows it.
 
-### Before the first run
+The `Vienna Journey` setting, kept here because DebugBear's API can attach a setting to a page but not create or edit one:
 
-1. ~~The Cloudflare database holds made-up albums (60 a year, 20 images each), not real photos.~~ Done 2026-09-24: `/2024/12-17/` (30 photos, from AWS staging) copied in with `api/scripts/import-album.ts`, originals through the upload pipeline, and every thumbnail renders. Its counterpart on AWS is `staging-pix.tacocat.com/2024/12-17`, so the first comparison is staging against Cloudflare rather than prod; the same script copies from prod with `--from prod`.
-2. ~~The Cloudflare site's `web/` app was written from scratch and lacks what the AWS app does, such as preloading the next and previous photo.~~ Done 2026-09-24: `web/` is a port of the AWS app, so the two sites run the same app and the comparison measures the platforms.
+```js
+// Open the first photo, then step through seven more at a reader's median pace, timing each from the
+// keypress or click until the new photo has loaded and decoded.
+const PHOTO = 'a[aria-label^="View full-size image"] img';
+const DWELL_MS = 2300;
+const PHOTOS = 8;
+
+async function photoShown(step, previousSrc) {
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+        const img = document.querySelector(PHOTO);
+        if (img && img.src !== previousSrc && img.complete && img.naturalWidth > 0) {
+            await img.decode().catch(() => {});
+            performance.mark(`${step}-shown`);
+            performance.measure(step, `${step}-start`, `${step}-shown`);
+            return img.src;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    performance.mark(`${step}-timeout`);
+    return previousSrc;
+}
+
+const firstThumbnail = await waitForElement('a[href^="/2025/09-29/"]');
+performance.mark('photo-01-start');
+firstThumbnail.click();
+let src = await photoShown('photo-01', null);
+
+for (let n = 2; n <= PHOTOS; n++) {
+    const step = `photo-${String(n).padStart(2, '0')}`;
+    await new Promise((resolve) => setTimeout(resolve, DWELL_MS));
+    performance.mark(`${step}-start`);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    src = await photoShown(step, src);
+}
+```
 
 ## What is known
+
+### From the browser runs
+
+The first runs, 2026-09-24 at 01:53 UTC, about an hour after `/2025/09-29` was copied in and half an hour after an idle-probe run. Each page ran three times within six minutes: once on its creation or edit and twice by request. The cold row is each page's first run; warm is the median of the other two. LCP is when the first thumbnail appears; first photo is from its click to the photo decoded.
+
+| Location       | Run  | TTFB, Cloudflare / AWS | LCP, Cloudflare / AWS | First photo, Cloudflare / AWS |
+| -------------- | ---- | ---------------------- | --------------------- | ----------------------------- |
+| France         | cold | 43 / 448 ms            | 3,230 / 2,720 ms      | 1,907 / 979 ms                |
+| France         | warm | 116 / 397 ms           | 1,632 / 1,624 ms      | 421 / 443 ms                  |
+| California     | cold | 121 / 322 ms           | 1,792 / 1,818 ms      | 645 / 612 ms                  |
+| California     | warm | 102 / 317 ms           | 1,640 / 1,978 ms      | 629 / 604 ms                  |
+| South Carolina | cold | 88 / 192 ms            | 1,817 / 2,933 ms      | 544 / 1,844 ms                |
+| South Carolina | warm | 86 / 315 ms            | 1,624 / 1,747 ms      | 628 / 532 ms                  |
+
+- **Every later photo took 23 to 115 ms on both sites**, since both apps preload the next and previous photo during the reader's 2.3 s on each.
+- **Cloudflare's page arrives in 43 to 121 ms against AWS's 192 to 448 ms**, but its LCP stays near 1.6 s even warm: the app loads its JS, then the album, before any thumbnail shows.
+- **Cold France went to AWS**: Cloudflare's first run there took 3.2 s to the first thumbnail and 1.9 s for the first photo. One sample; the scheduled runs will say whether it holds.
 
 ### AWS today
 
@@ -90,6 +140,9 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-23, 23:53 to 23:58 UTC:** the two-level item type migration rebuilt the `item` table on the deployed D1 and the ported app was deployed, half an hour before the 00:23 UTC probe, so that run's primary was not idle.
 - **2026-09-24, 00:08 to 00:11 UTC:** the day album `/2024/12-17/` copied from AWS staging into the deployed site, 30 originals through the upload pipeline, so the 00:23 and 01:23 UTC probes ran on a database and bucket just written to.
 - **2026-09-24:** `web/` replaced by a port of the AWS app (`docs/Risks.md` row 5), so both sites now run the same app with the same photo preloading, and the Worker answers in the AWS API's shapes. The comparison still waits on a real day album in the Cloudflare database (_Before the first run_, step 1).
+
+- **2026-09-24, 00:50 to 00:51 UTC:** `/2025/09-29/` (30 photos) copied from AWS production into the deployed site, a day album no reader had opened in the logs' twelve days, so the comparison runs against production rather than staging.
+- **2026-09-24, 01:53 UTC:** DebugBear set up in place of WebPageTest, whose free plan has no API or scheduling, and the first runs taken (_From the browser runs_ above). The scheduled workflow takes over from here.
 
 ## Open questions
 
