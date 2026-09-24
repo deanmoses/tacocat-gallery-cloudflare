@@ -15,7 +15,27 @@ npm run db:migrate:local --workspace api
 npm run dev --workspace api
 ```
 
-Deploy to staging with `npm run deploy --workspace api -- --containers-rollout=none`, which leaves the transcoder container untouched, and to production with `npm run deploy:production --workspace api -- --containers-rollout=none`. When a deploy does push the container, Wrangler's "Image already exists remotely, skipping push" means the image did not change.
+Staging deploys itself on every merge to `main` (see Deploying below). To deploy by hand, `npm run deploy --workspace api -- --containers-rollout=none` deploys staging and leaves the transcoder container untouched, and `npm run deploy:production --workspace api -- --containers-rollout=none` does the same for production. When a deploy does push the container, Wrangler's "Image already exists remotely, skipping push" means the image did not change.
+
+## Deploying
+
+A merge to `main` deploys staging through Workers Builds, Cloudflare's GitHub App: Cloudflare's build machines check out the commit, install the repo, apply staging's migrations and run the same deploy script as by hand. No API token is stored in GitHub; the build uses a token Cloudflare creates and holds. The build's log and status are in the dashboard under the staging Worker, Settings, Builds, and Cloudflare posts a check run on the commit in GitHub.
+
+Workers Builds does not wait for GitHub's checks. It is safe because branch protection lets nothing onto `main` that did not pass them on its pull request. The connection is the one setting that lives in the dashboard rather than in this repo, since the GitHub App has to be authorized as a person, so here is what it is set to, for re-creating it:
+
+| Setting                                  | Value                                  | Why                                                                                                                                                      |
+| ---------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Production branch                        | `main`                                 |                                                                                                                                                          |
+| Root directory                           | `api`                                  | Cloudflare checks that the Wrangler config in the root directory names the Worker being deployed.                                                        |
+| Build command                            | `cd .. && npm ci --ignore-scripts`     | The workspaces install from the repo root. `--ignore-scripts` skips the hook install and the Playwright browser download, which the build does not need. |
+| Deploy command                           | `npm run db:migrate && npm run deploy` | Migrations first, while the old version still serves, then the web app's build and the deploy.                                                           |
+| Build variable `SKIP_DEPENDENCY_INSTALL` | `1`                                    | The root directory has no lockfile, so the automatic install would fail.                                                                                 |
+| Build variable `HUSKY`                   | `0`                                    |                                                                                                                                                          |
+| Build variable `NODE_VERSION`            | `24`                                   | The `.nvmrc` is at the repo root, out of the root directory's view.                                                                                      |
+| Preview builds                           | off                                    |                                                                                                                                                          |
+| Build watch paths                        | the defaults                           | Excluding `docs/**` and `**/*.md` would spare a redeploy on a docs-only merge, at the cost of another dashboard setting.                                 |
+
+Production is not connected. It deploys by hand until the release script exists, with `npm run deploy:production --workspace api`.
 
 ## Environments
 
