@@ -69,6 +69,10 @@ The probe cron runs on Cloudflare, not locally. To read the results, run `npm ru
 
 Requests to Globalping carry the `GLOBALPING_TOKEN` Worker secret (in `api/.dev.vars` locally), which raises Globalping's rate limit from a per-IP one shared with every Worker on the same egress IP.
 
+## Browser runs
+
+`.github/workflows/perf.yml` runs the album journey in DebugBear four times a day, and can be started by hand from the Actions tab. To start one from here, run `node api/scripts/debugbear.ts run`; to read the results, `node api/scripts/debugbear.ts report --from <YYYY-MM-DD>`. Both need a DebugBear API key as `DEBUGBEAR_API_KEY`, in `api/.dev.vars` locally and as a repository secret for the workflow. The pages, device and journey script are described in `docs/Perf.md`.
+
 ## Infrastructure
 
 `infra/` holds the OpenTofu config for everything outside the Worker: the zone and its settings once, and each environment's database, buckets, queues and image host through the `environment` module, one instance per entry in `local.environments`. Its `d1_database_ids` output is what `api/wrangler.jsonc` binds. It uses an account API token named `CLOUDFLARE_TERRAFORM_API_TOKEN` in `api/.dev.vars`, kept out of `CLOUDFLARE_API_TOKEN` because Wrangler would pick that up over the `tacocat` profile. State is local and gitignored.
