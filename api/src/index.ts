@@ -2,6 +2,7 @@ import { getAlbum, setAlbumThumbnail } from './albums';
 import { currentAdmin, purgeSpentChallenges, routeAuth } from './auth';
 import { orm } from './db';
 import { purgeUploadErrors, uploadErrors } from './errors';
+import { health } from './health';
 import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { backupDatabase, putItem, readYourWrites, search, seed } from './items';
 import { json, notFound } from './http';
@@ -100,6 +101,9 @@ async function routeRead(request: Request, env: Env, ctx: ExecutionContext): Pro
     }
     if (pathname === '/api/ryw') {
         return readYourWrites(env);
+    }
+    if (pathname === '/api/health') {
+        return health(env);
     }
     if (pathname === '/api/search') {
         return search(request, env);
