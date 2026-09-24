@@ -68,9 +68,11 @@ for tool in actionlint gitleaks hadolint shellcheck shfmt tofu; do
         exit 1
     }
 done
-actionlint --version | head -1
+# sed -n 1p rather than head -1: head exits after one line, and under pipefail a tool still writing its version then
+# dies of SIGPIPE and fails the step, on some runs and not others.
+actionlint --version | sed -n 1p
 gitleaks version
 hadolint --version
 shellcheck --version | grep version:
 shfmt --version
-tofu version | head -1
+tofu version | sed -n 1p
