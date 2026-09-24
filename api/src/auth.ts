@@ -118,17 +118,16 @@ async function registerOptions(request: Request, env: AuthEnv, site: URL): Promi
     if (!invite) {
         return json({ error: 'This invite link is invalid, used or expired.' }, 400);
     }
-    const { adminPasskey } = schema;
     const existing = await orm(env.DB)
-        .select({ id: adminPasskey.credentialId, transports: adminPasskey.transports })
-        .from(adminPasskey)
-        .where(eq(adminPasskey.adminName, invite.adminName))
+        .select({ id: schema.passkey.credentialId, transports: schema.passkey.transports })
+        .from(schema.passkey)
+        .where(eq(schema.passkey.username, invite.username))
         .all();
-    const userId = await sha256(`admin:${invite.adminName}`);
+    const userId = await sha256(`admin:${invite.username}`);
     const options = await generateRegistrationOptions({
         rpName: 'Tacocat Gallery',
         rpID: site.hostname,
-        userName: invite.adminName,
+        userName: invite.username,
         // Stable per admin, so a new passkey from the same password manager replaces the old one there.
         userID: userId.slice(0, 16),
         attestationType: 'none',
@@ -166,11 +165,10 @@ async function registerVerify(request: Request, env: AuthEnv, site: URL): Promis
     }
 
     // Claiming the invite first means a link used twice at once still yields one passkey.
-    const { adminInvite, adminPasskey } = schema;
     const claimed = await orm(env.DB)
-        .update(adminInvite)
+        .update(schema.invite)
         .set({ usedAt: NOW })
-        .where(and(eq(adminInvite.tokenHash, invite.tokenHash), isNull(adminInvite.usedAt)))
+        .where(and(eq(schema.invite.tokenHash, invite.tokenHash), isNull(schema.invite.usedAt)))
         .run();
     if (claimed.meta.changes !== 1) {
         return json({ error: 'This invite link has already been used.' }, 400);
@@ -178,16 +176,16 @@ async function registerVerify(request: Request, env: AuthEnv, site: URL): Promis
 
     const { credential } = result.registrationInfo;
     await orm(env.DB)
-        .insert(adminPasskey)
+        .insert(schema.passkey)
         .values({
             credentialId: credential.id,
-            adminName: invite.adminName,
+            username: invite.username,
             publicKey: credential.publicKey.toBase64(TO_BASE64URL),
             counter: credential.counter,
             transports: credential.transports ?? null,
         });
-    console.info({ event: 'passkey_registered', admin: invite.adminName });
-    return loggedIn(env, invite.adminName);
+    console.info({ event: 'passkey_registered', admin: invite.username });
+    return loggedIn(env, invite.username);
 }
 
 async function loginOptions(env: AuthEnv, site: URL): Promise<Response> {
@@ -201,11 +199,10 @@ async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<R
     if (expectedChallenge === null) {
         return json({ error: 'Login attempt expired; try again.' }, 400);
     }
-    const { adminPasskey } = schema;
     const passkey = await orm(env.DB)
         .select()
-        .from(adminPasskey)
-        .where(eq(adminPasskey.credentialId, response.id))
+        .from(schema.passkey)
+        .where(eq(schema.passkey.credentialId, response.id))
         .get();
     if (!passkey) {
         return json({ error: 'This passkey is not registered here.' }, 401);
@@ -232,15 +229,15 @@ async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<R
     // Only after verifying, so a request without a valid signature writes nothing.
     const spent = await spendChallenge(orm(env.DB), expectedChallenge);
     if (spent.meta.changes !== 1) {
-        console.warn({ event: 'passkey_replayed', admin: passkey.adminName });
+        console.warn({ event: 'passkey_replayed', admin: passkey.username });
         return json({ error: 'Passkey could not be verified.' }, 401);
     }
     await orm(env.DB)
-        .update(adminPasskey)
+        .update(schema.passkey)
         .set({ counter: result.authenticationInfo.newCounter, lastUsedAt: NOW })
-        .where(eq(adminPasskey.credentialId, response.id));
-    console.info({ event: 'admin_logged_in', admin: passkey.adminName });
-    return loggedIn(env, passkey.adminName);
+        .where(eq(schema.passkey.credentialId, response.id));
+    console.info({ event: 'admin_logged_in', admin: passkey.username });
+    return loggedIn(env, passkey.username);
 }
 
 /**
@@ -271,17 +268,18 @@ async function loggedIn(env: AuthEnv, name: string): Promise<Response> {
     return Response.json({ admin: name }, { headers });
 }
 
-async function findInvite(env: AuthEnv, token: string): Promise<{ tokenHash: string; adminName: string } | null> {
+async function findInvite(env: AuthEnv, token: string): Promise<{ tokenHash: string; username: string } | null> {
     if (token === '') {
         return null;
     }
-    const { adminInvite } = schema;
     const tokenDigest = await sha256(token);
     const tokenHash = tokenDigest.toHex();
     const invite = await orm(env.DB)
-        .select({ tokenHash: adminInvite.tokenHash, adminName: adminInvite.adminName })
-        .from(adminInvite)
-        .where(and(eq(adminInvite.tokenHash, tokenHash), isNull(adminInvite.usedAt), gt(adminInvite.expiresAt, NOW)))
+        .select({ tokenHash: schema.invite.tokenHash, username: schema.invite.username })
+        .from(schema.invite)
+        .where(
+            and(eq(schema.invite.tokenHash, tokenHash), isNull(schema.invite.usedAt), gt(schema.invite.expiresAt, NOW)),
+        )
         .get();
     return invite ?? null;
 }

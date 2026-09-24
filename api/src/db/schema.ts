@@ -17,7 +17,7 @@ function sqlList(values: readonly string[]): string {
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
-/** Albums, photos and videos. */
+/** Gallery items: albums, photos and videos. */
 export const item = sqliteTable(
     'item',
     {
@@ -101,10 +101,22 @@ export const uploadError = sqliteTable('upload_error', {
     createdAt: text('created_at').notNull().default(now),
 });
 
-/** Admin passkeys. An admin has one per password manager or device they registered. */
-export const adminPasskey = sqliteTable('admin_passkey', {
+/**
+ * Who may log in. There is no screen for this table: a migration seeds it, and a new user is another migration, so the
+ * list of users is code and a pull request is its history.
+ */
+export const user = sqliteTable('user', {
+    /** The lowercase handle, which is what the session cookie carries and what other tables key on. */
+    username: text('username').primaryKey(),
+    createdAt: text('created_at').notNull().default(now),
+});
+
+/** Passkeys. A user has one per password manager or device they registered. */
+export const passkey = sqliteTable('passkey', {
     credentialId: text('credential_id').primaryKey(),
-    adminName: text('admin_name').notNull(),
+    username: text('username')
+        .notNull()
+        .references(() => user.username),
     /** Checks the signature a login sends. */
     publicKey: text('public_key').notNull(),
     /** The authenticator's sign count, which only rises, so a lower one gives away a cloned key. */
@@ -116,12 +128,14 @@ export const adminPasskey = sqliteTable('admin_passkey', {
 });
 
 /**
- * One-time links that let whoever opens them register a passkey as `adminName`. Only the hash of each token is stored;
+ * One-time links that let whoever opens them register a passkey as `username`. Only the hash of each token is stored;
  * the token itself is in the link.
  */
-export const adminInvite = sqliteTable('admin_invite', {
+export const invite = sqliteTable('invite', {
     tokenHash: text('token_hash').primaryKey(),
-    adminName: text('admin_name').notNull(),
+    username: text('username')
+        .notNull()
+        .references(() => user.username),
     expiresAt: text('expires_at').notNull(),
     usedAt: text('used_at'),
 });
