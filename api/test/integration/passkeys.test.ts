@@ -8,12 +8,12 @@ import { ORIGIN, call } from '../helpers';
 const TOKEN = 'invite-token';
 const DAY_MS = 86_400_000;
 
-/** Stores an invite for `adminName`, as api/scripts/invite.sh does: only the hash of its token. */
-async function invite(adminName: string, expiresAt = new Date(Date.now() + DAY_MS), token = TOKEN): Promise<void> {
+/** Stores an invite for `username`, one of the seeded users, as api/scripts/invite.sh does: only the hash of its token. */
+async function invite(username: string, expiresAt = new Date(Date.now() + DAY_MS), token = TOKEN): Promise<void> {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
     await orm(env.DB)
-        .insert(schema.adminInvite)
-        .values({ tokenHash: new Uint8Array(digest).toHex(), adminName, expiresAt: expiresAt.toISOString() });
+        .insert(schema.invite)
+        .values({ tokenHash: new Uint8Array(digest).toHex(), username, expiresAt: expiresAt.toISOString() });
 }
 
 /** A browser on the local dev origin: it sends the Origin header and keeps the cookies the Worker sets. */
@@ -75,26 +75,26 @@ async function logIn(browser: Browser, authenticator: SoftwareAuthenticator): Pr
     return browser.post('/api/auth/login/verify', await authenticator.assert(ORIGIN, await challenge(options)));
 }
 
-async function storedPasskeys(): Promise<(typeof schema.adminPasskey.$inferSelect)[]> {
-    return orm(env.DB).select().from(schema.adminPasskey).all();
+async function storedPasskeys(): Promise<(typeof schema.passkey.$inferSelect)[]> {
+    return orm(env.DB).select().from(schema.passkey).all();
 }
 
 describe('registering a passkey through an invite', () => {
     it('stores the passkey for the invited admin and logs them in', async () => {
-        await invite('Dean');
+        await invite('moses');
         const browser = new Browser();
         const authenticator = await SoftwareAuthenticator.create();
         const response = await register(browser, authenticator);
 
-        await expect(response.json()).resolves.toStrictEqual({ admin: 'Dean' });
-        await expect(browser.admin()).resolves.toBe('Dean');
+        await expect(response.json()).resolves.toStrictEqual({ admin: 'moses' });
+        await expect(browser.admin()).resolves.toBe('moses');
         await expect(storedPasskeys()).resolves.toMatchObject([
-            { credentialId: authenticator.id, adminName: 'Dean', counter: 0, transports: ['internal'] },
+            { credentialId: authenticator.id, username: 'moses', counter: 0, transports: ['internal'] },
         ]);
     });
 
     it('uses the invite up', async () => {
-        await invite('Dean');
+        await invite('moses');
         await register(new Browser(), await SoftwareAuthenticator.create());
         const again = await new Browser().post('/api/auth/register/options', { token: TOKEN });
 
@@ -102,7 +102,7 @@ describe('registering a passkey through an invite', () => {
     });
 
     it('yields one passkey when the invite is used twice at once', async () => {
-        await invite('Dean');
+        await invite('moses');
         const attempts = await Promise.all(
             Array.from({ length: 2 }, async () => {
                 const browser = new Browser();
@@ -125,7 +125,7 @@ describe('registering a passkey through an invite', () => {
     });
 
     it('refuses an answer to another challenge, without saying why', async () => {
-        await invite('Dean');
+        await invite('moses');
         const browser = new Browser();
         await browser.post('/api/auth/register/options', { token: TOKEN });
         const authenticator = await SoftwareAuthenticator.create();
@@ -140,7 +140,7 @@ describe('registering a passkey through an invite', () => {
     });
 
     it('refuses an expired invite', async () => {
-        await invite('Dean', new Date(Date.now() - 1000));
+        await invite('moses', new Date(Date.now() - 1000));
         const response = await new Browser().post('/api/auth/register/options', { token: TOKEN });
 
         expect(response.status).toBe(400);
@@ -152,8 +152,8 @@ describe('logging in with a passkey', () => {
 
     // Two admins, so a login has to pick out the right one.
     beforeEach(async () => {
-        await invite('Dean');
-        await invite('Maria', undefined, 'another-invite-token');
+        await invite('moses');
+        await invite('lucie', undefined, 'another-invite-token');
         authenticator = await SoftwareAuthenticator.create();
         await register(new Browser(), await SoftwareAuthenticator.create());
         await register(new Browser(), authenticator, 'another-invite-token');
@@ -162,20 +162,19 @@ describe('logging in with a passkey', () => {
     it('logs in the admin it was registered to, and records its use', async () => {
         const browser = new Browser();
         const response = await logIn(browser, authenticator);
-        const { adminPasskey } = schema;
         const used = await orm(env.DB)
             .select({
-                adminName: adminPasskey.adminName,
-                counter: adminPasskey.counter,
-                lastUsedAt: adminPasskey.lastUsedAt,
+                username: schema.passkey.username,
+                counter: schema.passkey.counter,
+                lastUsedAt: schema.passkey.lastUsedAt,
             })
-            .from(adminPasskey)
-            .where(eq(adminPasskey.credentialId, authenticator.id))
+            .from(schema.passkey)
+            .where(eq(schema.passkey.credentialId, authenticator.id))
             .get();
 
-        await expect(response.json()).resolves.toStrictEqual({ admin: 'Maria' });
-        await expect(browser.admin()).resolves.toBe('Maria');
-        expect(used).toStrictEqual({ adminName: 'Maria', counter: 1, lastUsedAt: expect.any(String) });
+        await expect(response.json()).resolves.toStrictEqual({ admin: 'lucie' });
+        await expect(browser.admin()).resolves.toBe('lucie');
+        expect(used).toStrictEqual({ username: 'lucie', counter: 1, lastUsedAt: expect.any(String) });
     });
 
     it('refuses a passkey registered nowhere', async () => {
@@ -228,7 +227,7 @@ describe('logging in with a passkey', () => {
         { what: 'reports a sign count of 0 every time', counts: false },
     ])('refuses a login replayed with its challenge cookie, from a passkey that $what', async ({ counts }) => {
         const passkey = await SoftwareAuthenticator.create({ counts });
-        await invite('Ana', undefined, 'third-invite-token');
+        await invite('felix', undefined, 'third-invite-token');
         await register(new Browser(), passkey, 'third-invite-token');
         const browser = new Browser();
         const options = await browser.post('/api/auth/login/options');

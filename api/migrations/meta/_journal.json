@@ -71,6 +71,27 @@
       "when": 1790203809209,
       "tag": "20260923225009_fts_indexes_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790239815509,
+      "tag": "20260924085015_drop_admin_logins",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1790239846751,
+      "tag": "20260924085046_user_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790239848130,
+      "tag": "20260924085048_seed_users",
+      "breakpoints": true
     }
   ]
 }
