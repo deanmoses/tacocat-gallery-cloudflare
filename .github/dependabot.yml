@@ -1,0 +1,54 @@
+# Weekly dependency updates, grouped so a week's bumps arrive as a few pull requests rather than a dozen. Each pull
+# request runs CI like any other and merges the same way. The versions in scripts/install-lint-tools.sh are outside
+# Dependabot's reach and are bumped by hand.
+version: 2
+updates:
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+      # A newly published version waits this long before it is proposed, so a package hijacked and pulled within days
+      # never lands here.
+      cooldown:
+          default-days: 7
+      groups:
+          # Majors come one per pull request, since each is its own migration to review.
+          minor-and-patch:
+              update-types: [minor, patch]
+      commit-message:
+          prefix: chore(deps)
+      open-pull-requests-limit: 5
+
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+      cooldown:
+          default-days: 7
+      groups:
+          actions:
+              patterns: ['*']
+      commit-message:
+          prefix: chore(ci)
+
+    - package-ecosystem: docker
+      directory: /api/transcoder
+      schedule:
+          interval: weekly
+          day: monday
+      cooldown:
+          default-days: 7
+      commit-message:
+          prefix: chore(video)
+
+    - package-ecosystem: terraform
+      directory: /infra
+      schedule:
+          interval: weekly
+          day: monday
+      cooldown:
+          default-days: 7
+      commit-message:
+          prefix: chore(infra)

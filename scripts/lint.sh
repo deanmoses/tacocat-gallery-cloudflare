@@ -8,6 +8,9 @@
 # --staged is the fast early warning, not the gate: typed ESLint rules look across files, so a type changed in a
 # staged file can make an unstaged one fail, and only the full run in CI sees that. Type errors anywhere are still
 # caught locally, because `npm run check` always covers the whole project.
+#
+# The migration checks look at what changed. A full run compares the working tree with HEAD, or with the branch named in
+# LINT_BASE_REF when that is set, which is how CI sees every commit of a pull request.
 
 set -uo pipefail
 
@@ -38,7 +41,8 @@ fi
 
 # A missing system tool is fatal in CI and a warning locally: a fresh clone should still be able to commit, but CI
 # silently skipping a check is how a check stops existing. Install them with
-# `brew install gitleaks shellcheck shfmt hadolint opentofu`.
+# `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`; CI gets the same versions from
+# scripts/install-lint-tools.sh.
 require() {
     command -v "$1" >/dev/null 2>&1 && return 0
     if [ -n "${CI:-}" ]; then
@@ -102,18 +106,21 @@ check() {
     report "$?" "$output"
 }
 
-# Migrations changed since the last commit, by git's --diff-filter letters: in the index for a staged run, anywhere in
-# the working tree for a full run. A CI run has nothing uncommitted, so it will need a base branch to diff against.
+# Migrations changed, by git's --diff-filter letters: in the index for a staged run; in the working tree and every
+# commit since the branch left LINT_BASE_REF, or since HEAD when that is unset, for a full run.
 #
 # A move that keeps a migration's file name and content is not a change, because Wrangler records a migration by its
 # file name alone. So the diff covers the whole repo rather than just the migrations directory, which lets git pair an
 # exact move (-M100%) instead of seeing a deletion and an addition, and such a move is dropped.
 changed_migrations() {
-    local diff
+    local diff base=HEAD
     if [ "$STAGED" = "1" ]; then
         diff=$(git diff --cached --name-status -M100% --diff-filter="$1")
     else
-        diff=$(git diff HEAD --name-status -M100% --diff-filter="$1")
+        if [ -n "${LINT_BASE_REF:-}" ]; then
+            base=$(git merge-base "$LINT_BASE_REF" HEAD)
+        fi
+        diff=$(git diff "$base" --name-status -M100% --diff-filter="$1")
         if [ "$1" = "A" ]; then
             diff+=$'\n'$(git ls-files --others --exclude-standard | sed 's/^/A\t/')
         fi
@@ -196,6 +203,37 @@ check node scripts/build-agent-instructions.ts --check
 # Whole project either way: an unused export is a fact about the files that don't import it.
 echo -n "Lint: unused files, exports and dependencies (knip)... "
 check knip --no-progress
+
+# api/.dev.vars holds real tokens, and one pasted into a file is public once pushed. A staged run scans what is about
+# to be committed; a full run scans every commit, since a token in any of them is as public as one in the newest.
+echo -n "Secrets: none committed (gitleaks)... "
+if require gitleaks; then
+    if [ "$STAGED" = "1" ]; then
+        check gitleaks git --pre-commit --staged --no-banner --redact .
+    else
+        check gitleaks git --no-banner --redact .
+    fi
+fi
+
+echo -n "Lint: GitHub Actions workflows (actionlint)... "
+if require actionlint; then
+    over_files actionlint -- '.github/workflows/*.yml'
+fi
+
+# A tag can be moved to different code after review; a commit id cannot. Dependabot moves the ids and keeps the version
+# comment beside each one current. Actions in this repo (`./`) have no version.
+pinned_actions() {
+    local unpinned
+    unpinned=$(grep -nE '^[[:space:]]*(- )?uses:' "$@" |
+        grep -vE 'uses:[[:space:]]*(\./|[^[:space:]@]+@[0-9a-f]{40}([[:space:]]|$))')
+    if [ -n "$unpinned" ]; then
+        echo "Pin each action to a full commit id, with the version as a comment, e.g. actions/checkout@<40 hex> # v7:"
+        echo "$unpinned"
+        return 1
+    fi
+}
+echo -n "Workflows: actions pinned to a commit... "
+over_files pinned_actions -- '.github/workflows/*.yml'
 
 echo -n "Lint: shell scripts (shellcheck)... "
 if require shellcheck; then
