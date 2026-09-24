@@ -30,7 +30,7 @@
     "devDependencies": {
         "@cloudflare/vitest-plugin": "^1.2.3",
         "@levischuck/tiny-cbor": "^0.3.6",
-        "@types/node": "^24.13.6",
+        "@types/node": "^26.6.1",
         "@vitest/coverage-istanbul": "~4.1.11",
         "drizzle-kit": "^0.31.11",
         "typescript": "~6.0.3",
