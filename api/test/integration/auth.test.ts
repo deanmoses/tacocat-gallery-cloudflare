@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { ORIGIN, call, callAsAdmin } from '../helpers';
 import { adminCookie } from '../secrets';
@@ -49,6 +50,17 @@ describe('passkey endpoints', () => {
 
         expect(missing.status).toBe(403);
         expect(foreign.status).toBe(403);
+    });
+
+    it("accepts the environment's own site as the Origin", async () => {
+        const response = await call('/api/auth/login/options', {
+            method: 'POST',
+            headers: { origin: env.SITE_ORIGIN },
+        });
+        const options = await response.json<{ rpId: string }>();
+
+        expect(response.status).toBe(200);
+        expect(options.rpId).toBe(new URL(env.SITE_ORIGIN).hostname);
     });
 
     it('issues login options bound to the Origin host, with a challenge cookie', async () => {

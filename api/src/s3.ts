@@ -1,20 +1,20 @@
 import { AwsClient } from 'aws4fetch';
 
-const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com/tacocat-proto-media';
+const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com';
 
-/** Presigned S3 URL, so upload and transcode bytes never pass through the Worker. */
+/** Presigned S3 URL into the media bucket, so upload and transcode bytes never pass through the Worker. */
 export async function presign(
-    credentials: { R2_ACCESS_KEY_ID: string; R2_SECRET_ACCESS_KEY: string },
+    config: { R2_ACCESS_KEY_ID: string; R2_SECRET_ACCESS_KEY: string; MEDIA_BUCKET: string },
     request: { method: 'GET' | 'PUT'; key: string; contentType?: string },
 ): Promise<string> {
     const client = new AwsClient({
-        accessKeyId: credentials.R2_ACCESS_KEY_ID,
-        secretAccessKey: credentials.R2_SECRET_ACCESS_KEY,
+        accessKeyId: config.R2_ACCESS_KEY_ID,
+        secretAccessKey: config.R2_SECRET_ACCESS_KEY,
         service: 's3',
         region: 'auto',
     });
     const target = new URL(
-        `${R2_S3_ENDPOINT}/${request.key
+        `${R2_S3_ENDPOINT}/${config.MEDIA_BUCKET}/${request.key
             .split('/')
             .map((segment) => encodeURIComponent(segment))
             .join('/')}`,

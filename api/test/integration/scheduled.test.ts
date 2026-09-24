@@ -88,10 +88,13 @@ describe('nightly cron', () => {
 });
 
 describe('idle latency probe cron', () => {
-    it('asks Globalping with the account token', async () => {
+    it("asks Globalping to probe the environment's site, with the account token", async () => {
         const requests = stubGlobalping();
         await runCron('23 0,1,3,7,15 * * *');
         const creates = requests.filter((request) => request.method === 'POST');
+        const targets = await Promise.all(
+            creates.map(async (request) => (await request.json<{ target: string }>()).target),
+        );
 
         expect(requests.every((request) => request.url.startsWith('https://api.globalping.io/v1/measurements'))).toBe(
             true,
@@ -100,6 +103,7 @@ describe('idle latency probe cron', () => {
         expect(creates.map((request) => request.headers.get('authorization'))).toStrictEqual(
             Array.from({ length: 12 }, () => 'Bearer test-globalping-token'),
         );
+        expect(targets).toStrictEqual(Array.from({ length: 12 }, () => env.PROBE_TARGET));
     });
 
     it('records one row per location and step, from Globalping results', async () => {

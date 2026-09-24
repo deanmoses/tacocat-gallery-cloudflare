@@ -1,5 +1,11 @@
 locals {
   account_id = "ed3ca575118099486baeb129959697c8"
+  # Each environment's data, named from its prefix. Production keeps the prototype's names: the real migration fills a
+  # fresh database and buckets anyway, and they get the final names then.
+  environments = {
+    production = { prefix = "tacocat-proto", image_host = "img.deanmoses.com" }
+    staging    = { prefix = "tacocat-staging", image_host = "staging-img.deanmoses.com" }
+  }
 }
 
 resource "cloudflare_zone" "deanmoses" {
@@ -41,7 +47,7 @@ resource "cloudflare_ruleset" "cache" {
   phase   = "http_request_cache_settings"
   rules = [{
     description = "Cache derived images from R2"
-    expression  = "(http.host eq \"img.deanmoses.com\")"
+    expression  = "(http.host in {${join(" ", [for environment in local.environments : format("%q", environment.image_host)])}})"
     action      = "set_cache_settings"
     action_parameters = {
       cache    = true
@@ -50,65 +56,52 @@ resource "cloudflare_ruleset" "cache" {
   }]
 }
 
-resource "cloudflare_d1_database" "proto" {
-  account_id            = local.account_id
-  name                  = "tacocat-proto"
-  primary_location_hint = "wnam"
-  read_replication      = { mode = "auto" }
-  lifecycle {
-    prevent_destroy = true
-    # The API does not return the hint, so an imported database would otherwise plan a replacement.
-    ignore_changes = [primary_location_hint]
-  }
-}
-
-resource "cloudflare_r2_bucket" "media" {
+module "environment" {
+  source     = "./environment"
+  for_each   = local.environments
   account_id = local.account_id
-  name       = "tacocat-proto-media"
-  location   = "wnam"
-  lifecycle {
-    prevent_destroy = true
-  }
+  zone_id    = cloudflare_zone.deanmoses.id
+  prefix     = each.value.prefix
+  image_host = each.value.image_host
 }
 
-# Public through img.deanmoses.com, so it must never hold originals.
-resource "cloudflare_r2_bucket" "derived" {
-  account_id = local.account_id
-  name       = "tacocat-proto-derived"
-  location   = "wnam"
-  lifecycle {
-    prevent_destroy = true
-  }
+# Production's resources predate the module; these keep their state where it is instead of destroying and recreating.
+moved {
+  from = cloudflare_d1_database.proto
+  to   = module.environment["production"].cloudflare_d1_database.this
 }
 
-resource "cloudflare_r2_custom_domain" "img" {
-  account_id  = local.account_id
-  bucket_name = cloudflare_r2_bucket.derived.name
-  domain      = "img.deanmoses.com"
-  zone_id     = cloudflare_zone.deanmoses.id
-  enabled     = true
-  min_tls     = "1.2"
+moved {
+  from = cloudflare_r2_bucket.media
+  to   = module.environment["production"].cloudflare_r2_bucket.media
 }
 
-resource "cloudflare_queue" "uploads" {
-  account_id = local.account_id
-  queue_name = "tacocat-proto-uploads"
+moved {
+  from = cloudflare_r2_bucket.derived
+  to   = module.environment["production"].cloudflare_r2_bucket.derived
 }
 
-# Upload messages that run out of retries land here (see dead_letter_queue in api/wrangler.jsonc).
-resource "cloudflare_queue" "uploads_dlq" {
-  account_id = local.account_id
-  queue_name = "tacocat-proto-uploads-dlq"
+moved {
+  from = cloudflare_r2_custom_domain.img
+  to   = module.environment["production"].cloudflare_r2_custom_domain.img
 }
 
-resource "cloudflare_r2_bucket_event_notification" "uploads" {
-  account_id  = local.account_id
-  bucket_name = cloudflare_r2_bucket.media.name
-  queue_id    = cloudflare_queue.uploads.queue_id
-  rules = [{
-    prefix = "inbox/"
-    # The API returns "" for no suffix; null would show a diff on every plan.
-    suffix  = ""
-    actions = ["PutObject", "CompleteMultipartUpload", "CopyObject"]
-  }]
+moved {
+  from = cloudflare_queue.uploads
+  to   = module.environment["production"].cloudflare_queue.uploads
+}
+
+moved {
+  from = cloudflare_queue.uploads_dlq
+  to   = module.environment["production"].cloudflare_queue.uploads_dlq
+}
+
+moved {
+  from = cloudflare_r2_bucket_event_notification.uploads
+  to   = module.environment["production"].cloudflare_r2_bucket_event_notification.uploads
+}
+
+# What api/wrangler.jsonc needs from here.
+output "d1_database_ids" {
+  value = { for name, environment in module.environment : name => environment.d1_database_id }
 }

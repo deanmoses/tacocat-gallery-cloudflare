@@ -1,6 +1,9 @@
 {
     "$schema": "../node_modules/wrangler/config-schema.json",
-    "name": "tacocat-gallery-cloudflare",
+    // Two environments, each its own Worker with its own data. The top level is staging, which is also what
+    // `wrangler dev` and the tests run locally, so a Wrangler command without --env can only reach staging;
+    // `--env production` is the only way to production. Bindings are not inherited, so each environment lists its own.
+    "name": "tacocat-gallery-cloudflare-staging",
     "account_id": "ed3ca575118099486baeb129959697c8",
     "main": "src/index.ts",
     "compatibility_date": "2026-09-01",
@@ -30,34 +33,45 @@
             "/debug/*",
         ],
     },
+    // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
+    "workers_dev": true,
+    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
     "secrets": { "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"] },
+    "routes": [{ "pattern": "staging-pix.deanmoses.com", "custom_domain": true }],
+    "vars": {
+        // The site's own origin, the only one besides local development that may create or use a passkey.
+        "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
+        // The derived bucket's custom domain, which /i2/* fetches derivatives through.
+        "DERIVED_ORIGIN": "https://staging-img.deanmoses.com",
+        // The bucket presigned uploads and transcodes go to, by its S3 name.
+        "MEDIA_BUCKET": "tacocat-staging-media",
+        // What the idle-latency probes measure.
+        "PROBE_TARGET": "tacocat-gallery-cloudflare-staging.tacocat-gallery-cloudflare.workers.dev",
+    },
     "d1_databases": [
         {
             "binding": "DB",
-            "database_name": "tacocat-proto",
-            "database_id": "e833562b-4758-41e9-b545-d1aa250bb6c5",
+            "database_name": "tacocat-staging",
+            "database_id": "55f1fb52-b6df-497d-8beb-403e91dd0466",
             "migrations_dir": "migrations",
         },
     ],
     "r2_buckets": [
-        { "binding": "MEDIA", "bucket_name": "tacocat-proto-media" },
-        { "binding": "DERIVED", "bucket_name": "tacocat-proto-derived" },
+        { "binding": "MEDIA", "bucket_name": "tacocat-staging-media" },
+        { "binding": "DERIVED", "bucket_name": "tacocat-staging-derived" },
     ],
-    // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
-    "workers_dev": true,
-    "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
     "images": { "binding": "IMAGES" },
     "queues": {
         "consumers": [
             {
-                "queue": "tacocat-proto-uploads",
+                "queue": "tacocat-staging-uploads",
                 "max_batch_size": 10,
                 "max_batch_timeout": 1,
                 "max_retries": 5,
                 // Seconds, so a short D1 or R2 outage can pass before the next attempt.
                 "retry_delay": 60,
                 // Messages that run out of retries are kept here for replay instead of being dropped.
-                "dead_letter_queue": "tacocat-proto-uploads-dlq",
+                "dead_letter_queue": "tacocat-staging-uploads-dlq",
             },
         ],
     },
@@ -65,8 +79,6 @@
         "crons": [
             // Daily D1 backup and upload-error purge. src/index.ts picks the job by this exact string (BACKUP_CRON), so change both together.
             "17 9 * * *",
-            // Idle-latency probes (src/probes.ts) at doubling gaps; every cron other than BACKUP_CRON runs these.
-            "23 0,1,3,7,15 * * *",
         ],
     },
     "containers": [
@@ -78,5 +90,65 @@
         },
     ],
     "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
-    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+    "env": {
+        "production": {
+            // The Worker's original name, so its custom domain, secrets, container and probe history stay where they are.
+            "name": "tacocat-gallery-cloudflare",
+            "secrets": {
+                "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "GLOBALPING_TOKEN", "SESSION_SECRET"],
+            },
+            "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
+            "vars": {
+                "SITE_ORIGIN": "https://pix.deanmoses.com",
+                "DERIVED_ORIGIN": "https://img.deanmoses.com",
+                "MEDIA_BUCKET": "tacocat-proto-media",
+                "PROBE_TARGET": "tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev",
+            },
+            "d1_databases": [
+                {
+                    "binding": "DB",
+                    "database_name": "tacocat-proto",
+                    "database_id": "e833562b-4758-41e9-b545-d1aa250bb6c5",
+                    "migrations_dir": "migrations",
+                },
+            ],
+            "r2_buckets": [
+                { "binding": "MEDIA", "bucket_name": "tacocat-proto-media" },
+                { "binding": "DERIVED", "bucket_name": "tacocat-proto-derived" },
+            ],
+            "images": { "binding": "IMAGES" },
+            "queues": {
+                "consumers": [
+                    {
+                        "queue": "tacocat-proto-uploads",
+                        "max_batch_size": 10,
+                        "max_batch_timeout": 1,
+                        "max_retries": 5,
+                        "retry_delay": 60,
+                        "dead_letter_queue": "tacocat-proto-uploads-dlq",
+                    },
+                ],
+            },
+            "triggers": {
+                "crons": [
+                    "17 9 * * *",
+                    // Idle-latency probes (src/probes.ts) at doubling gaps; every cron other than BACKUP_CRON runs these.
+                    // Production only: they measure the site readers use.
+                    "23 0,1,3,7,15 * * *",
+                ],
+            },
+            "containers": [
+                {
+                    "class_name": "Transcoder",
+                    // The container application's default name ends in the environment's, so the one that exists is
+                    // named here.
+                    "name": "tacocat-gallery-cloudflare-transcoder",
+                    "image": "./transcoder/Dockerfile",
+                    "instance_type": "lite",
+                    "max_instances": 1,
+                },
+            ],
+            "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
+        },
+    },
 }

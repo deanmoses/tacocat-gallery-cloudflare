@@ -13,7 +13,7 @@ import { html, json, notFound } from './http';
 import { INVITE_PAGE, LOGIN_PAGE } from './pages/auth';
 import { type SignedCookie, cookie, readSigned, sign } from './session';
 
-type AuthEnv = Pick<Env, 'DB' | 'SESSION_SECRET'>;
+type AuthEnv = Pick<Env, 'DB' | 'SESSION_SECRET' | 'SITE_ORIGIN'>;
 
 const SESSION_COOKIE = 'admin_session';
 const CHALLENGE_COOKIE = 'pk_challenge';
@@ -32,13 +32,12 @@ const ENCODER = new TextEncoder();
 const TO_BASE64URL = { alphabet: 'base64url', omitPadding: true } as const;
 const FROM_BASE64URL = { alphabet: 'base64url' } as const;
 
-// A passkey is bound to the site it was created on. The browser's Origin header names that site, and only these
-// Are accepted; wrangler dev rewrites request.url to the custom domain, so the URL can't be used for this.
-const ALLOWED_ORIGINS = new Set([
-    'https://tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev',
-    'https://pix.deanmoses.com',
-    'http://localhost:8787',
-]);
+// A passkey is bound to the site it was created on. The browser's Origin header names that site, and only the
+// environment's own site and local development are accepted; wrangler dev rewrites request.url to the custom domain,
+// so the URL can't be used for this.
+function isAllowedOrigin(origin: string, env: AuthEnv): boolean {
+    return origin === env.SITE_ORIGIN || origin === 'http://localhost:8787';
+}
 
 /** The two screens and the JSON endpoints behind them, or undefined if the request is not an auth route. */
 export async function routeAuth(request: Request, env: AuthEnv): Promise<Response | undefined> {
@@ -60,7 +59,7 @@ export async function routeAuth(request: Request, env: AuthEnv): Promise<Respons
         return notFound();
     }
     const origin = request.headers.get('origin') ?? '';
-    if (!ALLOWED_ORIGINS.has(origin)) {
+    if (!isAllowedOrigin(origin, env)) {
         return json({ error: 'origin not allowed' }, 403);
     }
     const site = new URL(origin);

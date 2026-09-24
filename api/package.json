@@ -9,14 +9,17 @@
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest",
-        "types": "wrangler types",
-        "check": "wrangler types --check && tsc -p . && tsc -p src && tsc -p test && tsc -p test/stack",
+        "types": "wrangler types --strict-vars=false",
+        "check": "wrangler types --strict-vars=false --check && tsc -p . && tsc -p src && tsc -p test && tsc -p test/stack",
         "db:generate": "drizzle-kit generate",
-        "db:migrate:local": "wrangler d1 migrations apply tacocat-proto --local",
-        "db:migrate": "wrangler d1 migrations apply tacocat-proto --remote",
+        "db:migrate:local": "wrangler d1 migrations apply DB --local",
+        "db:migrate": "wrangler d1 migrations apply DB --remote",
+        "db:migrate:production": "wrangler d1 migrations apply DB --remote --env production",
         "deploy": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler deploy",
+        "deploy:production": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler deploy --env production",
         "logs": "wrangler tail",
-        "probes": "wrangler d1 execute tacocat-proto --remote --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
+        "logs:production": "wrangler tail --env production",
+        "probes": "wrangler d1 execute DB --remote --env production --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
     },
     "dependencies": {
         "@cloudflare/containers": "^0.3.7",

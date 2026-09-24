@@ -3,7 +3,7 @@
 // album's and its media's words then go straight into D1, since the Worker has no endpoint for them yet. Runs against
 // the deployed Worker, with the credentials in api/.dev.vars.
 //
-// Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod]
+// Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production]
 import { execFile } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -14,7 +14,15 @@ import * as valibot from 'valibot';
 import { presign } from '../src/s3.ts';
 
 const API_DIR = fileURLToPath(new URL('..', import.meta.url));
-const SITE = 'https://pix.deanmoses.com';
+// Where the album goes. Staging is wrangler.jsonc's top-level environment, so Wrangler reaches it without --env.
+const TARGETS = {
+    staging: { site: 'https://staging-pix.deanmoses.com', bucket: 'tacocat-staging-media', wranglerEnv: [] },
+    production: {
+        site: 'https://pix.deanmoses.com',
+        bucket: 'tacocat-proto-media',
+        wranglerEnv: ['--env', 'production'],
+    },
+};
 const SOURCES = {
     staging: { api: 'https://api.staging-pix.tacocat.com', images: 'https://img.staging-pix.tacocat.com' },
     prod: { api: 'https://api.pix.tacocat.com', images: 'https://img.pix.tacocat.com' },
@@ -58,6 +66,7 @@ const LISTED = valibot.object({
 
 const albumPath = process.argv[2] ?? '';
 const source = process.argv.includes('--from') ? SOURCES.prod : SOURCES.staging;
+const target = process.argv.includes('--to') ? TARGETS.production : TARGETS.staging;
 const { year, day } = dayAlbum(albumPath);
 
 const secrets = await devVars();
@@ -101,13 +110,13 @@ if (thumbnail !== undefined && photos.some((photo) => photo.path === thumbnail))
     );
 }
 await sql(statements);
-console.log(`done: ${SITE}${albumPath.slice(0, -1)}`);
+console.log(`done: ${target.site}${albumPath.slice(0, -1)}`);
 
 /** The year and day of a day album's path, or the usage message for anything else. */
 function dayAlbum(candidate: string): { year: string; day: string } {
     const match = /^\/(?<year>\d{4})\/(?<day>\d{2}-\d{2})\/$/v.exec(candidate);
     if (match?.groups === undefined) {
-        throw new Error('Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod]');
+        throw new Error('Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production]');
     }
     return { year: match.groups['year'] ?? '', day: match.groups['day'] ?? '' };
 }
@@ -141,6 +150,7 @@ async function upload(photo: AwsMedia): Promise<void> {
         {
             R2_ACCESS_KEY_ID: secrets['R2_ACCESS_KEY_ID'] ?? '',
             R2_SECRET_ACCESS_KEY: secrets['R2_SECRET_ACCESS_KEY'] ?? '',
+            MEDIA_BUCKET: target.bucket,
         },
         { method: 'PUT', key: `inbox${photo.path}`, contentType },
     );
@@ -155,7 +165,7 @@ async function untilProcessed(names: string[]): Promise<void> {
     const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
     let missing = names;
     while (Date.now() < deadline) {
-        const response = await fetch(`${SITE}/api/album${albumPath}?consistency=primary`);
+        const response = await fetch(`${target.site}/api/album${albumPath}?consistency=primary`);
         if (response.ok) {
             const listed = valibot.parse(LISTED, await response.json());
             const done = new Set(
@@ -208,7 +218,7 @@ async function sql(queries: string[]): Promise<void> {
     await new Promise<void>((resolve, reject) => {
         execFile(
             'npx',
-            ['wrangler', 'd1', 'execute', 'tacocat-proto', '--remote', '--yes', '--file', file],
+            ['wrangler', 'd1', 'execute', 'DB', '--remote', ...target.wranglerEnv, '--yes', '--file', file],
             {
                 cwd: API_DIR,
                 env: { ...process.env, CLOUDFLARE_API_TOKEN: secrets['CLOUDFLARE_TERRAFORM_API_TOKEN'] ?? '' },
