@@ -3,11 +3,13 @@
 # --staged, which gives each per-file check only the staged files. The checks are the same either way, so a commit is
 # held to the standard CI enforces. Add a check here, never in the hook or a workflow.
 #
-# Usage: scripts/lint.sh [--staged]
+# Usage: scripts/lint.sh [--staged | --docs]
 #
 # --staged is the fast early warning, not the gate: typed ESLint rules look across files, so a type changed in a
 # staged file can make an unstaged one fail, and only the full run in CI sees that. Type errors anywhere are still
 # caught locally, because `npm run check` always covers the whole project.
+#
+# --docs runs only the checks that can fail on a change to markdown, for a CI run in which nothing else changed.
 #
 # The migration checks look at what changed. A full run compares the working tree with HEAD, or with the branch named in
 # LINT_BASE_REF when that is set, which is how CI sees every commit of a pull request.
@@ -20,11 +22,13 @@ PATH="$DIR/node_modules/.bin:$PATH"
 FAILED=0
 
 STAGED=0
+DOCS=0
 case "${1:-}" in
 --staged) STAGED=1 ;;
+--docs) DOCS=1 ;;
 '') ;;
 *)
-    echo "Usage: scripts/lint.sh [--staged]" >&2
+    echo "Usage: scripts/lint.sh [--staged | --docs]" >&2
     exit 2
     ;;
 esac
@@ -106,6 +110,15 @@ check() {
     report "$?" "$output"
 }
 
+finish() {
+    echo "================================================="
+    if [ "$FAILED" = "1" ]; then
+        echo -e "${RED}Lint FAILED${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}Lint PASSED${NC}"
+}
+
 # Migrations changed, by git's --diff-filter letters: in the index for a staged run; in the working tree and every
 # commit since the branch left LINT_BASE_REF, or since HEAD when that is unset, for a full run.
 #
@@ -132,22 +145,38 @@ changed_migrations() {
 
 if [ "$STAGED" = "1" ]; then
     echo "Running lint checks on staged files"
+elif [ "$DOCS" = "1" ]; then
+    echo "Running lint checks on markdown"
 else
     echo "Running lint checks"
 fi
 echo "================================================="
 
-echo -n "Format: Prettier (code, JSON, Markdown)... "
-over_files prettier --check --log-level warn --ignore-unknown -- ':(glob)**/*'
+if [ "$DOCS" = "1" ]; then
+    echo -n "Format: Prettier (Markdown)... "
+    over_files prettier --check --log-level warn -- '*.md'
+else
+    echo -n "Format: Prettier (code, JSON, Markdown)... "
+    over_files prettier --check --log-level warn --ignore-unknown -- ':(glob)**/*'
+fi
+
+echo -n "Lint: Markdown (markdownlint)... "
+over_files markdownlint-cli2 --no-globs -- '*.md'
+
+# Whole file either way, since a hand edit to a generated file has to be caught whatever else is staged.
+echo -n "Docs: CLAUDE.md and AGENTS.md match docs/AGENTS.src.md... "
+check node scripts/build-agent-instructions.ts --check
+
+if [ "$DOCS" = "1" ]; then
+    finish
+    exit 0
+fi
 
 echo -n "Lint: ESLint (code, Svelte and JSON)... "
 over_files eslint --max-warnings 0 --no-warn-ignored -- '*.ts' '*.mjs' '*.js' '*.svelte' '*.json' '*.jsonc'
 
 echo -n "Lint: Stylelint (CSS and Svelte styles)... "
 over_files stylelint --max-warnings 0 -- '*.css' '*.svelte'
-
-echo -n "Lint: Markdown (markdownlint)... "
-over_files markdownlint-cli2 --no-globs -- '*.md'
 
 # Wrangler records applied migrations by filename, so an edit to one never reaches a database that already has it, and
 # a renamed one would run twice.
@@ -196,10 +225,6 @@ else
 Run \`npm run db:generate --workspace api\` after changing the schema, and never edit a generated migration or snapshot."
 fi
 
-# Whole file either way, since a hand edit to a generated file has to be caught whatever else is staged.
-echo -n "Docs: CLAUDE.md and AGENTS.md match docs/AGENTS.src.md... "
-check node scripts/build-agent-instructions.ts --check
-
 # Whole project either way: an unused export is a fact about the files that don't import it.
 echo -n "Lint: unused files, exports and dependencies (knip)... "
 check knip --no-progress
@@ -221,7 +246,8 @@ if require actionlint; then
 fi
 
 # A tag can be moved to different code after review; a commit id cannot. Dependabot moves the ids and keeps the version
-# comment beside each one current. Actions in this repo (`./`) have no version.
+# comment beside each one current. Actions in this repo (`./`) have no version. Covers the composite actions under
+# .github/actions too, which actionlint does not read.
 pinned_actions() {
     local unpinned
     unpinned=$(grep -nE '^[[:space:]]*(- )?uses:' "$@" |
@@ -233,7 +259,7 @@ pinned_actions() {
     fi
 }
 echo -n "Workflows: actions pinned to a commit... "
-over_files pinned_actions -- '.github/workflows/*.yml'
+over_files pinned_actions -- '.github/*.yml'
 
 echo -n "Lint: shell scripts (shellcheck)... "
 if require shellcheck; then
@@ -270,9 +296,4 @@ else
     fi
 fi
 
-echo "================================================="
-if [ "$FAILED" = "1" ]; then
-    echo -e "${RED}Lint FAILED${NC}"
-    exit 1
-fi
-echo -e "${GREEN}Lint PASSED${NC}"
+finish

@@ -18,53 +18,78 @@ env:
     HUSKY: 0 # The hooks run the same scripts as this workflow, on the developer's machine.
 
 jobs:
-    # The check branch protection requires: the same lint, type check and tests as `npm run quality`, over the whole
-    # repo. The tools it needs beyond npm are installed pinned and checksummed by scripts/install-lint-tools.sh.
-    checks:
+    # A change to markdown alone gets the markdown checks alone. A `paths-ignore` on the trigger would skip the run
+    # instead, but a run that never starts never reports, and branch protection needs a check that always does:
+    # merge-ok, below.
+    changes:
         runs-on: ubuntu-latest
-        timeout-minutes: 25
+        timeout-minutes: 5
+        permissions:
+            contents: read
+            pull-requests: read # paths-filter lists a pull request's files through the API
+        outputs:
+            code: ${{ steps.filter.outputs.code }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+                  fetch-depth: 0 # on push, paths-filter diffs against the previous commit
+            - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+              id: filter
+              with:
+                  predicate-quantifier: every
+                  filters: |
+                      code:
+                        - '**'
+                        - '!**/*.md'
+                        - '!LICENSE'
+
+    # Lint, type check and tests each on their own runner, so a run takes as long as the slowest of them rather than
+    # their sum. Together they are what `npm run quality` runs locally, over the whole repo.
+    lint:
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
                   # gitleaks scans every commit, and the migration checks diff against the branch the change is going into.
                   fetch-depth: 0
-
-            - name: Setup Node.js
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-
-            # Ahead of npm ci, whose prepare script installs the browser: restoring afterwards would be too late to
-            # skip the download.
-            - name: Cache Playwright browsers
-              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-              with:
-                  path: ~/.cache/ms-playwright
-                  key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-                  # A lockfile change misses the exact key, so fall back to the last browsers cached: a dependency bump
-                  # rarely moves Playwright.
-                  restore-keys: playwright-${{ runner.os }}-
-
-            - name: Install lint tools
-              run: scripts/install-lint-tools.sh
-
-            - name: Install dependencies
-              run: npm ci
-
+            - uses: ./.github/actions/setup
+            # The system tools the lint needs beyond npm, pinned and checksummed.
+            - run: scripts/install-lint-tools.sh
             - name: Lint
               env:
                   LINT_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
               run: npm run lint
 
+    check:
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: ./.github/actions/setup
             - name: Type check
               run: npm run check
 
+    test:
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: ./.github/actions/setup
             - name: Test
               run: npm test
-
             # Uploaded on success too: a run that only passed on retry is exactly the one worth looking at.
             - name: Upload Playwright report
               if: ${{ !cancelled() }}
@@ -76,3 +101,63 @@ jobs:
                       e2e/playwright-report/
                   if-no-files-found: ignore
                   retention-days: 7
+
+    lint-docs:
+        needs: changes
+        if: needs.changes.outputs.code == 'false'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: ./.github/actions/setup
+              with:
+                  scripts: 'false'
+            - name: Lint markdown
+              run: scripts/lint.sh --docs
+
+    # The check branch protection requires. It passes when the jobs the change called for all succeeded: lint, check
+    # and test for a code change, lint-docs otherwise. Anything else, a detector that answered nothing included, fails:
+    # this must not fail open.
+    merge-ok:
+        needs: [changes, lint, check, test, lint-docs]
+        if: always()
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - name: Check required jobs
+              env:
+                  CHANGES: ${{ needs.changes.result }}
+                  CODE: ${{ needs.changes.outputs.code }}
+                  LINT: ${{ needs.lint.result }}
+                  CHECK: ${{ needs.check.result }}
+                  TEST: ${{ needs.test.result }}
+                  LINT_DOCS: ${{ needs.lint-docs.result }}
+              run: |
+                  if [ "$CHANGES" != success ]; then
+                      echo "changes did not succeed ($CHANGES)"
+                      exit 1
+                  fi
+                  case "$CODE" in
+                  true)
+                      for job in "lint:$LINT" "check:$CHECK" "test:$TEST"; do
+                          if [ "${job#*:}" != success ]; then
+                              echo "code changed but ${job%%:*} did not succeed (${job#*:})"
+                              exit 1
+                          fi
+                      done
+                      echo "code changed; lint, check and test passed"
+                      ;;
+                  false)
+                      if [ "$LINT_DOCS" != success ]; then
+                          echo "docs changed but lint-docs did not succeed ($LINT_DOCS)"
+                          exit 1
+                      fi
+                      echo "docs changed; lint-docs passed"
+                      ;;
+                  *)
+                      echo "unexpected code output '$CODE'"
+                      exit 1
+                      ;;
+                  esac

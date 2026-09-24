@@ -1,0 +1,38 @@
+name: Install
+description: Node from .nvmrc with the npm cache, then `npm ci`, with the Playwright browser cached across runs.
+
+inputs:
+    scripts:
+        description: >-
+            Whether `npm ci` runs the packages' install scripts, which download the Playwright browser and write
+            SvelteKit's generated types. A job that needs only the packages passes "false".
+        default: 'true'
+
+runs:
+    using: composite
+    steps:
+        - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+          with:
+              node-version-file: .nvmrc
+              cache: npm
+
+        # Ahead of npm ci, whose prepare script installs the browser: restoring afterwards would be too late to skip
+        # the download.
+        - if: inputs.scripts == 'true'
+          uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+          with:
+              path: ~/.cache/ms-playwright
+              key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+              # A lockfile change misses the exact key, so fall back to the last browser cached: a dependency bump
+              # rarely moves Playwright.
+              restore-keys: playwright-${{ runner.os }}-
+
+        - shell: bash
+          env:
+              SCRIPTS: ${{ inputs.scripts }}
+          run: |
+              if [ "$SCRIPTS" = true ]; then
+                  npm ci
+              else
+                  npm ci --ignore-scripts
+              fi
