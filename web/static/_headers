@@ -1,0 +1,4 @@
+# SvelteKit fingerprints every file under _app/immutable, so a changed file gets a new URL and a browser never needs to
+# ask whether its copy is current. The same Cache-Control the AWS site's CloudFront sets on these files.
+/_app/immutable/*
+  Cache-Control: public, max-age=31536000, immutable
