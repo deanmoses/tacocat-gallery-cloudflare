@@ -35,7 +35,7 @@ Production, on `pix.deanmoses.com`, and staging, on `staging-pix.deanmoses.com`,
 
 Staging is the config's top level and production is `env.production`, so a Wrangler command without `--env` can only reach staging, and the scripts in `api/package.json` come in pairs: `deploy` and `deploy:production`, `db:migrate` and `db:migrate:production`, `logs` and `logs:production`. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. What differs between the environments beyond the bindings is four `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey; the derived-image host; the media bucket's S3 name; and the idle-probe target. The probes run in production only, so staging's cron is the nightly backup alone.
 
-To seed staging, `node api/scripts/import-album.ts /2024/12-17/` copies a day album from the AWS staging gallery into it (see Copying an album from AWS), and `api/scripts/invite.sh "<name>" --env staging` mints an invite for a passkey there. The production Worker keeps its original name, `tacocat-gallery-cloudflare`, so its custom domain, secrets, container and probe history stayed put when the environments were introduced; staging's is `tacocat-gallery-cloudflare-staging`.
+To seed staging, `node api/scripts/import-album.ts /2024/12-17/` copies a day album from the AWS staging gallery into it (see Copying an album from AWS), and `api/scripts/invite.sh <user> --env staging` mints an invite for a passkey there. The production Worker keeps its original name, `tacocat-gallery-cloudflare`, so its custom domain, secrets, container and probe history stayed put when the environments were introduced; staging's is `tacocat-gallery-cloudflare-staging`.
 
 ## Database schema
 
@@ -69,7 +69,7 @@ Three things keep the supply chain honest. Dependabot (`.github/dependabot.yml`)
 
 ## Admin login
 
-`api/scripts/invite.sh "<name>" --env staging` (or `--env production`) prints a one-time invite link for that environment's Worker; `--local` is for `npm run dev --workspace api`. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh Selftest --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
+`api/scripts/invite.sh <user> --env staging` (or `--env production`) prints a one-time invite link for that environment's Worker; `--local` is for `npm run dev --workspace api`. The name has to be in the `user` table, which no screen edits: a migration seeds it (`api/migrations/*_seed_users.sql`), so adding a user is another migration, and every environment gets the same users. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh moses --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
 
 ## Copying an album from AWS
 
