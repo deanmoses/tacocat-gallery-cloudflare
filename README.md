@@ -31,7 +31,15 @@ For an in-place undo, Time Travel restores `item` and `item_fts` consistently, b
 
 ## Development
 
-`npm run quality` formats, lints, type-checks and tests.
+`npm run quality` formats, lints, type-checks and tests. The lint step needs `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`; without them it warns and skips those checks, where CI fails.
+
+## Continuous integration
+
+The repo is `deanmoses/tacocat-gallery-cloudflare` on GitHub. `main` is protected: every change goes through a pull request, and merging needs the `checks` job of `.github/workflows/ci.yml` to pass on a branch up to date with `main`. That job runs `npm run lint`, `npm run check` and `npm test`, the same scripts as `npm run quality` and the pre-commit hook, over the whole repo. `scripts/install-lint-tools.sh` gives the runner the system tools the lint needs, each pinned to the version Homebrew has locally and verified against its release checksum; when `brew upgrade` moves one, move it there too.
+
+The repository's own settings are applied by `scripts/github-setup.sh` with the GitHub API, so they can be read and re-applied from here: branch protection, secret scanning with push protection, Dependabot alerts and security updates, merge options and the labels the `/pr` skill uses. Run it once after creating the repository and again whenever it changes.
+
+Three things keep the supply chain honest. Dependabot (`.github/dependabot.yml`) proposes npm, GitHub Actions, Docker and OpenTofu updates weekly, grouped, after a seven-day cooldown so a version pulled within days of publication never arrives. Every GitHub Action is pinned to a full commit id with its version as a comment; the lint fails on a tag, and Dependabot moves the ids. Secrets are caught three times: gitleaks on the staged files at commit, gitleaks over the whole history in CI, and GitHub's push protection at the remote.
 
 ## Front end
 

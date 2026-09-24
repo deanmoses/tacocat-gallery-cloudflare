@@ -56,6 +56,7 @@ The account is on Workers Paid ($5/month), so going past an allowance costs mone
 - **No `eslint-disable` comments.** Fix the code, or ask the user if you can turn the rule off in `eslint.config.ts` with the reason.
 - `npm run lint:fix` fixers can change what code means; review the diff.
 - **New checks go in `scripts/lint.sh` or `scripts/test.sh`**, never only in the pre-commit hook.
+- **`main` is protected.** Every change lands through a pull request whose CI `checks` job passed on a branch up to date with `main`; nobody pushes to `main`. The repository's settings are `scripts/github-setup.sh`, not the dashboard. See Continuous integration in `README.md`.
 - **Markdown** is never hard-wrapped: one line per paragraph or list item.
 
 ### Comments
