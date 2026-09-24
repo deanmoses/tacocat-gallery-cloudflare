@@ -98,6 +98,22 @@ for (let n = 2; n <= PHOTOS; n++) {
 
 ### From the browser runs
 
+The runs that record the album page's LCP, 2026-09-24: 08:11 (started by hand), 10:16 (GitHub's late schedule), 15:52 (started outside the schedule) and 19:23 (the Worker's cron), each cold and then warm. Medians in ms, of four runs a cell; Cloudflare in South Carolina has two, since its runs from 08:13 to 10:19 are left out as a network fault (see the log). LCP is the album page's own, when its first thumbnail appears; first photo is from its click to the photo decoded.
+
+| Location       | Run  | TTFB, Cloudflare / AWS | Album LCP, Cloudflare / AWS | First photo, Cloudflare / AWS |
+| -------------- | ---- | ---------------------- | --------------------------- | ----------------------------- |
+| France         | cold | 63 / 412 ms            | 1,586 / 1,484 ms            | 156 / 109 ms                  |
+| France         | warm | 70 / 436 ms            | 1,348 / 1,492 ms            | 158 / 129 ms                  |
+| California     | cold | 113 / 302 ms           | 1,112 / 1,362 ms            | 236 / 120 ms                  |
+| California     | warm | 98 / 322 ms            | 1,444 / 1,384 ms            | 223 / 113 ms                  |
+| South Carolina | cold | 100 / 238 ms           | 1,820 / 1,608 ms            | 668 / 304 ms                  |
+| South Carolina | warm | 92 / 200 ms            | 1,044 / 1,208 ms            | 174 / 107 ms                  |
+
+- **The page arrives two to six times sooner on Cloudflare** in every cell.
+- **The album page's LCP is even so far.** Each site wins three cells, by 60 to 250 ms, and a cell's runs spread over 300 to 1,100 ms, so four runs cannot separate them.
+- **AWS shows the first photo sooner in every cell**, but only the 19:23 runs came after the cache header fix released at 17:30 (see the log). In those, the click reaches the photo's request as quickly on Cloudflare as on AWS, 22 to 36 ms against 26 to 35 ms; what is left is the photo's response at a colo's first request, 151 to 165 ms of server wait from California and South Carolina against CloudFront's 22 to 28 ms.
+- **Later photos take 27 to 56 ms on both sites.**
+
 The first runs, 2026-09-24 at 01:53 UTC, about an hour after `/2025/09-29` was copied in and half an hour after an idle-probe run. Each page ran three times within six minutes: once on its creation or edit and twice by request. The cold row is each page's first run; warm is the median of the other two. First photo is from its click to the photo decoded.
 
 | Location       | Run  | TTFB, Cloudflare / AWS | LCP, Cloudflare / AWS | First photo, Cloudflare / AWS |
@@ -157,7 +173,7 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-23:** idle probes deployed on 2026-09-22 read the first three runs above. Edge caching of albums ruled out. WebPageTest chosen as the verdict instrument. Static assets probed from Paris and Baton Rouge: served locally on Cloudflare from the first request. The AWS logs show photo clicks outnumbering album opens about ten to one, so the scenario is now the email reader's visit. `web/` turned out to be a from-scratch rewrite missing the AWS app's photo preloading; the comparison waits for a port.
 - **2026-09-23, 23:53 to 23:58 UTC:** the two-level item type migration rebuilt the `item` table on the deployed D1 and the ported app was deployed, half an hour before the 00:23 UTC probe, so that run's primary was not idle.
 - **2026-09-24, 00:08 to 00:11 UTC:** the day album `/2024/12-17/` copied from AWS staging into the deployed site, 30 originals through the upload pipeline, so the 00:23 and 01:23 UTC probes ran on a database and bucket just written to.
-- **2026-09-24:** `web/` replaced by a port of the AWS app (`docs/Risks.md` row 5), so both sites now run the same app with the same photo preloading, and the Worker answers in the AWS API's shapes. The comparison still waits on a real day album in the Cloudflare database (_Before the first run_, step 1).
+- **2026-09-24:** `web/` replaced by a port of the AWS app (`docs/Risks.md` row 5), so both sites now run the same app with the same photo preloading, and the Worker answers in the AWS API's shapes.
 
 - **2026-09-24, 00:50 to 00:51 UTC:** `/2025/09-29/` (30 photos) copied from AWS production into the deployed site, a day album no reader had opened in the logs' twelve days, so the comparison runs against production rather than staging.
 - **2026-09-24, 01:53 UTC:** DebugBear set up in place of WebPageTest, whose free plan has no API or scheduling, and the first runs taken (_From the browser runs_ above). The scheduled workflow takes over from here.
@@ -165,6 +181,11 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-24, 08:10 and 10:15 UTC:** the first two runs of the workflow, the first started by hand and the second by GitHub's schedule, five hours after its 05:23 slot. The browser runs move to the Worker's cron. DebugBear's South Carolina machine took about 350 ms for each TLS handshake with Cloudflare in the runs from 08:14 to 10:19, against 19 ms at 16:47, when a Google Cloud machine in Charleston reached Cloudflare's Atlanta location in 23 to 66 ms; South Carolina results from that window are a network fault, not the site.
 
 - **2026-09-24, 17:20 UTC:** the first photo reached the screen 50 to 100 ms later on Cloudflare than on AWS in every run so far, with the photo's own request no slower. The difference came before the request: on a click the app loads the photo page's JS and CSS, which the browser already held from the album page, and AWS lets it use them straight from its cache (`public, max-age=31536000, immutable`, set in `tacocat-gallery-hosting-aws`'s CloudFront) while Workers static assets default to `public, max-age=0, must-revalidate`, so the browser asked Cloudflare about each file first, 26 to 86 ms of round trips. `web/static/_headers` now gives `/_app/immutable/*` the same header as AWS.
+
+- **2026-09-24, 15:52 UTC:** a round of runs started outside the schedule, recorded with the rest.
+- **2026-09-24, 17:30 UTC:** the immutable Cache-Control on `/_app/immutable/*` released to production and staging.
+- **2026-09-24, 19:23 and 19:38 UTC:** the first runs the Worker's cron started, on time, the cold one two hours after the release. The first photo's click now reaches its request as quickly as on AWS.
+- **2026-09-24, 19:52 UTC:** a derived image served through the Worker's cache now reports its cache lookup and, on a miss, its R2 read, in `Server-Timing` and a `derived_image` log line with the colo, so the next runs show how much of a colo's first-photo wait is the R2 read.
 
 ## Open questions
 
