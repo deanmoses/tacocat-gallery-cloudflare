@@ -78,7 +78,9 @@ jobs:
             - name: Type check
               run: npm run check
 
-    test:
+    # The Worker's tests and the front end's on separate runners: each side's suites take about as long as the other's,
+    # and both start the site, so neither waits for the other's build.
+    test-api:
         needs: changes
         if: needs.changes.outputs.code == 'true'
         runs-on: ubuntu-latest
@@ -88,8 +90,21 @@ jobs:
               with:
                   persist-credentials: false
             - uses: ./.github/actions/setup
-            - name: Test
-              run: npm test
+            - name: Test shared and api
+              run: scripts/test.sh shared api
+
+    test-web:
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: ./.github/actions/setup
+            - name: Test web and e2e
+              run: scripts/test.sh web e2e
             # Uploaded on success too: a run that only passed on retry is exactly the one worth looking at.
             - name: Upload Playwright report
               if: ${{ !cancelled() }}
@@ -118,10 +133,10 @@ jobs:
               run: scripts/lint.sh --docs
 
     # The check branch protection requires. It passes when the jobs the change called for all succeeded: lint, check
-    # and test for a code change, lint-docs otherwise. Anything else, a detector that answered nothing included, fails:
-    # this must not fail open.
+    # and the two test jobs for a code change, lint-docs otherwise. Anything else, a detector that answered nothing
+    # included, fails: this must not fail open.
     merge-ok:
-        needs: [changes, lint, check, test, lint-docs]
+        needs: [changes, lint, check, test-api, test-web, lint-docs]
         if: always()
         runs-on: ubuntu-latest
         timeout-minutes: 5
@@ -132,7 +147,8 @@ jobs:
                   CODE: ${{ needs.changes.outputs.code }}
                   LINT: ${{ needs.lint.result }}
                   CHECK: ${{ needs.check.result }}
-                  TEST: ${{ needs.test.result }}
+                  TEST_API: ${{ needs.test-api.result }}
+                  TEST_WEB: ${{ needs.test-web.result }}
                   LINT_DOCS: ${{ needs.lint-docs.result }}
               run: |
                   if [ "$CHANGES" != success ]; then
@@ -141,13 +157,13 @@ jobs:
                   fi
                   case "$CODE" in
                   true)
-                      for job in "lint:$LINT" "check:$CHECK" "test:$TEST"; do
+                      for job in "lint:$LINT" "check:$CHECK" "test-api:$TEST_API" "test-web:$TEST_WEB"; do
                           if [ "${job#*:}" != success ]; then
                               echo "code changed but ${job%%:*} did not succeed (${job#*:})"
                               exit 1
                           fi
                       done
-                      echo "code changed; lint, check and test passed"
+                      echo "code changed; lint, check, test-api and test-web passed"
                       ;;
                   false)
                       if [ "$LINT_DOCS" != success ]; then

@@ -1,22 +1,33 @@
 #!/usr/bin/env bash
 # The tests of every workspace: shared/'s in Node and api/'s inside workerd, both on the Vitest 4 hoisted to the root,
-# and web/'s in a browser on its own Vitest 5. Each runs from its own directory with the Vitest it resolves there. CI and
-# `npm test` run all of them and then the e2e tests; .husky/pre-commit runs this with --staged, which runs only the
-# tests whose imports reach a staged file, and no e2e tests, since building and starting the site takes seconds.
+# and web/'s in a browser on its own Vitest 5. Each runs from its own directory with the Vitest it resolves there. `npm
+# test` runs all of them and then the e2e tests; CI runs the suites on separate runners; .husky/pre-commit runs this with
+# --staged, which runs only the tests whose imports reach a staged file, and no e2e tests, since building and starting
+# the site takes seconds.
 #
-# Usage: scripts/test.sh [--staged]
+# Usage: scripts/test.sh [--staged | <suite>...]   suites: shared api web e2e; all of them when none is named
 
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR" || exit 1
 
+STAGED=0
+SUITES="shared api web e2e"
 case "${1:-}" in
 --staged) STAGED=1 ;;
-'') STAGED=0 ;;
+'') ;;
 *)
-    echo "Usage: scripts/test.sh [--staged]" >&2
-    exit 2
+    for suite in "$@"; do
+        case "$suite" in
+        shared | api | web | e2e) ;;
+        *)
+            echo "Usage: scripts/test.sh [--staged | <suite>...]   suites: shared api web e2e" >&2
+            exit 2
+            ;;
+        esac
+    done
+    SUITES="$*"
     ;;
 esac
 
@@ -27,17 +38,30 @@ workspace_vitest() {
     (cd "$workspace" && npm exec --no -- vitest "$@")
 }
 
+# Whether a suite was named: `runs <suite>`.
+runs() {
+    case " $SUITES " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+    esac
+}
+
 if [ "$STAGED" = "0" ]; then
-    shared_status=0
-    workspace_vitest shared run || shared_status=$?
-    api_status=0
-    workspace_vitest api run || api_status=$?
-    web_status=0
-    workspace_vitest web run || web_status=$?
-    e2e_status=0
-    npm exec --no -- playwright test --config e2e/playwright.config.ts || e2e_status=$?
-    [ "$shared_status" -eq 0 ] && [ "$api_status" -eq 0 ] && [ "$web_status" -eq 0 ] && [ "$e2e_status" -eq 0 ]
-    exit
+    # The api stack tests and the e2e tests each start the site, which starts from the web app's build. Built once here,
+    # and api/test/stack/start.ts sees the variable and leaves it alone, instead of each building the same thing again.
+    if runs api || runs e2e; then
+        if ! npm run --silent build --workspace web; then
+            echo "building the web app failed" >&2
+            exit 1
+        fi
+        export WEB_BUILD_READY=1
+    fi
+    status=0
+    if runs shared; then workspace_vitest shared run || status=1; fi
+    if runs api; then workspace_vitest api run || status=1; fi
+    if runs web; then workspace_vitest web run || status=1; fi
+    if runs e2e; then npm exec --no -- playwright test --config e2e/playwright.config.ts || status=1; fi
+    exit "$status"
 fi
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
