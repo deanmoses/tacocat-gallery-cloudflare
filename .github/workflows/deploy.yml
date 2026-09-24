@@ -33,8 +33,8 @@ jobs:
         environment:
             name: staging
             url: https://staging-pix.deanmoses.com
-        # One release to a Worker at a time, in the order pushed: a deployment holds two versions, so two releases
-        # interleaved would evict each other's version from under its check.
+        # One release to a Worker at a time: a deployment holds two versions, so two releases interleaved would evict each
+        # other's version from under its check. A push made while another run waits cancels the waiting one.
         concurrency:
             group: deploy-staging
             cancel-in-progress: false
