@@ -4,6 +4,7 @@ import { orm } from './db';
 import { purgeUploadErrors, uploadErrors } from './errors';
 import { health } from './health';
 import { debugImage, derivedViaCacheApi, derivedViaCdn, raw } from './images';
+import { startBrowserRuns } from './browser-runs';
 import { backupDatabase, putItem, readYourWrites, search, seed } from './items';
 import { json, notFound } from './http';
 import { probeIdleLatency } from './probes';
@@ -14,6 +15,8 @@ import { media } from './video';
 export { Transcoder } from './video';
 
 const BACKUP_CRON = '17 9 * * *';
+const BROWSER_COLD_CRON = '23 5,11,19,22 * * *';
+const BROWSER_WARM_CRON = '38 5,11,19,22 * * *';
 
 export default {
     async fetch(request, env, ctx): Promise<Response> {
@@ -45,12 +48,24 @@ export default {
     },
 
     async scheduled(controller, env): Promise<void> {
-        if (controller.cron === BACKUP_CRON) {
-            await backupDatabase(env);
-            await purgeUploadErrors(env);
-            await purgeSpentChallenges(orm(env.DB));
-        } else {
-            await probeIdleLatency(env);
+        switch (controller.cron) {
+            case BACKUP_CRON: {
+                await backupDatabase(env);
+                await purgeUploadErrors(env);
+                await purgeSpentChallenges(orm(env.DB));
+                break;
+            }
+            case BROWSER_COLD_CRON: {
+                await startBrowserRuns(env, 'cold');
+                break;
+            }
+            case BROWSER_WARM_CRON: {
+                await startBrowserRuns(env, 'warm');
+                break;
+            }
+            default: {
+                await probeIdleLatency(env);
+            }
         }
     },
 } satisfies ExportedHandler<Env, R2EventMessage>;

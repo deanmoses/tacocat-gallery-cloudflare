@@ -134,3 +134,46 @@ describe('idle latency probe cron', () => {
         });
     });
 });
+
+describe('browser run crons', () => {
+    /** Answers DebugBear: the project lists two pages, and starting a test on either returns an analysis. */
+    function stubDebugbear(): Request[] {
+        const requests: Request[] = [];
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+            const request = new Request(input, init);
+            requests.push(request);
+            return Response.json(
+                request.method === 'POST'
+                    ? { analysis: { id: 'a1' } }
+                    : {
+                          pages: [
+                              { id: '11', url: 'https://pix.deanmoses.com/2025/09-29', region: 'france' },
+                              { id: '12', url: 'https://pix.tacocat.com/2025/09-29', region: 'france' },
+                          ],
+                      },
+            );
+        });
+        return requests;
+    }
+
+    it.each([
+        { name: 'cold', cron: '23 5,11,19,22 * * *' },
+        { name: 'warm', cron: '38 5,11,19,22 * * *' },
+    ])('starts a $name run of every page in the DebugBear project, with the API key', async ({ name, cron }) => {
+        const requests = stubDebugbear();
+        await runCron(cron);
+        const starts = requests.filter((request) => request.method === 'POST');
+        const titles = await Promise.all(
+            starts.map(async (request) => (await request.json<{ buildTitle: string }>()).buildTitle),
+        );
+
+        expect(starts.map((request) => request.url)).toStrictEqual([
+            'https://www.debugbear.com/api/v1/page/11/analyze',
+            'https://www.debugbear.com/api/v1/page/12/analyze',
+        ]);
+        expect(titles).toStrictEqual([name, name]);
+        expect(requests.map((request) => request.headers.get('x-api-key'))).toStrictEqual(
+            Array.from({ length: 3 }, () => 'test-debugbear-key'),
+        );
+    });
+});

@@ -7,6 +7,7 @@ export const TEST_SECRETS = {
     R2_ACCESS_KEY_ID: 'test-access-key',
     R2_SECRET_ACCESS_KEY: 'test-secret-key',
     GLOBALPING_TOKEN: 'test-globalping-token',
+    DEBUGBEAR_API_KEY: 'test-debugbear-key',
 };
 
 const ENCODER = new TextEncoder();
