@@ -17,11 +17,7 @@ Verified against Cloudflare's docs while designing this: a deployment holds at m
 
 ## Where it stands
 
-Live since 2026-09-24. The token was made from the Edit Cloudflare Workers template with D1 Write and Containers Write added and covered every call the script makes; the staging Worker was disconnected from Workers Builds; the merge that added the workflow was production's first release. Each release takes about 30 seconds on a GitHub runner, and the check at 0% answered with the new version's id within a few seconds of the deployment on both Workers.
-
-Still to see:
-
-- That the override header reaches the static assets of the 0% version as well as its Worker code. The check at 0% now compares `/_app/version.json` with the build just uploaded, whose version is new on every build, so the next release answers this: if the header reaches only the Worker, every release fails there with traffic untouched.
+Live since 2026-09-24. The token was made from the Edit Cloudflare Workers template with D1 Write and Containers Write added and covered every call the script makes; the staging Worker was disconnected from Workers Builds; the merge that added the workflow was production's first release. Each release takes about 30 seconds on a GitHub runner, and the check at 0% answered with the new version's id within a few seconds of the deployment on both Workers. The override header reaches the 0% version's static assets as well as its Worker code: on 2026-09-24 the check at 0% on staging read the new build's `/_app/version.json` through it, before the switch, while the previous version's build was still what readers got.
 
 ## After that
 
