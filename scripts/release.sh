@@ -3,8 +3,10 @@
 #
 #   1. Build the web app and upload a version. It serves no traffic.
 #   2. Note the database's Time Travel bookmark, then apply the migrations. They are additive by rule (see
-#      scripts/lint.sh), so the version still serving should keep working on the new schema; it is checked, since a
-#      migration that breaks it has broken the site already, and the run should say so rather than go on.
+#      scripts/lint.sh), so the version still serving should keep working on the new schema. It is checked, since a
+#      migration that breaks it has broken the site already. The release then goes on, because the new version was
+#      written for that schema and is the likeliest fix, but the run ends red whatever happens, and nothing rolls back
+#      to the broken version.
 #   3. Put the new version in the deployment at 0% and check it on the live hostname through the version-override
 #      header: the health route must answer with the id just uploaded and a migration no older than the tree's newest,
 #      the root album's JSON must parse, the app shell must be the app, and the app's files must be the build just
@@ -165,15 +167,20 @@ echo "bookmark before migrating, for wrangler d1 time-travel restore: $(wrangler
 wrangler d1 migrations apply DB --remote
 
 step "Checking that $previous still works on the migrated database"
+previous_broken=
 if ! expect_version "$previous" "Cloudflare-Workers-Version-Overrides: $worker=\"$previous\""; then
-    echo "$previous is still serving and failing its check: the migrations broke it" >&2
-    exit 1
+    previous_broken=1
+    echo "the migrations broke $previous, which is serving; releasing $new anyway, as the likeliest fix" >&2
 fi
 
 step "Checking $new at 0% through the version override"
 wrangler versions deploy "$previous@100%" "$new@0%" --yes --message "release $short: $new at 0% for its check"
 if ! expect_version "$new" "Cloudflare-Workers-Version-Overrides: $worker=\"$new\"" "$build"; then
-    echo "leaving $previous serving; $new stays uploaded" >&2
+    if [ -n "$previous_broken" ]; then
+        echo "leaving $previous serving, broken by the migrations; $new failed too and stays uploaded" >&2
+    else
+        echo "leaving $previous serving; $new stays uploaded" >&2
+    fi
     wrangler versions deploy "$previous@100%" --yes --message "release $short failed its check; $previous alone again"
     exit 1
 fi
@@ -183,10 +190,18 @@ wrangler versions deploy "$new@100%" --yes --message "release $short"
 # No build check here: until the switch has propagated, a request can still reach the previous version's files, and only
 # the health route waits for it.
 if ! expect_version "$new"; then
+    if [ -n "$previous_broken" ]; then
+        echo "$new failed its check after the switch; not rolling back to $previous, which the migrations broke" >&2
+        exit 1
+    fi
     echo "rolling back to $previous" >&2
     wrangler rollback "$previous" --yes --message "release $short failed its check after the switch"
     exit 1
 fi
 
 step "Released $short to $1"
+if [ -n "$previous_broken" ]; then
+    echo "$new passed its checks and is serving, but the migrations broke $previous, so there is nothing to roll back to" >&2
+    exit 1
+fi
 echo "To undo: (cd api && npx wrangler rollback $previous ${env_flag[*]})"
