@@ -164,6 +164,8 @@ CloudFront serves an album page through its error response for the single-page a
 
 - **2026-09-24, 08:10 and 10:15 UTC:** the first two runs of the workflow, the first started by hand and the second by GitHub's schedule, five hours after its 05:23 slot. The browser runs move to the Worker's cron. DebugBear's South Carolina machine took about 350 ms for each TLS handshake with Cloudflare in the runs from 08:14 to 10:19, against 19 ms at 16:47, when a Google Cloud machine in Charleston reached Cloudflare's Atlanta location in 23 to 66 ms; South Carolina results from that window are a network fault, not the site.
 
+- **2026-09-24, 17:20 UTC:** the first photo reached the screen 50 to 100 ms later on Cloudflare than on AWS in every run so far, with the photo's own request no slower. The difference came before the request: on a click the app loads the photo page's JS and CSS, which the browser already held from the album page, and AWS lets it use them straight from its cache (`public, max-age=31536000, immutable`, set in `tacocat-gallery-hosting-aws`'s CloudFront) while Workers static assets default to `public, max-age=0, must-revalidate`, so the browser asked Cloudflare about each file first, 26 to 86 ms of round trips. `web/static/_headers` now gives `/_app/immutable/*` the same header as AWS.
+
 ## Open questions
 
 - How long a D1 replica stays active after its last read, and whether a Durable Object in Western Europe reading every few minutes keeps Paris on the London replica.

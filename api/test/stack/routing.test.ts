@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises';
 import { describe, expect, inject, it } from 'vitest';
 
 /**
@@ -38,4 +39,23 @@ describe('the asset router', () => {
             expect(body).toContain('<meta name="robots" content="noindex" />');
         },
     );
+});
+
+describe('browser caching of the web app', () => {
+    it('lets a browser keep a hashed app chunk for a year without asking the server again', async () => {
+        const entries = await readdir(new URL('../../../web/build/_app/immutable/entry/', import.meta.url));
+        const chunk = entries.find((name) => name.endsWith('.js'));
+        const response = await fetch(new URL(`/_app/immutable/entry/${chunk ?? ''}`, inject('stackOrigin')));
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    });
+
+    it('has a browser check the app page itself on every visit, since a deploy changes it at the same URL', async () => {
+        const response = await navigate('/2001/06-15');
+        await response.body?.cancel();
+
+        expect(response.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
+    });
 });
