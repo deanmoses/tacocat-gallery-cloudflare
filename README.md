@@ -53,6 +53,18 @@ For an in-place undo, Time Travel restores `item` and `item_fts` consistently, b
 
 `npm run quality` formats, lints, type-checks and tests. The lint step needs `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`; without them it warns and skips those checks, where CI fails.
 
+## Claude Code on the web
+
+A cloud session starts in a container that has only this repository, an older Node than `.nvmrc` pins and none of the lint's system tools, so `.claude/hooks/session-start.sh` prepares it: Node from `.nvmrc` through nvm, `npm install`, and the lint tools through `scripts/install-lint-tools.sh` plus shellcheck from apt. It runs only when `CLAUDE_CODE_REMOTE` is set, takes about a minute on a cold image, and its `[session-start]` lines in the session banner say how long each step took and which one failed if one did.
+
+What a session can reach is set in the cloud environment (the environment menu in the session's title bar, then Edit), not in the repo:
+
+- Wrangler reads `CLOUDFLARE_API_TOKEN` from the environment's variables, so with it a session can run `scripts/release.sh staging`, `wrangler d1 info` and `wrangler tail` as a developer would. Give it its own token with the deploy token's scopes (see Deploying), so it can be revoked on its own; the account id is in `api/wrangler.jsonc`. Without it a session still deploys, through the push.
+- `DEBUGBEAR_API_KEY`, for `node api/scripts/debugbear.ts`.
+- `api/.dev.vars` is not there, so `wrangler dev` does not run; the tests do not need it (see `docs/Testing.md`).
+- Pushes and the GitHub tools use the GitHub connection of the account that started the session. `gh` is not installed, so `scripts/github-setup.sh` stays a script for a developer's machine.
+- `.mcp.json` holds only `cloudflare-docs`, which needs no login. The Cloudflare account itself is reached through claude.ai's Cloudflare Developer Platform connector, enabled for the session, which logs in once and works in a cloud session as on a developer's machine; a server needing OAuth in `.mcp.json` cannot log in from a cloud session, and one alongside the connector shows every tool twice. Servers a developer keeps outside the repo, such as Context7 with an API key, stay outside it: a project entry of the same name would win over theirs.
+
 ## Continuous integration
 
 The repo is `deanmoses/tacocat-gallery-cloudflare` on GitHub. `main` is protected: every change goes through a pull request, and merging needs the `merge-ok` check of `.github/workflows/ci.yml` to pass on a branch up to date with `main`. Behind it, `npm run lint`, `npm run check`, the Worker's tests and the front end's tests run as four parallel jobs, the same scripts as `npm run quality` and the pre-commit hook, over the whole repo; a change to markdown alone runs only `scripts/lint.sh --docs`. Each job starts from `.github/actions/setup`, which installs Node and the packages with the npm and Playwright caches, and the lint job adds `scripts/install-lint-tools.sh`, which gives the runner the system tools the lint needs, each pinned to the version Homebrew has locally and verified against its release checksum; when `brew upgrade` moves one, move it there too. GitHub gives a public repo unlimited Actions minutes, so a parallel job costs nothing but the setup it repeats.

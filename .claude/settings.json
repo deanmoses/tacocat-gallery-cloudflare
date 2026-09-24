@@ -1,5 +1,5 @@
 {
-    "enabledMcpjsonServers": ["cloudflare-docs", "cloudflare-observability", "cloudflare-bindings", "cloudflare-api"],
+    "enabledMcpjsonServers": ["cloudflare-docs"],
     "permissions": {
         "allow": [
             "Bash(npm run db:migrate --workspace api)",

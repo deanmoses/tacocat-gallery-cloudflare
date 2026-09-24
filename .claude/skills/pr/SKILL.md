@@ -40,7 +40,7 @@ One sentence describing the overall change.
 
 ## Labels
 
-Apply all labels that fit. Use `gh pr create --label <label>` or `gh pr edit --add-label <label>`. Only use these labels:
+Apply all labels that fit. Use `gh pr create --label <label>` or `gh pr edit --add-label <label>`, or the GitHub tools where `gh` is not installed, as in a Claude Code on the web session. Only use these labels:
 
 - `enhancement` - User-facing features or improvements (must change production code behavior)
 - `refactor` - Production code changes that don't alter behavior
