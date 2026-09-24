@@ -7,6 +7,7 @@ function transcoderEnv(respond: () => Response): { env: TranscodeEnv; requests: 
     const env: TranscodeEnv = {
         R2_ACCESS_KEY_ID: 'test-access-key',
         R2_SECRET_ACCESS_KEY: 'test-secret-key',
+        MEDIA_BUCKET: 'test-media',
         TRANSCODER: {
             getByName: () => ({
                 fetch: async (input, init): Promise<Response> => {
@@ -52,9 +53,9 @@ describe(transcodeVideo, () => {
         );
 
         expect(paths).toStrictEqual({
-            src: '/tacocat-proto-media/inbox/2024/06-15/a.mov',
-            mp4Put: '/tacocat-proto-media/derived/2024/06-15/a.mov/v1/video.mp4',
-            posterPut: '/tacocat-proto-media/derived/2024/06-15/a.mov/v1/poster.jpg',
+            src: '/test-media/inbox/2024/06-15/a.mov',
+            mp4Put: '/test-media/derived/2024/06-15/a.mov/v1/video.mp4',
+            posterPut: '/test-media/derived/2024/06-15/a.mov/v1/poster.jpg',
         });
     });
 

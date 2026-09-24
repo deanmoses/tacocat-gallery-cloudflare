@@ -49,7 +49,7 @@ async function buildWebApp(): Promise<void> {
 }
 
 async function migrate(persistTo: string): Promise<void> {
-    const apply = ['d1', 'migrations', 'apply', 'tacocat-proto', '--local', '--persist-to', persistTo];
+    const apply = ['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', persistTo];
     await npm(['exec', '--no', '--', 'wrangler', ...apply], API_DIR, 'migrating the local database failed');
 }
 

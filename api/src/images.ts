@@ -9,7 +9,6 @@ import {
 import { json, notFound, pathAfter } from './http';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
-const DERIVED_ORIGIN = 'https://img.deanmoses.com';
 // Every format the Images binding can write; anything else asked for gets a JPEG.
 const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
     'image/jpeg',
@@ -69,7 +68,7 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
         return badImageUrl();
     }
     // Only successes are cached: a 404 from before the derivative was generated would otherwise stick for a year.
-    const upstream = await fetch(`${DERIVED_ORIGIN}/${wanted.key}`, {
+    const upstream = await fetch(`${env.DERIVED_ORIGIN}/${wanted.key}`, {
         cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31_536_000, '400-599': -1 } },
     });
     if (upstream.ok) {

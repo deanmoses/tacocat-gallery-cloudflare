@@ -3,8 +3,6 @@ import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
 import { type Orm, orm, schema } from './db';
 import { round } from './db/timing';
 
-const PROBE_TARGET = 'tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev';
-
 type ProbeFrom = string | Record<string, string>[];
 
 // Louisiana has a single Globalping probe, so Houston stands in when it is offline.
@@ -142,7 +140,7 @@ async function globalping(env: Env, locations: ProbeFrom, request: ProbeStep): P
         },
         body: JSON.stringify({
             type: 'http',
-            target: PROBE_TARGET,
+            target: env.PROBE_TARGET,
             locations,
             limit: 1,
             measurementOptions: { protocol: 'HTTPS', request: { ...request, method: 'GET' } },

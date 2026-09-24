@@ -16,13 +16,13 @@ const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1))
 
 function uploadEvent(key: string): R2EventMessage {
     const now = new Date();
-    return { action: 'PutObject', bucket: 'tacocat-proto-media', object: { key }, eventTime: now.toISOString() };
+    return { action: 'PutObject', bucket: 'tacocat-staging-media', object: { key }, eventTime: now.toISOString() };
 }
 
 /** One batch of upload events, as the queue delivers them, with ids counting from 1. */
 function uploadBatch(keys: string[]): MessageBatch<R2EventMessage> {
     return createMessageBatch<R2EventMessage>(
-        'tacocat-proto-uploads',
+        'tacocat-staging-uploads',
         keys.map((key, index) => ({
             id: String(index + 1),
             timestamp: new Date(),
@@ -78,7 +78,7 @@ describe('upload pipeline', () => {
         const { url } = await response.json<{ url: string }>();
         const signed = new URL(url);
 
-        expect(signed.pathname).toBe('/tacocat-proto-media/inbox/2024/06-15/new.jpg');
+        expect(signed.pathname).toBe(`/${env.MEDIA_BUCKET}/inbox/2024/06-15/new.jpg`);
         expect(signed.searchParams.get('X-Amz-Signature')).toMatch(/^[\da-f]{64}$/v);
     });
 

@@ -2,7 +2,7 @@
 
 Prototype to find out whether moving pix.tacocat.com to Cloudflare works. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. Where it stands is `docs/Risks.md`, and how performance is judged against the AWS site is `docs/Perf.md`.
 
-The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit front end (see Front end below), and `shared/` the album schema and path helpers both import. One Worker holds every spike: one D1 database, two R2 buckets (originals and derived images), an upload Queue with a dead-letter queue, the Images binding, and a Container for video transcoding. It serves `pix.deanmoses.com`, a custom domain on a Cloudflare zone standing in for tacocat.com, as well as `workers.dev`, so the tacocat.com DNS move is not needed yet.
+The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit front end (see Front end below), and `shared/` the album schema and path helpers both import. One Worker holds every spike: one D1 database, two R2 buckets (originals and derived images), an upload Queue with a dead-letter queue, the Images binding, and a Container for video transcoding. It runs in two environments (see Environments below): production on `pix.deanmoses.com` and staging on `staging-pix.deanmoses.com`, custom domains on a Cloudflare zone standing in for tacocat.com, as well as `workers.dev`, so the tacocat.com DNS move is not needed yet.
 
 ## Running it
 
@@ -15,11 +15,19 @@ npm run db:migrate:local --workspace api
 npm run dev --workspace api
 ```
 
-Deploy with `npm run deploy --workspace api -- --containers-rollout=none`, which leaves the transcoder container untouched. When a deploy does push the container, Wrangler's "Image already exists remotely, skipping push" means the image did not change.
+Deploy to staging with `npm run deploy --workspace api -- --containers-rollout=none`, which leaves the transcoder container untouched, and to production with `npm run deploy:production --workspace api -- --containers-rollout=none`. When a deploy does push the container, Wrangler's "Image already exists remotely, skipping push" means the image did not change.
+
+## Environments
+
+Production, on `pix.deanmoses.com`, and staging, on `staging-pix.deanmoses.com`, are two Workers from the same `api/wrangler.jsonc`, each with its own database, buckets, queues, image host, secrets and admin passkeys. Staging holds test albums, not a copy of production; upload whatever a test needs. Both are public and both send noindex, as on AWS, so performance and SEO tools can reach either.
+
+Staging is the config's top level and production is `env.production`, so a Wrangler command without `--env` can only reach staging, and the scripts in `api/package.json` come in pairs: `deploy` and `deploy:production`, `db:migrate` and `db:migrate:production`, `logs` and `logs:production`. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. What differs between the environments beyond the bindings is four `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey; the derived-image host; the media bucket's S3 name; and the idle-probe target. The probes run in production only, so staging's cron is the nightly backup alone.
+
+To seed staging, `node api/scripts/import-album.ts /2024/12-17/` copies a day album from the AWS staging gallery into it (see Copying an album from AWS), and `api/scripts/invite.sh "<name>" --env staging` mints an invite for a passkey there. The production Worker keeps its original name, `tacocat-gallery-cloudflare`, so its custom domain, secrets, container and probe history stayed put when the environments were introduced; staging's is `tacocat-gallery-cloudflare-staging`.
 
 ## Database schema
 
-`api/src/db/schema.ts` is the source of truth for the tables, in [Drizzle](https://orm.drizzle.team). To change one, edit the schema, run `npm run db:generate --workspace api` to write the migration into `api/migrations/`, review the SQL, then `npm run db:migrate:local --workspace api` and, once it works, `npm run db:migrate --workspace api`. drizzle-kit only writes migrations; Wrangler runs them and records which have been applied.
+`api/src/db/schema.ts` is the source of truth for the tables, in [Drizzle](https://orm.drizzle.team). To change one, edit the schema, run `npm run db:generate --workspace api` to write the migration into `api/migrations/`, review the SQL, then `npm run db:migrate:local --workspace api` and, once it works, `npm run db:migrate --workspace api` for staging and `npm run db:migrate:production --workspace api` for production. drizzle-kit only writes migrations; Wrangler runs them and records which have been applied.
 
 The FTS5 search table and its triggers are raw SQL (`api/migrations/0002_fts_by_rowid.sql`), because Drizzle does not model virtual tables or triggers, and search queries go through Drizzle's `sql` template. `0001` to `0004` predate Drizzle; the `drizzle_baseline` migration only gives drizzle-kit a snapshot of what they created.
 
@@ -27,7 +35,7 @@ The FTS5 search table and its triggers are raw SQL (`api/migrations/0002_fts_by_
 
 The nightly cron dumps the D1 tables, not the FTS table, to R2 as JSON. To restore into a fresh D1, load the rows, then rebuild the search index with `INSERT INTO item_fts(item_fts) VALUES('rebuild')`.
 
-For an in-place undo, Time Travel restores `item` and `item_fts` consistently, but a restore to a timestamp can land minutes early. Before anything risky, note the current bookmark with `npx wrangler d1 time-travel info tacocat-proto` in `api/`, and restore to that with `npx wrangler d1 time-travel restore tacocat-proto --bookmark=<bookmark>`.
+For an in-place undo, Time Travel restores `item` and `item_fts` consistently, but a restore to a timestamp can land minutes early. Before anything risky, note the current bookmark with `npx wrangler d1 time-travel info DB --env production` in `api/`, and restore to that with `npx wrangler d1 time-travel restore DB --env production --bookmark=<bookmark>`.
 
 ## Development
 
@@ -49,11 +57,11 @@ Three things keep the supply chain honest. Dependabot (`.github/dependabot.yml`)
 
 ## Admin login
 
-`api/scripts/invite.sh "<name>"` prints a one-time invite link for the deployed Worker; add `--local` for `npm run dev --workspace api`. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh Selftest --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
+`api/scripts/invite.sh "<name>" --env staging` (or `--env production`) prints a one-time invite link for that environment's Worker; `--local` is for `npm run dev --workspace api`. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh Selftest --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
 
 ## Copying an album from AWS
 
-`node api/scripts/import-album.ts /2024/12-17/` copies one day album from the AWS staging gallery into the deployed site, or from production with `--from prod`. The originals go through the upload pipeline, so the Worker records them and makes their derived images; the album's and photos' titles, descriptions, tags, crops and thumbnail then go into D1 with the account token, since the Worker has no write endpoints for them yet. Videos are left behind while the transcoder is parked on `lite`.
+`node api/scripts/import-album.ts /2024/12-17/` copies one day album from the AWS staging gallery into this project's staging site, or into production with `--to production`, and from the AWS production gallery with `--from prod`. The originals go through the upload pipeline, so the Worker records them and makes their derived images; the album's and photos' titles, descriptions, tags, crops and thumbnail then go into D1 with the account token, since the Worker has no write endpoints for them yet. Videos are left behind while the transcoder is parked on `lite`.
 
 ## Idle latency probes
 
@@ -63,7 +71,7 @@ Requests to Globalping carry the `GLOBALPING_TOKEN` Worker secret (in `api/.dev.
 
 ## Infrastructure
 
-`infra/` holds the OpenTofu config for everything outside the Worker. It uses an account API token named `CLOUDFLARE_TERRAFORM_API_TOKEN` in `api/.dev.vars`, kept out of `CLOUDFLARE_API_TOKEN` because Wrangler would pick that up over the `tacocat` profile. State is local and gitignored.
+`infra/` holds the OpenTofu config for everything outside the Worker: the zone and its settings once, and each environment's database, buckets, queues and image host through the `environment` module, one instance per entry in `local.environments`. Its `d1_database_ids` output is what `api/wrangler.jsonc` binds. It uses an account API token named `CLOUDFLARE_TERRAFORM_API_TOKEN` in `api/.dev.vars`, kept out of `CLOUDFLARE_API_TOKEN` because Wrangler would pick that up over the `tacocat` profile. State is local and gitignored.
 
 ```bash
 cd infra

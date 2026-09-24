@@ -26,7 +26,7 @@ const TRANSCODE_RESULT = valibot.looseObject({
 });
 
 /** What transcoding needs from the bindings, with the transcoder as anything that answers fetch. */
-export interface TranscodeEnv extends Pick<Env, 'R2_ACCESS_KEY_ID' | 'R2_SECRET_ACCESS_KEY'> {
+export interface TranscodeEnv extends Pick<Env, 'R2_ACCESS_KEY_ID' | 'R2_SECRET_ACCESS_KEY' | 'MEDIA_BUCKET'> {
     TRANSCODER: {
         getByName: (name: string) => { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
     };
