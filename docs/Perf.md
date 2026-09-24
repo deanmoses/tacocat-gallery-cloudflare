@@ -33,7 +33,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 
 - **Locations:** France (Paris), US West CA (California) and US East (South Carolina). South Carolina stands in for Louisiana and Atlanta; DebugBear has nothing nearer.
 - **Device:** `Desktop unthrottled`, a device defined in the project with no added latency, no bandwidth cap and no CPU slowdown. The built-in `Desktop` adds 40 ms to every round trip.
-- **Visit:** DebugBear loads the album page and records its time to first byte and LCP. The `Vienna Journey` setting below starts with the page, as DebugBear runs every snippet, so it waits for the page's load event and a reader's median 2.3 s on the album before opening the first photo; clicking sooner would let the photo become the album page's LCP. It then steps through the next seven at 2.3 s a photo, recording each from click to photo decoded as `photo-01` to `photo-08`. With eleven photos, every Cloudflare run stopped after the tenth, about 26 s after the page started loading, where the AWS runs, whose journeys started earlier, got all eleven; eight leaves room.
+- **Visit:** DebugBear loads the album page and records its time to first byte. The `Vienna Journey` setting below starts with the page, as DebugBear runs every snippet, so it waits for the page's load event and a reader's median 2.3 s on the album before opening the first photo, and records the album page's LCP as `album-lcp` just before it clicks. DebugBear's own LCP measures the photo: Chrome stops updating LCP at a person's input, not a script's, so the open photo becomes the largest paint. It then steps through the next seven at 2.3 s a photo, recording each from click to photo decoded as `photo-01` to `photo-08`. With eleven photos, every Cloudflare run stopped after the tenth, about 26 s after the page started loading, where the AWS runs, whose journeys started earlier, got all eleven; eight leaves room.
 - **Schedule:** `.github/workflows/perf.yml` runs `node api/scripts/debugbear.ts run` at 05:23, 11:23, 19:23 and 22:23 UTC, two hours from every idle-probe run: every page once, then again as soon as all have finished. The pages have no DebugBear schedule of their own.
 - **Cold or warm:** `node api/scripts/debugbear.ts report` marks a run warm when the same page ran in the 30 minutes before it, and cold otherwise, so a run is classed by what reached the site before it rather than by which request started it. Creating or editing a page in DebugBear starts a test of its own.
 - **Background traffic:** the idle probes hit the Cloudflare site five times a day, and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California. A Paris probe can leave D1's London replica active for a Paris browser run that follows it.
@@ -43,7 +43,8 @@ The `Vienna Journey` setting, kept here because DebugBear's API can attach a set
 ```js
 // DebugBear runs this as soon as the page starts loading. Once the album page has loaded and been looked at for a
 // reader's median 2.3 s, open the first photo, then step through seven more at the same pace, timing each from the
-// click or keypress until the new photo has loaded and decoded.
+// click or keypress until the new photo has loaded and decoded. The album page's own LCP is recorded as album-lcp
+// before the first click, since Chrome keeps updating LCP through a script's clicks and would report the photo.
 const PHOTO = 'a[aria-label^="View full-size image"] img';
 const DWELL_MS = 2300;
 const PHOTOS = 8;
@@ -73,6 +74,13 @@ await new Promise((resolve) => {
 });
 await new Promise((resolve) => setTimeout(resolve, DWELL_MS));
 const firstThumbnail = await waitForElement('a[href^="/2025/09-29/"]');
+const albumLcp = await new Promise((resolve) => {
+    new PerformanceObserver((list) => resolve(list.getEntries().at(-1).startTime)).observe({
+        type: 'largest-contentful-paint',
+        buffered: true,
+    });
+});
+performance.measure('album-lcp', { start: 0, end: albumLcp });
 performance.mark('photo-01-start');
 firstThumbnail.click();
 let src = await photoShown('photo-01', null);
@@ -90,7 +98,7 @@ for (let n = 2; n <= PHOTOS; n++) {
 
 ### From the browser runs
 
-The first runs, 2026-09-24 at 01:53 UTC, about an hour after `/2025/09-29` was copied in and half an hour after an idle-probe run. Each page ran three times within six minutes: once on its creation or edit and twice by request. The cold row is each page's first run; warm is the median of the other two. LCP is when the first thumbnail appears; first photo is from its click to the photo decoded.
+The first runs, 2026-09-24 at 01:53 UTC, about an hour after `/2025/09-29` was copied in and half an hour after an idle-probe run. Each page ran three times within six minutes: once on its creation or edit and twice by request. The cold row is each page's first run; warm is the median of the other two. First photo is from its click to the photo decoded.
 
 | Location       | Run  | TTFB, Cloudflare / AWS | LCP, Cloudflare / AWS | First photo, Cloudflare / AWS |
 | -------------- | ---- | ---------------------- | --------------------- | ----------------------------- |
@@ -102,9 +110,9 @@ The first runs, 2026-09-24 at 01:53 UTC, about an hour after `/2025/09-29` was c
 | South Carolina | warm | 86 / 315 ms            | 1,624 / 1,747 ms      | 628 / 532 ms                  |
 
 - **Every later photo took 23 to 115 ms on both sites**, since both apps preload the next and previous photo during the reader's 2.3 s on each.
-- **Cloudflare's page arrives in 43 to 121 ms against AWS's 192 to 448 ms**, but its LCP stays near 1.6 s even warm: the app loads its JS, then the album, before any thumbnail shows.
-- **These LCPs may include the first photo.** The journey then clicked the first photo as soon as its thumbnail appeared, before the page's load event, so a run's LCP may be the photo rather than a thumbnail. The scheduled runs wait for the load event first.
-- **Cold France went to AWS**: Cloudflare's first run there took 3.2 s to the first thumbnail and 1.9 s for the first photo. One sample; the scheduled runs will say whether it holds.
+- **Cloudflare's page arrives in 43 to 121 ms against AWS's 192 to 448 ms.**
+- **The LCP column measures a photo, not the album page.** DebugBear's LCP kept updating through the script's clicks, so it is whichever photo was largest; the album page's own LCP is recorded as `album-lcp` from the next runs on. TTFB and the photo timings stand.
+- **The first photo in cold France went to AWS**: 1.9 s on Cloudflare against 1.0 s. One sample; the scheduled runs will say whether it holds.
 
 ### AWS today
 

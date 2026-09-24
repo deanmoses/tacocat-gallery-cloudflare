@@ -136,7 +136,8 @@ async function pageRuns(page: Page, from: Date): Promise<Run[]> {
             site: new URL(page.url).hostname === 'pix.tacocat.com' ? 'AWS' : 'Cloudflare',
             warm: previous !== undefined && date.getTime() - previous.getTime() < WARM_WITHIN_MS,
             ttfb: numeric(row['performance.ttfb']),
-            lcp: numeric(row['performance.largestContentfulPaint']),
+            // DebugBear's own LCP keeps counting through the journey's clicks, so it measures a photo.
+            lcp: numeric(row['measure.album-lcp']),
             photos: Object.keys(row)
                 .filter((key) => key.startsWith('measure.photo-'))
                 .toSorted()
