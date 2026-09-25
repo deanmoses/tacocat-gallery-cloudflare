@@ -278,6 +278,7 @@ For the sessions doing the rest, things a fresh session would otherwise find out
 - The test admin is `moses`, a seeded user, because a presign records who asked and `upload.username` references `user`; a cookie for a made-up name gets a foreign key error on the first write that records it.
 - `eslint --fix` turns `expect(a > b).toBe(true)` into `toBeGreaterThan`, which throws on strings. Compare timestamps with `Date.parse`.
 - Presign takes only strict media names, what the app's sanitizer makes, so a test stages an upload under a lowercase name with underscores, not a fixture file's own.
+- D1 binds at most 100 parameters to one statement, so rows go in as a batch of single-row inserts, never one multi-row insert; a drop of 52 photos found the presign insert doing the latter. Local D1 enforces the limit, so a test with a day's worth of rows catches it.
 
 ## Afterwards: copying the gallery
 

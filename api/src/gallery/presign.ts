@@ -88,7 +88,12 @@ export async function presignUploads(
             username,
         };
     });
-    await database.insert(schema.upload).values(rows).run();
+    // One statement per row, in one atomic batch: D1 binds at most 100 parameters to a statement, and a day's drop
+    // of photos is far more rows than that allows in one insert.
+    const [first, ...rest] = rows.map((row) => database.insert(schema.upload).values(row));
+    if (first !== undefined) {
+        await database.batch([first, ...rest]);
+    }
     const uploads = await Promise.all(
         rows.map(async (row) => {
             const url = await presign(env, { method: 'PUT', bucket: env.MEDIA_BUCKET, key: inboxKey(row.versionId) });

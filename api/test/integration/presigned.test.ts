@@ -191,6 +191,20 @@ describe('asking for upload URLs', () => {
         ]);
     });
 
+    // D1 binds at most 100 parameters to one statement, which a multi-row insert of a day's photos overruns
+    it('issues URLs for a whole day of photos at once', async () => {
+        const paths = Array.from({ length: 60 }, (_, index) => `${DAY}photo_${index}.jpg`);
+        const response = await presign(
+            DAY,
+            paths.map((path) => ({ path })),
+        );
+        const uploads = await parseExactly(response, parsePresigned);
+        const rows = await orm(env.DB).select().from(schema.upload).all();
+
+        expect(Object.keys(uploads)).toStrictEqual(paths);
+        expect(rows).toHaveLength(60);
+    });
+
     it('takes a replacement in the same format under the same path', async () => {
         const response = await presign(DAY, [{ path: `${DAY}existing.jpg`, replaces: `${DAY}existing.jpg` }]);
         const uploads = await parseExactly(response, parsePresigned);
