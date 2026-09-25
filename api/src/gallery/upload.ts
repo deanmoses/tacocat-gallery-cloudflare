@@ -40,6 +40,7 @@ interface MediaFacts extends Size {
     mediaType: MediaType;
     title: string | null;
     description: string | null;
+    tags: string[] | null;
     durationSeconds: number | null;
 }
 
@@ -70,7 +71,7 @@ export async function processUploadEvent(event: R2EventMessage, env: UploadEnv):
     const placement = await place(event);
     if (!isVideoName(placement.itemName)) {
         const bytes = await object.arrayBuffer();
-        const outcome = readImage(bytes);
+        const outcome = await readImage(bytes);
         if (!outcome.ok) {
             await reject(env, key, placement, outcome.error);
             return;
@@ -100,7 +101,7 @@ export async function processUploadEvent(event: R2EventMessage, env: UploadEnv):
         placement,
         object: fresh,
         body: fresh.body,
-        facts: { mediaType: 'video', title: null, description: null, width, height, durationSeconds },
+        facts: { mediaType: 'video', title: null, description: null, tags: null, width, height, durationSeconds },
     });
 }
 
@@ -138,6 +139,7 @@ async function store(env: UploadEnv, { placement, object, body, facts }: Stored)
             ...media,
             itemType: 'media',
             ...facts,
+            tags: facts.tags?.join(',') ?? null,
             versionId: placement.versionId,
             published: false,
         }),

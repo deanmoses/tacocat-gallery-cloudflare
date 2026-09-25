@@ -1,18 +1,20 @@
 import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
+import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import { and, asc, eq, or } from 'drizzle-orm';
-import { imageUrl } from 'tacocat-gallery-shared';
+import { imageUrl, parseAlbum } from 'tacocat-gallery-shared';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import worker from '../../src/index';
 import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/gallery/upload';
-import { call, callAsAdmin, storedItem } from '../helpers';
+import { call, callAsAdmin, parseExactly, storedItem } from '../helpers';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
 const handler: ExportedHandler<Env, R2EventMessage> = worker;
 
 const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1));
+const heic = Uint8Array.fromBase64(heicDataUrl.slice(heicDataUrl.indexOf(',') + 1));
 
 function uploadEvent(key: string): R2EventMessage {
     const now = new Date();
@@ -82,7 +84,7 @@ describe('upload pipeline', () => {
         expect(signed.searchParams.get('X-Amz-Signature')).toMatch(/^[\da-f]{64}$/v);
     });
 
-    it('moves an inbox upload to an immutable key and records its IPTC caption', async () => {
+    it('moves an inbox upload to an immutable key and records its IPTC caption and keywords', async () => {
         await env.MEDIA.put('inbox/2024/06-15/FullMetadata.jpg', jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const acks = await deliverUpload('inbox/2024/06-15/FullMetadata.jpg');
         const inbox = await env.MEDIA.head('inbox/2024/06-15/FullMetadata.jpg');
@@ -97,11 +99,28 @@ describe('upload pipeline', () => {
             published: false,
             title: 'My Image Title',
             description: 'My image description',
+            tags: 'halloween,dog,parade',
             width: 300,
             height: 225,
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([
             `originals/2024/06-15/FullMetadata.jpg/${String(item?.versionId)}`,
+        ]);
+    });
+
+    it('records the XMP caption of a HEIC, which has no IPTC, and the album lists its tags', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/photo.heic', heic, { httpMetadata: { contentType: 'image/heic' } });
+        await deliverUpload('inbox/2024/06-15/photo.heic');
+        const album = await parseExactly(await callAsAdmin('/api/album/2024/06-15/'), parseAlbum);
+
+        expect(album.children).toStrictEqual([
+            expect.objectContaining({
+                itemName: 'photo.heic',
+                title: 'Test Image Title',
+                description: 'Test description',
+                tags: ['test1', 'test2', 'test3'],
+                dimensions: { width: 4032, height: 3024 },
+            }),
         ]);
     });
 
