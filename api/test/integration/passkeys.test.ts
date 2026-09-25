@@ -135,7 +135,7 @@ describe('registering a passkey through an invite', () => {
         });
 
         expect(response.status).toBe(400);
-        await expect(response.json()).resolves.toStrictEqual({ error: 'Passkey could not be verified.' });
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Passkey could not be verified.' });
         await expect(storedPasskeys()).resolves.toStrictEqual([]);
     });
 
@@ -207,7 +207,7 @@ describe('logging in with a passkey', () => {
         const response = await browser.post('/api/auth/login/verify', await authenticator.assert(ORIGIN, earlier));
 
         expect(response.status).toBe(401);
-        await expect(response.json()).resolves.toStrictEqual({ error: 'Passkey could not be verified.' });
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Passkey could not be verified.' });
         await expect(browser.admin()).resolves.toBeNull();
     });
 

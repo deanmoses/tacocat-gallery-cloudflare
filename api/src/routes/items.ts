@@ -4,13 +4,13 @@ import type { schema } from '../db';
 import { orm, upsertItem } from '../db';
 import { d1Header } from '../db/timing';
 import { written } from '../http/bookmark';
-import { json } from '../http/responses';
+import { failure } from '../http/responses';
 
 /** `PUT /api/item` with an `ItemWrite` saves every field of that item, clearing any left out. */
 export async function putItem(request: Request, env: Env): Promise<Response> {
     const body = valibot.safeParse(itemWriteSchema, await request.json());
     if (!body.success) {
-        return json({ error: valibot.summarize(body.issues) }, 400);
+        return failure(400, valibot.summarize(body.issues));
     }
     const session = env.DB.withSession('first-primary');
     const started = performance.now();

@@ -27,6 +27,7 @@
         "aws4fetch": "^1.0.20",
         "drizzle-orm": "^0.45.3",
         "exifreader": "^4.45.2",
+        "hono": "^4.13.9",
         "tacocat-gallery-shared": "0.0.1",
         "valibot": "^1.5.0"
     },

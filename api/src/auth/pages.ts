@@ -28,7 +28,7 @@ $('login').onclick = async () => {
         const optionsJSON = await (await post('/api/auth/login/options')).json();
         const res = await post('/api/auth/login/verify', await startAuthentication({ optionsJSON }));
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error);
+        if (!res.ok) throw new Error(body.errorMessage);
         show(body.admin);
     } catch (e) {
         $('msg').textContent = e.message;
@@ -53,10 +53,10 @@ $('create').onclick = async () => {
     try {
         const options = await post('/api/auth/register/options', { token });
         const optionsJSON = await options.json();
-        if (!options.ok) throw new Error(optionsJSON.error);
+        if (!options.ok) throw new Error(optionsJSON.errorMessage);
         const res = await post('/api/auth/register/verify', { token, response: await startRegistration({ optionsJSON }) });
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error);
+        if (!res.ok) throw new Error(body.errorMessage);
         $('create').hidden = true;
         $('msg').innerHTML = 'Done. You are logged in as <b></b>. Next time, log in at <a href="/login">/login</a>.';
         $('msg').querySelector('b').textContent = body.admin;

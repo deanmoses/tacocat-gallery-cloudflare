@@ -97,5 +97,6 @@ describe('admin-only writes', () => {
         const response = await call('/api/item', { method: 'PUT', body: '{}' });
 
         expect(response.status).toBe(401);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Unauthorized' });
     });
 });
