@@ -82,7 +82,10 @@
         "consumers": [
             {
                 "queue": "tacocat-staging-uploads",
-                "max_batch_size": 10,
+                // One upload per invocation. Queues adds consumers only between batches, so a batch of ten walked one
+                // upload at a time, each holding its whole file in memory, kept a drop of 52 photos on one consumer for
+                // most of two minutes; one per batch gives the scaler a decision every upload.
+                "max_batch_size": 1,
                 "max_batch_timeout": 1,
                 "max_retries": 5,
                 // Seconds, so a short D1 or R2 outage can pass before the next attempt.
@@ -148,7 +151,7 @@
                 "consumers": [
                     {
                         "queue": "tacocat-proto-uploads",
-                        "max_batch_size": 10,
+                        "max_batch_size": 1,
                         "max_batch_timeout": 1,
                         "max_retries": 5,
                         "retry_delay": 60,
