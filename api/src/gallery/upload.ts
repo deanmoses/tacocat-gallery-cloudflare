@@ -1,15 +1,9 @@
-import {
-    type MediaType,
-    type Size,
-    VIDEO_FILE,
-    albumsEnclosing,
-    derivedPrefix,
-    isVideoName,
-} from 'tacocat-gallery-shared';
+import { type MediaType, type Size, albumsEnclosing, isVideoName } from 'tacocat-gallery-shared';
 import { insertAlbumIfMissing, orm, upsertItem } from '../db';
 import { readImage } from '../media/exif';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../media/transcoder';
-import { presign } from '../storage/presign';
+import { originalKey, posterKey, videoKey } from '../storage/keys';
+import { type S3Credentials, presign } from '../storage/s3';
 import { setThumbnail } from './albums';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 
@@ -21,9 +15,10 @@ export interface R2EventMessage {
     eventTime: string;
 }
 
-type PresignEnv = Parameters<typeof presign>[0];
+/** What signing the transcoder's URLs takes: the credentials, and which bucket is which. */
+type S3Env = S3Credentials & Pick<Env, 'MEDIA_BUCKET' | 'DERIVED_BUCKET'>;
 
-export type UploadEnv = TranscodeEnv & PresignEnv & Pick<Env, 'DB' | 'MEDIA'>;
+export type UploadEnv = TranscodeEnv & S3Env & Pick<Env, 'DB' | 'MEDIA'>;
 
 /** Where an inbox upload belongs in the gallery, and the immutable id its original will be stored under. */
 interface Placement {
@@ -84,7 +79,7 @@ export async function processUploadEvent(event: R2EventMessage, env: UploadEnv):
         });
         return;
     }
-    const job = await transcodeJob(env, key, derivedPrefix(placement.galleryPath, placement.versionId));
+    const job = await transcodeJob(env, key, placement.versionId);
     const outcome = await transcodeVideo(env, job);
     if (!outcome.ok) {
         await reject(env, key, placement, outcome.error);
@@ -105,13 +100,28 @@ export async function processUploadEvent(event: R2EventMessage, env: UploadEnv):
     });
 }
 
-/** Signed URLs for the container to read the source and write the MP4 and poster under `prefix`. */
-export async function transcodeJob(env: PresignEnv, sourceKey: string, prefix: string): Promise<TranscodeJob> {
+/**
+ * Signed URLs for the container to read the source from the media bucket and write the MP4 and poster for `versionId`
+ * into the derived bucket, where every derivative of a version lives.
+ */
+export async function transcodeJob(env: S3Env, sourceKey: string, versionId: string): Promise<TranscodeJob> {
+    const media = env.MEDIA_BUCKET;
+    const derived = env.DERIVED_BUCKET;
     return {
         sourceKey,
-        src: await presign(env, { method: 'GET', key: sourceKey }),
-        mp4Put: await presign(env, { method: 'PUT', key: `${prefix}/${VIDEO_FILE}`, contentType: 'video/mp4' }),
-        posterPut: await presign(env, { method: 'PUT', key: `${prefix}/poster.jpg`, contentType: 'image/jpeg' }),
+        src: await presign(env, { method: 'GET', bucket: media, key: sourceKey }),
+        mp4Put: await presign(env, {
+            method: 'PUT',
+            bucket: derived,
+            key: videoKey(versionId),
+            contentType: 'video/mp4',
+        }),
+        posterPut: await presign(env, {
+            method: 'PUT',
+            bucket: derived,
+            key: posterKey(versionId),
+            contentType: 'image/jpeg',
+        }),
     };
 }
 
@@ -128,7 +138,11 @@ async function place(event: R2EventMessage): Promise<Placement> {
     };
 }
 
-/** Records the item, then the original under its immutable key, then lets go of the inbox copy. */
+/**
+ * Records the item, then the original under its immutable key, then lets go of the inbox copy. The original carries
+ * the path it was uploaded to, written once and never updated, so an object in a bucket keyed by version can still say
+ * where it came from.
+ */
 async function store(env: UploadEnv, { placement, object, body, facts }: Stored): Promise<void> {
     const database = orm(env.DB);
     const albums = albumsEnclosing(placement.parentPath);
@@ -148,8 +162,9 @@ async function store(env: UploadEnv, { placement, object, body, facts }: Stored)
         ...(day === undefined ? [] : [setThumbnail(database, day, media, { onlyIfNone: true })]),
         uploadErrorDelete(database, placement.galleryPath),
     ]);
-    await env.MEDIA.put(`originals${placement.galleryPath}/${placement.versionId}`, body, {
+    await env.MEDIA.put(originalKey(placement.versionId), body, {
         httpMetadata: object.httpMetadata ?? {},
+        customMetadata: { path: placement.galleryPath },
     });
     await env.MEDIA.delete(placement.inboxKey);
     console.info({ event: 'upload_processed', ...placement, ...facts });

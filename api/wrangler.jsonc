@@ -41,8 +41,9 @@
         "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
         // The derived bucket's custom domain, which /i2/* fetches derivatives through.
         "DERIVED_ORIGIN": "https://staging-img.deanmoses.com",
-        // The bucket presigned uploads and transcodes go to, by its S3 name.
+        // The buckets by their S3 names: uploads are presigned into the first, and the transcoder writes into the second.
         "MEDIA_BUCKET": "tacocat-staging-media",
+        "DERIVED_BUCKET": "tacocat-staging-derived",
         // What the idle-latency probes measure.
         "PROBE_TARGET": "tacocat-gallery-cloudflare-staging.tacocat-gallery-cloudflare.workers.dev",
     },
@@ -108,6 +109,7 @@
                 "SITE_ORIGIN": "https://pix.deanmoses.com",
                 "DERIVED_ORIGIN": "https://img.deanmoses.com",
                 "MEDIA_BUCKET": "tacocat-proto-media",
+                "DERIVED_BUCKET": "tacocat-proto-derived",
                 "PROBE_TARGET": "tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev",
             },
             "d1_databases": [

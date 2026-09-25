@@ -89,6 +89,10 @@ Three things keep the supply chain honest. Dependabot (`.github/dependabot.yml`)
 
 `node api/scripts/import-album.ts /2024/12-17/` copies one day album from the AWS staging gallery into this project's staging site, or into production with `--to production`, and from the AWS production gallery with `--from prod`. The originals go through the upload pipeline, so the Worker records them and makes their derived images; the album's and photos' titles, descriptions, tags, crops and thumbnail then go into D1 with the account token, since the Worker has no write endpoints for them yet. Videos are left behind while the transcoder is parked on `lite`.
 
+## Finding an item's objects
+
+The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix.jpg` prints the item's row from the deployed database and every object stored for its version in each bucket, `--env production` for production. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
+
 ## Idle latency probes
 
 The probe cron runs on Cloudflare, not locally. To read the results, run `npm run probes --workspace api`. To try the probe code without waiting for the schedule, run `npx wrangler dev --test-scheduled --enable-containers=false` in `api/` and request `/__scheduled?cron=23+0,1,3,7,15+*+*+*`. That runs the handler locally against the deployed Worker and writes to the local D1.

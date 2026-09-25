@@ -1,7 +1,18 @@
-import { isHeicName, parseMediaVersion } from 'tacocat-gallery-shared';
+import { isHeicName, parseImageRequest, parseMediaVersion } from 'tacocat-gallery-shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
-import { type Derivative, IMMUTABLE, type Steps, asJpeg, derivedImage, derivedKey, timed } from '../media/images';
+import {
+    type Derivation,
+    type Derivative,
+    IMMUTABLE,
+    type Steps,
+    asJpeg,
+    derivativeName,
+    derivedImage,
+    outputFormat,
+    timed,
+} from '../media/images';
+import { derivedImageKey, originalKey, posterKey } from '../storage/keys';
 
 /**
  * `GET /raw/<media path>/<versionId>`: that version's original, as uploaded. Only Safari can show a HEIC, so one comes
@@ -15,7 +26,7 @@ export async function raw(request: Request, env: Env): Promise<Response> {
     if (wanted === null) {
         return failure(400, 'expected /raw/<media path>/<versionId>');
     }
-    const object = await env.MEDIA.get(`originals${wanted.path}/${wanted.versionId}`);
+    const object = await env.MEDIA.get(originalKey(wanted.versionId));
     if (!object) {
         return notFound();
     }
@@ -60,7 +71,7 @@ export async function derivedViaCacheApi(
         const response = new Response(hit.body, hit);
         return reported(request, response, 'cache-api-hit', steps);
     }
-    const wanted = derivedKey(new URL(request.url), '/i');
+    const wanted = derivation(new URL(request.url), '/i');
     if (wanted === null) {
         return badImageUrl();
     }
@@ -96,7 +107,7 @@ function reported(request: Request, response: Response, how: string, steps: Step
  */
 export async function derivedViaCdn(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const wanted = derivedKey(url, '/i2');
+    const wanted = derivation(url, '/i2');
     if (wanted === null) {
         return badImageUrl();
     }
@@ -112,6 +123,22 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
     }
     const derivative = await derivedImage(env, wanted, {});
     return 'missing' in derivative ? sourceNotFound(derivative.missing) : generated(derivative);
+}
+
+/** What the URL asks for and where its derivative and sources are, or null for a URL imageUrl would not write. */
+function derivation(url: URL, prefix: string): Derivation | null {
+    const request = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);
+    if (request === null) {
+        return null;
+    }
+    const format = outputFormat(url.searchParams.get('format'));
+    return {
+        request,
+        format,
+        key: derivedImageKey(request.versionId, derivativeName(request, format)),
+        poster: posterKey(request.versionId),
+        original: originalKey(request.versionId),
+    };
 }
 
 function generated(derivative: Derivative): Response {

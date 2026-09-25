@@ -5,13 +5,14 @@
 //
 // Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production]
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
-import { presign } from '../src/storage/presign.ts';
+import { presign } from '../src/storage/s3.ts';
+import { devVars } from './dev-vars.ts';
 
 const API_DIR = fileURLToPath(new URL('..', import.meta.url));
 // Where the album goes. Staging is wrangler.jsonc's top-level environment, so Wrangler reaches it without --env.
@@ -125,19 +126,6 @@ function isVideo(item: AwsMedia): boolean {
     return item.mediaType === 'video';
 }
 
-/** The Worker's secrets as api/.dev.vars holds them, read here and never printed. */
-async function devVars(): Promise<Record<string, string>> {
-    const lines = (await readFile(path.join(API_DIR, '.dev.vars'), 'utf8')).split('\n');
-    return Object.fromEntries(
-        lines
-            .filter((line) => line.includes('='))
-            .map((line) => {
-                const at = line.indexOf('=');
-                return [line.slice(0, at).trim(), line.slice(at + 1).trim()];
-            }),
-    );
-}
-
 /** Sends the original to R2's inbox as the browser does, which is what starts the Worker's processing of it. */
 async function upload(photo: AwsMedia): Promise<void> {
     const response = await fetch(`${source.images}${photo.path}`);
@@ -150,9 +138,8 @@ async function upload(photo: AwsMedia): Promise<void> {
         {
             R2_ACCESS_KEY_ID: secrets['R2_ACCESS_KEY_ID'] ?? '',
             R2_SECRET_ACCESS_KEY: secrets['R2_SECRET_ACCESS_KEY'] ?? '',
-            MEDIA_BUCKET: target.bucket,
         },
-        { method: 'PUT', key: `inbox${photo.path}`, contentType },
+        { method: 'PUT', bucket: target.bucket, key: `inbox${photo.path}`, contentType },
     );
     const put = await fetch(url, { method: 'PUT', headers: { 'content-type': contentType }, body });
     if (!put.ok) {

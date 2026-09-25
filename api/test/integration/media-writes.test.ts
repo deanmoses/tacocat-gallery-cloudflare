@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { type AlbumGalleryItem, parseAlbum } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
+import { originalKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
 
 const DAY = '/1990/06-15/';
@@ -117,10 +118,10 @@ describe('a media item', () => {
         });
 
         it('leaves the objects for the purge', async () => {
-            await env.MEDIA.put(`originals${DAY}felix.jpg/v1`, new Uint8Array(3));
+            await env.MEDIA.put(originalKey('v1'), new Uint8Array(3));
             await write('DELETE', `/api/media${DAY}felix.jpg`);
 
-            await expect(env.MEDIA.head(`originals${DAY}felix.jpg/v1`)).resolves.not.toBeNull();
+            await expect(env.MEDIA.head(originalKey('v1'))).resolves.not.toBeNull();
         });
 
         it('is not found for a media item that is not there, and for an album', async () => {

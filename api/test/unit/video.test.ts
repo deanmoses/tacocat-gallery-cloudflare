@@ -20,8 +20,8 @@ function transcoderEnv(respond: () => Response): { env: TranscodeEnv; requests: 
 const JOB: TranscodeJob = {
     sourceKey: 'inbox/a.mov',
     src: 'https://bucket.example/inbox/a.mov?signed',
-    mp4Put: 'https://bucket.example/derived/a.mov/v1/video.mp4?signed',
-    posterPut: 'https://bucket.example/derived/a.mov/v1/poster.jpg?signed',
+    mp4Put: 'https://bucket.example/derived/v1/video.mp4?signed',
+    posterPut: 'https://bucket.example/derived/v1/poster.jpg?signed',
 };
 
 function transcoded(rotation: number): Response {

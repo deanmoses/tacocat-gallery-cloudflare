@@ -9,9 +9,8 @@
 //
 // Usage: node api/scripts/check-gallery.ts prod-items.json [--site http://localhost:8787] [--paths]
 import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
+import { devVars } from './dev-vars.ts';
 
 const file = process.argv[2];
 if (file === undefined || file.startsWith('--')) {
@@ -23,7 +22,6 @@ const siteAt = process.argv.indexOf('--site');
 const site = siteAt === -1 ? 'http://localhost:8787' : (process.argv[siteAt + 1] ?? '');
 const showEveryPath = process.argv.includes('--paths');
 
-const API_DIR = fileURLToPath(new URL('..', import.meta.url));
 const AT_ONCE = 8;
 const PATHS_SHOWN = 5;
 
@@ -232,19 +230,6 @@ function parseJson(text: string): unknown {
     } catch {
         return undefined;
     }
-}
-
-/** The Worker's secrets as api/.dev.vars holds them, which is what `wrangler dev` signs sessions with; never printed. */
-async function devVars(): Promise<Record<string, string>> {
-    const lines = (await readFile(path.join(API_DIR, '.dev.vars'), 'utf8')).split('\n');
-    return Object.fromEntries(
-        lines
-            .filter((line) => line.includes('='))
-            .map((line) => {
-                const at = line.indexOf('=');
-                return [line.slice(0, at).trim(), line.slice(at + 1).trim()];
-            }),
-    );
 }
 
 /** An admin session cookie signed as the Worker signs one, good for an hour. */

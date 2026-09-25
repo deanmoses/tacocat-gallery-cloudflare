@@ -1,8 +1,8 @@
 import type { Rectangle } from './album';
 import { isMediaPath } from './paths';
 
-// The URLs the web app asks the Worker for media by. Both ends build and read them here, and a derivative's stored key
-// is made from the same text, so a derivative is found again only if every URL for it is spelled the same way.
+// The URLs the web app asks the Worker for media by. Both ends build and read them here, and the Worker keys a stored
+// derivative from the same text, so a derivative is found again only if every URL for it is spelled the same way.
 
 /** At least one side, in pixels. With both, the image is cut to cover them; with one, scaled to it. */
 export type ImageSize = { width: number; height: number | null } | { width: null; height: number };
@@ -79,14 +79,6 @@ export function parseMediaVersion(rest: string): MediaVersion | null {
 export function originalUrl(path: string, versionId: string): string {
     return `/raw${path}/${versionId}`;
 }
-
-/** The R2 prefix under which a version's derivatives live: the transcoder's MP4 and poster, and every image size. */
-export function derivedPrefix(path: string, versionId: string): string {
-    return `derived${path}/${versionId}`;
-}
-
-/** The file name the transcoder writes a video's MP4 under, in its version's derived prefix. */
-export const VIDEO_FILE = 'video.mp4';
 
 /** A version of a video as the MP4 the transcoder wrote, served with byte ranges. */
 export function videoUrl(path: string, versionId: string): string {

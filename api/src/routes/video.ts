@@ -1,6 +1,7 @@
-import { VIDEO_FILE, derivedPrefix, parseMediaVersion } from 'tacocat-gallery-shared';
+import { parseMediaVersion } from 'tacocat-gallery-shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
+import { videoKey } from '../storage/keys';
 
 /**
  * `GET /v/<media path>/<versionId>`: the MP4 the transcoder wrote for that version, with byte ranges, which playback
@@ -11,8 +12,7 @@ export async function media(request: Request, env: Env): Promise<Response> {
     if (wanted === null) {
         return failure(400, 'expected /v/<media path>/<versionId>');
     }
-    const key = `${derivedPrefix(wanted.path, wanted.versionId)}/${VIDEO_FILE}`;
-    const object = await env.MEDIA.get(key, { range: request.headers });
+    const object = await env.DERIVED.get(videoKey(wanted.versionId), { range: request.headers });
     if (!object) {
         return notFound();
     }
