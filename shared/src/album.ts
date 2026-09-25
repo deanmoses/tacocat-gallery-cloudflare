@@ -71,9 +71,6 @@ const albumGalleryItem = valibot.object({
     children: valibot.optional(valibot.array(galleryRecordSchema)),
 });
 
-/** The body of `POST /api/album/<path>/thumbnail`: the media item, in that album or any other, to show it by. */
-export const setThumbnailSchema = valibot.object({ path: valibot.string() });
-
 export type Rectangle = valibot.InferOutput<typeof rectangleSchema>;
 export type Size = valibot.InferOutput<typeof sizeSchema>;
 export type AlbumThumbnailRecord = valibot.InferOutput<typeof albumThumbnail>;

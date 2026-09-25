@@ -62,9 +62,9 @@ describe('search', () => {
             published: true,
         });
         await putItem({ parentPath: '/2024/07-03/', itemName: 'a.jpg', ...MEDIA });
-        await callAsAdmin('/api/album/2024/07-03/thumbnail', {
-            method: 'POST',
-            body: JSON.stringify({ path: '/2024/07-03/a.jpg' }),
+        await callAsAdmin('/api/album-thumb/2024/07-03/', {
+            method: 'PATCH',
+            body: JSON.stringify({ mediaPath: '/2024/07-03/a.jpg' }),
         });
         const found = await search('tostada');
 

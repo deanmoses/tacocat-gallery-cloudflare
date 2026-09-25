@@ -15,7 +15,15 @@ import { failure, html, json, notFound } from '../http/responses';
 import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
 import { seed } from '../ops/seed';
-import { getAlbum, headMedia, setAlbumThumbnail } from './albums';
+import {
+    createAlbumRoute,
+    deleteAlbumRoute,
+    getAlbum,
+    headMedia,
+    renameAlbumRoute,
+    setAlbumThumbnail,
+    updateAlbumRoute,
+} from './albums';
 import { debugImage } from './debug';
 import { uploadErrors } from './errors';
 import { derivedViaCacheApi, derivedViaCdn, raw } from './images';
@@ -120,10 +128,11 @@ export function createApp(): Hono<App> {
     app.post('/api/backup', async (context) => json(await backupDatabase(context.env)));
     app.post('/api/upload-url', async (context) => uploadUrl(context.req.raw, context.env));
     app.post('/api/errors', async (context) => uploadErrors(context.req.raw, context.env));
-    // A wildcard between two segments spans only one, so the path's own tail says whether this is the thumbnail route.
-    app.post('/api/album/*', async (context) =>
-        context.req.path.endsWith('/thumbnail') ? setAlbumThumbnail(context.req.raw, context.env) : notFound(),
-    );
+    app.put('/api/album/*', async (context) => createAlbumRoute(context.req.raw, context.env));
+    app.patch('/api/album/*', async (context) => updateAlbumRoute(context.req.raw, context.env));
+    app.delete('/api/album/*', async (context) => deleteAlbumRoute(context.req.raw, context.env));
+    app.post('/api/album-rename/*', async (context) => renameAlbumRoute(context.req.raw, context.env));
+    app.patch('/api/album-thumb/*', async (context) => setAlbumThumbnail(context.req.raw, context.env));
     return app;
 }
 

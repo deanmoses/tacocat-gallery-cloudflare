@@ -1,7 +1,17 @@
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { albumExists, mediaExists, readAlbum, setThumbnail } from '../../src/gallery/albums';
+import {
+    albumExists,
+    createAlbum,
+    deleteAlbum,
+    describeAlbum,
+    mediaExists,
+    readAlbum,
+    renameAlbum,
+    setThumbnail,
+    updateAlbum,
+} from '../../src/gallery/albums';
 import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/gallery/search';
@@ -159,6 +169,73 @@ describe('rows read on a gallery-sized table', () => {
         // are written. The search index's update trigger, were it to fire, would write two more rows per change.
         expect(result.meta.rows_read).toBeLessThanOrEqual(3 * result.meta.changes + OVERHEAD);
         expect(result.meta.rows_written).toBeLessThanOrEqual(2 * result.meta.changes);
+    });
+
+    // Each write's conditions look at other rows through subqueries, which have to seek.
+    it.each([
+        {
+            what: 'making a day album',
+            write: async () => createAlbum(database, { parentPath: '/2001/', itemName: '12-31' }, {}),
+        },
+        {
+            what: 'publishing a day under its year',
+            write: async () =>
+                updateAlbum(database, { parentPath: '/2001/', itemName: dayName(4) }, { published: true }),
+        },
+        {
+            what: 'deleting an empty day',
+            write: async () => {
+                await createAlbum(database, { parentPath: '/2001/', itemName: '12-31' }, {});
+                return deleteAlbum(database, { parentPath: '/2001/', itemName: '12-31' });
+            },
+        },
+    ])('$what reads a few rows', async ({ write }) => {
+        const result = await write();
+
+        // More than one where the search index's trigger wrote too.
+        expect(result.changes).toBeGreaterThan(0);
+        expect(result.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    it('refusing to delete a day with photos reads a few rows', async () => {
+        const result = await deleteAlbum(database, { parentPath: '/2001/', itemName: dayName(4) });
+
+        expect(result.changes).toBe(0);
+        expect(result.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    it('renaming a day moves its photos and reads a few rows besides them', async () => {
+        const result = await renameAlbum(database, { parentPath: '/2001/', itemName: dayName(4) }, '12-31');
+        const moved = await database
+            .select({ id: item.id })
+            .from(item)
+            .where(eq(item.parentPath, '/2001/12-31/'))
+            .run();
+
+        expect(result.changes).toBe(1);
+        expect(moved.results).toHaveLength(IMAGES_PER_DAY);
+    });
+
+    it('explaining a refused write reads a few rows', async () => {
+        const facts = await describeAlbum(
+            database,
+            { parentPath: '/2001/', itemName: dayName(4) },
+            { newName: dayName(5), mediaPath: `${dayPath(4)}img_1.jpg` },
+        );
+        const cost = await database
+            .select({ id: item.id })
+            .from(item)
+            .where(and(eq(item.parentPath, '/2001/'), eq(item.itemName, dayName(4))))
+            .run();
+
+        expect(facts).toStrictEqual({
+            exists: true,
+            yearPublished: true,
+            children: IMAGES_PER_DAY,
+            taken: true,
+            mediaExists: true,
+        });
+        expect(cost.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
 
     it('setting an album thumbnail reads a few rows', async () => {

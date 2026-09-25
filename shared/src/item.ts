@@ -94,6 +94,24 @@ function cropFits(item: ItemWrite): boolean {
     return x >= 0 && y >= 0 && width > 0 && height > 0 && x + width <= item.width && y + height <= item.height;
 }
 
+/**
+ * The body of `PUT` and `PATCH /api/album/<path>`: what an admin writes about an album, every field optional. A
+ * caption that is blank clears the field, since the editor sends what is left when the text is deleted.
+ */
+export const albumWriteSchema = valibot.strictObject({
+    description: valibot.optional(valibot.nullable(valibot.string())),
+    summary: valibot.optional(valibot.nullable(valibot.string())),
+    published: valibot.optional(valibot.boolean()),
+});
+
+/** The body of `POST /api/album-rename/<path>` and `POST /api/media-rename/<path>`. */
+export const renameSchema = valibot.strictObject({ newName: valibot.string() });
+
+/** The body of `PATCH /api/album-thumb/<path>`: the media item, in the album or an album inside it, to show it by. */
+export const albumThumbnailSchema = valibot.strictObject({ mediaPath: valibot.string() });
+
+export type AlbumWrite = valibot.InferOutput<typeof albumWriteSchema>;
+
 /** What `GET /api/search/<terms>` returns: the matches this viewer may see, as full records, newest first. */
 const searchResponse = valibot.object({
     /** Every match, not only this page. */
