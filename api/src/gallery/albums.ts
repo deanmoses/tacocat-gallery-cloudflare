@@ -14,14 +14,19 @@ import {
     rectangleSchema,
 } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
-import { NOW, type Orm, schema } from '../db';
+import { type Orm, schema } from '../db';
 
-// A crop as the column stores it, JSON text.
-const CROP = valibot.pipe(
-    valibot.string(),
-    valibot.transform((text): unknown => JSON.parse(text)),
-    rectangleSchema,
-);
+/** A JSON column as D1 returns it, text, parsed against `shape`. */
+function jsonColumn<T extends valibot.GenericSchema>(shape: T): valibot.GenericSchema<string, valibot.InferOutput<T>> {
+    return valibot.pipe(
+        valibot.string(),
+        valibot.transform((text): unknown => JSON.parse(text)),
+        shape,
+    );
+}
+
+const CROP = jsonColumn(rectangleSchema);
+const TAGS = jsonColumn(valibot.array(valibot.string()));
 
 // A row of `item` joined to its thumbnail's row, as D1 returns it under SQL column names: run() is the query method
 // that returns D1's meta, and its rows are untyped.
@@ -31,10 +36,10 @@ const ROW_FIELDS = {
     title: valibot.nullable(valibot.string()),
     description: valibot.nullable(valibot.string()),
     summary: valibot.nullable(valibot.string()),
-    tags: valibot.nullable(valibot.string()),
+    tags: valibot.nullable(TAGS),
     version_id: valibot.nullable(valibot.string()),
     published: valibot.number(),
-    updated_on: valibot.string(),
+    updated_at: valibot.string(),
     width: valibot.nullable(valibot.number()),
     height: valibot.nullable(valibot.number()),
     duration_seconds: valibot.nullable(valibot.number()),
@@ -108,7 +113,7 @@ export function setThumbnail(
         .where(and(eq(item.parentPath, media.parentPath), eq(item.itemName, media.itemName)));
     return database
         .update(item)
-        .set({ thumbnailId: sql`(${mediaId})`, updatedOn: NOW })
+        .set({ thumbnailId: sql`(${mediaId})` })
         .$dynamic()
         .where(
             and(
@@ -164,7 +169,7 @@ function toAlbumRecord(row: AlbumRow): AlbumRecord {
         path: albumPath(row.parent_path, row.item_name),
         parentPath: row.parent_path,
         itemName: row.item_name,
-        updatedOn: row.updated_on,
+        updatedOn: row.updated_at,
         ...(row.description !== null && { description: row.description }),
         published: row.published === 1,
         ...(thumbnail !== undefined && { thumbnail }),
@@ -178,14 +183,14 @@ function toMediaRecord(row: MediaRow): MediaRecord {
         path: mediaPath(row.parent_path, row.item_name),
         parentPath: row.parent_path,
         itemName: row.item_name,
-        updatedOn: row.updated_on,
+        updatedOn: row.updated_at,
         ...(row.description !== null && { description: row.description }),
         // A media item comes with its file and its size; rows from before that was required say nothing of either.
         versionId: row.version_id ?? '',
         dimensions: { width: row.width ?? 0, height: row.height ?? 0 },
         ...(row.thumbnail_crop !== null && { thumbnail: row.thumbnail_crop }),
         ...(row.title !== null && { title: row.title }),
-        ...(row.tags !== null && { tags: row.tags.split(',') }),
+        ...(row.tags !== null && { tags: row.tags }),
     };
     return row.media_type === 'video'
         ? { ...record, mediaType: 'video', duration: row.duration_seconds ?? 0 }

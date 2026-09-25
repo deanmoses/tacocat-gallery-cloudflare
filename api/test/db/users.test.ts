@@ -18,7 +18,7 @@ describe('the user table', () => {
     it('is what an invite must name', async () => {
         const invite = orm(env.DB)
             .insert(schema.invite)
-            .values({ tokenHash: 'hash', username: 'nobody', expiresAt: '2999-01-01T00:00:00.000Z' });
+            .values({ tokenHash: 'a'.repeat(64), username: 'nobody', expiresAt: '2999-01-01T00:00:00.000Z' });
 
         await expect(invite).rejects.toMatchObject(FOREIGN_KEY_FAILED);
     });

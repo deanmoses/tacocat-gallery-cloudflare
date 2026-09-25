@@ -99,7 +99,7 @@ describe('upload pipeline', () => {
             published: false,
             title: 'My Image Title',
             description: 'My image description',
-            tags: 'halloween,dog,parade',
+            tags: ['halloween', 'dog', 'parade'],
             width: 300,
             height: 225,
         });
@@ -129,7 +129,7 @@ describe('upload pipeline', () => {
             parentPath: '/1999/',
             itemName: '03-03',
             itemType: 'album',
-            title: 'Kept',
+            summary: 'Kept',
             published: true,
         }).run();
         await env.MEDIA.put('inbox/1999/03-03/kept.jpg', jpg, { httpMetadata: { contentType: 'image/jpeg' } });
@@ -139,7 +139,7 @@ describe('upload pipeline', () => {
             .select({
                 parentPath: item.parentPath,
                 itemName: item.itemName,
-                title: item.title,
+                summary: item.summary,
                 published: item.published,
             })
             .from(item)
@@ -148,8 +148,8 @@ describe('upload pipeline', () => {
             .all();
 
         expect(albums).toStrictEqual([
-            { parentPath: '/', itemName: '1999', title: null, published: false },
-            { parentPath: '/1999/', itemName: '03-03', title: 'Kept', published: true },
+            { parentPath: '/', itemName: '1999', summary: null, published: false },
+            { parentPath: '/1999/', itemName: '03-03', summary: 'Kept', published: true },
         ]);
     });
 

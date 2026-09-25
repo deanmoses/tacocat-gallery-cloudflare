@@ -139,7 +139,6 @@ async function store(env: UploadEnv, { placement, object, body, facts }: Stored)
             ...media,
             itemType: 'media',
             ...facts,
-            tags: facts.tags?.join(',') ?? null,
             versionId: placement.versionId,
             published: false,
         }),

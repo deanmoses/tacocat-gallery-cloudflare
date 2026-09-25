@@ -64,13 +64,13 @@ describe('nightly cron', () => {
         const { uploadError } = schema;
         const database = orm(env.DB);
         await database.insert(uploadError).values([
-            { path: '/old.mov', message: 'stale', createdAt: hoursAgo(25) },
-            { path: '/new.mov', message: 'fresh', createdAt: hoursAgo(23) },
+            { path: '/2024/06-15/old.mov', message: 'stale', createdAt: hoursAgo(26), updatedAt: hoursAgo(25) },
+            { path: '/2024/06-15/new.mov', message: 'fresh', createdAt: hoursAgo(26), updatedAt: hoursAgo(23) },
         ]);
         await runCron('17 9 * * *');
         const kept = await database.select({ path: uploadError.path }).from(uploadError).orderBy(asc(uploadError.path));
 
-        expect(kept).toStrictEqual([{ path: '/new.mov' }]);
+        expect(kept).toStrictEqual([{ path: '/2024/06-15/new.mov' }]);
     });
 
     it('purges spent login challenges once they have expired', async () => {

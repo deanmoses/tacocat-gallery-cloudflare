@@ -1,0 +1,968 @@
+{
+  "id": "6af6df09-4fd4-4752-8cb3-ea8734df9822",
+  "prevId": "ae0379fc-e926-49f5-b7f9-136e4fc5fdb1",
+  "version": "6",
+  "dialect": "sqlite",
+  "tables": {
+    "invite": {
+      "name": "invite",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "invite_username_user_username_fk": {
+          "name": "invite_username_user_username_fk",
+          "tableFrom": "invite",
+          "columnsFrom": [
+            "username"
+          ],
+          "tableTo": "user",
+          "columnsTo": [
+            "username"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "invite_token_hash_format": {
+          "name": "invite_token_hash_format",
+          "value": "length(token_hash) = 64 AND token_hash NOT GLOB '*[^0-9a-f]*'"
+        },
+        "invite_expires_at_format": {
+          "name": "invite_expires_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS expires_at"
+        },
+        "invite_used_at_format": {
+          "name": "invite_used_at_format",
+          "value": "used_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', used_at) IS used_at"
+        },
+        "invite_created_at_format": {
+          "name": "invite_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "invite_updated_at_format": {
+          "name": "invite_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "invite_updated_after_created": {
+          "name": "invite_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "item": {
+      "name": "item",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parent_path": {
+          "name": "parent_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_name": {
+          "name": "item_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_type": {
+          "name": "item_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "published": {
+          "name": "published",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "thumbnail_id": {
+          "name": "thumbnail_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "thumbnail_crop": {
+          "name": "thumbnail_crop",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "item_version_id": {
+          "name": "item_version_id",
+          "columns": [
+            "version_id"
+          ],
+          "isUnique": false
+        },
+        "item_thumbnail_id": {
+          "name": "item_thumbnail_id",
+          "columns": [
+            "thumbnail_id"
+          ],
+          "isUnique": false
+        },
+        "item_parent_path_item_name_unique": {
+          "name": "item_parent_path_item_name_unique",
+          "columns": [
+            "parent_path",
+            "item_name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "item_thumbnail_id_item_id_fk": {
+          "name": "item_thumbnail_id_item_id_fk",
+          "tableFrom": "item",
+          "columnsFrom": [
+            "thumbnail_id"
+          ],
+          "tableTo": "item",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "item_type_check": {
+          "name": "item_type_check",
+          "value": "item_type IN ('album', 'media')"
+        },
+        "item_media_type_check": {
+          "name": "item_media_type_check",
+          "value": "(item_type = 'media') = (media_type IS NOT NULL) AND (media_type IS NULL OR media_type IN ('image', 'video'))"
+        },
+        "item_path_check": {
+          "name": "item_path_check",
+          "value": "CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '[0-9][0-9][0-9][0-9]') OR (parent_path GLOB '/[0-9][0-9][0-9][0-9]/' AND item_name GLOB '[0-9][0-9]-[0-9][0-9]') ELSE parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*' END"
+        },
+        "item_file_check": {
+          "name": "item_file_check",
+          "value": "CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END"
+        },
+        "item_duration_check": {
+          "name": "item_duration_check",
+          "value": "(media_type IS 'video') = (duration_seconds IS NOT NULL) AND (duration_seconds IS NULL OR duration_seconds > 0)"
+        },
+        "item_caption_check": {
+          "name": "item_caption_check",
+          "value": "CASE item_type WHEN 'album' THEN title IS NULL AND tags IS NULL ELSE summary IS NULL END AND (title IS NULL OR trim(title, char(32, 9, 10, 13)) <> '') AND (description IS NULL OR trim(description, char(32, 9, 10, 13)) <> '') AND (summary IS NULL OR trim(summary, char(32, 9, 10, 13)) <> '')"
+        },
+        "item_tags_check": {
+          "name": "item_tags_check",
+          "value": "tags IS NULL OR (json_valid(tags) AND json_type(tags) = 'array' AND json_array_length(tags) > 0)"
+        },
+        "item_published_check": {
+          "name": "item_published_check",
+          "value": "published IN (0, 1) AND (item_type = 'album' OR published = 0)"
+        },
+        "item_thumbnail_check": {
+          "name": "item_thumbnail_check",
+          "value": "CASE item_type WHEN 'album' THEN thumbnail_crop IS NULL ELSE thumbnail_id IS NULL AND (thumbnail_crop IS NULL OR (json_valid(thumbnail_crop) AND json_type(thumbnail_crop) = 'object' AND coalesce(json_type(thumbnail_crop, '$.x'), '') IN ('integer', 'real') AND coalesce(json_type(thumbnail_crop, '$.y'), '') IN ('integer', 'real') AND coalesce(json_type(thumbnail_crop, '$.width'), '') IN ('integer', 'real') AND coalesce(json_type(thumbnail_crop, '$.height'), '') IN ('integer', 'real') AND json_extract(thumbnail_crop, '$.x') >= 0 AND json_extract(thumbnail_crop, '$.y') >= 0 AND json_extract(thumbnail_crop, '$.width') > 0 AND json_extract(thumbnail_crop, '$.height') > 0 AND json_extract(thumbnail_crop, '$.x') + json_extract(thumbnail_crop, '$.width') <= coalesce(width, 0) AND json_extract(thumbnail_crop, '$.y') + json_extract(thumbnail_crop, '$.height') <= coalesce(height, 0))) END"
+        },
+        "item_created_at_format": {
+          "name": "item_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "item_updated_at_format": {
+          "name": "item_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "item_updated_after_created": {
+          "name": "item_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "passkey": {
+      "name": "passkey",
+      "columns": {
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "public_key": {
+          "name": "public_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "counter": {
+          "name": "counter",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "transports": {
+          "name": "transports",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "passkey_username_user_username_fk": {
+          "name": "passkey_username_user_username_fk",
+          "tableFrom": "passkey",
+          "columnsFrom": [
+            "username"
+          ],
+          "tableTo": "user",
+          "columnsTo": [
+            "username"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "passkey_credential_id_check": {
+          "name": "passkey_credential_id_check",
+          "value": "credential_id <> ''"
+        },
+        "passkey_public_key_check": {
+          "name": "passkey_public_key_check",
+          "value": "public_key <> ''"
+        },
+        "passkey_counter_check": {
+          "name": "passkey_counter_check",
+          "value": "counter >= 0"
+        },
+        "passkey_last_used_at_format": {
+          "name": "passkey_last_used_at_format",
+          "value": "last_used_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_used_at) IS last_used_at"
+        },
+        "passkey_created_at_format": {
+          "name": "passkey_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "passkey_updated_at_format": {
+          "name": "passkey_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "passkey_updated_after_created": {
+          "name": "passkey_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "probe_result": {
+      "name": "probe_result",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "run_at": {
+          "name": "run_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "idle_hours": {
+          "name": "idle_hours",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "seq": {
+          "name": "seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "probe_city": {
+          "name": "probe_city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "probe_network": {
+          "name": "probe_network",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "total_ms": {
+          "name": "total_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dns_ms": {
+          "name": "dns_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tcp_ms": {
+          "name": "tcp_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tls_ms": {
+          "name": "tls_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_byte_ms": {
+          "name": "first_byte_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "worker_colo": {
+          "name": "worker_colo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "worker_ms": {
+          "name": "worker_ms",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "d1_region": {
+          "name": "d1_region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "d1_colo": {
+          "name": "d1_colo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "d1_primary": {
+          "name": "d1_primary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "d1_rtt_ms": {
+          "name": "d1_rtt_ms",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "measurement_id": {
+          "name": "measurement_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "probe_result_run_at": {
+          "name": "probe_result_run_at",
+          "columns": [
+            "run_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "probe_result_seq_check": {
+          "name": "probe_result_seq_check",
+          "value": "seq >= 0"
+        },
+        "probe_result_status_check": {
+          "name": "probe_result_status_check",
+          "value": "status IS NULL OR status BETWEEN 100 AND 599"
+        },
+        "probe_result_timings_check": {
+          "name": "probe_result_timings_check",
+          "value": "(total_ms IS NULL OR total_ms >= 0) AND (dns_ms IS NULL OR dns_ms >= 0) AND (tcp_ms IS NULL OR tcp_ms >= 0) AND (tls_ms IS NULL OR tls_ms >= 0) AND (first_byte_ms IS NULL OR first_byte_ms >= 0) AND (worker_ms IS NULL OR worker_ms >= 0) AND (d1_rtt_ms IS NULL OR d1_rtt_ms >= 0)"
+        },
+        "probe_result_created_at_format": {
+          "name": "probe_result_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "probe_result_updated_at_format": {
+          "name": "probe_result_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "probe_result_updated_after_created": {
+          "name": "probe_result_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "spent_challenge": {
+      "name": "spent_challenge",
+      "columns": {
+        "challenge": {
+          "name": "challenge",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "spent_challenge_expires_at": {
+          "name": "spent_challenge_expires_at",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "spent_challenge_expires_at_format": {
+          "name": "spent_challenge_expires_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) IS expires_at"
+        },
+        "spent_challenge_created_at_format": {
+          "name": "spent_challenge_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "spent_challenge_updated_at_format": {
+          "name": "spent_challenge_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "spent_challenge_updated_after_created": {
+          "name": "spent_challenge_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "upload": {
+      "name": "upload",
+      "columns": {
+        "version_id": {
+          "name": "version_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parent_path": {
+          "name": "parent_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_name": {
+          "name": "item_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "target_path": {
+          "name": "target_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "upload_target_id_item_id_fk": {
+          "name": "upload_target_id_item_id_fk",
+          "tableFrom": "upload",
+          "columnsFrom": [
+            "target_id"
+          ],
+          "tableTo": "item",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        },
+        "upload_username_user_username_fk": {
+          "name": "upload_username_user_username_fk",
+          "tableFrom": "upload",
+          "columnsFrom": [
+            "username"
+          ],
+          "tableTo": "user",
+          "columnsTo": [
+            "username"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "upload_version_id_format": {
+          "name": "upload_version_id_format",
+          "value": "version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*'"
+        },
+        "upload_path_check": {
+          "name": "upload_path_check",
+          "value": "parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*'"
+        },
+        "upload_target_check": {
+          "name": "upload_target_check",
+          "value": "(target_path IS NULL AND target_id IS NULL) OR target_path IS NOT NULL AND substr(target_path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(target_path, 13) GLOB '?*.?*' AND substr(target_path, 13) NOT GLOB '*.*.*' AND substr(target_path, 13) NOT GLOB '*/*'"
+        },
+        "upload_completed_at_format": {
+          "name": "upload_completed_at_format",
+          "value": "completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at) IS completed_at"
+        },
+        "upload_created_at_format": {
+          "name": "upload_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "upload_updated_at_format": {
+          "name": "upload_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "upload_updated_after_created": {
+          "name": "upload_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "upload_error": {
+      "name": "upload_error",
+      "columns": {
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "upload_error_path_check": {
+          "name": "upload_error_path_check",
+          "value": "path IS NOT NULL AND substr(path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(path, 13) GLOB '?*.?*' AND substr(path, 13) NOT GLOB '*.*.*' AND substr(path, 13) NOT GLOB '*/*'"
+        },
+        "upload_error_message_check": {
+          "name": "upload_error_message_check",
+          "value": "trim(message, char(32, 9, 10, 13)) <> ''"
+        },
+        "upload_error_created_at_format": {
+          "name": "upload_error_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "upload_error_updated_at_format": {
+          "name": "upload_error_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "upload_error_updated_after_created": {
+          "name": "upload_error_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    },
+    "user": {
+      "name": "user",
+      "columns": {
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "user_username_format": {
+          "name": "user_username_format",
+          "value": "username GLOB '[a-z]*' AND username NOT GLOB '*[^a-z0-9_]*'"
+        },
+        "user_created_at_format": {
+          "name": "user_created_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at"
+        },
+        "user_updated_at_format": {
+          "name": "user_updated_at_format",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at"
+        },
+        "user_updated_after_created": {
+          "name": "user_updated_after_created",
+          "value": "updated_at >= created_at"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

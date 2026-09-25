@@ -33,9 +33,8 @@ describe('an album', () => {
                 title: 'Beach',
                 tags: ['sand', 'sea'],
                 versionId: 'v1',
-                width: 40,
-                height: 30,
-                published: true,
+                width: 4000,
+                height: 3000,
                 thumbnailCrop: CROP,
             }),
             putItem({
@@ -47,7 +46,6 @@ describe('an album', () => {
                 width: 16,
                 height: 9,
                 durationSeconds: 9.5,
-                published: false,
             }),
         ]);
         await setThumbnail(DAY, '/1981/01-01/a.jpg');
@@ -75,7 +73,7 @@ describe('an album', () => {
                     itemName: 'a.jpg',
                     updatedOn: expect.any(String),
                     versionId: 'v1',
-                    dimensions: { width: 40, height: 30 },
+                    dimensions: { width: 4000, height: 3000 },
                     thumbnail: CROP,
                     title: 'Beach',
                     tags: ['sand', 'sea'],

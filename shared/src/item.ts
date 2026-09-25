@@ -10,12 +10,21 @@ function clearable<T extends valibot.GenericSchema>(
 }
 
 const integer = valibot.pipe(valibot.number(), valibot.integer());
+const positive = valibot.pipe(integer, valibot.minValue(1));
+
+/** Text with something in it once trimmed: a caption that would be blank is left out or cleared instead. */
+const caption = valibot.pipe(
+    valibot.string(),
+    valibot.check((text) => text.trim() !== '', 'is blank; leave it out or clear it with null'),
+);
+
+/** At least one tag, none blank. */
+const tags = valibot.pipe(valibot.array(caption), valibot.minLength(1, 'has no tags; clear them with null'));
 
 const writeFields = {
     parentPath: valibot.string(),
     itemName: valibot.string(),
-    description: clearable(valibot.string()),
-    published: valibot.optional(valibot.boolean()),
+    description: clearable(caption),
 };
 
 // Strict, so that a misspelled field is refused rather than clearing the one it meant.
@@ -23,19 +32,21 @@ const itemWrite = valibot.variant('itemType', [
     valibot.strictObject({
         itemType: valibot.literal('album'),
         ...writeFields,
-        summary: clearable(valibot.string()),
+        summary: clearable(caption),
+        /** Guests see published albums; media shows whenever its album does. */
+        published: valibot.optional(valibot.boolean()),
     }),
     valibot.strictObject({
         itemType: valibot.literal('media'),
         mediaType: mediaTypeSchema,
         ...writeFields,
-        title: clearable(valibot.string()),
-        tags: clearable(valibot.array(valibot.string())),
+        title: clearable(caption),
+        tags: clearable(tags),
         // Every media item has a file, and the album pages need its size to lay it out.
         versionId: valibot.string(),
-        width: integer,
-        height: integer,
-        durationSeconds: clearable(valibot.number()),
+        width: positive,
+        height: positive,
+        durationSeconds: clearable(valibot.pipe(valibot.number(), valibot.minValue(0))),
         thumbnailCrop: clearable(rectangleSchema),
     }),
 ]);
@@ -49,6 +60,10 @@ export const itemWriteSchema = valibot.pipe(
             'an album is a year in / or a day in a year, and media a file in a day album, a video by its extension',
         ),
         ['itemName'],
+    ),
+    valibot.forward(
+        valibot.check(cropFits, 'a thumbnail crop starts at or after 0 and fits inside the width and height'),
+        ['thumbnailCrop'],
     ),
 );
 
@@ -68,6 +83,15 @@ function isGalleryKey(item: ItemWrite): boolean {
         key.itemName === itemName &&
         isVideoName(itemName) === (item.mediaType === 'video')
     );
+}
+
+/** Whether a media item's crop, when it has one, is a rectangle of its own pixels. */
+function cropFits(item: ItemWrite): boolean {
+    if (item.itemType === 'album' || item.thumbnailCrop === undefined || item.thumbnailCrop === null) {
+        return true;
+    }
+    const { x, y, width, height } = item.thumbnailCrop;
+    return x >= 0 && y >= 0 && width > 0 && height > 0 && x + width <= item.width && y + height <= item.height;
 }
 
 const searchFields = {

@@ -13,6 +13,7 @@ import { inSequence } from '../../src/util/sequence';
 const OVERHEAD = 10;
 const DAYS = 100;
 const IMAGES_PER_DAY = 20;
+const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4032, height: 3024 } as const;
 
 /** The name of the index-th day album of 2001: 01-01, 01-02 and so on. */
 function dayName(index: number): string {
@@ -40,11 +41,8 @@ async function seedGallery(database: Orm): Promise<void> {
                     upsertItem(database, {
                         parentPath: day.path,
                         itemName: `img_${index}.jpg`,
-                        itemType: 'media',
-                        mediaType: 'image',
-                        versionId: 'v1',
-                        width: 4032,
-                        height: 3024,
+                        ...IMAGE,
+                        versionId: `${day.name}-${index}`,
                         title: `Taco ${index}`,
                         description: 'Tacos on the beach',
                     }),
@@ -71,7 +69,7 @@ describe('rows read on a gallery-sized table', () => {
         { what: 'inserting an item', values: { parentPath: '/2001/01-01/', itemName: 'new.jpg', title: 'Quesadilla' } },
         { what: 'updating an item', values: { parentPath: '/2001/01-01/', itemName: 'img_3.jpg', title: 'Burrito' } },
     ])('$what reads a few rows', async ({ values }) => {
-        const result = await upsertItem(database, { ...values, itemType: 'media', mediaType: 'image' }).run();
+        const result = await upsertItem(database, { ...values, ...IMAGE }).run();
 
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
@@ -99,6 +97,70 @@ describe('rows read on a gallery-sized table', () => {
         },
     );
 
+    // ON DELETE SET NULL has SQLite find every album that points at the deleted row, which needs the index on thumbnail_id.
+    it('deleting the media an album shows clears the album, reading a few rows', async () => {
+        const result = await database
+            .delete(item)
+            .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_0.jpg')))
+            .run();
+        const day = await database
+            .select({ thumbnailId: item.thumbnailId })
+            .from(item)
+            .where(and(eq(item.parentPath, '/2001/'), eq(item.itemName, dayName(4))))
+            .get();
+
+        expect(day).toStrictEqual({ thumbnailId: null });
+        // The row, what the search index's delete trigger reads, and the album the index on thumbnail_id finds.
+        expect(result.meta.rows_read).toBeLessThanOrEqual(2 * OVERHEAD);
+    });
+
+    it('finding the item an object belongs to by its version reads one row', async () => {
+        const result = await database
+            .select({ parentPath: item.parentPath, itemName: item.itemName })
+            .from(item)
+            .where(eq(item.versionId, `${dayName(7)}-3`))
+            .run();
+
+        expect(result.results).toStrictEqual([{ parent_path: dayPath(7), item_name: 'img_3.jpg' }]);
+        // The index entry and the row.
+        expect(result.meta.rows_read).toBeLessThanOrEqual(2);
+    });
+
+    it.each([
+        {
+            what: 'publishing an album',
+            write: () =>
+                database
+                    .update(item)
+                    .set({ published: false })
+                    .where(and(eq(item.parentPath, '/2001/'), eq(item.itemName, dayName(4)))),
+        },
+        {
+            what: 'pointing an item at a new version',
+            write: () =>
+                database
+                    .update(item)
+                    .set({ versionId: 'v2' })
+                    .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_1.jpg'))),
+        },
+        {
+            what: "moving an album's children on a rename",
+            write: () =>
+                database
+                    .update(item)
+                    .set({ parentPath: '/2001/12-31/' })
+                    .where(eq(item.parentPath, dayPath(4))),
+        },
+    ])('$what touches nothing in the search index', async ({ write }) => {
+        const result = await write().run();
+
+        expect(result.meta.changes).toBeGreaterThan(0);
+        // Each changed row, its unique index entry and its foreign key are read; the row and at most one index entry
+        // are written. The search index's update trigger, were it to fire, would write two more rows per change.
+        expect(result.meta.rows_read).toBeLessThanOrEqual(3 * result.meta.changes + OVERHEAD);
+        expect(result.meta.rows_written).toBeLessThanOrEqual(2 * result.meta.changes);
+    });
+
     it('setting an album thumbnail reads a few rows', async () => {
         const album = { parentPath: '/2001/', itemName: dayName(4) };
         const result = await setThumbnail(database, album, { parentPath: dayPath(4), itemName: 'img_7.jpg' }).run();
@@ -111,13 +173,7 @@ describe('rows read on a gallery-sized table', () => {
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
     ])('searching for a rare word as $who reads only its matches', async ({ admin }) => {
-        await upsertItem(database, {
-            parentPath: dayPath(9),
-            itemName: 'q.jpg',
-            itemType: 'media',
-            mediaType: 'image',
-            title: 'Quesadilla',
-        }).run();
+        await upsertItem(database, { parentPath: dayPath(9), itemName: 'q.jpg', ...IMAGE, title: 'Quesadilla' }).run();
         const found = await searchItems(database, 'quesadilla', admin);
 
         expect(found.results).toHaveLength(1);

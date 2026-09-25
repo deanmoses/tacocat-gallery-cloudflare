@@ -14,7 +14,6 @@ import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
 import { failure, html, json, notFound } from '../http/responses';
 import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
-import { readYourWrites } from '../ops/ryw';
 import { seed } from '../ops/seed';
 import { getAlbum, setAlbumThumbnail } from './albums';
 import { debugImage } from './debug';
@@ -99,7 +98,6 @@ export function createApp(): Hono<App> {
     app.get('/api/album/*', async (context) => getAlbum(context.req.raw, context.env));
     app.get('/api/search', async (context) => search(context.req.raw, context.env));
     app.get('/api/health', async (context) => health(context.env));
-    app.get('/api/ryw', async (context) => readYourWrites(context.env));
     app.get('/raw/*', async (context) => raw(context.req.raw, context.env));
     app.get('/v/*', async (context) => media(context.req.raw, context.env));
     app.get('/i/*', async (context) => derivedViaCacheApi(context.req.raw, context.env, context.executionCtx));
