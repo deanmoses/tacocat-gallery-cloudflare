@@ -13,7 +13,7 @@ import { d1Header } from '../db/timing';
 import { readAlbum, setThumbnail } from '../gallery/albums';
 import { BOOKMARK_HEADER, requestBookmark, written } from '../http/bookmark';
 import { pathAfter } from '../http/paths';
-import { json, notFound } from '../http/responses';
+import { failure, json, notFound } from '../http/responses';
 
 /**
  * Reads through the Sessions API so a nearby replica can answer. A client that just wrote passes the bookmark it got
@@ -54,18 +54,18 @@ export async function setAlbumThumbnail(request: Request, env: Env): Promise<Res
     }
     const album = albumKey(path);
     if (album === null) {
-        return json({ error: 'the root album has no thumbnail' }, 400);
+        return failure(400, 'the root album has no thumbnail');
     }
     const body = valibot.safeParse(setThumbnailSchema, await request.json());
     const media = body.success ? mediaKey(body.output.path) : null;
     if (media === null) {
-        return json({ error: 'expected { path } of a media item, such as /2001/06-15/felix.jpg' }, 400);
+        return failure(400, 'expected { path } of a media item, such as /2001/06-15/felix.jpg');
     }
     const session = env.DB.withSession('first-primary');
     const started = performance.now();
     const set = await setThumbnail(orm(session), album, media).run();
     return set.meta.changes === 0
-        ? notFound({ album: path, media: mediaPath(media.parentPath, media.itemName) })
+        ? notFound(`No album ${path} with media ${mediaPath(media.parentPath, media.itemName)}`)
         : written(session, { 'x-d1': d1Header(set.meta, performance.now() - started) });
 }
 

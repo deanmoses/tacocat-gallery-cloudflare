@@ -91,7 +91,7 @@ describe('saving an item through the API', () => {
         const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
 
         expect(response.status).toBe(400);
-        await expect(response.json()).resolves.toStrictEqual({ error: expect.any(String) });
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: expect.any(String) });
         await expect(storedItem(ITEM.parentPath, ITEM.itemName)).resolves.toBeUndefined();
     });
 
@@ -125,7 +125,7 @@ describe('saving an item through the API', () => {
         const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
 
         expect(response.status).toBe(400);
-        await expect(response.json()).resolves.toStrictEqual({ error: expect.stringContaining('day album') });
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: expect.stringContaining('day album') });
         await expect(storedItem(body.parentPath, body.itemName)).resolves.toBeUndefined();
     });
 });

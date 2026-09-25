@@ -655,6 +655,12 @@ export default defineConfig(
                 },
                 // HTTP headers, cookie names and other keys that are someone else's wire format.
                 { selector: ['objectLiteralProperty', 'typeProperty'], modifiers: ['requiresQuotes'], format: null },
+                // Hono names the two slots of its environment type in PascalCase.
+                {
+                    selector: 'typeProperty',
+                    filter: { regex: '^(Bindings|Variables)$', match: true },
+                    format: ['PascalCase'],
+                },
             ],
         },
     },

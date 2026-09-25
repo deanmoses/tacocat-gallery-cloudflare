@@ -1,7 +1,7 @@
 import * as valibot from 'valibot';
 import { orm } from '../db';
 import { recentUploadErrors } from '../gallery/errors';
-import { json } from '../http/responses';
+import { failure, json } from '../http/responses';
 
 const PATHS = valibot.object({ paths: valibot.array(valibot.string()) });
 
@@ -10,5 +10,5 @@ export async function uploadErrors(request: Request, env: Pick<Env, 'DB'>): Prom
     const body = valibot.safeParse(PATHS, await request.json());
     return body.success
         ? json({ errors: await recentUploadErrors(orm(env.DB), body.output.paths) })
-        : json({ error: 'expected { paths: string[] }' }, 400);
+        : failure(400, 'expected { paths: string[] }');
 }

@@ -8,7 +8,7 @@ export async function debugImage(request: Request, env: Env): Promise<Response> 
     const key = pathAfter(url, '/debug/image/');
     const head = await env.MEDIA.get(key);
     if (!head) {
-        return notFound({ key });
+        return notFound(`No object ${key}`);
     }
     const bytes = new Uint8Array(await head.arrayBuffer());
     const blob = new Blob([bytes]);

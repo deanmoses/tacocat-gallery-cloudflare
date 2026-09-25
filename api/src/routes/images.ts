@@ -1,5 +1,5 @@
 import { pathAfter } from '../http/paths';
-import { json, notFound } from '../http/responses';
+import { failure, notFound } from '../http/responses';
 import { type Derivative, IMMUTABLE, type Steps, derivedImage, derivedKey, timed } from '../media/images';
 
 export async function raw(request: Request, env: Env): Promise<Response> {
@@ -16,7 +16,11 @@ export async function raw(request: Request, env: Env): Promise<Response> {
  * Worker in front, per-colo Cache API: a hit never reaches R2, but every colo fills from R2 on its own. Each response
  * says how long its steps took, in Server-Timing and a log line, since a colo's first request is the slow one.
  */
-export async function derivedViaCacheApi(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function derivedViaCacheApi(
+    request: Request,
+    env: Env,
+    ctx: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<Response> {
     const cache = caches.default;
     const steps: Steps = {};
     const hit = await timed(steps, 'cache', async () => cache.match(request));
@@ -85,9 +89,9 @@ function generated(derivative: Derivative): Response {
 }
 
 function sourceNotFound(key: string): Response {
-    return json({ error: 'source not found', key }, 404);
+    return notFound(`No source for ${key}`);
 }
 
 function badImageUrl(): Response {
-    return json({ error: 'expected /i/<media path>/<versionId>?size=200x200&crop=x,y,width,height' }, 400);
+    return failure(400, 'expected /i/<media path>/<versionId>?size=200x200&crop=x,y,width,height');
 }

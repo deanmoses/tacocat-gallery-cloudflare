@@ -10,8 +10,7 @@ import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
 import { type Orm, orm, schema } from '../db';
 import { cookie } from '../http/cookies';
-import { html, json, notFound } from '../http/responses';
-import { INVITE_PAGE, LOGIN_PAGE } from './pages';
+import { failure, json } from '../http/responses';
 import { type SignedCookie, readSigned, sign } from './session';
 
 type AuthEnv = Pick<Env, 'DB' | 'SESSION_SECRET' | 'SITE_ORIGIN'>;
@@ -40,50 +39,15 @@ function isAllowedOrigin(origin: string, env: AuthEnv): boolean {
     return origin === env.SITE_ORIGIN || origin === 'http://localhost:8787';
 }
 
-/** The two screens and the JSON endpoints behind them, or undefined if the request is not an auth route. */
-export async function routeAuth(request: Request, env: AuthEnv): Promise<Response | undefined> {
-    const url = new URL(request.url);
-    const { pathname } = url;
-    if (pathname === '/login') {
-        return html(LOGIN_PAGE);
-    }
-    if (pathname.startsWith('/invite/')) {
-        return html(INVITE_PAGE);
-    }
-    if (!pathname.startsWith('/api/auth/')) {
-        return undefined;
-    }
-    if (pathname === '/api/auth/status' && request.method === 'GET') {
-        return json({ admin: await currentAdmin(request, env) });
-    }
-    if (request.method !== 'POST') {
-        return notFound();
-    }
+/** The site a passkey request comes from, as a URL, or null when it is not one a passkey may be bound to. */
+export function requestSite(request: Request, env: AuthEnv): URL | null {
     const origin = request.headers.get('origin') ?? '';
-    if (!isAllowedOrigin(origin, env)) {
-        return json({ error: 'origin not allowed' }, 403);
-    }
-    const site = new URL(origin);
-    switch (pathname) {
-        case '/api/auth/register/options': {
-            return registerOptions(request, env, site);
-        }
-        case '/api/auth/register/verify': {
-            return registerVerify(request, env, site);
-        }
-        case '/api/auth/login/options': {
-            return loginOptions(env, site);
-        }
-        case '/api/auth/login/verify': {
-            return loginVerify(request, env, site);
-        }
-        case '/api/auth/logout': {
-            return json({ admin: null }, 200, { 'set-cookie': cookie(SESSION_COOKIE, '', { maxAge: 0, path: '/' }) });
-        }
-        default: {
-            return notFound();
-        }
-    }
+    return isAllowedOrigin(origin, env) ? new URL(origin) : null;
+}
+
+/** Ends the admin session by expiring its cookie. */
+export function logout(): Response {
+    return json({ admin: null }, 200, { 'set-cookie': cookie(SESSION_COOKIE, '', { maxAge: 0, path: '/' }) });
 }
 
 /** Records a login challenge as used, changing no row if it already was. */
@@ -113,11 +77,11 @@ export async function currentAdmin(request: Request, env: AuthEnv): Promise<stri
     return session?.name ?? null;
 }
 
-async function registerOptions(request: Request, env: AuthEnv, site: URL): Promise<Response> {
+export async function registerOptions(request: Request, env: AuthEnv, site: URL): Promise<Response> {
     const { token } = await request.json<{ token: string }>();
     const invite = await findInvite(env, token);
     if (!invite) {
-        return json({ error: 'This invite link is invalid, used or expired.' }, 400);
+        return failure(400, 'This invite link is invalid, used or expired.');
     }
     const existing = await orm(env.DB)
         .select({ id: schema.passkey.credentialId, transports: schema.passkey.transports })
@@ -141,15 +105,15 @@ async function registerOptions(request: Request, env: AuthEnv, site: URL): Promi
     return json(options, 200, { 'set-cookie': await challengeCookie(env, options.challenge) });
 }
 
-async function registerVerify(request: Request, env: AuthEnv, site: URL): Promise<Response> {
+export async function registerVerify(request: Request, env: AuthEnv, site: URL): Promise<Response> {
     const { token, response } = await request.json<{ token: string; response: RegistrationResponseJSON }>();
     const expectedChallenge = await readChallenge(request, env);
     if (expectedChallenge === null) {
-        return json({ error: 'Login attempt expired; try again.' }, 400);
+        return failure(400, 'Login attempt expired; try again.');
     }
     const invite = await findInvite(env, token);
     if (!invite) {
-        return json({ error: 'This invite link is invalid, used or expired.' }, 400);
+        return failure(400, 'This invite link is invalid, used or expired.');
     }
 
     const result = await unlessThrown(
@@ -162,7 +126,7 @@ async function registerVerify(request: Request, env: AuthEnv, site: URL): Promis
         }),
     );
     if (result?.verified !== true) {
-        return json({ error: 'Passkey could not be verified.' }, 400);
+        return failure(400, 'Passkey could not be verified.');
     }
 
     // Claiming the invite first means a link used twice at once still yields one passkey.
@@ -172,7 +136,7 @@ async function registerVerify(request: Request, env: AuthEnv, site: URL): Promis
         .where(and(eq(schema.invite.tokenHash, invite.tokenHash), isNull(schema.invite.usedAt)))
         .run();
     if (claimed.meta.changes !== 1) {
-        return json({ error: 'This invite link has already been used.' }, 400);
+        return failure(400, 'This invite link has already been used.');
     }
 
     const { credential } = result.registrationInfo;
@@ -189,16 +153,16 @@ async function registerVerify(request: Request, env: AuthEnv, site: URL): Promis
     return loggedIn(env, invite.username);
 }
 
-async function loginOptions(env: AuthEnv, site: URL): Promise<Response> {
+export async function loginOptions(env: AuthEnv, site: URL): Promise<Response> {
     const options = await generateAuthenticationOptions({ rpID: site.hostname, userVerification: 'preferred' });
     return json(options, 200, { 'set-cookie': await challengeCookie(env, options.challenge) });
 }
 
-async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<Response> {
+export async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<Response> {
     const response = await request.json<AuthenticationResponseJSON>();
     const expectedChallenge = await readChallenge(request, env);
     if (expectedChallenge === null) {
-        return json({ error: 'Login attempt expired; try again.' }, 400);
+        return failure(400, 'Login attempt expired; try again.');
     }
     const passkey = await orm(env.DB)
         .select()
@@ -206,7 +170,7 @@ async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<R
         .where(eq(schema.passkey.credentialId, response.id))
         .get();
     if (!passkey) {
-        return json({ error: 'This passkey is not registered here.' }, 401);
+        return failure(401, 'This passkey is not registered here.');
     }
 
     const result = await unlessThrown(
@@ -225,13 +189,13 @@ async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<R
         }),
     );
     if (result?.verified !== true) {
-        return json({ error: 'Passkey could not be verified.' }, 401);
+        return failure(401, 'Passkey could not be verified.');
     }
     // Only after verifying, so a request without a valid signature writes nothing.
     const spent = await spendChallenge(orm(env.DB), expectedChallenge);
     if (spent.meta.changes !== 1) {
         console.warn({ event: 'passkey_replayed', admin: passkey.username });
-        return json({ error: 'Passkey could not be verified.' }, 401);
+        return failure(401, 'Passkey could not be verified.');
     }
     await orm(env.DB)
         .update(schema.passkey)

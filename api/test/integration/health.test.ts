@@ -24,11 +24,13 @@ describe('GET /api/health', () => {
         expect(body.migration).toBe(env.TEST_MIGRATIONS.at(-1)?.name);
     });
 
-    it('fails when a bucket does not answer', async () => {
+    it('fails when a bucket does not answer, saying nothing of why in the body', async () => {
         vi.spyOn(env.DERIVED, 'head').mockRejectedValue(new Error('bucket unreachable'));
+        vi.spyOn(console, 'error').mockReturnValue();
 
         const response = await call('/api/health');
 
         expect(response.status).toBe(500);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Server Error' });
     });
 });
