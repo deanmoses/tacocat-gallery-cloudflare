@@ -6,6 +6,8 @@ locals {
     production = { prefix = "tacocat-proto", image_host = "img.deanmoses.com" }
     staging    = { prefix = "tacocat-staging", image_host = "staging-img.deanmoses.com" }
   }
+  # A request to either environment's image host, for the zone rules that apply to derived images alone.
+  image_hosts_expression = "(http.host in {${join(" ", [for environment in local.environments : format("%q", environment.image_host)])}})"
 }
 
 resource "cloudflare_zone" "deanmoses" {
@@ -47,11 +49,36 @@ resource "cloudflare_ruleset" "cache" {
   phase   = "http_request_cache_settings"
   rules = [{
     description = "Cache derived images from R2"
-    expression  = "(http.host in {${join(" ", [for environment in local.environments : format("%q", environment.image_host)])}})"
+    expression  = local.image_hosts_expression
     action      = "set_cache_settings"
     action_parameters = {
       cache    = true
       edge_ttl = { mode = "respect_origin" }
+    }
+  }]
+}
+
+# The image hosts serve stored derivatives straight from R2, never through the Worker, so the headers every response
+# from the site carries (api/src/http/headers.ts, with the reasons) are set here for them: the ones that mean something
+# on an image, since a frame, referrer or permissions policy says nothing there. Cross-Origin-Resource-Policy keeps
+# other sites from embedding the photos; the gallery is the same site, so it is unaffected.
+resource "cloudflare_ruleset" "image_headers" {
+  zone_id = cloudflare_zone.deanmoses.id
+  name    = "image headers"
+  kind    = "zone"
+  phase   = "http_response_headers_transform"
+  rules = [{
+    description = "Crawler opt-out and security headers on derived images from R2"
+    expression  = local.image_hosts_expression
+    action      = "rewrite"
+    action_parameters = {
+      headers = {
+        "X-Robots-Tag"                 = { operation = "set", value = "noindex, noimageindex, nosnippet, max-image-preview:none, notranslate, noarchive, noai, noimageai" }
+        "tdm-reservation"              = { operation = "set", value = "1" }
+        "Strict-Transport-Security"    = { operation = "set", value = "max-age=31536000; includeSubDomains" }
+        "X-Content-Type-Options"       = { operation = "set", value = "nosniff" }
+        "Cross-Origin-Resource-Policy" = { operation = "set", value = "same-site" }
+      }
     }
   }]
 }
