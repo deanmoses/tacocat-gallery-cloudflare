@@ -132,6 +132,31 @@ export const renameSchema = valibot.strictObject({ newName: valibot.string() });
 /** The body of `PATCH /api/album-thumb/<path>`: the media item, in the album or an album inside it, to show it by. */
 export const albumThumbnailSchema = valibot.strictObject({ mediaPath: valibot.string() });
 
+/**
+ * The body of `POST /api/presigned/<albumPath>`: the media path each upload will have, and for a replacement, the path
+ * of the item it replaces, whose base name `path` keeps with the new file's extension.
+ */
+export const presignRequestSchema = valibot.pipe(
+    valibot.array(valibot.strictObject({ path: valibot.string(), replaces: valibot.optional(valibot.string()) })),
+    valibot.minLength(1, 'No media to upload'),
+);
+
+export type PresignRequest = valibot.InferOutput<typeof presignRequestSchema>;
+
+/** Where to PUT one upload, and the version id the item will carry once the upload is processed. */
+const presignedUpload = valibot.object({ url: valibot.string(), versionId: valibot.string() });
+
+/** What `POST /api/presigned` returns: one presigned upload per path asked for, keyed by that path. */
+const presignResponse = valibot.record(valibot.string(), presignedUpload);
+
+export type PresignedUpload = valibot.InferOutput<typeof presignedUpload>;
+export type PresignResponse = valibot.InferOutput<typeof presignResponse>;
+
+/** Checks that `input`, a parsed JSON body, is a presign response; throws with the first field that is not. */
+export function parsePresigned(input: unknown): PresignResponse {
+    return valibot.parse(presignResponse, input);
+}
+
 export type AlbumWrite = valibot.InferOutput<typeof albumWriteSchema>;
 
 /** What `GET /api/search/<terms>` returns: the matches this viewer may see, as full records, newest first. */

@@ -9,42 +9,30 @@ import noTitleOrHeadlineDataUrl from '../../fixtures/NoTitleOrHeadline.jpg?inlin
 import turnedDataUrl from '../../fixtures/PortraitOrientation6.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { describe, expect, it } from 'vitest';
-import { type R2EventMessage, transcodeJob, versionIdFor } from '../../src/gallery/upload';
+import { transcodeJob } from '../../src/gallery/upload';
+import { mintVersionId } from '../../src/storage/keys';
 import { readImage } from '../../src/media/exif';
 
 function bytes(dataUrl: string): ArrayBuffer {
     return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1)).buffer;
 }
 
-function uploadEvent(eventTime: string, eTag = 'etag-1'): R2EventMessage {
-    return { action: 'PutObject', bucket: 'media', object: { key: 'inbox/2024/06-15/a.jpg', eTag }, eventTime };
-}
-
-describe(versionIdFor, () => {
-    it('is the same for a redelivered event', async () => {
-        const event = uploadEvent('2024-06-15T12:00:00.000Z');
-
-        await expect(versionIdFor(event)).resolves.toBe(await versionIdFor(structuredClone(event)));
-    });
-
-    it('sorts a later upload of the same path after an earlier one', async () => {
-        const earlier = await versionIdFor(uploadEvent('2024-06-15T12:00:00.000Z'));
-        const later = await versionIdFor(uploadEvent('2024-06-15T12:00:00.001Z'));
+describe(mintVersionId, () => {
+    it('sorts a later id after an earlier one, whatever the random half', () => {
+        const earlier = mintVersionId(Date.parse('2024-06-15T12:00:00.000Z'));
+        const later = mintVersionId(Date.parse('2024-06-15T12:00:00.001Z'));
 
         expect([later, earlier].toSorted()).toStrictEqual([earlier, later]);
     });
 
-    it('differs for different contents uploaded at the same moment', async () => {
-        const first = await versionIdFor(uploadEvent('2024-06-15T12:00:00.000Z', 'etag-1'));
-        const second = await versionIdFor(uploadEvent('2024-06-15T12:00:00.000Z', 'etag-2'));
+    it('differs between two minted at the same moment', () => {
+        const now = Date.parse('2024-06-15T12:00:00.000Z');
 
-        expect(second).not.toBe(first);
+        expect(mintVersionId(now)).not.toBe(mintVersionId(now));
     });
 
-    it('can go in a URL path unescaped', async () => {
-        const id = await versionIdFor(uploadEvent('2024-06-15T12:00:00.000Z'));
-
-        expect(id).toMatch(/^[\da-z]+$/v);
+    it('is letters and digits, so it goes in a URL and a key as it is', () => {
+        expect(mintVersionId()).toMatch(/^[\da-z]{9}[\da-f]{16}$/v);
     });
 });
 

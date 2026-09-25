@@ -3,8 +3,8 @@ locals {
   # Each environment's data, named from its prefix. Production keeps the prototype's names: the real migration fills a
   # fresh database and buckets anyway, and they get the final names then.
   environments = {
-    production = { prefix = "tacocat-proto", image_host = "img.deanmoses.com" }
-    staging    = { prefix = "tacocat-staging", image_host = "staging-img.deanmoses.com" }
+    production = { prefix = "tacocat-proto", image_host = "img.deanmoses.com", site_origin = "https://pix.deanmoses.com" }
+    staging    = { prefix = "tacocat-staging", image_host = "staging-img.deanmoses.com", site_origin = "https://staging-pix.deanmoses.com" }
   }
   # A request to either environment's image host, for the zone rules that apply to derived images alone.
   image_hosts_expression = "(http.host in {${join(" ", [for environment in local.environments : format("%q", environment.image_host)])}})"
@@ -84,12 +84,13 @@ resource "cloudflare_ruleset" "image_headers" {
 }
 
 module "environment" {
-  source     = "./environment"
-  for_each   = local.environments
-  account_id = local.account_id
-  zone_id    = cloudflare_zone.deanmoses.id
-  prefix     = each.value.prefix
-  image_host = each.value.image_host
+  source      = "./environment"
+  for_each    = local.environments
+  account_id  = local.account_id
+  zone_id     = cloudflare_zone.deanmoses.id
+  prefix      = each.value.prefix
+  image_host  = each.value.image_host
+  site_origin = each.value.site_origin
 }
 
 # Production's resources predate the module; these keep their state where it is instead of destroying and recreating.

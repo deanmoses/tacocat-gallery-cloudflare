@@ -28,8 +28,8 @@ import { debugImage } from './debug';
 import { uploadErrors } from './errors';
 import { derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { putItem } from './items';
+import { presignRoute } from './presigned';
 import { search } from './search';
-import { uploadUrl } from './upload';
 import { media } from './video';
 
 /** The bindings, and the site a passkey request comes from, which the origin check below leaves for its handlers. */
@@ -126,7 +126,7 @@ export function createApp(): Hono<App> {
     app.put('/api/item', async (context) => putItem(context.req.raw, context.env));
     app.post('/api/seed', async (context) => seed(context.req.raw, context.env));
     app.post('/api/backup', async (context) => json(await backupDatabase(context.env)));
-    app.post('/api/upload-url', async (context) => uploadUrl(context.req.raw, context.env));
+    app.post('/api/presigned/*', async (context) => presignRoute(context.req.raw, context.env));
     app.post('/api/errors', async (context) => uploadErrors(context.req.raw, context.env));
     app.put('/api/album/*', async (context) => createAlbumRoute(context.req.raw, context.env));
     app.patch('/api/album/*', async (context) => updateAlbumRoute(context.req.raw, context.env));

@@ -1,10 +1,15 @@
 // Gallery paths, as the URL scheme has had them since 2001: the root album is `/`, a year album `/2001/`, a day album
 // `/2001/06-15/` and a media item `/2001/06-15/felix.jpg`. Albums end in a slash and media do not.
 
+/** The image formats an upload may have, as the AWS gallery accepted them. */
+export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'] as const;
+
+/** The video formats an upload may have. Which of them the transcoder can read is ffmpeg's business. */
+export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'mpg', 'mpeg'] as const;
+
 const YEAR_NAME = /^\d{4}$/v;
 const DAY_NAME = /^\d{2}-\d{2}$/v;
 const MEDIA_NAME = /^[^.\/]+\.[^.\/]+$/v;
-const VIDEO_NAME = /\.(?:avi|m4v|mov|mp4)$/iv;
 const HEIC_NAME = /\.(?:heic|heif)$/iv;
 const STRICT_MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*\.[0-9a-z]+$/v;
 
@@ -21,9 +26,24 @@ export function isMediaName(name: string): boolean {
     return MEDIA_NAME.test(name);
 }
 
-/** Videos are told apart by extension; these four are every kind the gallery has ever held. */
+/** Videos are told apart from images by extension alone. */
 export function isVideoName(name: string): boolean {
-    return VIDEO_NAME.test(name);
+    return (VIDEO_EXTENSIONS as readonly string[]).includes(extensionOf(name));
+}
+
+/** A media name whose extension is one the gallery takes, image or video: what an upload may be called. */
+export function hasMediaExtension(name: string): boolean {
+    const extension = extensionOf(name);
+    return (
+        isMediaName(name) &&
+        ((IMAGE_EXTENSIONS as readonly string[]).includes(extension) ||
+            (VIDEO_EXTENSIONS as readonly string[]).includes(extension))
+    );
+}
+
+/** `felix.jpg` without its extension: `felix`. */
+export function baseNameOf(name: string): string {
+    return name.slice(0, name.lastIndexOf('.'));
 }
 
 /**

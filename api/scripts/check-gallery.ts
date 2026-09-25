@@ -10,6 +10,7 @@
 // Usage: node api/scripts/check-gallery.ts prod-items.json [--site http://localhost:8787] [--paths]
 import { readFile } from 'node:fs/promises';
 import * as valibot from 'valibot';
+import { adminCookie } from './admin-cookie.ts';
 import { devVars } from './dev-vars.ts';
 
 const file = process.argv[2];
@@ -90,7 +91,7 @@ interface Refusal {
 }
 
 const rows = valibot.parse(SCAN, JSON.parse(await readFile(file, 'utf8'))).map((raw) => valibot.parse(AWS_ITEM, raw));
-const cookie = await adminCookie((await devVars())['SESSION_SECRET'] ?? '');
+const cookie = await adminCookie((await devVars())['SESSION_SECRET'] ?? '', 'check-gallery');
 console.log(`${rows.length} rows in ${file}; writing each to ${site}`);
 
 const unknownTypes = rows.filter((row) => row.itemType !== 'album' && row.itemType !== 'image');
@@ -230,22 +231,4 @@ function parseJson(text: string): unknown {
     } catch {
         return undefined;
     }
-}
-
-/** An admin session cookie signed as the Worker signs one, good for an hour. */
-async function adminCookie(secret: string): Promise<string> {
-    if (secret === '') {
-        throw new Error('SESSION_SECRET is not set in api/.dev.vars');
-    }
-    const encoder = new TextEncoder();
-    const body = base64url(encoder.encode(JSON.stringify({ name: 'check-gallery', exp: Date.now() + 3_600_000 })));
-    const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
-        'sign',
-    ]);
-    const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(body)));
-    return `admin_session=${body}.${base64url(signature)}`;
-}
-
-function base64url(bytes: Uint8Array): string {
-    return Buffer.from(bytes).toString('base64url');
 }

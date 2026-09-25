@@ -379,6 +379,7 @@ describe(enrichWithPreviousVersionIds, () => {
 
         expect(enrichWithPreviousVersionIds(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg']);
         expect(files[0]?.previousVersionId).toBe('photo-v1');
+        expect(files[0]?.replaces).toBe(mediaPath('photo.jpg'));
     });
 
     // A HEIC is stored as a JPG, so it collides with a JPG already in the album
@@ -389,6 +390,7 @@ describe(enrichWithPreviousVersionIds, () => {
 
         expect(enrichWithPreviousVersionIds(files, albumWithPhotoAndClip())).toStrictEqual(['photo.heic']);
         expect(files[0]?.previousVersionId).toBe('photo-v1');
+        expect(files[0]?.replaces).toBe(mediaPath('photo.jpg'));
     });
 
     it('checks every file in the batch, and leaves the ones that collide with nothing alone', () => {
@@ -396,6 +398,11 @@ describe(enrichWithPreviousVersionIds, () => {
 
         expect(enrichWithPreviousVersionIds(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg', 'clip.mp4']);
         expect(files.map((file) => file.previousVersionId)).toStrictEqual([undefined, 'photo-v1', 'clip-v1']);
+        expect(files.map((file) => file.replaces)).toStrictEqual([
+            undefined,
+            mediaPath('photo.jpg'),
+            mediaPath('clip.mp4'),
+        ]);
     });
 
     // The check can run before the album has loaded, so an absent or empty album

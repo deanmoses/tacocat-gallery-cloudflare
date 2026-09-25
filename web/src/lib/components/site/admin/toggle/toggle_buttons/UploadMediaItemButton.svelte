@@ -37,7 +37,7 @@
             return;
         }
         const uploadPath = getUploadPathForReplacement(mediaPath, file.name);
-        uploadMachine.uploadMediaItem(uploadPath, file, media?.versionId);
+        uploadMachine.uploadMediaItem(uploadPath, file, media?.versionId, mediaPath);
     }
 </script>
 

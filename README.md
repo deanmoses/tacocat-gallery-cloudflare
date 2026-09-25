@@ -87,7 +87,7 @@ Three things keep the supply chain honest. Dependabot (`.github/dependabot.yml`)
 
 ## Copying an album from AWS
 
-`node api/scripts/import-album.ts /2024/12-17/` copies one day album from the AWS staging gallery into this project's staging site, or into production with `--to production`, and from the AWS production gallery with `--from prod`. The originals go through the upload pipeline, so the Worker records them and makes their derived images; the album's and photos' titles, descriptions, tags, crops and thumbnail then go into D1 with the account token, since the Worker has no write endpoints for them yet. Videos are left behind while the transcoder is parked on `lite`.
+`node api/scripts/import-album.ts /2024/12-17/` copies one day album from the AWS staging gallery into this project's staging site, or into production with `--to production`, and from the AWS production gallery with `--from prod`. The originals go through the upload pipeline as a browser's would, presigned by the Worker as the admin `--user` names (`moses` unless told otherwise) with a session signed from the `SESSION_SECRET` in `api/.dev.vars`, so the Worker records them and makes their derived images; the album's and photos' titles, descriptions, tags, crops and thumbnail then go into D1 with the account token, since the Worker has no write endpoints for them yet. Videos are left behind while the transcoder is parked on `lite`.
 
 ## Finding an item's objects
 

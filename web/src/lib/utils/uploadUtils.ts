@@ -143,6 +143,8 @@ export function enrichWithPreviousVersionIds(files: MediaItemToUpload[], album: 
             collidingNames.push(file.file.name);
             // Set previousVersionId so upload completion detection works for replacements
             file.previousVersionId = media.versionId;
+            // The server refuses an upload under a taken name unless told which item it replaces
+            file.replaces = media.path;
         }
     }
     return collidingNames;

@@ -202,9 +202,15 @@ export const upload = sqliteTable(
     'upload',
     {
         versionId: text('version_id').primaryKey(),
-        /** The day album and name the item will have. */
+        /**
+         * The day album and name asked for when the URL was issued. The pipeline places the item by `album_id`, under
+         * the album's path as it is then, so these are the record of the request; a replacement takes only the
+         * extension of `item_name`, keeping the target's own base name.
+         */
         parentPath: text('parent_path').notNull(),
         itemName: text('item_name').notNull(),
+        /** The day album the item goes in, by row id, cleared by the database if the album is deleted first. */
+        albumId: integer('album_id').references(() => item.id, { onDelete: 'set null' }),
         /**
          * The item a replacement replaces, by row id and by path. The id is cleared by the database if that item is
          * deleted before the upload finishes, and the path then still says the upload was a replacement.
@@ -217,7 +223,10 @@ export const upload = sqliteTable(
         completedAt: text('completed_at'),
         ...timestamps,
     },
-    () => [
+    (table) => [
+        // Clearing a deleted album or item from the uploads that point at it is a seek, not a scan of every upload.
+        index('upload_album_id').on(table.albumId),
+        index('upload_target_id').on(table.targetId),
         check('upload_version_id_format', sql.raw(versionIdSql('version_id'))),
         check(
             'upload_path_check',

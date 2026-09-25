@@ -70,6 +70,8 @@ export interface MediaItemToUpload {
     uploadPath: string;
     /** For replacements: the S3 versionId of the media item being replaced */
     previousVersionId?: string;
+    /** For replacements: the path of the media item being replaced, which the server needs to be told */
+    replaces?: string;
 }
 
 /**

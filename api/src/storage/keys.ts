@@ -25,3 +25,19 @@ export function posterKey(versionId: string): string {
 export function derivedImageKey(versionId: string, name: string): string {
     return `${derivedPrefix(versionId)}/${name}`;
 }
+
+/** Where the browser puts an upload, under the version id minted for it. */
+export function inboxKey(versionId: string): string {
+    return `inbox/${versionId}`;
+}
+
+/**
+ * A new version id: the moment it was minted, so a listing of originals is in upload order, then 64 random bits,
+ * which are what make knowing the id knowing the photo. Letters and digits only, so it goes in a URL and a key as it is.
+ */
+export function mintVersionId(now = Date.now()): string {
+    const random = crypto.getRandomValues(new Uint8Array(8));
+    return (
+        now.toString(36).padStart(9, '0') + Array.from(random, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    );
+}

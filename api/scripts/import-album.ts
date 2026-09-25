@@ -3,7 +3,7 @@
 // album's and its media's words then go straight into D1, since the Worker has no endpoint for them yet. Runs against
 // the deployed Worker, with the credentials in api/.dev.vars.
 //
-// Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production]
+// Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production] [--user moses]
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,18 +11,14 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
-import { presign } from '../src/storage/s3.ts';
+import { adminCookie } from './admin-cookie.ts';
 import { devVars } from './dev-vars.ts';
 
 const API_DIR = fileURLToPath(new URL('..', import.meta.url));
 // Where the album goes. Staging is wrangler.jsonc's top-level environment, so Wrangler reaches it without --env.
 const TARGETS = {
-    staging: { site: 'https://staging-pix.deanmoses.com', bucket: 'tacocat-staging-media', wranglerEnv: [] },
-    production: {
-        site: 'https://pix.deanmoses.com',
-        bucket: 'tacocat-proto-media',
-        wranglerEnv: ['--env', 'production'],
-    },
+    staging: { site: 'https://staging-pix.deanmoses.com', wranglerEnv: [] },
+    production: { site: 'https://pix.deanmoses.com', wranglerEnv: ['--env', 'production'] },
 };
 const SOURCES = {
     staging: { api: 'https://api.staging-pix.tacocat.com', images: 'https://img.staging-pix.tacocat.com' },
@@ -64,6 +60,8 @@ type AwsMedia = valibot.InferOutput<typeof AWS_MEDIA>;
 const LISTED = valibot.object({
     children: valibot.optional(valibot.array(valibot.object({ itemName: TEXT, versionId: valibot.optional(TEXT) }))),
 });
+// What the Worker answers a presign request with, as far as the upload reads it.
+const PRESIGNED = valibot.record(TEXT, valibot.object({ url: TEXT }));
 
 const albumPath = process.argv[2] ?? '';
 const source = process.argv.includes('--from') ? SOURCES.prod : SOURCES.staging;
@@ -71,6 +69,12 @@ const target = process.argv.includes('--to') ? TARGETS.production : TARGETS.stag
 const { year, day } = dayAlbum(albumPath);
 
 const secrets = await devVars();
+// The Worker records who asked for each upload, so the name has to be one of its users.
+const userAt = process.argv.indexOf('--user');
+const cookie = await adminCookie(
+    secrets['SESSION_SECRET'] ?? '',
+    userAt === -1 ? 'moses' : (process.argv[userAt + 1] ?? ''),
+);
 const album = valibot.parse(AWS_ALBUM, await (await fetch(`${source.api}/album${albumPath}`)).json());
 const media = (album.children ?? []).filter((child) => child.itemType === 'image');
 const [photos, videos] = [media.filter((item) => !isVideo(item)), media.filter(isVideo)];
@@ -86,6 +90,7 @@ await sql([
     }),
 ]);
 
+const existing = await existingNames();
 await inParallel(photos, UPLOADS_AT_ONCE, async (photo) => {
     await upload(photo);
     console.log(`uploaded ${photo.path}`);
@@ -117,7 +122,9 @@ console.log(`done: ${target.site}${albumPath.slice(0, -1)}`);
 function dayAlbum(candidate: string): { year: string; day: string } {
     const match = /^\/(?<year>\d{4})\/(?<day>\d{2}-\d{2})\/$/v.exec(candidate);
     if (match?.groups === undefined) {
-        throw new Error('Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production]');
+        throw new Error(
+            'Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production] [--user moses]',
+        );
     }
     return { year: match.groups['year'] ?? '', day: match.groups['day'] ?? '' };
 }
@@ -126,7 +133,10 @@ function isVideo(item: AwsMedia): boolean {
     return item.mediaType === 'video';
 }
 
-/** Sends the original to R2's inbox as the browser does, which is what starts the Worker's processing of it. */
+/**
+ * Sends the original to R2's inbox as the browser does: asks the Worker for a presigned URL, as a replacement if the
+ * album already lists the name, and PUTs the file to it. The Worker's processing of it starts from there.
+ */
 async function upload(photo: AwsMedia): Promise<void> {
     const response = await fetch(`${source.images}${photo.path}`);
     if (!response.ok) {
@@ -134,17 +144,33 @@ async function upload(photo: AwsMedia): Promise<void> {
     }
     const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
     const body = await response.arrayBuffer();
-    const url = await presign(
-        {
-            R2_ACCESS_KEY_ID: secrets['R2_ACCESS_KEY_ID'] ?? '',
-            R2_SECRET_ACCESS_KEY: secrets['R2_SECRET_ACCESS_KEY'] ?? '',
-        },
-        { method: 'PUT', bucket: target.bucket, key: `inbox${photo.path}`, contentType },
-    );
+    const galleryPath = `${albumPath}${photo.itemName}`;
+    const presigned = await fetch(`${target.site}/api/presigned${albumPath}`, {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify([
+            existing.has(photo.itemName) ? { path: galleryPath, replaces: galleryPath } : { path: galleryPath },
+        ]),
+    });
+    if (!presigned.ok) {
+        throw new Error(`presigning ${galleryPath} failed: ${presigned.status} ${await presigned.text()}`);
+    }
+    const url = valibot.parse(PRESIGNED, await presigned.json())[galleryPath]?.url ?? '';
     const put = await fetch(url, { method: 'PUT', headers: { 'content-type': contentType }, body });
     if (!put.ok) {
         throw new Error(`uploading ${photo.path} failed: ${put.status} ${await put.text()}`);
     }
+}
+
+/** The names the target album already lists, which an upload of the same name has to say it replaces. */
+async function existingNames(): Promise<Set<string>> {
+    const response = await fetch(`${target.site}/api/album${albumPath}`, { headers: { cookie } });
+    if (!response.ok) {
+        await response.body?.cancel();
+        return new Set();
+    }
+    const listed = valibot.parse(LISTED, await response.json());
+    return new Set((listed.children ?? []).map((child) => child.itemName));
 }
 
 /** Waits until the Worker lists every name in the album with a version, which is the upload processed. */

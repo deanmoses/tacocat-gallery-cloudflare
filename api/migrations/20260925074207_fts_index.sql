@@ -1,5 +1,6 @@
--- resets: the migrations start over from one baseline, since both environments held only prototype data, emptied by
--- hand before this was pushed; the seventeen migrations before it rebuilt item three times.
+-- resets: the migrations start over from one baseline, since no environment had been given the earlier ones: both
+-- held only prototype data, emptied by hand before this was pushed, and the seventeen migrations before the reset had
+-- rebuilt item three times.
 --
 -- The search index over items, kept in step by triggers. The update trigger fires only for the columns the index
 -- holds, so a write that touches none of them, such as setting a thumbnail, publishing, pointing a row at a new

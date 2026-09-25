@@ -19,6 +19,11 @@ variable "image_host" {
   description = "The hostname the derived bucket is served from, such as img.deanmoses.com."
 }
 
+variable "site_origin" {
+  type        = string
+  description = "The origin the web app runs on, such as https://pix.deanmoses.com, which browsers upload from."
+}
+
 resource "cloudflare_d1_database" "this" {
   account_id            = var.account_id
   name                  = var.prefix
@@ -38,6 +43,21 @@ resource "cloudflare_r2_bucket" "media" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+# The browser PUTs an upload straight to the media bucket with a URL the Worker signed, which is a cross-origin request
+# from the site, and from the local dev server while developing. The one header it sends is the file's own content type.
+resource "cloudflare_r2_bucket_cors" "media" {
+  account_id  = var.account_id
+  bucket_name = cloudflare_r2_bucket.media.name
+  rules = [{
+    allowed = {
+      origins = [var.site_origin, "http://localhost:8787"]
+      methods = ["PUT"]
+      headers = ["content-type"]
+    }
+    max_age_seconds = 3600
+  }]
 }
 
 # Public through its custom domain, so it must never hold originals.

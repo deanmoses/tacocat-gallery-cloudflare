@@ -120,12 +120,14 @@ CREATE TABLE `upload` (
 	`version_id` text PRIMARY KEY NOT NULL,
 	`parent_path` text NOT NULL,
 	`item_name` text NOT NULL,
+	`album_id` integer,
 	`target_id` integer,
 	`target_path` text,
 	`username` text NOT NULL,
 	`completed_at` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`album_id`) REFERENCES `item`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`target_id`) REFERENCES `item`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`username`) REFERENCES `user`(`username`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "upload_version_id_format" CHECK(version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*'),
@@ -137,6 +139,8 @@ CREATE TABLE `upload` (
 	CONSTRAINT "upload_updated_after_created" CHECK(updated_at >= created_at)
 );
 --> statement-breakpoint
+CREATE INDEX `upload_album_id` ON `upload` (`album_id`);--> statement-breakpoint
+CREATE INDEX `upload_target_id` ON `upload` (`target_id`);--> statement-breakpoint
 CREATE TABLE `upload_error` (
 	`path` text PRIMARY KEY NOT NULL,
 	`message` text NOT NULL,

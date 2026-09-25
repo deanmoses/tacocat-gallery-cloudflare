@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     albumExists,
@@ -16,7 +16,10 @@ import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/gallery/search';
 import { deleteMedia, describeMedia, recutThumbnail, renameMedia, updateMedia } from '../../src/gallery/media';
+import { presignUploads } from '../../src/gallery/presign';
+import { type MediaFacts, type Upload, insertItem, replaceItem } from '../../src/gallery/upload';
 import { inSequence } from '../../src/util/sequence';
+import { TEST_SECRETS } from '../secrets';
 
 // D1 bills by rows read, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
 // Local D1 counts the rows a trigger reads in the meta of the statement that fired it, so a query that scans instead of
@@ -65,6 +68,78 @@ async function seedGallery(database: Orm): Promise<void> {
             ),
         ]),
     );
+    // An empty day, so that deleting an album that uploads point at can be tried.
+    await upsertItem(database, { parentPath: '/2001/', itemName: EMPTY_DAY, itemType: 'album', published: true }).run();
+    // The upload that made each image, pointing at it and at its day, since a delete's cost through a foreign key
+    // shows only when the referencing table has rows.
+    await database.run(sql`
+        INSERT INTO upload (version_id, parent_path, item_name, album_id, target_id, target_path, username, completed_at)
+        SELECT version_id, parent_path, item_name,
+            (SELECT day.id FROM item day WHERE day.parent_path || day.item_name || '/' = item.parent_path),
+            id, parent_path || item_name, 'moses', created_at
+        FROM item WHERE item_type = 'media'`);
+    const emptyDay = await database
+        .select({ id: schema.item.id })
+        .from(schema.item)
+        .where(and(eq(schema.item.parentPath, '/2001/'), eq(schema.item.itemName, EMPTY_DAY)))
+        .get();
+    await database
+        .insert(schema.upload)
+        .values(
+            Array.from({ length: IMAGES_PER_DAY }, (_, index) => ({
+                versionId: `pending-${index}`,
+                parentPath: dayPath(DAYS),
+                itemName: `pending_${index}.jpg`,
+                albumId: emptyDay?.id ?? null,
+                username: 'moses',
+            })),
+        )
+        .run();
+}
+
+const EMPTY_DAY = dayName(DAYS);
+const PRESIGN_ENV = { ...TEST_SECRETS, MEDIA_BUCKET: 'test-media' };
+
+/** What the pipeline learned from a file, as the item statements take it. */
+const FACTS: MediaFacts = {
+    mediaType: 'image',
+    title: 'From the file',
+    description: null,
+    tags: null,
+    width: 4032,
+    height: 3024,
+    durationSeconds: null,
+};
+
+/** An upload row as presign writes it, into the day-th album, replacing `targetId` when given. */
+async function uploadRow(
+    database: Orm,
+    day: number,
+    itemName: string,
+    targetId: number | null = null,
+): Promise<Upload> {
+    const { item } = schema;
+    const album = await database
+        .select({ id: item.id })
+        .from(item)
+        .where(and(eq(item.parentPath, '/2001/'), eq(item.itemName, dayName(day))))
+        .get();
+    const [row] = await database
+        .insert(schema.upload)
+        .values({
+            versionId: `minted-${itemName}`,
+            parentPath: dayPath(day),
+            itemName,
+            albumId: album?.id ?? null,
+            targetId,
+            targetPath: targetId === null ? null : `${dayPath(day)}img_3.jpg`,
+            username: 'moses',
+        })
+        .returning();
+    if (row === undefined) {
+        throw new Error('no upload row');
+    }
+    return row;
 }
 
 describe('rows read on a gallery-sized table', () => {
@@ -123,6 +198,61 @@ describe('rows read on a gallery-sized table', () => {
         expect(day).toStrictEqual({ thumbnailId: null });
         // The row, what the search index's delete trigger reads, and the album the index on thumbnail_id finds.
         expect(result.meta.rows_read).toBeLessThanOrEqual(2 * OVERHEAD);
+    });
+
+    it('deleting an empty day that uploads point at clears them, reading a few rows', async () => {
+        const result = await deleteAlbum(database, { parentPath: '/2001/', itemName: EMPTY_DAY });
+        const cleared = await database
+            .select({ albumId: schema.upload.albumId })
+            .from(schema.upload)
+            .where(eq(schema.upload.parentPath, dayPath(DAYS)))
+            .all();
+
+        expect(result.changes).toBeGreaterThan(0);
+        expect(cleared).toStrictEqual(Array.from({ length: IMAGES_PER_DAY }, () => ({ albumId: null })));
+        // Clearing each upload costs about five reads, the index entry, the row and its other foreign keys checked
+        // again, so the cost follows the uploads ever made into the album, not the size of the upload table.
+        expect(result.meta?.rows_read).toBeLessThanOrEqual(5 * IMAGES_PER_DAY + OVERHEAD);
+    });
+
+    it('asking for upload URLs reads the album and its children', async () => {
+        const result = await presignUploads(
+            PRESIGN_ENV,
+            database,
+            dayPath(4),
+            [{ path: `${dayPath(4)}new.jpg` }, { path: `${dayPath(4)}img_3.png`, replaces: `${dayPath(4)}img_3.jpg` }],
+            'moses',
+        );
+
+        expect('uploads' in result && Object.keys(result.uploads)).toHaveLength(2);
+        expect('uploads' in result && result.rowsRead).toBeLessThanOrEqual(IMAGES_PER_DAY + OVERHEAD);
+    });
+
+    it('placing a new upload under its album reads a few rows', async () => {
+        const upload = await uploadRow(database, 4, 'new.jpg');
+        const result = await database.run(insertItem(database, upload.albumId ?? 0, upload, FACTS));
+
+        expect(result.meta.changes).toBeGreaterThan(0);
+        expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    it('pointing an item at its replacement reads a few rows', async () => {
+        const target = await database
+            .select({ id: item.id })
+            .from(item)
+            .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_3.jpg')))
+            .get();
+        const upload = await uploadRow(database, 4, 'img_3.png', target?.id ?? null);
+        const result = await database.run(replaceItem(database, target?.id ?? 0, upload, FACTS));
+        const renamed = await database
+            .select({ itemName: item.itemName })
+            .from(item)
+            .where(eq(item.id, target?.id ?? 0))
+            .get();
+
+        expect(result.meta.changes).toBeGreaterThan(0);
+        expect(renamed).toStrictEqual({ itemName: 'img_3.png' });
+        expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
 
     it('finding the item an object belongs to by its version reads one row', async () => {

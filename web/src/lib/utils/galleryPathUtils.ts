@@ -1,8 +1,13 @@
-/** Supported image extensions */
-export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'];
+import {
+    IMAGE_EXTENSIONS as SHARED_IMAGE_EXTENSIONS,
+    VIDEO_EXTENSIONS as SHARED_VIDEO_EXTENSIONS,
+} from 'tacocat-gallery-shared';
 
-/** Supported video extensions */
-export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'mpg', 'mpeg'];
+/** Supported image extensions, the ones the server accepts an upload of */
+export const IMAGE_EXTENSIONS: string[] = [...SHARED_IMAGE_EXTENSIONS];
+
+/** Supported video extensions, the ones the server accepts an upload of */
+export const VIDEO_EXTENSIONS: string[] = [...SHARED_VIDEO_EXTENSIONS];
 
 /** Pattern matching any valid media extension */
 const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].toSorted().join('|');

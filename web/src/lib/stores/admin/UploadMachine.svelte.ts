@@ -12,6 +12,7 @@ import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
 import { fetchPresignedUrls, uploadToS3 } from '$lib/utils/s3Upload';
+import type { PresignedUpload } from 'tacocat-gallery-shared';
 import { getMediaPath, getProcessingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 
@@ -35,8 +36,8 @@ class UploadMachine {
     //    To read this store's state, use one of the public $derived() fields
     //
 
-    uploadMediaItem(uploadPath: string, file: File, previousVersionId?: string): void {
-        void this.#uploadMediaItem(uploadPath, file, previousVersionId); // invoke async service in fire-and-forget fashion
+    uploadMediaItem(uploadPath: string, file: File, previousVersionId?: string, replaces?: string): void {
+        void this.#uploadMediaItem(uploadPath, file, previousVersionId, replaces); // invoke async service in fire-and-forget fashion
     }
 
     uploadMediaItems(albumPath: string, mediaItemsToUpload: MediaItemToUpload[]): void {
@@ -114,12 +115,22 @@ class UploadMachine {
      * @param uploadPath path to upload to
      * @param file A File object from browser's file picker
      * @param previousVersionId For replacements: versionId of the media item being replaced
+     * @param replaces For replacements: path of the media item being replaced
      */
-    async #uploadMediaItem(uploadPath: string, file: File, previousVersionId?: string): Promise<void> {
+    async #uploadMediaItem(
+        uploadPath: string,
+        file: File,
+        previousVersionId?: string,
+        replaces?: string,
+    ): Promise<void> {
         try {
             const albumPath = getParentFromPath(uploadPath);
             this.#uploadEnqueued(uploadPath, file, previousVersionId);
-            await this.#uploadSingleMediaItem(albumPath, { file, uploadPath });
+            await this.#uploadSingleMediaItem(albumPath, {
+                file,
+                uploadPath,
+                ...(replaces === undefined ? {} : { replaces }),
+            });
             await this.#pollForProcessedMediaItems(albumPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -150,15 +161,15 @@ class UploadMachine {
         }
 
         // Get presigned URL and upload
-        const presignedResult = await fetchPresignedUrls(albumPath, [mediaItemToUpload.uploadPath]);
+        const presignedResult = await fetchPresignedUrls(albumPath, [presignEntry(mediaItemToUpload)]);
         if (!presignedResult.success) {
             throw new Error(presignedResult.error);
         }
-        const presignedUrl = presignedResult.urls[mediaItemToUpload.uploadPath];
-        if (presignedUrl === undefined || presignedUrl === '') {
+        const presigned = presignedResult.uploads[mediaItemToUpload.uploadPath];
+        if (presigned === undefined) {
             throw new Error('No presigned URL for media item');
         }
-        await this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presignedUrl);
+        await this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presigned);
     }
 
     async #uploadMediaItems(albumPath: string, mediaItemsToUpload: MediaItemToUpload[]): Promise<void> {
@@ -196,12 +207,11 @@ class UploadMachine {
             if (itemsToUpload.length === 0) return;
 
             // Get presigned URLs
-            const uploadPaths = itemsToUpload.map((img) => img.uploadPath);
-            const presignedResult = await fetchPresignedUrls(albumPath, uploadPaths);
+            const presignedResult = await fetchPresignedUrls(albumPath, itemsToUpload.map(presignEntry));
             if (!presignedResult.success) {
                 throw new Error(presignedResult.error);
             }
-            const presignedUrls = presignedResult.urls;
+            const presignedUploads = presignedResult.uploads;
 
             // Enqueue uploads
             for (const mediaItemToUpload of itemsToUpload) {
@@ -215,12 +225,12 @@ class UploadMachine {
             // Upload to S3 in parallel
             const mediaUploads: Promise<void>[] = [];
             for (const mediaItemToUpload of itemsToUpload) {
-                const presignedUrl = presignedUrls[mediaItemToUpload.uploadPath];
-                if (presignedUrl === undefined || presignedUrl === '') {
+                const presigned = presignedUploads[mediaItemToUpload.uploadPath];
+                if (presigned === undefined) {
                     this.#uploadErrored(mediaItemToUpload.uploadPath, `No presigned URL for media`);
                     continue;
                 }
-                mediaUploads.push(this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presignedUrl));
+                mediaUploads.push(this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presigned));
             }
             await Promise.allSettled(mediaUploads);
             await this.#pollForProcessedMediaItems(albumPath);
@@ -233,12 +243,15 @@ class UploadMachine {
         }
     }
 
-    async #uploadMediaItemViaPresignedUrl(mediaItemToUpload: MediaItemToUpload, presignedUrl: string): Promise<void> {
+    async #uploadMediaItemViaPresignedUrl(
+        mediaItemToUpload: MediaItemToUpload,
+        presigned: PresignedUpload,
+    ): Promise<void> {
         this.#uploadStarted(mediaItemToUpload.uploadPath);
-        const result = await uploadToS3(mediaItemToUpload.file, presignedUrl);
+        const result = await uploadToS3(mediaItemToUpload.file, presigned.url);
         if (result.success) {
-            console.log(`Uploaded [${mediaItemToUpload.uploadPath}], got versionId [${result.versionId}]`);
-            this.#uploadProcessing(mediaItemToUpload.uploadPath, result.versionId);
+            console.log(`Uploaded [${mediaItemToUpload.uploadPath}] as versionId [${presigned.versionId}]`);
+            this.#uploadProcessing(mediaItemToUpload.uploadPath, presigned.versionId);
         } else {
             this.#uploadErrored(mediaItemToUpload.uploadPath, result.error);
         }
@@ -308,6 +321,11 @@ class UploadMachine {
     }
 }
 export const uploadMachine = new UploadMachine();
+
+/** What the server is told about an upload: where it goes, and for a replacement, what it replaces */
+function presignEntry(item: MediaItemToUpload): { path: string; replaces?: string } {
+    return { path: item.uploadPath, ...(item.replaces === undefined ? {} : { replaces: item.replaces }) };
+}
 
 async function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {

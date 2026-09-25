@@ -1,6 +1,6 @@
 {
-  "id": "6af6df09-4fd4-4752-8cb3-ea8734df9822",
-  "prevId": "ae0379fc-e926-49f5-b7f9-136e4fc5fdb1",
+  "id": "6c65d90d-b895-4a67-87fc-1b349f489fc6",
+  "prevId": "0da72116-cb43-46ec-9765-fff6e18ebfb1",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -736,6 +736,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "album_id": {
+          "name": "album_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "target_id": {
           "name": "target_id",
           "type": "integer",
@@ -781,8 +788,36 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "upload_album_id": {
+          "name": "upload_album_id",
+          "columns": [
+            "album_id"
+          ],
+          "isUnique": false
+        },
+        "upload_target_id": {
+          "name": "upload_target_id",
+          "columns": [
+            "target_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
+        "upload_album_id_item_id_fk": {
+          "name": "upload_album_id_item_id_fk",
+          "tableFrom": "upload",
+          "columnsFrom": [
+            "album_id"
+          ],
+          "tableTo": "item",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        },
         "upload_target_id_item_id_fk": {
           "name": "upload_target_id_item_id_fk",
           "tableFrom": "upload",

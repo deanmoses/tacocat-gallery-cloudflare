@@ -296,6 +296,19 @@ describe('an upload row', () => {
         await expect(insert).rejects.toMatchObject(refusedBy('upload_target_check'));
     });
 
+    it('is cleared of an album that is deleted before it finishes', async () => {
+        const db = database();
+        const [day] = await db.insert(schema.item).values(DAY).returning();
+        await db.insert(schema.upload).values({ ...UPLOAD, versionId: 'v3', albumId: day?.id });
+        await db
+            .delete(schema.item)
+            .where(eq(schema.item.id, day?.id ?? 0))
+            .run();
+        const upload = await db.select().from(schema.upload).where(eq(schema.upload.versionId, 'v3')).get();
+
+        expect(upload).toMatchObject({ albumId: null, parentPath: '/2001/06-15/' });
+    });
+
     it('keeps saying it was a replacement after its target is deleted', async () => {
         const db = database();
         const [media] = await db.insert(schema.item).values(IMAGE).returning();
