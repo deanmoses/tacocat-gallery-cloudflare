@@ -229,9 +229,9 @@ This plan, steps 2, 3 and 11 change no data and need no wipe, so each is its own
 
 The steps:
 
-1. **This plan.**
-2. **Layers.** Files move into the directories above, the import rules and the cycle check go into `eslint.config.ts`, nothing changes behaviour.
-3. **Hono, the error shape and dispatch.** The `startsWith` chain in `index.ts` becomes a Hono app in `index.ts` and `routes/`, with the response wrapper and the admin gate as middleware; `{ errorMessage }` from `shared/` through `onError` and `notFound`; every method routed; exceptions no longer leak; the app's tests updated where they assert on a body. The routes themselves keep their paths and answers.
+1. **This plan.** _Done: #27, 2026-09-24._
+2. **Layers.** Files move into the directories above, the import rules and the cycle check go into `eslint.config.ts`, nothing changes behaviour. _Done: #26, 2026-09-24._
+3. **Hono, the error shape and dispatch.** The `startsWith` chain in `index.ts` becomes a Hono app in `index.ts` and `routes/`, with the response wrapper and the admin gate as middleware; `{ errorMessage }` from `shared/` through `onError` and `notFound`; every method routed; exceptions no longer leak; the app's tests updated where they assert on a body. The routes themselves keep their paths and answers. _Done: #28, 2026-09-24._
 4. **Schema baseline**, in two commits. First `api/scripts/check-gallery.ts`: it reads every album of the AWS gallery, from a DynamoDB export or, failing AWS access, through the public API, writes each row through `PUT /api/item` into a local `wrangler dev` running the baseline drafted in the working tree, and reports every constraint that refused a row, by name and with the paths. It is the first half of the gallery copy (see Afterwards), not a throwaway. Then the baseline as those findings shaped it: the migrations reset, timestamps on every table, the constraints, the thumbnail foreign key, the two indexes, the `upload` table; the staging database emptied by hand before the push. A constraint that turns out to reject real rows costs a table rebuild to change, which is why the check comes first.
 5. **Reads.** `HEAD` for albums and media, search with the app's URL and shape, `/raw/` and `/v/` narrowed to a version's original and MP4, the seed and debug routes behind login, `/api/ryw` and `/upload/` removed.
 6. **Album writes.** Create, update with the publish guard, delete, rename, set thumbnail.
@@ -239,9 +239,20 @@ The steps:
 8. **Storage.** Keys by version id, the id minted at presign and written to the `upload` table the baseline created, the presign route with its body and response, the pipeline reading the upload row, replacement in any format with the crop rule, the thumbnail and detail image generated at the end, the transcoder writing to the derived bucket, the metadata label, the media script. No migration. Staging's buckets are emptied by hand with this push, as its database was at step 4: every object under the old path keys is garbage the moment this deploys, more than the purge's per-run cap would clear in weeks of nights. Production's buckets get the same at step 12.
 9. **The purge**, and the backup written to match.
 10. **The web app**: the two changes, the removal of the renamed-on-server code listed with them, the optional items if they fit, and the e2e admin journeys.
-11. **Headers and `robots.txt`**, as above. Independent of every other step and its own pull request, so it can go first if a session wants a small one.
+11. **Headers and `robots.txt`**, as above. Independent of every other step and its own pull request, so it can go first if a session wants a small one. _Done: 2026-09-24; the `_headers` file does reach an app route's fallback, which the stack test confirms._
 12. **Docs, and the merge.** `docs/Architecture.md` written from the code, `README.md`, `docs/Risks.md` rows #5 and #13 updated, `docs/AGENTS.src.md` no longer calling this a prototype, `docs/plans/Release.md` no longer owing the headers. Before the merge, production's database and both its buckets are emptied by hand, the database backed up first as at step 4, since every object in them is under the old keys and the purge's cap would take weeks to clear them. Expect the merge's Deploy run to show as failed for the reason given under the migrations reset, and watch it.
 13. **Production's gallery back.** Production is what the probes and the browser runs measure four times a day, and after the merge it is empty, so this comes the same day: the albums `docs/Perf.md` measures are imported again with `import-album.ts`, now writing rows through `PUT /api/item`. Every version id and every URL changes with the keys, so the edge cache and every browser cache start cold, and `docs/Perf.md` says so, dates it, and marks the runs on either side of the gap.
+
+### What the first steps taught
+
+For the sessions doing the rest, things a fresh session would otherwise find out the hard way:
+
+- Branch from `main` after the previous step merges, and never `git stash` mid-step: a step's new files are untracked until staged, and a stash drops them from the tree.
+- A step is one pull request with one commit, and the pre-commit hook runs every suite the staged files touch, so a commit takes about 40 seconds. Commit once, when the step is green, rather than in pieces.
+- The test helpers to reach for are `call`, `callAsAdmin` and `parseExactly` in `api/test/helpers.ts`. A stack test can import a constant from `api/src` to hold two copies of something together, as the headers test holds `web/static/_headers` to the Worker's values.
+- What Hono does with `HEAD`, a mid-path `*` and a guest's write is under The API above; read it before adding a route.
+- `import-x/no-cycle` sees `.ts` files only because the config names the extension; the comment there says so, so it is not a setting to tidy away.
+- Wrangler's local Durable Object reset prints `Application called deleteAllDurableObjects()` as an uncaught exception during the tests. It is the Vitest Workers plugin's storage isolation, not a failing test.
 
 ## Afterwards: copying the gallery
 

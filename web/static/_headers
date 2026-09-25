@@ -1,3 +1,14 @@
+# The asset router serves the app's files without the Worker, so the headers every response from this site carries are
+# repeated here from api/src/http/headers.ts; a stack test fails when the two drift.
+/*
+  X-Robots-Tag: noindex, noimageindex, nosnippet, max-image-preview:none, notranslate, noarchive, noai, noimageai
+  tdm-reservation: 1
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: accelerometer=(), browsing-topics=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+
 # SvelteKit fingerprints every file under _app/immutable, so a changed file gets a new URL and a browser never needs to
 # ask whether its copy is current. The same Cache-Control the AWS site's CloudFront sets on these files.
 /_app/immutable/*

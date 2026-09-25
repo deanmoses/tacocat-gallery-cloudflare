@@ -40,6 +40,7 @@ Before each test, `api/test/setup.ts` calls `reset()`, which empties every bindi
 - `call`, `callAsAdmin`, `callForJson` and `putItem` in `api/test/helpers.ts` send a request as a browser on the local dev origin would. They wait for work the Worker left running with `waitUntil()`, such as a cache write, so the next test's reset cannot cut it off.
 - The admin cookie is signed independently of `api/src/auth/session.ts`, so a change to the cookie format fails a test.
 - Passkeys come from `SoftwareAuthenticator` in `api/test/authenticator.ts`, which builds what a browser sends from a real P-256 key, so the Worker's WebAuthn checks run unchanged. `api/test/integration/passkeys.test.ts` drives registration and login with it, and `api/scripts/passkey-selftest.ts` uses it against `wrangler dev`.
+- A stack test may import a constant from `api/src` when it holds a copy of something to the Worker's value, as `api/test/stack/headers.test.ts` holds `web/static/_headers` to `SITE_HEADERS`; it runs in Node, so what it imports has to be free of Worker types.
 - Drive the queue with `createMessageBatch` and read what was acked with `getQueueResult`; drive a cron with `createScheduledController`. `api/test/integration/media.test.ts` and `scheduled.test.ts` show both.
 - Files from `api/fixtures/` load with a `?inline` import.
 
