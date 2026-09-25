@@ -22,4 +22,3 @@ Live since 2026-09-24. The token was made from the Edit Cloudflare Workers templ
 ## After that
 
 - An alert when production starts failing after a release: a Cloudflare notification on the Worker's error rate, or a DebugBear alert, since it visits four times a day.
-- `X-Robots-Tag: noindex` from the Worker and a `robots.txt` that allows crawling, as the AWS site sends; the app carries only the meta tag. Both environments, one change, a test each.

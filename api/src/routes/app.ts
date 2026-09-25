@@ -10,6 +10,7 @@ import {
     registerVerify,
     requestSite,
 } from '../auth/passkeys';
+import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
 import { failure, html, json, notFound } from '../http/responses';
 import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
@@ -38,12 +39,22 @@ interface App {
 export function createApp(): Hono<App> {
     const app = new Hono<App>();
 
-    // Every response says where it ran and how long the Worker took, and under /api/, which view it served.
+    // Every response carries the site's headers, says where it ran and how long the Worker took, and under /api/,
+    // which view it served.
     app.use(async (context, next) => {
         const started = performance.now();
         await next();
+        for (const [name, value] of Object.entries(SITE_HEADERS)) {
+            context.res.headers.set(name, value);
+        }
         context.res.headers.set('x-worker-colo', colo(context.req.raw));
         context.res.headers.append('server-timing', `worker;dur=${(performance.now() - started).toFixed(1)}`);
+    });
+    app.on('GET', ['/i/*', '/i2/*', '/v/*', '/raw/*'], async (context, next) => {
+        await next();
+        for (const [name, value] of Object.entries(MEDIA_HEADERS)) {
+            context.res.headers.set(name, value);
+        }
     });
     app.use('/api/*', async (context, next) => {
         await next();
