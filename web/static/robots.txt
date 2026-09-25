@@ -1,40 +1,5 @@
 # Crawling is allowed in order to stay out of search results: a crawler must fetch a page to see its noindex, and a
-# Disallow would hide that and leave bare URLs listed. The bots below only train, so there is no listing to lose.
-# Sorted, so a duplicate shows on sight.
+# Disallow would hide that and leave bare URLs listed. The AI crawlers to keep out are named in the block Cloudflare
+# puts before this, from the zone's robots.txt setting, and Cloudflare keeps that list current.
 User-agent: *
 Allow: /
-
-User-agent: AI2Bot
-User-agent: Amazonbot
-User-agent: anthropic-ai
-User-agent: Applebot-Extended
-User-agent: Bytespider
-User-agent: CCBot
-User-agent: ChatGPT-User
-User-agent: Claude-SearchBot
-User-agent: Claude-User
-User-agent: Claude-Web
-User-agent: ClaudeBot
-User-agent: cohere-ai
-User-agent: Diffbot
-User-agent: DuckAssistBot
-User-agent: FacebookBot
-User-agent: Google-CloudVertexBot
-User-agent: Google-Extended
-User-agent: GPTBot
-User-agent: ImagesiftBot
-User-agent: img2dataset
-User-agent: Meta-ExternalAgent
-User-agent: meta-externalfetcher
-User-agent: MistralAI-User
-User-agent: OAI-SearchBot
-User-agent: omgili
-User-agent: omgilibot
-User-agent: PanguBot
-User-agent: Perplexity-User
-User-agent: PerplexityBot
-User-agent: SemrushBot-OCOB
-User-agent: Timpibot
-User-agent: Webzio-Extended
-User-agent: YouBot
-Disallow: /

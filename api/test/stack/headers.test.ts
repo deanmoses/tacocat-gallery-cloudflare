@@ -39,14 +39,14 @@ describe("the site's headers on the app's files", () => {
 });
 
 describe('robots.txt', () => {
-    it('lets every crawler in, so it sees the noindex, and keeps the training bots out', async () => {
+    // The zone prepends Cloudflare's block naming the AI crawlers, which the local stack has no zone to show; this is
+    // the file alone, which has to be a real file so the app's fallback page is not served in its place.
+    it('is a text file that lets every crawler in, so it sees the noindex', async () => {
         const response = await navigate('/robots.txt');
         const body = await response.text();
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
-        expect(body).toMatch(/^(?:#[^\n]*\n)*User-agent: \*\nAllow: \/\n{2}(?:User-agent: [^\n]+\n)+Disallow: \/\n$/v);
-        expect(body).toContain('User-agent: GPTBot\n');
-        expect(body).toContain('User-agent: ClaudeBot\n');
+        expect(body).toMatch(/^(?:#[^\n]*\n)*User-agent: \*\nAllow: \/\n$/v);
     });
 });
