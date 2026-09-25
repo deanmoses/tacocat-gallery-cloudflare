@@ -91,7 +91,7 @@
             <p>Drop images and videos or a 📁</p>
         {/if}
         {#if uploads.length > 0}
-            {#each uploads as upload (upload.uploadPath)}
+            {#each uploads as upload (upload.path)}
                 <UploadThumbnail {upload} />
             {/each}
         {/if}

@@ -5,6 +5,7 @@ import {
     type PresignResponse,
     albumKey,
     baseNameOf,
+    hasStrictExtension,
     isStrictMediaName,
     mediaKey,
     mediaPath,
@@ -106,9 +107,14 @@ function plan(albumPath: string, entries: PresignRequest): Planned[] | { refused
         if (key === null) {
             return { refused: `Invalid media path [${path}]` };
         }
-        if (!isStrictMediaName(key.itemName)) {
+        if (replaces === undefined && !isStrictMediaName(key.itemName)) {
             return {
                 refused: `Invalid media name [${key.itemName}]: lowercase letters, digits and single underscores, with an extension the gallery takes, jpg not jpeg`,
+            };
+        }
+        if (replaces !== undefined && !hasStrictExtension(key.itemName)) {
+            return {
+                refused: `Invalid extension on [${key.itemName}]: lowercase, one the gallery takes, jpg not jpeg`,
             };
         }
         if (key.parentPath !== albumPath) {

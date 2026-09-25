@@ -56,7 +56,16 @@ export function baseNameOf(name: string): string {
  * `isStoredMediaName` admits.
  */
 export function isStrictMediaName(name: string): boolean {
-    return STRICT_MEDIA_NAME.test(name) && isStoredMediaName(name);
+    return STRICT_MEDIA_NAME.test(name) && hasStrictExtension(name);
+}
+
+/**
+ * The extension as the sanitizer spells it: lowercase, one the gallery stores, `jpg` not `jpeg`. A replacement keeps
+ * its target's base name, which may be an older one the sanitizer never saw, so its extension is all that is judged.
+ */
+export function hasStrictExtension(name: string): boolean {
+    const extension = name.slice(name.lastIndexOf('.') + 1);
+    return isStoredMediaName(name) && extension === extension.toLowerCase();
 }
 
 /**

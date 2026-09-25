@@ -7,7 +7,7 @@ import type { Album } from '$lib/models/GalleryItemInterfaces';
 /**
  * Every store writes to the one AlbumState singleton, and specs run in a
  * shuffled order, so an album left behind by one spec changes what an unrelated
- * one sees. Nine collections is more than a spec should have to remember.
+ * one sees. More collections than a spec should have to remember.
  */
 export function resetAlbumState(): void {
     albumState.editMode = false;
@@ -20,7 +20,6 @@ export function resetAlbumState(): void {
     albumState.mediaRenames.clear();
     albumState.mediaDeletes.clear();
     albumState.crops.clear();
-    albumState.albumChangedAt.clear();
 }
 
 /**

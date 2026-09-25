@@ -11,7 +11,7 @@
     import type { MediaItemToUpload } from '$lib/models/album';
     import { sessionStore } from '$lib/stores/SessionStore.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
-    import { enrichWithPreviousVersionIds } from '$lib/utils/uploadUtils';
+    import { markReplacements } from '$lib/utils/uploadUtils';
 
     interface Props {
         albumPath: string;
@@ -39,7 +39,7 @@
         imagesToUpload = getSanitizedFiles(files, albumPath);
         if (!imagesToUpload.length) return;
         const album = albumState.albums.get(albumPath)?.album;
-        const collidingNames = enrichWithPreviousVersionIds(imagesToUpload, album);
+        const collidingNames = markReplacements(imagesToUpload, album);
         if (collidingNames.length > 0) {
             dialog?.show(collidingNames);
         } else {

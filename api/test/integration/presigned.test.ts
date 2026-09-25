@@ -24,6 +24,7 @@ describe('asking for upload URLs', () => {
         await putItem({ parentPath: DAY, itemName: 'existing.jpg', ...IMAGE });
         await putItem({ parentPath: DAY, itemName: 'twin.jpg', ...IMAGE });
         await putItem({ parentPath: DAY, itemName: 'twin.png', ...IMAGE });
+        await putItem({ parentPath: DAY, itemName: 'Old-Photo.JPG', ...IMAGE });
     });
 
     it('needs an admin', async () => {
@@ -109,6 +110,18 @@ describe('asking for upload URLs', () => {
             message: 'not in album',
         },
         {
+            what: 'a replacement with an extension the sanitizer would have lowercased',
+            albumPath: DAY,
+            body: [{ path: `${DAY}existing.PNG`, replaces: `${DAY}existing.jpg` }],
+            message: 'Invalid extension',
+        },
+        {
+            what: 'a replacement spelled jpeg',
+            albumPath: DAY,
+            body: [{ path: `${DAY}Old-Photo.jpeg`, replaces: `${DAY}Old-Photo.JPG` }],
+            message: 'Invalid extension',
+        },
+        {
             what: 'a replacement under another name',
             albumPath: DAY,
             body: [{ path: `${DAY}renamed.jpg`, replaces: `${DAY}existing.jpg` }],
@@ -183,5 +196,13 @@ describe('asking for upload URLs', () => {
         const uploads = await parseExactly(response, parsePresigned);
 
         expect(Object.keys(uploads)).toStrictEqual([`${DAY}existing.jpg`]);
+    });
+
+    // The gallery copied from AWS holds names the sanitizer never saw; a replacement keeps the name it finds
+    it('takes a replacement of an item with an older, unsanitized name, in another format', async () => {
+        const response = await presign(DAY, [{ path: `${DAY}Old-Photo.png`, replaces: `${DAY}Old-Photo.JPG` }]);
+        const uploads = await parseExactly(response, parsePresigned);
+
+        expect(Object.keys(uploads)).toStrictEqual([`${DAY}Old-Photo.png`]);
     });
 });

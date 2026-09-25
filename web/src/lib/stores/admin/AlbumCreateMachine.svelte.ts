@@ -67,9 +67,9 @@ class AlbumCreateMachine {
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
-            await albumLoadMachine.reloadAfterChange(albumPath); // load newly created album
+            await albumLoadMachine.fetchFromServer(albumPath); // load newly created album
             this.#success(albumPath);
-            await albumLoadMachine.reloadAfterChange(getParentFromPath(albumPath)); // reload parent album
+            await albumLoadMachine.fetchFromServer(getParentFromPath(albumPath)); // reload parent album
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             this.#error(albumPath, msg);

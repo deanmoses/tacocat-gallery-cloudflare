@@ -75,7 +75,7 @@ class AlbumRenameMachine {
             // Fetch parent album to get renamed album added to it, without waiting,
             // because we want the UI to move to the new album now
             const parentAlbumPath = getParentFromPath(oldAlbumPath);
-            void albumLoadMachine.reloadAfterChange(parentAlbumPath);
+            void albumLoadMachine.fetchFromServer(parentAlbumPath);
             // Remove old album from album store, without waiting,
             // because we want the UI to move away from the old album first
             void albumLoadMachine.removeFromMemoryAndDisk(oldAlbumPath);

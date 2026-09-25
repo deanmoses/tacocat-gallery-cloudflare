@@ -59,6 +59,6 @@
 
 {#if sessionStore.isAdmin}
     {#await import('./MediaPageFullScreenDropZone.svelte') then { default: FullScreenDropZone }}
-        <FullScreenDropZone mediaPath={media.path} versionId={media.versionId} />
+        <FullScreenDropZone mediaPath={media.path} />
     {/await}
 {/if}

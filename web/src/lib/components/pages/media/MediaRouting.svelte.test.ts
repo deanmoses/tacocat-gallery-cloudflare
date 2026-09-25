@@ -62,7 +62,7 @@ const setStatus =
 const setUpload =
     (status: UploadState): Seed =>
     ({ mediaPath: itemPath }) => {
-        albumState.uploads.push(uploadEntry({ mediaPath: itemPath, status }));
+        albumState.uploads.push(uploadEntry({ path: itemPath, status }));
     };
 
 /** States whose page puts no words on the screen, leaving the title to carry it */
@@ -275,7 +275,7 @@ describe(MediaRouting, () => {
     });
 
     it('an unrecognized upload status shows the status on a titled page', async () => {
-        albumState.uploads.push(uploadEntry({ mediaPath: MEDIA_PATH, status: 'WAT' as UploadState }));
+        albumState.uploads.push(uploadEntry({ path: MEDIA_PATH, status: 'WAT' as UploadState }));
 
         show();
 

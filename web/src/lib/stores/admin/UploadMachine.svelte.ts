@@ -10,9 +10,9 @@ import {
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
-import { fetchPresignedUrls, uploadToS3 } from '$lib/utils/s3Upload';
+import { fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
 import { type PresignedUpload, sanitizeMediaFilename } from 'tacocat-gallery-shared';
-import { getMediaPath, getProcessingTimeout } from '$lib/utils/fileFormats';
+import { getProcessingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 
 /**
@@ -35,66 +35,60 @@ class UploadMachine {
     //    To read this store's state, use one of the public $derived() fields
     //
 
-    uploadMediaItem(uploadPath: string, file: File, previousVersionId?: string, replaces?: string): void {
-        void this.#uploadMediaItem(uploadPath, file, previousVersionId, replaces); // invoke async service in fire-and-forget fashion
+    uploadMediaItem(path: string, file: File, replaces?: string): void {
+        void this.#uploadMediaItem(path, file, replaces); // invoke async service in fire-and-forget fashion
     }
 
     uploadMediaItems(albumPath: string, mediaItemsToUpload: MediaItemToUpload[]): void {
         void this.#uploadMediaItems(albumPath, mediaItemsToUpload); // invoke async service in fire-and-forget fashion
     }
 
-    #uploadEnqueued(uploadPath: string, file: File, previousVersionId?: string): void {
-        albumState.uploads.push({
-            file,
-            uploadPath,
-            mediaPath: getMediaPath(uploadPath),
-            status: UploadState.UPLOAD_NOT_STARTED,
-            ...(previousVersionId === undefined ? {} : { previousVersionId }),
-        });
+    #uploadEnqueued(path: string, file: File): void {
+        albumState.uploads.push({ file, path, status: UploadState.UPLOAD_NOT_STARTED });
     }
 
-    #uploadStarted(uploadPath: string): void {
-        const upload = albumState.uploads.find((entry) => entry.uploadPath === uploadPath);
+    #uploadStarted(path: string): void {
+        const upload = albumState.uploads.find((entry) => entry.path === path);
         if (!upload) {
-            console.warn(`Upload not found for path: ${uploadPath}`);
+            console.warn(`Upload not found for path: ${path}`);
             return;
         }
         upload.status = UploadState.UPLOADING;
     }
 
-    #uploadProcessing(uploadPath: string, versionId: string): void {
-        const upload = albumState.uploads.find((entry) => entry.uploadPath === uploadPath);
+    #uploadProcessing(path: string, versionId: string): void {
+        const upload = albumState.uploads.find((entry) => entry.path === path);
         if (!upload) {
-            console.warn(`Upload not found for path: ${uploadPath}`);
+            console.warn(`Upload not found for path: ${path}`);
             return;
         }
         upload.status = UploadState.PROCESSING;
         upload.versionId = versionId;
     }
 
-    #uploadErrored(uploadPath: string, errorMessage: string): void {
-        console.error(`Error uploading [${uploadPath}]: ${errorMessage}`);
-        toast.push(`Error uploading [${uploadPath}]: ${errorMessage}`);
-        this.#uploadComplete(uploadPath);
+    #uploadErrored(path: string, errorMessage: string): void {
+        console.error(`Error uploading [${path}]: ${errorMessage}`);
+        toast.push(`Error uploading [${path}]: ${errorMessage}`);
+        this.#uploadComplete(path);
     }
 
-    #uploadProcessingFailed(uploadPath: string, errorMessage: string): void {
-        console.error(`Processing failed for ${uploadPath}: ${errorMessage}`);
-        toast.push(`Processing failed for ${uploadPath}: ${errorMessage}`, {
+    #uploadProcessingFailed(path: string, errorMessage: string): void {
+        console.error(`Processing failed for ${path}: ${errorMessage}`);
+        toast.push(`Processing failed for ${path}: ${errorMessage}`, {
             duration: 8000,
             pausable: true,
         });
-        this.#uploadComplete(uploadPath);
+        this.#uploadComplete(path);
     }
 
-    #uploadSkipped(uploadPath: string, skipMessage: string): void {
-        console.error(`Skipping upload [${uploadPath}]: ${skipMessage}`);
-        toast.push(`Skipping upload [${uploadPath}]: ${skipMessage}`);
+    #uploadSkipped(path: string, skipMessage: string): void {
+        console.error(`Skipping upload [${path}]: ${skipMessage}`);
+        toast.push(`Skipping upload [${path}]: ${skipMessage}`);
     }
 
-    #uploadComplete(uploadPath: string): void {
+    #uploadComplete(path: string): void {
         // remove upload from list
-        albumState.uploads = albumState.uploads.filter((upload) => upload.uploadPath !== uploadPath);
+        albumState.uploads = albumState.uploads.filter((upload) => upload.path !== path);
     }
 
     //
@@ -109,31 +103,24 @@ class UploadMachine {
     //
 
     /**
-     * Upload the specified single media item.  Replaces media item at the specified path, if it exists.
+     * Upload one media item, replacing the item at `replaces` when there is one.
      *
-     * @param uploadPath path to upload to
+     * @param path the media path the item will have
      * @param file A File object from browser's file picker
-     * @param previousVersionId For replacements: versionId of the media item being replaced
-     * @param replaces For replacements: path of the media item being replaced
      */
-    async #uploadMediaItem(
-        uploadPath: string,
-        file: File,
-        previousVersionId?: string,
-        replaces?: string,
-    ): Promise<void> {
+    async #uploadMediaItem(path: string, file: File, replaces?: string): Promise<void> {
         try {
-            const albumPath = getParentFromPath(uploadPath);
-            this.#uploadEnqueued(uploadPath, file, previousVersionId);
+            const albumPath = getParentFromPath(path);
+            this.#uploadEnqueued(path, file);
             await this.#uploadSingleMediaItem(albumPath, {
                 file,
-                uploadPath,
+                path,
                 ...(replaces === undefined ? {} : { replaces }),
             });
             await this.#pollForProcessedMediaItems(albumPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            this.#uploadErrored(uploadPath, msg);
+            this.#uploadErrored(path, msg);
         }
     }
 
@@ -141,21 +128,21 @@ class UploadMachine {
     async #uploadSingleMediaItem(albumPath: string, mediaItemToUpload: MediaItemToUpload): Promise<void> {
         // Validate extension and path
         if (!hasValidMediaExtension(mediaItemToUpload.file.name)) {
-            this.#uploadSkipped(mediaItemToUpload.uploadPath, `Invalid file type: [${mediaItemToUpload.file.name}]`);
-            this.#uploadComplete(mediaItemToUpload.uploadPath);
+            this.#uploadSkipped(mediaItemToUpload.path, `Invalid file type: [${mediaItemToUpload.file.name}]`);
+            this.#uploadComplete(mediaItemToUpload.path);
             return;
         }
-        if (!isValidMediaPath(mediaItemToUpload.uploadPath)) {
-            this.#uploadSkipped(mediaItemToUpload.uploadPath, `Invalid media path: [${mediaItemToUpload.uploadPath}]`);
-            this.#uploadComplete(mediaItemToUpload.uploadPath);
+        if (!isValidMediaPath(mediaItemToUpload.path)) {
+            this.#uploadSkipped(mediaItemToUpload.path, `Invalid media path: [${mediaItemToUpload.path}]`);
+            this.#uploadComplete(mediaItemToUpload.path);
             return;
         }
 
         // Validate media content
         const validationResult = await validateMediaBatch([mediaItemToUpload]);
         if (validationResult.invalid.length > 0) {
-            this.#uploadSkipped(mediaItemToUpload.uploadPath, 'Invalid or corrupted media file');
-            this.#uploadComplete(mediaItemToUpload.uploadPath);
+            this.#uploadSkipped(mediaItemToUpload.path, 'Invalid or corrupted media file');
+            this.#uploadComplete(mediaItemToUpload.path);
             return;
         }
 
@@ -164,7 +151,7 @@ class UploadMachine {
         if (!presignedResult.success) {
             throw new Error(presignedResult.error);
         }
-        const presigned = presignedResult.uploads[mediaItemToUpload.uploadPath];
+        const presigned = presignedResult.uploads[mediaItemToUpload.path];
         if (presigned === undefined) {
             throw new Error('No presigned URL for media item');
         }
@@ -180,17 +167,11 @@ class UploadMachine {
             // Validate file extensions and media paths
             itemsToUpload = itemsToUpload.filter((mediaItemToUpload) => {
                 if (!hasValidMediaExtension(mediaItemToUpload.file.name)) {
-                    this.#uploadSkipped(
-                        mediaItemToUpload.uploadPath,
-                        `Invalid file type: [${mediaItemToUpload.file.name}]`,
-                    );
+                    this.#uploadSkipped(mediaItemToUpload.path, `Invalid file type: [${mediaItemToUpload.file.name}]`);
                     return false;
                 }
-                if (!isValidMediaPath(mediaItemToUpload.uploadPath)) {
-                    this.#uploadSkipped(
-                        mediaItemToUpload.uploadPath,
-                        `Invalid media path: [${mediaItemToUpload.uploadPath}]`,
-                    );
+                if (!isValidMediaPath(mediaItemToUpload.path)) {
+                    this.#uploadSkipped(mediaItemToUpload.path, `Invalid media path: [${mediaItemToUpload.path}]`);
                     return false;
                 }
                 return true;
@@ -199,8 +180,8 @@ class UploadMachine {
 
             // Validate media content (checks file size > 0 and that browser can load any browser-loadable media)
             const validationResult = await validateMediaBatch(itemsToUpload);
-            for (const uploadPath of validationResult.invalid) {
-                this.#uploadSkipped(uploadPath, 'Invalid or corrupted media file');
+            for (const path of validationResult.invalid) {
+                this.#uploadSkipped(path, 'Invalid or corrupted media file');
             }
             itemsToUpload = validationResult.valid;
             if (itemsToUpload.length === 0) return;
@@ -214,19 +195,15 @@ class UploadMachine {
 
             // Enqueue uploads
             for (const mediaItemToUpload of itemsToUpload) {
-                this.#uploadEnqueued(
-                    mediaItemToUpload.uploadPath,
-                    mediaItemToUpload.file,
-                    mediaItemToUpload.previousVersionId,
-                );
+                this.#uploadEnqueued(mediaItemToUpload.path, mediaItemToUpload.file);
             }
 
-            // Upload to S3 in parallel
+            // Put every file to its URL in parallel
             const mediaUploads: Promise<void>[] = [];
             for (const mediaItemToUpload of itemsToUpload) {
-                const presigned = presignedUploads[mediaItemToUpload.uploadPath];
+                const presigned = presignedUploads[mediaItemToUpload.path];
                 if (presigned === undefined) {
-                    this.#uploadErrored(mediaItemToUpload.uploadPath, `No presigned URL for media`);
+                    this.#uploadErrored(mediaItemToUpload.path, `No presigned URL for media`);
                     continue;
                 }
                 mediaUploads.push(this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presigned));
@@ -236,7 +213,7 @@ class UploadMachine {
         } catch (error) {
             // Clean up any uploads that were enqueued before the failure
             for (const mediaItemToUpload of itemsToUpload) {
-                this.#uploadComplete(mediaItemToUpload.uploadPath);
+                this.#uploadComplete(mediaItemToUpload.path);
             }
             toast.push(String(error));
         }
@@ -246,13 +223,13 @@ class UploadMachine {
         mediaItemToUpload: MediaItemToUpload,
         presigned: PresignedUpload,
     ): Promise<void> {
-        this.#uploadStarted(mediaItemToUpload.uploadPath);
-        const result = await uploadToS3(mediaItemToUpload.file, presigned.url);
+        this.#uploadStarted(mediaItemToUpload.path);
+        const result = await uploadToBucket(mediaItemToUpload.file, presigned.url);
         if (result.success) {
-            console.log(`Uploaded [${mediaItemToUpload.uploadPath}] as versionId [${presigned.versionId}]`);
-            this.#uploadProcessing(mediaItemToUpload.uploadPath, presigned.versionId);
+            console.log(`Uploaded [${mediaItemToUpload.path}] as versionId [${presigned.versionId}]`);
+            this.#uploadProcessing(mediaItemToUpload.path, presigned.versionId);
         } else {
-            this.#uploadErrored(mediaItemToUpload.uploadPath, result.error);
+            this.#uploadErrored(mediaItemToUpload.path, result.error);
         }
     }
 
@@ -264,7 +241,7 @@ class UploadMachine {
 
         // Calculate max poll attempts based on the slowest-processing file type
         const uploads = getUploadsForAlbum(albumPath);
-        const maxTimeoutMs = Math.max(...uploads.map((upload) => getProcessingTimeout(upload.uploadPath)));
+        const maxTimeoutMs = Math.max(...uploads.map((upload) => getProcessingTimeout(upload.path)));
         const maxPollAttempts = Math.ceil(maxTimeoutMs / POLL_INTERVAL_MS);
 
         let processingComplete: boolean;
@@ -280,7 +257,7 @@ class UploadMachine {
         if (processingComplete) return;
         const remaining = getUploadsForAlbum(albumPath);
         for (const upload of remaining) {
-            this.#uploadComplete(upload.uploadPath);
+            this.#uploadComplete(upload.path);
         }
         toast.push('Some media are still processing. Refresh to see them when ready.');
     }
@@ -290,8 +267,8 @@ class UploadMachine {
         if (uploads.length === 0) return true;
         try {
             // Check for processing errors (e.g., video transcoding failures)
-            const uploadPaths = uploads.map((upload) => upload.uploadPath);
-            const errorResult = await checkMediaErrors(uploadPaths);
+            const paths = uploads.map((upload) => upload.path);
+            const errorResult = await checkMediaErrors(paths);
             if (errorResult.success && errorResult.errors) {
                 for (const [path, errorMessage] of Object.entries(errorResult.errors)) {
                     this.#uploadProcessingFailed(path, errorMessage);
@@ -299,17 +276,15 @@ class UploadMachine {
             }
 
             // Check which uploads have completed successfully
-            await albumLoadMachine.reloadAfterChange(albumPath);
+            await albumLoadMachine.fetchFromServer(albumPath);
             const album = albumState.albums.get(albumPath)?.album;
             if (!album) throw new Error('album not loaded');
 
-            const { processed, allProcessed } = findProcessedUploads(uploads, (mediaPath) => {
-                const media = album.getMedia(mediaPath);
-                return media?.versionId;
-            });
+            const versions = new Set(album.media.map((media) => media.versionId));
+            const { processed, allProcessed } = findProcessedUploads(uploads, (versionId) => versions.has(versionId));
 
-            for (const uploadPath of processed) {
-                this.#uploadComplete(uploadPath);
+            for (const path of processed) {
+                this.#uploadComplete(path);
             }
 
             return allProcessed;
@@ -323,7 +298,7 @@ export const uploadMachine = new UploadMachine();
 
 /** What the server is told about an upload: where it goes, and for a replacement, what it replaces */
 function presignEntry(item: MediaItemToUpload): { path: string; replaces?: string } {
-    return { path: item.uploadPath, ...(item.replaces === undefined ? {} : { replaces: item.replaces }) };
+    return { path: item.path, ...(item.replaces === undefined ? {} : { replaces: item.replaces }) };
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -340,18 +315,18 @@ export function getSanitizedFiles(files: FileList | File[], albumPath: string): 
     // Create sanitized paths for all files
     const filesWithPaths: MediaItemToUpload[] = [];
     for (const file of files) {
-        const uploadPath = albumPath + sanitizeMediaFilename(file.name);
-        filesWithPaths.push({ file, uploadPath });
+        const path = albumPath + sanitizeMediaFilename(file.name);
+        filesWithPaths.push({ file, path });
     }
 
     // Deduplicate paths
     // e.g., my-photo.jpg and my_photo.jpg both become my_photo.jpg, and therefore one needs to become my_photo_1.jpg
-    const originalPaths = filesWithPaths.map((item) => item.uploadPath);
+    const originalPaths = filesWithPaths.map((item) => item.path);
     const deduplicatedPaths = deduplicateMediaPaths(originalPaths);
 
     // Build result with deduplicated paths, which come back one per original path in the same order
     return filesWithPaths.map((item, index) => ({
         file: item.file,
-        uploadPath: deduplicatedPaths[index] ?? item.uploadPath,
+        path: deduplicatedPaths[index] ?? item.path,
     }));
 }

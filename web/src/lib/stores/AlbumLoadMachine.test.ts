@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRESH_AFTER_CHANGE_MS, albumLoadMachine } from './AlbumLoadMachine.svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { albumLoadMachine } from './AlbumLoadMachine.svelte';
 import { albumState } from './AlbumState.svelte';
 import { AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import { clear as clearDisk, keys as diskKeys, get as getFromDisk, set as setOnDisk } from 'idb-keyval';
@@ -177,68 +177,6 @@ describe('albumLoadMachine', () => {
      * on disk, so every read of an album this session changed asks past the
      * cache for a while.
      */
-    describe('reading past the edge cache after a change', () => {
-        afterEach(() => vi.useRealTimers());
-
-        const searches = (server: ReturnType<typeof fakeServer>): string[] =>
-            server.rawCalls.map((call) => call.url.search);
-
-        it('reloadAfterChange asks past the cache', async () => {
-            const server = fakeServer();
-            server.get(ROUTE, jsonResponse(record()));
-
-            await albumLoadMachine.reloadAfterChange(PATH);
-
-            expect(searches(server)).toStrictEqual(['?fresh']);
-        });
-
-        it('so does a page visit soon after, and a plain one later', async () => {
-            vi.useFakeTimers({ now: new Date(2001, 11, 31) });
-            const server = fakeServer();
-            server.get(ROUTE, jsonResponse(record()));
-            await albumLoadMachine.reloadAfterChange(PATH);
-
-            albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => {
-                expect(server.calls).toHaveLength(2);
-            });
-            vi.advanceTimersByTime(FRESH_AFTER_CHANGE_MS);
-            albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => {
-                expect(server.calls).toHaveLength(3);
-            });
-
-            expect(searches(server)).toStrictEqual(['?fresh', '?fresh', '']);
-        });
-
-        // A draft save changes the album in memory without a server round trip
-        it('a saved draft counts as a change', async () => {
-            const entry = seedLoadedAlbum(record());
-            const server = fakeServer();
-            server.get(ROUTE, jsonResponse(record()));
-
-            albumLoadMachine.updateAlbumEntry(entry);
-            albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => {
-                expect(server.calls).toHaveLength(1);
-            });
-
-            expect(searches(server)).toStrictEqual(['?fresh']);
-        });
-
-        it('an album this session never changed is read through the cache', async () => {
-            const server = fakeServer();
-            server.get(ROUTE, jsonResponse(record()));
-
-            albumLoadMachine.fetch(PATH);
-            await vi.waitFor(() => {
-                expect(server.calls).toHaveLength(1);
-            });
-
-            expect(searches(server)).toStrictEqual(['']);
-        });
-    });
-
     describe('fetchFromServer', () => {
         it('records an album the server does not have, and drops the stale disk copy', async () => {
             await setOnDisk(PATH, record());

@@ -1,149 +1,58 @@
 import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { getMediaPath, isRenamedOnServer } from './fileFormats';
+import { baseNameOf, extensionOf, sanitizeMediaFilename } from 'tacocat-gallery-shared';
 
 /**
- * Lowercased extension without the dot; the whole string when there is no dot
- * @param pathOrFileName Accepts filename or full path.
+ * The path a file takes when it replaces the item at `targetPath`: the target's base name with the file's extension as
+ * the sanitizer spells it, so a PNG dropped on `felix.jpg` becomes `felix.png` and a `.jpeg` re-export keeps the name.
  */
-function extensionOf(pathOrFileName: string): string {
-    return pathOrFileName.slice(pathOrFileName.lastIndexOf('.') + 1).toLowerCase();
+export function replacementPath(targetPath: string, fileName: string): string {
+    const cut = targetPath.lastIndexOf('/') + 1;
+    const baseName = baseNameOf(targetPath.slice(cut));
+    return `${targetPath.slice(0, cut)}${baseName}.${extensionOf(sanitizeMediaFilename(fileName))}`;
 }
 
-/**
- * Returns an error message if the new file's extension is incompatible with the existing file,
- * or undefined if compatible. JPG/JPEG/HEIC/HEIF are interchangeable (backend converts HEIC→JPG).
- */
-export function getReplacementExtensionError(existingPath: string, newFileName: string): string | undefined {
-    const existingExt = extensionOf(existingPath);
-    const newExt = extensionOf(newFileName);
-
-    if (existingExt === newExt) return undefined;
-
-    const jpgOrHeic = ['jpg', 'jpeg', 'heic', 'heif'];
-    const existingIsJpg = ['jpg', 'jpeg'].includes(existingExt);
-    if (existingIsJpg && jpgOrHeic.includes(newExt)) return undefined;
-
-    return existingIsJpg
-        ? 'Cannot replace: file must be JPG/JPEG or HEIC/HEIF'
-        : `Cannot replace: file must be .${existingExt}`;
-}
-
-/**
- * For replacement uploads, returns the upload path to use.
- * - JPG/JPEG are equivalent: keeps target path exactly as-is (ensures replacement)
- * - HEIC/HEIF replacing JPG: uses source extension (backend needs it to convert)
- */
-export function getUploadPathForReplacement(targetPath: string, fileName: string): string {
-    const targetExt = extensionOf(targetPath);
-    const sourceExt = extensionOf(fileName);
-    if (targetExt === sourceExt) {
-        return targetPath;
-    }
-    // JPG and JPEG are equivalent - keep target path exactly to ensure replacement
-    const jpgExtensions = new Set(['jpg', 'jpeg']);
-    if (jpgExtensions.has(targetExt) && jpgExtensions.has(sourceExt)) {
-        return targetPath;
-    }
-    // Replace target extension with source extension (e.g., HEIC replacing JPG)
-    return targetPath.replace(/\.[^.]+$/v, () => `.${sourceExt}`);
-}
-
-/**
- * Result of checking which uploads have been processed by the server
- */
 export interface ProcessedUploadsResult {
-    /** Image paths that have been fully processed and are now in the album */
+    /** The paths of the uploads the album now holds */
     processed: string[];
-    /** Whether all uploads have been processed */
     allProcessed: boolean;
 }
 
 /**
- * Checks which uploads have been processed by comparing upload entries
- * against the current album state.
- *
- * An upload is considered processed when:
- * 1. It has status PROCESSING (meaning it was uploaded to S3)
- * 2. It has a versionId from S3
- * 3. The album contains an image at the expected path after server processing
- *
- * For files that are renamed on server (e.g., HEIC → JPG), we check that the album has an image
- * at the expected path. For replacements, we also verify the versionId changed from the previous one.
- * For non-renamed files, we match versionId exactly.
- *
- * @param uploads - The list of upload entries to check
- * @param getImageVersionId - Function to get the versionId of an image in the album (returns undefined if not found)
- * @returns Object containing array of processed uploadPaths and whether all are done
+ * Which uploads the server has made into items: the ones whose version id the album now carries. A replacement in
+ * another format lands under a new name, so the version is what is looked for, never the path.
  */
 export function findProcessedUploads(
     uploads: UploadEntry[],
-    getImageVersionId: (imagePath: string) => string | undefined,
+    albumHasVersion: (versionId: string) => boolean,
 ): ProcessedUploadsResult {
     const processed: string[] = [];
     let allProcessed = true;
-
     for (const upload of uploads) {
-        // Skip uploads not yet in PROCESSING state (still uploading to S3) or
-        // missing versionId (defensive check - should always have versionId when PROCESSING)
-        if (upload.status !== UploadState.PROCESSING || upload.versionId === undefined) {
-            allProcessed = false;
-            continue;
-        }
-
-        const albumVersionId = getImageVersionId(upload.mediaPath);
-        const isComplete = isUploadComplete(upload, albumVersionId);
-
-        if (isComplete) {
-            processed.push(upload.uploadPath);
+        if (
+            upload.status === UploadState.PROCESSING &&
+            upload.versionId !== undefined &&
+            albumHasVersion(upload.versionId)
+        ) {
+            processed.push(upload.path);
         } else {
-            console.log(`Did not find file [${upload.mediaPath}] in the album, it must still be processing`);
             allProcessed = false;
         }
-    }
-    if (allProcessed) {
-        console.log(`Found all uploaded files in the album, processing complete!`);
     }
     return { processed, allProcessed };
 }
 
 /**
- * Determines if a single upload is complete based on the album's current state.
+ * Marks each file whose name an item in the album already holds as replacing that item, which the server refuses an
+ * upload under a taken name without, and returns those files' names for the admin to confirm. An album not loaded
+ * yet has nothing to collide with.
  */
-function isUploadComplete(upload: UploadEntry, albumVersionId: string | undefined): boolean {
-    if (isRenamedOnServer(upload.uploadPath)) {
-        // File is renamed on server (e.g., HEIC → JPG), so versionId will differ from upload
-        if (upload.previousVersionId !== undefined) {
-            // Replacement: wait for versionId to change from the previous one
-            return albumVersionId !== undefined && albumVersionId !== upload.previousVersionId;
-        }
-        // New upload: just needs to exist in album
-        return albumVersionId !== undefined;
-    }
-    // File keeps same name, so versionId should match exactly
-    return albumVersionId === upload.versionId;
-}
-
-/**
- * Check which files already exist in the album.
- * For colliding files, sets previousVersionId so upload completion detection works correctly.
- * @param files - Files to check for collisions
- * @param album - The album to check against (if undefined, returns empty array)
- * @returns Names of colliding files (for display in confirmation dialog)
- */
-export function enrichWithPreviousVersionIds(files: MediaItemToUpload[], album: Album | undefined): string[] {
+export function markReplacements(files: MediaItemToUpload[], album: Album | undefined): string[] {
     const collidingNames: string[] = [];
-    if (!album) return collidingNames;
     for (const file of files) {
-        // Check both upload path and final path (e.g., HEIC→JPG conversion)
-        const mediaPath = getMediaPath(file.uploadPath);
-        const media = album.getMedia(file.uploadPath) ?? album.getMedia(mediaPath);
+        const media = album?.getMedia(file.path);
         if (media) {
-            console.log(`File [${file.uploadPath}] is already in album [${album.path}]`);
             collidingNames.push(file.file.name);
-            // Set previousVersionId so upload completion detection works for replacements
-            file.previousVersionId = media.versionId;
-            // The server refuses an upload under a taken name unless told which item it replaces
             file.replaces = media.path;
         }
     }

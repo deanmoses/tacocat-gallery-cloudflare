@@ -61,37 +61,22 @@ export const CreateStatus = {
 } as const;
 export type CreateStatus = (typeof CreateStatus)[keyof typeof CreateStatus];
 
-/**
- * Input data for uploading a media item (before upload starts)
- */
+/** A file about to be uploaded, and the media path it will have */
 export interface MediaItemToUpload {
     file: File;
-    /** Path used for S3 upload (e.g., /2024/01-01/photo.heic) */
-    uploadPath: string;
-    /** For replacements: the S3 versionId of the media item being replaced */
-    previousVersionId?: string;
-    /** For replacements: the path of the media item being replaced, which the server needs to be told */
+    /** For a replacement, the target's base name with this file's extension; otherwise the sanitized file name in the album */
+    path: string;
+    /** For a replacement, the item it replaces: the server refuses an upload under a taken name unless told which item it replaces */
     replaces?: string;
 }
 
-/**
- * Represents a single media item being uploaded
- */
+/** An upload in flight */
 export interface UploadEntry {
     file: File;
-    /** Path used for S3 upload (e.g., /2024/01-01/photo.heic) */
-    uploadPath: string;
-    /** Expected mediaPath in album after server processing (e.g., /2024/01-01/photo.jpg for HEIC) */
-    mediaPath: string;
+    path: string;
     status: UploadState;
-    /** S3 versionId of newly uploaded media item.
-     * For file formats that get converted to a different format on the server (like HEIC -> JPG),
-     * this will be the versionId of the pre-conversion media item, which is not useful */
+    /** The version id the server minted for this upload, which the media item carries once the pipeline has made it */
     versionId?: string;
-    /** S3 versionId of media item being replaced.
-     * For file formats that get converted to a different format on the server (like HEIC -> JPG),
-     * detecting when the versionId is no longer this is how we determine the new media item has been converted and is ready to use */
-    previousVersionId?: string;
 }
 
 /**

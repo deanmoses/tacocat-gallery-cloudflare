@@ -43,7 +43,7 @@ class FakeImage {
 function mediaItem(name: string, sizeInBytes = 100): MediaItemToUpload {
     return {
         file: new File([new Uint8Array(sizeInBytes)], name, { type: 'image/jpeg' }),
-        uploadPath: `/2024/01-01/${name}`,
+        path: `/2024/01-01/${name}`,
     };
 }
 
@@ -72,7 +72,7 @@ describe('mediaValidation', () => {
         it('accepts a file that decodes', async () => {
             const result = await validateMediaBatch([mediaItem('valid.jpg')]);
 
-            expect(result.valid.map((item) => item.uploadPath)).toStrictEqual(['/2024/01-01/valid.jpg']);
+            expect(result.valid.map((item) => item.path)).toStrictEqual(['/2024/01-01/valid.jpg']);
             expect(result.invalid).toStrictEqual([]);
         });
 
@@ -120,7 +120,7 @@ describe('mediaValidation', () => {
 
             const result = await validateMediaBatch(batch);
 
-            expect(result.valid.map((item) => item.uploadPath)).toStrictEqual([
+            expect(result.valid.map((item) => item.path)).toStrictEqual([
                 '/2024/01-01/good1.jpg',
                 '/2024/01-01/photo.heic',
                 '/2024/01-01/good2.jpg',

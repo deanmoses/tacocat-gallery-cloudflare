@@ -27,8 +27,6 @@ class AlbumState {
     mediaDeletes = new SvelteMap<string, DeleteEntry>();
     crops = new SvelteMap<string, CropEntry>();
     uploads: UploadEntry[] = $state([]);
-    /** When this session last changed each album, so a re-read soon after can ask past the edge cache */
-    albumChangedAt = new Map<string, number>();
 }
 export const albumState = new AlbumState();
 
@@ -37,11 +35,11 @@ export const albumState = new AlbumState();
 //
 
 export function getUploadsForAlbum(albumPath: string): UploadEntry[] {
-    return albumState.uploads.filter((upload) => upload.mediaPath.startsWith(albumPath));
+    return albumState.uploads.filter((upload) => upload.path.startsWith(albumPath));
 }
 
 export function getUpload(mediaPath: string): UploadEntry | undefined {
-    return albumState.uploads.find((upload) => upload.mediaPath === mediaPath);
+    return albumState.uploads.find((upload) => upload.path === mediaPath);
 }
 
 /** The album's parent, if it has loaded. The root has none. */

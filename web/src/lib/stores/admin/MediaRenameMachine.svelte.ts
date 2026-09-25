@@ -73,7 +73,7 @@ class MediaRenameMachine {
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
-            await albumLoadMachine.reloadAfterChange(albumPath); // update the album
+            await albumLoadMachine.fetchFromServer(albumPath); // update the album
             this.#success(oldMediaPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

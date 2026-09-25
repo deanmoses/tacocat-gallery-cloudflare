@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fakeServer, jsonResponse } from '$lib/test-support/http';
-import { fetchPresignedUrls, uploadToS3 } from './s3Upload';
+import { fetchPresignedUrls, uploadToBucket } from './mediaUpload';
 
 const ALBUM = '/2024/06-15/';
 const ROUTE = `/api/presigned${ALBUM}`;
@@ -44,13 +44,13 @@ describe(fetchPresignedUrls, () => {
     });
 });
 
-describe(uploadToS3, () => {
+describe(uploadToBucket, () => {
     it("PUTs the file to the URL with the file's own content type", async () => {
         const server = fakeServer();
         server.put('/inbox/v9', new Response(null, { status: 200 }));
         const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
 
-        const result = await uploadToS3(file, 'https://bucket.test/inbox/v9?signed');
+        const result = await uploadToBucket(file, 'https://bucket.test/inbox/v9?signed');
         const [put] = server.rawCalls;
 
         expect(result).toStrictEqual({ success: true });
@@ -62,7 +62,7 @@ describe(uploadToS3, () => {
         const server = fakeServer();
         server.put('/inbox/v9', new Response(null, { status: 403, statusText: 'Forbidden' }));
 
-        const result = await uploadToS3(new File([], 'photo.png'), 'https://bucket.test/inbox/v9?signed');
+        const result = await uploadToBucket(new File([], 'photo.png'), 'https://bucket.test/inbox/v9?signed');
 
         expect(result).toStrictEqual({ success: false, error: 'Forbidden' });
     });

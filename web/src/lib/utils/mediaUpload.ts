@@ -2,18 +2,18 @@ import { type PresignRequest, type PresignResponse, parsePresigned } from 'tacoc
 import { getPresignedUploadUrlGenerationUrl } from './config';
 import { adminApi, failureMessage } from './adminApi';
 
-export type S3UploadResult = { success: true } | { success: false; error: string };
+export type UploadResult = { success: true } | { success: false; error: string };
 
 export type PresignedUrlResult = { success: true; uploads: PresignResponse } | { success: false; error: string };
 
 /**
- * Upload a file to the media bucket via presigned URL.
+ * PUTs the file straight into the media bucket, at the URL the Worker signed for it.
  *
  * @param file File to upload
  * @param presignedUrl presigned URL
  * @returns Success, or failure with error message
  */
-export async function uploadToS3(file: File, presignedUrl: string): Promise<S3UploadResult> {
+export async function uploadToBucket(file: File, presignedUrl: string): Promise<UploadResult> {
     try {
         const response = await fetch(presignedUrl, {
             method: 'PUT',

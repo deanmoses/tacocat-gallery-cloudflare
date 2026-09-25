@@ -60,13 +60,8 @@ export function albumRecord(fields: Partial<AlbumGalleryItem> = {}): AlbumGaller
  * fixture is asked about is its path and its status, never its contents.
  */
 export function uploadEntry(fields: Partial<UploadEntry> & Pick<UploadEntry, 'status'>): UploadEntry {
-    const fileName = fields.mediaPath?.split('/').pop() ?? 'item.jpg';
-    return {
-        file: new File([], fileName, { type: 'image/jpeg' }),
-        uploadPath: mediaPath(fileName),
-        mediaPath: mediaPath(fileName),
-        ...fields,
-    };
+    const fileName = fields.path?.split('/').pop() ?? 'item.jpg';
+    return { file: new File([], fileName, { type: 'image/jpeg' }), path: mediaPath(fileName), ...fields };
 }
 
 /** A rename in flight, from a path to the same path under a new name */

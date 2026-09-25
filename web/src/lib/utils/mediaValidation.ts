@@ -4,7 +4,7 @@ import { browserCanDisplay } from './fileFormats';
 /** Result of validating a batch of files */
 export interface MediaValidationResult {
     valid: MediaItemToUpload[];
-    invalid: string[]; // uploadPaths that failed validation
+    invalid: string[]; // paths that failed validation
 }
 
 /**
@@ -24,7 +24,7 @@ export async function validateMediaBatch(files: MediaItemToUpload[]): Promise<Me
         if (isValid) {
             valid.push(item);
         } else {
-            invalid.push(item.uploadPath);
+            invalid.push(item.path);
         }
     }
 

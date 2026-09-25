@@ -3,6 +3,7 @@ import {
     albumKey,
     albumsEnclosing,
     extensionOf,
+    hasStrictExtension,
     isAlbumPath,
     isDayAlbumPath,
     isMediaName,
@@ -52,6 +53,16 @@ describe(isStoredMediaName, () => {
 
     it.each(['felix.jpeg', 'felix.JPEG', 'notes.txt', 'felix', 'a.b.jpg'])('rejects %s', (name) => {
         expect(isStoredMediaName(name)).toBe(false);
+    });
+});
+
+describe(hasStrictExtension, () => {
+    it.each(['felix.jpg', 'Old-Photo.png', 'IMG_0001.heic'])('accepts %s', (name) => {
+        expect(hasStrictExtension(name)).toBe(true);
+    });
+
+    it.each(['felix.JPG', 'felix.jpeg', 'notes.txt', 'felix'])('rejects %s', (name) => {
+        expect(hasStrictExtension(name)).toBe(false);
     });
 });
 
