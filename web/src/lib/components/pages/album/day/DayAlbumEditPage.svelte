@@ -106,7 +106,7 @@
 
     :global(.thumbnail:hover .not-selected) {
         animation: fade-in 1400ms;
-        display: inherit;
+        opacity: 1;
     }
 
     @keyframes fade-in {

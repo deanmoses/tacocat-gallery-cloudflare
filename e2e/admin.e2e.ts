@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { ADMIN_DAY_PATH, ADMIN_PHOTO_PATH, ADMIN_YEAR_PATH } from './gallery.ts';
+import { ADMIN_DAY_PATH, ADMIN_PHOTO_PATH, ADMIN_SECOND_PHOTO_PATH, ADMIN_YEAR_PATH } from './gallery.ts';
 import { revealAdminControls, signInAsAdmin } from './support.ts';
 
 const JPEG_FIXTURE = fileURLToPath(new URL('../api/fixtures/FullMetadata.jpg', import.meta.url));
@@ -17,6 +17,17 @@ const MONTHS = [
 function cropperImageLoaded(): boolean {
     const image = document.querySelector<HTMLImageElement>('section[aria-label="Media"] img');
     return image !== null && image.complete && image.naturalWidth > 0;
+}
+
+/** Of the admin day's two photos, the one that is not its thumbnail in the API's answer for the album. */
+function photoNotTheThumbnail(albumJson: unknown): string {
+    const thumbnail =
+        typeof albumJson === 'object' && albumJson !== null && 'thumbnail' in albumJson
+            ? albumJson.thumbnail
+            : undefined;
+    const path =
+        typeof thumbnail === 'object' && thumbnail !== null && 'path' in thumbnail ? thumbnail.path : undefined;
+    return path === ADMIN_PHOTO_PATH ? ADMIN_SECOND_PHOTO_PATH : ADMIN_PHOTO_PATH;
 }
 
 /** The album as the API answers for it, read to check what a journey wrote. */
@@ -130,7 +141,20 @@ test.describe('an admin', () => {
                 .toMatchObject({ thumbnail: { path: ADMIN_PHOTO_PATH } });
         });
 
+        // The day has two photos and one is always its thumbnail, so a rerun has a star to press
+        await test.step("the day's edit page stars the photo that is not its thumbnail", async () => {
+            const other = photoNotTheThumbnail(await album(page, ADMIN_DAY_PATH));
+            await page.goto(ADMIN_DAY_PATH);
+            await revealAdminControls(page);
+            await page.getByRole('button', { name: 'Edit' }).click();
+            await page.getByRole('button', { name: 'Set as album thumbnail' }).click();
+
+            await expect.poll(async () => album(page, ADMIN_DAY_PATH)).toMatchObject({ thumbnail: { path: other } });
+            await page.getByRole('button', { name: 'Cancel' }).click();
+        });
+
         await test.step('the crop page cuts a square from the photo and saves it', async () => {
+            await page.goto(ADMIN_PHOTO_PATH);
             await revealAdminControls(page);
             await page.getByRole('button', { name: 'Crop' }).click();
             await expect(page).toHaveURL(`${ADMIN_PHOTO_PATH}/crop`);

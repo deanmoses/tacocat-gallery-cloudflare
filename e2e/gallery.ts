@@ -12,6 +12,8 @@ export const ADMIN_YEAR_PATH = '/2003/';
 /** The day album the admin journeys upload into, holding the one photo they caption, crop and replace. */
 export const ADMIN_DAY_PATH = '/2003/08-01/';
 export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo.jpg`;
+/** A second photo in that day, so one of the two is always not the day's thumbnail and can be made it. */
+export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second.jpg`;
 const ADMIN_PHOTO_VERSION = 'e2e-photo';
 
 /**
@@ -59,6 +61,16 @@ const GALLERY = {
         width: 4032,
         height: 3024,
     },
+    adminSecondPhoto: {
+        parentPath: ADMIN_DAY_PATH,
+        itemName: 'second.jpg',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Second',
+        versionId: 'e2e-second',
+        width: 4032,
+        height: 3024,
+    },
 } as const satisfies Record<string, ItemWrite>;
 
 /** The files behind the gallery's photos, as `<bucket>/<key>` in the media bucket the Worker's top-level config names. */
@@ -80,7 +92,19 @@ export const READY_PATH = `/api/album${NEXT_DAY_PATH}`;
 export async function seedGallery(origin: string): Promise<void> {
     const { nextDay, ...rest } = GALLERY;
     await Promise.all(Object.values(rest).map(async (item) => putItem(origin, item)));
+    await setThumbnail(origin, ADMIN_DAY_PATH, ADMIN_PHOTO_PATH);
     await putItem(origin, nextDay);
+}
+
+async function setThumbnail(origin: string, albumPath: string, mediaPath: string): Promise<void> {
+    const response = await fetch(new URL(`/api/album-thumb${albumPath}`, origin), {
+        method: 'PATCH',
+        headers: { cookie: await adminCookie() },
+        body: JSON.stringify({ mediaPath }),
+    });
+    if (!response.ok) {
+        throw new Error(`setting ${albumPath}'s thumbnail failed: ${response.status} ${await response.text()}`);
+    }
 }
 
 async function putItem(origin: string, item: ItemWrite): Promise<void> {
