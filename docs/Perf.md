@@ -127,6 +127,7 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-24, 19:23 and 19:38 UTC:** the first runs the Worker's cron started, on time, the cold one two hours after the release. The first photo's click now reaches its request as quickly as on AWS.
 - **2026-09-24, 19:52 UTC:** a derived image served through the Worker's cache now reports its cache lookup and, on a miss, its R2 read, in `Server-Timing` and a `derived_image` log line with the colo, so the next runs show how much of a colo's first-photo wait is the R2 read.
 - **2026-09-24, 22:23 and 22:38 UTC:** the second round from the Worker's cron, and the first with the derived-image timing: every derived image was a cache hit in its colo, answered in 6 to 17 ms. First photos came within 5 to 45 ms of AWS's in France and California.
+- **2026-09-25, 06:11 UTC:** the merge of the `tacocat.com` zone, the diff script and the backup workflow released production, an hour before the 07:23 UTC probe run, so that run's primary was not idle; nothing in the release touched the Worker's code.
 
 ## Appendix: the journey script
 
