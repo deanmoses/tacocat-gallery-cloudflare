@@ -18,6 +18,67 @@ async function album(path: string, asAdmin = false): Promise<AlbumGalleryItem> {
     return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/album${path}`), parseAlbum);
 }
 
+describe('HEAD, which the app asks before creating or renaming', () => {
+    beforeEach(async () => {
+        await Promise.all([
+            putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
+            putItem({ parentPath: '/1982/', itemName: '01-01', itemType: 'album', published: true }),
+            putItem({ parentPath: '/1982/', itemName: '02-02', itemType: 'album', published: false }),
+            putItem({ parentPath: '/1982/01-01/', itemName: 'shown.jpg', ...IMAGE, versionId: 'v1' }),
+            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden.jpg', ...IMAGE, versionId: 'v1' }),
+        ]);
+    });
+
+    async function head(path: string, asAdmin = false): Promise<Response> {
+        const response = await (asAdmin ? callAsAdmin : call)(path, { method: 'HEAD' });
+        await response.body?.cancel();
+        return response;
+    }
+
+    it.each([
+        { what: 'the root', path: '/api/album/' },
+        { what: 'a published year', path: '/api/album/1982/' },
+        { what: 'a published day', path: '/api/album/1982/01-01/' },
+        { what: 'a day without its slash', path: '/api/album/1982/01-01' },
+        { what: 'media in a published day', path: '/api/media/1982/01-01/shown.jpg' },
+    ])('says $what is there for a guest, with no body', async ({ path }) => {
+        const response = await head(path);
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-auth-status')).toBe('guest');
+    });
+
+    it.each([
+        { what: 'an unpublished day', path: '/api/album/1982/02-02/' },
+        { what: 'media in an unpublished day', path: '/api/media/1982/02-02/hidden.jpg' },
+    ])('hides $what from a guest and shows it to an admin', async ({ path }) => {
+        const [guest, admin] = await Promise.all([head(path), head(path, true)]);
+
+        expect(guest.status).toBe(404);
+        expect(admin.status).toBe(200);
+    });
+
+    it.each([
+        { what: 'a year that does not exist', path: '/api/album/1983/' },
+        { what: 'a day that does not exist', path: '/api/album/1982/03-03/' },
+        { what: 'media that does not exist', path: '/api/media/1982/01-01/nope.jpg' },
+        { what: 'media asked for as an album', path: '/api/album/1982/01-01/shown.jpg' },
+        { what: 'an album asked for as media', path: '/api/media/1982/01-01/' },
+        { what: 'something that is no path at all', path: '/api/album/tacos/' },
+    ])('says $what is not there', async ({ path }) => {
+        const response = await head(path);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('has nothing to GET for media', async () => {
+        const response = await call('/api/media/1982/01-01/shown.jpg');
+
+        expect(response.status).toBe(405);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Method Not Allowed' });
+    });
+});
+
 describe('an album', () => {
     beforeEach(async () => {
         await Promise.all([

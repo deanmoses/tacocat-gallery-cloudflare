@@ -1,67 +1,8 @@
-import { type SQL, and, eq, exists, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { type SQL, and, asc, eq, exists, isNull, sql } from 'drizzle-orm';
 import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
-import {
-    type AlbumGalleryItem,
-    type AlbumRecord,
-    type AlbumThumbnailRecord,
-    type GalleryRecord,
-    type ItemKey,
-    type MediaRecord,
-    albumKey,
-    albumPath,
-    mediaPath,
-    mediaTypeSchema,
-    rectangleSchema,
-} from 'tacocat-gallery-shared';
-import * as valibot from 'valibot';
+import { type AlbumGalleryItem, type ItemKey, albumKey } from 'tacocat-gallery-shared';
 import { type Orm, schema } from '../db';
-
-/** A JSON column as D1 returns it, text, parsed against `shape`. */
-function jsonColumn<T extends valibot.GenericSchema>(shape: T): valibot.GenericSchema<string, valibot.InferOutput<T>> {
-    return valibot.pipe(
-        valibot.string(),
-        valibot.transform((text): unknown => JSON.parse(text)),
-        shape,
-    );
-}
-
-const CROP = jsonColumn(rectangleSchema);
-const TAGS = jsonColumn(valibot.array(valibot.string()));
-
-// A row of `item` joined to its thumbnail's row, as D1 returns it under SQL column names: run() is the query method
-// that returns D1's meta, and its rows are untyped.
-const ROW_FIELDS = {
-    parent_path: valibot.string(),
-    item_name: valibot.string(),
-    title: valibot.nullable(valibot.string()),
-    description: valibot.nullable(valibot.string()),
-    summary: valibot.nullable(valibot.string()),
-    tags: valibot.nullable(TAGS),
-    version_id: valibot.nullable(valibot.string()),
-    published: valibot.number(),
-    updated_at: valibot.string(),
-    width: valibot.nullable(valibot.number()),
-    height: valibot.nullable(valibot.number()),
-    duration_seconds: valibot.nullable(valibot.number()),
-    thumbnail_crop: valibot.nullable(CROP),
-    thumb_parent_path: valibot.nullable(valibot.string()),
-    thumb_item_name: valibot.nullable(valibot.string()),
-    thumb_version_id: valibot.nullable(valibot.string()),
-    thumb_crop: valibot.nullable(CROP),
-};
-const ROW = valibot.variant('item_type', [
-    valibot.object({ item_type: valibot.literal('album'), media_type: valibot.null(), ...ROW_FIELDS }),
-    valibot.object({ item_type: valibot.literal('media'), media_type: mediaTypeSchema, ...ROW_FIELDS }),
-]);
-const ROWS = valibot.array(ROW);
-type Row = valibot.InferOutput<typeof ROW>;
-type AlbumRow = Extract<Row, { item_type: 'album' }>;
-type MediaRow = Extract<Row, { item_type: 'media' }>;
-
-interface Rows {
-    rows: Row[];
-    meta: D1Meta;
-}
+import { type Row, type Rows, selectRecords, toAlbumRecord, toRecord } from './records';
 
 export interface AlbumRead {
     album: AlbumGalleryItem | null;
@@ -70,7 +11,13 @@ export interface AlbumRead {
     d1Ms: number;
 }
 
-const THUMB = alias(schema.item, 'thumb');
+/** Whether something is there, with what the lookup read; the root album is not a row and reads nothing. */
+export interface Existence {
+    exists: boolean;
+    meta: D1Meta | null;
+}
+
+const ALBUM = alias(schema.item, 'album');
 
 /**
  * The album at `path` with its children, as `admin` or a guest sees it. Nothing in it comes from outside the album's
@@ -94,6 +41,62 @@ export async function readAlbum(database: Orm, path: string, admin: boolean): Pr
         rowsRead: children.meta.rows_read + (self?.meta.rows_read ?? 0),
         d1Ms,
     };
+}
+
+/** Whether the album at `path` is there for `admin` or a guest to see, without reading it. */
+export async function albumExists(database: Orm, path: string, admin: boolean): Promise<Existence> {
+    const { item } = schema;
+    const key = albumKey(path);
+    if (key === null) {
+        return { exists: true, meta: null };
+    }
+    const found = await database
+        .select({ id: item.id })
+        .from(item)
+        .where(
+            and(
+                eq(item.parentPath, key.parentPath),
+                eq(item.itemName, key.itemName),
+                eq(item.itemType, 'album'),
+                ...(admin ? [] : [eq(item.published, true)]),
+            ),
+        )
+        .run();
+    return { exists: found.results.length > 0, meta: found.meta };
+}
+
+/** Whether the media item at `key` is there for `admin` or a guest to see: a guest sees it if its album is published. */
+export async function mediaExists(database: Orm, key: ItemKey, admin: boolean): Promise<Existence> {
+    const { item } = schema;
+    const album = albumKey(key.parentPath);
+    const albumPublished =
+        album === null
+            ? sql`0`
+            : exists(
+                  database
+                      .select({ id: ALBUM.id })
+                      .from(ALBUM)
+                      .where(
+                          and(
+                              eq(ALBUM.parentPath, album.parentPath),
+                              eq(ALBUM.itemName, album.itemName),
+                              eq(ALBUM.published, true),
+                          ),
+                      ),
+              );
+    const found = await database
+        .select({ id: item.id })
+        .from(item)
+        .where(
+            and(
+                eq(item.parentPath, key.parentPath),
+                eq(item.itemName, key.itemName),
+                eq(item.itemType, 'media'),
+                ...(admin ? [] : [albumPublished]),
+            ),
+        )
+        .run();
+    return { exists: found.results.length > 0, meta: found.meta };
 }
 
 /**
@@ -127,21 +130,7 @@ export function setThumbnail(
 
 /** The items matching `where`, in name order, each with its thumbnail's row beside it. */
 async function rowsWhere(database: Orm, where: SQL | undefined): Promise<Rows> {
-    const { item } = schema;
-    const result = await database
-        .select({
-            ...getTableColumns(item),
-            thumb_parent_path: sql`${THUMB.parentPath}`.as('thumb_parent_path'),
-            thumb_item_name: sql`${THUMB.itemName}`.as('thumb_item_name'),
-            thumb_version_id: sql`${THUMB.versionId}`.as('thumb_version_id'),
-            thumb_crop: sql`${THUMB.thumbnailCrop}`.as('thumb_crop'),
-        })
-        .from(item)
-        .leftJoin(THUMB, eq(THUMB.id, item.thumbnailId))
-        .where(where)
-        .orderBy(item.itemName)
-        .run();
-    return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
+    return selectRecords(database, { where, orderBy: [asc(schema.item.itemName)] });
 }
 
 /**
@@ -156,54 +145,4 @@ function assemble(children: Row[], self: Row[] | null, admin: boolean): AlbumGal
     }
     const row = self.find(visible);
     return row?.item_type === 'album' ? { ...toAlbumRecord(row), children: shown } : null;
-}
-
-function toRecord(row: Row): GalleryRecord {
-    return row.item_type === 'album' ? toAlbumRecord(row) : toMediaRecord(row);
-}
-
-function toAlbumRecord(row: AlbumRow): AlbumRecord {
-    const thumbnail = toThumbnail(row);
-    return {
-        itemType: 'album',
-        path: albumPath(row.parent_path, row.item_name),
-        parentPath: row.parent_path,
-        itemName: row.item_name,
-        updatedOn: row.updated_at,
-        ...(row.description !== null && { description: row.description }),
-        published: row.published === 1,
-        ...(thumbnail !== undefined && { thumbnail }),
-        ...(row.summary !== null && { summary: row.summary }),
-    };
-}
-
-function toMediaRecord(row: MediaRow): MediaRecord {
-    const record = {
-        itemType: 'media' as const,
-        path: mediaPath(row.parent_path, row.item_name),
-        parentPath: row.parent_path,
-        itemName: row.item_name,
-        updatedOn: row.updated_at,
-        ...(row.description !== null && { description: row.description }),
-        // A media item comes with its file and its size; rows from before that was required say nothing of either.
-        versionId: row.version_id ?? '',
-        dimensions: { width: row.width ?? 0, height: row.height ?? 0 },
-        ...(row.thumbnail_crop !== null && { thumbnail: row.thumbnail_crop }),
-        ...(row.title !== null && { title: row.title }),
-        ...(row.tags !== null && { tags: row.tags }),
-    };
-    return row.media_type === 'video'
-        ? { ...record, mediaType: 'video', duration: row.duration_seconds ?? 0 }
-        : { ...record, mediaType: 'image' };
-}
-
-/** Undefined for an album with no thumbnail, or one whose media has no file yet. */
-function toThumbnail(row: Row): AlbumThumbnailRecord | undefined {
-    return row.thumb_parent_path === null || row.thumb_item_name === null || row.thumb_version_id === null
-        ? undefined
-        : {
-              path: mediaPath(row.thumb_parent_path, row.thumb_item_name),
-              versionId: row.thumb_version_id,
-              ...(row.thumb_crop !== null && { crop: row.thumb_crop }),
-          };
 }

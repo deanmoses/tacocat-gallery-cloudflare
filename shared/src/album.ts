@@ -62,7 +62,8 @@ const videoRecord = valibot.object({
 
 const mediaRecordSchema = valibot.variant('mediaType', [imageRecord, videoRecord]);
 
-const galleryRecordSchema = valibot.variant('itemType', [albumRecord, mediaRecordSchema]);
+/** Any item as the API sends it: an album, an image or a video. */
+export const galleryRecordSchema = valibot.variant('itemType', [albumRecord, mediaRecordSchema]);
 
 /** An album with its children: its media, or its albums. */
 const albumGalleryItem = valibot.object({

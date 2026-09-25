@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import { and, asc, eq, or } from 'drizzle-orm';
-import { imageUrl, parseAlbum } from 'tacocat-gallery-shared';
+import { imageUrl, originalUrl, parseAlbum, videoUrl } from 'tacocat-gallery-shared';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import worker from '../../src/index';
@@ -297,26 +297,95 @@ describe('upload errors', () => {
     });
 });
 
-describe('serving media', () => {
-    it('serves a byte range', async () => {
-        await env.MEDIA.put('clip.mp4', new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call('/v/clip.mp4', { headers: { range: 'bytes=10-19' } });
+describe('serving a video', () => {
+    const MP4 = 'derived/2024/06-15/clip.mov/v1/video.mp4';
+
+    it('serves a byte range of the MP4 the transcoder wrote for the version', async () => {
+        await env.MEDIA.put(MP4, new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
+        const response = await call(videoUrl('/2024/06-15/clip.mov', 'v1'), { headers: { range: 'bytes=10-19' } });
         const body = await response.arrayBuffer();
 
         expect(response.status).toBe(206);
         expect(response.headers.get('content-range')).toBe('bytes 10-19/100');
+        expect(response.headers.get('content-type')).toBe('video/mp4');
         expect(body.byteLength).toBe(10);
     });
 
-    it('serves a raw object', async () => {
-        await env.MEDIA.put('raw.jpg', jpg, { httpMetadata: { contentType: 'image/jpeg' } });
-        const response = await call('/raw/raw.jpg');
+    it('is not found for a version with no MP4, and refuses a URL that names no version', async () => {
+        const [missing, malformed] = await Promise.all([
+            call(videoUrl('/2024/06-15/clip.mov', 'v2')),
+            call('/v/derived/2024/06-15/clip.mov/v1/video.mp4'),
+        ]);
+        await Promise.all([missing.body?.cancel(), malformed.body?.cancel()]);
+
+        expect(missing.status).toBe(404);
+        expect(malformed.status).toBe(400);
+    });
+});
+
+describe('serving an original', () => {
+    const PHOTO = '/2024/06-15/félix beach.jpg';
+    const HEIC = '/2024/06-15/IMG_0001.HEIC';
+
+    it('serves the file as uploaded, named for a download and kept for a year', async () => {
+        await env.MEDIA.put(`originals${PHOTO}/v1`, jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        const response = await call(originalUrl(PHOTO, 'v1'));
         const body = await response.arrayBuffer();
 
+        expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toBe('image/jpeg');
+        expect(response.headers.get('content-disposition')).toBe(
+            `inline; filename="f_lix beach.jpg"; filename*=UTF-8''${encodeURIComponent('félix beach.jpg')}`,
+        );
+        expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
         expect(body.byteLength).toBe(jpg.byteLength);
     });
 
+    // Only Safari shows a HEIC. The bytes here are a JPEG under a HEIC's name, as some uploads are, which the binding
+    // decodes anywhere; what is tested is the route's answer, not the binding's HEIC support.
+    it('answers for a HEIC with a JPEG made on the way out', async () => {
+        await env.MEDIA.put(`originals${HEIC}/v1`, jpg, { httpMetadata: { contentType: 'image/heic' } });
+        const response = await call(originalUrl(HEIC, 'v1'));
+        const body = new Uint8Array(await response.arrayBuffer());
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toBe('image/jpeg');
+        expect(response.headers.get('content-disposition')).toContain('filename="IMG_0001.jpg"');
+        expect([...body.slice(0, 3)]).toStrictEqual([0xff, 0xd8, 0xff]);
+    });
+
+    it('gives the HEIC itself when asked, and when the binding cannot decode it', async () => {
+        await env.MEDIA.put(`originals${HEIC}/v1`, jpg, { httpMetadata: { contentType: 'image/heic' } });
+        const asked = await call(`${originalUrl(HEIC, 'v1')}?format=original`);
+        vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
+            throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
+        });
+        const undecodable = await call(originalUrl(HEIC, 'v1'));
+        const bodies = await Promise.all([asked.arrayBuffer(), undecodable.arrayBuffer()]);
+
+        expect([asked.status, undecodable.status]).toStrictEqual([200, 200]);
+        expect(asked.headers.get('content-type')).toBe('image/heic');
+        expect(undecodable.headers.get('content-type')).toBe('image/heic');
+        expect(bodies.map((body) => body.byteLength)).toStrictEqual([jpg.byteLength, jpg.byteLength]);
+    });
+
+    it('reaches nothing but originals: a version with no original is not found, whatever else the bucket holds', async () => {
+        await env.MEDIA.put('inbox/2024/06-15/pending.jpg', jpg);
+        await env.MEDIA.put('backups/d1/2024-06-15.json', new Uint8Array(10));
+        const [pending, backup, malformed] = await Promise.all([
+            call(originalUrl('/2024/06-15/pending.jpg', 'v1')),
+            call('/raw/backups/d1/2024-06-15.json/v1'),
+            call('/raw/originals/2024/06-15/pending.jpg/v1'),
+        ]);
+        await Promise.all([pending, backup, malformed].map(async (response) => response.body?.cancel()));
+
+        expect(pending.status).toBe(404);
+        expect(backup.status).toBe(400);
+        expect(malformed.status).toBe(400);
+    });
+});
+
+describe('serving media', () => {
     it('makes a video thumbnail from its poster', async () => {
         await env.MEDIA.put('derived/2024/06-15/clip.mov/v1/poster.jpg', jpg);
         const response = await call('/i/2024/06-15/clip.mov/v1?size=200x200');

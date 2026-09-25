@@ -21,17 +21,7 @@
         "not_found_handling": "single-page-application",
         // Every path the Worker serves, and only those; the rest are the app's files. Once this is a list, a request it
         // does not match never reaches the Worker, navigation or not, so a new route here has to be added to it.
-        "run_worker_first": [
-            "/api/*",
-            "/login",
-            "/invite/*",
-            "/upload/*",
-            "/raw/*",
-            "/v/*",
-            "/i/*",
-            "/i2/*",
-            "/debug/*",
-        ],
+        "run_worker_first": ["/api/*", "/login", "/invite/*", "/raw/*", "/v/*", "/i/*", "/i2/*", "/debug/*"],
     },
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,

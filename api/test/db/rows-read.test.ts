@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readAlbum, setThumbnail } from '../../src/gallery/albums';
+import { albumExists, mediaExists, readAlbum, setThumbnail } from '../../src/gallery/albums';
 import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/gallery/search';
@@ -170,25 +170,50 @@ describe('rows read on a gallery-sized table', () => {
     });
 
     it.each([
+        { what: 'an album', check: async () => albumExists(database, dayPath(4), false) },
+        {
+            what: 'a media item',
+            check: async () => mediaExists(database, { parentPath: dayPath(4), itemName: 'img_7.jpg' }, false),
+        },
+    ])('asking whether $what is there for a guest reads a row or two', async ({ check }) => {
+        const found = await check();
+
+        expect(found.exists).toBe(true);
+        expect(found.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    const SEARCH = { oldestFirst: false, startAt: 0, pageSize: 50 };
+
+    it.each([
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
     ])('searching for a rare word as $who reads only its matches', async ({ admin }) => {
         await upsertItem(database, { parentPath: dayPath(9), itemName: 'q.jpg', ...IMAGE, title: 'Quesadilla' }).run();
-        const found = await searchItems(database, 'quesadilla', admin);
+        const found = await searchItems(database, { ...SEARCH, terms: 'quesadilla' }, admin);
 
-        expect(found.results).toHaveLength(1);
-        expect(found.meta.rows_read).toBeLessThanOrEqual(found.results.length + OVERHEAD);
+        expect(found.items).toHaveLength(1);
+        expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
+            expect.toSatisfy((read: number) => read <= OVERHEAD),
+            expect.toSatisfy((read: number) => read <= 3 + OVERHEAD),
+        ]);
     });
 
-    // Every image in the gallery matches, and the best 50 come back.
+    // Every image in the gallery matches. The page is sorted by path, so every match is read to find it, and the
+    // count reads every match too: the index entry and the row, the album besides for a guest, and the thumbnail
+    // besides for the page. The rare word above is what tells a scan from this.
     it.each([
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
-    ])('searching for a common word as $who reads a few rows per result', async ({ admin }) => {
-        const found = await searchItems(database, 'taco', admin);
+    ])('searching for a common word as $who reads a few rows per match', async ({ admin }) => {
+        const found = await searchItems(database, { ...SEARCH, terms: 'taco' }, admin);
+        const matches = DAYS * IMAGES_PER_DAY;
 
-        expect(found.results).toHaveLength(50);
-        expect(found.meta.rows_read).toBeLessThanOrEqual(found.results.length * 3 + OVERHEAD);
+        expect(found.total).toBe(matches);
+        expect(found.items).toHaveLength(50);
+        expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
+            expect.toSatisfy((read: number) => read <= matches * 4 + OVERHEAD),
+            expect.toSatisfy((read: number) => read <= matches * 5 + OVERHEAD),
+        ]);
     });
 });
 

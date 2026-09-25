@@ -29,3 +29,12 @@ describe('HEAD', () => {
         await expect(response.text()).resolves.toBe('');
     });
 });
+
+describe('the image debug route', () => {
+    it('needs an admin, since it reports on any object', async () => {
+        const response = await call('/debug/image/2001/01-01/a.jpg');
+
+        expect(response.status).toBe(401);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Unauthorized' });
+    });
+});

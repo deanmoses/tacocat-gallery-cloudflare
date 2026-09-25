@@ -1,4 +1,5 @@
 import type { Rectangle } from './album';
+import { isMediaPath } from './paths';
 
 // The URLs the web app asks the Worker for media by. Both ends build and read them here, and a derivative's stored key
 // is made from the same text, so a derivative is found again only if every URL for it is spelled the same way.
@@ -19,7 +20,14 @@ export interface Query {
     get: (name: string) => string | null;
 }
 
+/** One version of one media item: what the raw and video routes serve. */
+export interface MediaVersion {
+    path: string;
+    versionId: string;
+}
+
 const DEFAULT_SIZE: ImageSize = { width: 1024, height: null };
+const VERSION_ID = /^[\w\-.]+$/v;
 const SIZE = /^(?<width>[1-9]\d*)?(?:x(?<height>[1-9]\d*))?$/v;
 const COORDINATE = /^(?:0|[1-9]\d*)(?:\.\d+)?$/v;
 
@@ -56,9 +64,20 @@ export function cropText({ x, y, width, height }: Rectangle): string {
     return `${x},${y},${width},${height}`;
 }
 
-/** A version of a media item as it was uploaded, whatever format that is. */
+/**
+ * Reads `/2001/06-15/felix.jpg/v1`, the path after a route's prefix, as a version of a media item. Null unless the
+ * path is a media path and the version is letters, digits, dot, underscore and hyphen, which every version id is.
+ */
+export function parseMediaVersion(rest: string): MediaVersion | null {
+    const cut = rest.lastIndexOf('/');
+    const path = rest.slice(0, cut);
+    const versionId = rest.slice(cut + 1);
+    return isMediaPath(path) && VERSION_ID.test(versionId) ? { path, versionId } : null;
+}
+
+/** A version of a media item as it was uploaded, whatever format that is; a HEIC comes as a JPEG unless asked for. */
 export function originalUrl(path: string, versionId: string): string {
-    return `/raw/originals${path}/${versionId}`;
+    return `/raw${path}/${versionId}`;
 }
 
 /** The R2 prefix under which a version's derivatives live: the transcoder's MP4 and poster, and every image size. */
@@ -71,7 +90,7 @@ export const VIDEO_FILE = 'video.mp4';
 
 /** A version of a video as the MP4 the transcoder wrote, served with byte ranges. */
 export function videoUrl(path: string, versionId: string): string {
-    return `/v/${derivedPrefix(path, versionId)}/${VIDEO_FILE}`;
+    return `/v${path}/${versionId}`;
 }
 
 function parseSize(text: string): ImageSize | null {

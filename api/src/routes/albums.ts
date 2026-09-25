@@ -10,14 +10,15 @@ import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { d1Header, round } from '../db/timing';
-import { readAlbum, setThumbnail } from '../gallery/albums';
+import { albumExists, mediaExists, readAlbum, setThumbnail } from '../gallery/albums';
 import { BOOKMARK_HEADER, requestBookmark, written } from '../http/bookmark';
 import { pathAfter } from '../http/paths';
 import { failure, json, notFound } from '../http/responses';
 
 /**
  * Reads through the Sessions API so a nearby replica can answer. A client that just wrote passes the bookmark it got
- * back, which guarantees it reads its own write; ?consistency=primary forces the primary.
+ * back, which guarantees it reads its own write; ?consistency=primary forces the primary. A HEAD, which the router
+ * hands here as a GET, asks only whether the album is there for this caller.
  */
 export async function getAlbum(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -30,6 +31,9 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
     const constraint =
         bookmark ?? (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
     const session = env.DB.withSession(constraint);
+    if (request.method === 'HEAD') {
+        return existence(await albumExists(orm(session), path, admin));
+    }
     const read = await readAlbum(orm(session), path, admin);
     if (read.album === null) {
         return notFound();
@@ -80,6 +84,26 @@ export async function setAlbumThumbnail(request: Request, env: Env): Promise<Res
     return set.meta.changes === 0
         ? notFound(`No album ${path} with media ${mediaPath(media.parentPath, media.itemName)}`)
         : written(session, { 'x-d1': d1Header(set.meta, performance.now() - started) });
+}
+
+/** `HEAD /api/media/<path>`: whether the media item is there for this caller. There is nothing to GET. */
+export async function headMedia(request: Request, env: Env): Promise<Response> {
+    if (request.method !== 'HEAD') {
+        return failure(405, 'Method Not Allowed');
+    }
+    const key = mediaKey(`/${pathAfter(new URL(request.url), '/api/media/')}`);
+    if (key === null) {
+        return notFound();
+    }
+    const admin = (await currentAdmin(request, env)) !== null;
+    const session = env.DB.withSession(requestBookmark(request) ?? 'first-unconstrained');
+    return existence(await mediaExists(orm(session), key, admin));
+}
+
+/** 200 or 404 and no body, with what the lookup cost. */
+function existence({ exists, meta }: { exists: boolean; meta: D1Meta | null }): Response {
+    const headers = meta === null ? {} : { 'x-d1': d1Header(meta, 0) };
+    return exists ? new Response(null, { status: 200, headers }) : notFound();
 }
 
 function withTrailingSlash(path: string): string {

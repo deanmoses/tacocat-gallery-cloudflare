@@ -1,5 +1,5 @@
 import * as valibot from 'valibot';
-import { rectangleSchema } from './album';
+import { galleryRecordSchema, rectangleSchema } from './album';
 import { mediaTypeSchema } from './item-type';
 import { albumKey, albumPath, isAlbumPath, isVideoName, mediaKey, mediaPath } from './paths';
 
@@ -94,27 +94,13 @@ function cropFits(item: ItemWrite): boolean {
     return x >= 0 && y >= 0 && width > 0 && height > 0 && x + width <= item.width && y + height <= item.height;
 }
 
-const searchFields = {
-    path: valibot.string(),
-    itemName: valibot.string(),
-    title: valibot.nullable(valibot.string()),
-    // Part of the description, with the words that matched in [brackets]; null when there is no description.
-    snippet: valibot.nullable(valibot.string()),
-};
-
-const searchResult = valibot.variant('itemType', [
-    valibot.object({ itemType: valibot.literal('album'), ...searchFields }),
-    valibot.object({ itemType: valibot.literal('media'), mediaType: mediaTypeSchema, ...searchFields }),
-]);
-
-/** What `GET /api/search?q=` returns: the best matches this viewer may see, best first. */
+/** What `GET /api/search/<terms>` returns: the matches this viewer may see, as full records, newest first. */
 const searchResponse = valibot.object({
-    q: valibot.string(),
-    count: valibot.number(),
-    results: valibot.array(searchResult),
+    /** Every match, not only this page. */
+    total: valibot.number(),
+    items: valibot.array(galleryRecordSchema),
 });
 
-export type SearchResult = valibot.InferOutput<typeof searchResult>;
 export type SearchResponse = valibot.InferOutput<typeof searchResponse>;
 
 /** Checks that `input`, a parsed JSON body, is a search response; throws with the first field that is not. */

@@ -88,6 +88,23 @@ export async function derivedImage(
     return { body: bytes, format, how: 'generated' };
 }
 
+/**
+ * The image as a full-size JPEG at a quality that keeps what a viewer would notice, or null when the Images binding
+ * cannot decode the file, as it cannot some HEICs.
+ */
+export async function asJpeg(env: Pick<Env, 'IMAGES'>, bytes: ArrayBuffer): Promise<ArrayBuffer | null> {
+    try {
+        const output = await env.IMAGES.input(byteStream(new Blob([bytes]).stream())).output({
+            format: 'image/jpeg',
+            quality: 92,
+        });
+        return await output.response().arrayBuffer();
+    } catch (error) {
+        console.warn({ event: 'jpeg_conversion_failed', error: String(error) });
+        return null;
+    }
+}
+
 /** What the URL asks for and the key its derivative is stored under, or null for a URL imageUrl would not write. */
 export function derivedKey(url: URL, prefix: string): DerivedKey | null {
     const request = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);

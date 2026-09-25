@@ -1,15 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { getTableColumns, like } from 'drizzle-orm';
-import { type ItemWrite, type SearchResponse, parseSearch } from 'tacocat-gallery-shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getTableColumns } from 'drizzle-orm';
+import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { callAsAdmin, putItem, storedItem } from '../helpers';
 
 const MEDIA = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
-
-async function search(query: string, asAdmin = false): Promise<SearchResponse> {
-    return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/search?q=${query}`), parseSearch);
-}
 
 describe('saving an item', () => {
     const { item } = schema;
@@ -195,129 +190,6 @@ describe('saving an item through the API', () => {
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: expect.stringContaining('day album') });
         await expect(storedItem(body.parentPath, body.itemName)).resolves.toBeUndefined();
-    });
-});
-
-/** Searches for `word`, as a guest or as an admin, and names what was found, in name order. */
-async function searchNames(word: string, asAdmin = false): Promise<string[]> {
-    const { results } = await search(word, asAdmin);
-    return results.map((result) => result.itemName).toSorted();
-}
-
-describe('search', () => {
-    it('finds an item by a word in its title, with a snippet from its description', async () => {
-        await putItem({ parentPath: '/2024/', itemName: '07-01', itemType: 'album', published: true });
-        await putItem({
-            parentPath: '/2024/07-01/',
-            itemName: 'quesadilla.jpg',
-            ...MEDIA,
-            title: 'Quesadilla night',
-            description: 'Quesadillas at home',
-        });
-        const found = await search('quesadilla');
-
-        expect(found).toStrictEqual({
-            q: 'quesadilla',
-            count: 1,
-            results: [
-                {
-                    itemType: 'media',
-                    mediaType: 'image',
-                    path: '/2024/07-01/quesadilla.jpg',
-                    itemName: 'quesadilla.jpg',
-                    title: 'Quesadilla night',
-                    snippet: 'Quesadillas at home',
-                },
-            ],
-        });
-    });
-
-    it('links an album by its album path', async () => {
-        await putItem({
-            parentPath: '/2024/',
-            itemName: '07-03',
-            itemType: 'album',
-            summary: 'Tostada',
-            published: true,
-        });
-        const found = await search('tostada');
-
-        expect(found.results).toStrictEqual([
-            { itemType: 'album', path: '/2024/07-03/', itemName: '07-03', title: 'Tostada', snippet: null },
-        ]);
-    });
-
-    it('follows an update to the title', async () => {
-        const item: ItemWrite = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal.jpg' };
-        await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
-        await putItem({ ...item, title: 'Enchilada night' });
-        await putItem({ ...item, title: 'Burrito night' });
-        const [old, current] = await Promise.all([search('enchilada'), search('burrito')]);
-
-        expect(old.count).toBe(0);
-        expect(current.count).toBe(1);
-    });
-
-    describe('as the album pages decide what a guest sees', () => {
-        beforeEach(async () => {
-            await Promise.all([
-                putItem({
-                    parentPath: '/2024/',
-                    itemName: '07-10',
-                    itemType: 'album',
-                    summary: 'Fajita',
-                    published: true,
-                }),
-                putItem({
-                    parentPath: '/2024/',
-                    itemName: '07-11',
-                    itemType: 'album',
-                    summary: 'Fajita',
-                    published: false,
-                }),
-                putItem({
-                    parentPath: '/2024/07-10/',
-                    itemName: 'shown.jpg',
-                    ...MEDIA,
-                    title: 'Fajita',
-                }),
-                putItem({
-                    parentPath: '/2024/07-11/',
-                    itemName: 'hidden.jpg',
-                    ...MEDIA,
-                    title: 'Fajita',
-                }),
-                putItem({
-                    parentPath: '/2024/07-12/',
-                    itemName: 'no-album.jpg',
-                    ...MEDIA,
-                    title: 'Fajita',
-                }),
-            ]);
-        });
-
-        it('shows a guest published albums and the media in them', async () => {
-            await expect(searchNames('fajita')).resolves.toStrictEqual(['07-10', 'shown.jpg']);
-        });
-
-        it('shows an admin everything', async () => {
-            await expect(searchNames('fajita', true)).resolves.toStrictEqual([
-                '07-10',
-                '07-11',
-                'hidden.jpg',
-                'no-album.jpg',
-                'shown.jpg',
-            ]);
-        });
-    });
-
-    it('keeps the FTS index consistent through writes and deletes', async () => {
-        await callAsAdmin('/api/seed?years=1', { method: 'POST' });
-        await orm(env.DB).delete(schema.item).where(like(schema.item.parentPath, '/2000/01-%'));
-        // FTS5's integrity check is a command written as an insert into the index, which Drizzle cannot model.
-        const check = env.DB.prepare("INSERT INTO item_fts(item_fts) VALUES('integrity-check')").run();
-
-        await expect(check).resolves.toMatchObject({ success: true });
     });
 });
 

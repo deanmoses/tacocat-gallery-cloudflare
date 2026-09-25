@@ -5,6 +5,7 @@ const YEAR_NAME = /^\d{4}$/v;
 const DAY_NAME = /^\d{2}-\d{2}$/v;
 const MEDIA_NAME = /^[^.\/]+\.[^.\/]+$/v;
 const VIDEO_NAME = /\.(?:avi|m4v|mov|mp4)$/iv;
+const HEIC_NAME = /\.(?:heic|heif)$/iv;
 
 export function isYearName(name: string): boolean {
     return YEAR_NAME.test(name);
@@ -22,6 +23,11 @@ export function isMediaName(name: string): boolean {
 /** Videos are told apart by extension; these four are every kind the gallery has ever held. */
 export function isVideoName(name: string): boolean {
     return VIDEO_NAME.test(name);
+}
+
+/** A HEIC, which only Safari can show, so the raw route offers it as a JPEG. */
+export function isHeicName(name: string): boolean {
+    return HEIC_NAME.test(name);
 }
 
 /** Whether `path` is the root, a year album or a day album. */
