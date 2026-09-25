@@ -123,6 +123,8 @@ describe('saving an item through the API', () => {
         { name: 'a media item with no media type', body: { ...ITEM, mediaType: undefined } },
         { name: 'an album with a media type', body: { ...ITEM, itemType: 'album' } },
         { name: 'media marked published', body: { ...ITEM, published: true } },
+        { name: 'a name spelled jpeg', body: { ...ITEM, itemName: 'a.jpeg' } },
+        { name: 'an extension the gallery does not take', body: { ...ITEM, itemName: 'a.txt' } },
         { name: 'a blank title', body: { ...ITEM, title: '  ' } },
         { name: 'no tags in the list', body: { ...ITEM, tags: [] } },
         { name: 'a blank tag', body: { ...ITEM, tags: ['sand', ''] } },

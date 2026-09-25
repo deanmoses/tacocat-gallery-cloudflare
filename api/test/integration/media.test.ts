@@ -155,11 +155,11 @@ describe('upload pipeline', () => {
     beforeEach(seedDay);
 
     it('moves an inbox upload to its version key, labelled with its path, and records its IPTC caption and keywords', async () => {
-        const versionId = await stage(`${DAY}FullMetadata.jpg`, jpg);
+        const versionId = await stage(`${DAY}full_metadata.jpg`, jpg);
         const acks = await deliver(versionId);
         const [inbox, item, originals, original, row] = await Promise.all([
             env.MEDIA.head(inboxKey(versionId)),
-            storedItem(DAY, 'FullMetadata.jpg'),
+            storedItem(DAY, 'full_metadata.jpg'),
             env.MEDIA.list({ prefix: 'originals/' }),
             env.MEDIA.head(originalKey(versionId)),
             uploadRow(versionId),
@@ -180,18 +180,18 @@ describe('upload pipeline', () => {
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([originalKey(versionId)]);
         expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
-        expect(original?.customMetadata).toStrictEqual({ path: `${DAY}FullMetadata.jpg` });
+        expect(original?.customMetadata).toStrictEqual({ path: `${DAY}full_metadata.jpg` });
         expect(row?.completedAt).not.toBeNull();
     });
 
     it('makes the thumbnail and the detail image before anyone asks, so the first reader is served what is stored', async () => {
-        const versionId = await upload(`${DAY}FullMetadata.jpg`, jpg);
+        const versionId = await upload(`${DAY}full_metadata.jpg`, jpg);
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
         const thumbnail = await call(
-            imageUrl({ path: `${DAY}FullMetadata.jpg`, versionId, size: { width: 200, height: 200 }, crop: null }),
+            imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 200, height: 200 }, crop: null }),
         );
         const detail = await call(
-            imageUrl({ path: `${DAY}FullMetadata.jpg`, versionId, size: { width: 300, height: null }, crop: null }),
+            imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 300, height: null }, crop: null }),
         );
         await Promise.all([thumbnail.body?.cancel(), detail.body?.cancel()]);
 

@@ -39,9 +39,12 @@ function timestampSql(column: string, { nullable = false } = {}): string {
     return `${nullable ? `${column} IS NULL OR ` : ''}strftime('%Y-%m-%dT%H:%M:%fZ', ${column}) IS ${column}`;
 }
 
-/** `column` is a media file name: one dot with something on each side, and no slash. */
+/**
+ * `column` is a media file name: one dot with something on each side, no slash, and not `.jpeg`, since the gallery
+ * stores a JPEG as `.jpg` and the sanitizer spells it so before the name reaches a table.
+ */
 function mediaNameSql(column: string): string {
-    return `${column} GLOB '?*.?*' AND ${column} NOT GLOB '*.*.*' AND ${column} NOT GLOB '*/*'`;
+    return `${column} GLOB '?*.?*' AND ${column} NOT GLOB '*.*.*' AND ${column} NOT GLOB '*/*' AND lower(${column}) NOT GLOB '*.jpeg'`;
 }
 
 /** `column` is the path of a media item in a day album: `/2001/06-15/felix.jpg`. */

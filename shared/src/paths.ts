@@ -31,11 +31,15 @@ export function isVideoName(name: string): boolean {
     return (VIDEO_EXTENSIONS as readonly string[]).includes(extensionOf(name));
 }
 
-/** A media name whose extension is one the gallery takes, image or video: what an upload may be called. */
-export function hasMediaExtension(name: string): boolean {
+/**
+ * A media name as the gallery stores one: a listed extension, and `jpg` rather than `jpeg`. The lists say what file
+ * an upload may be; a JPEG file is stored under `.jpg` whatever it was called, so `.jpeg` never names an item.
+ */
+export function isStoredMediaName(name: string): boolean {
     const extension = extensionOf(name);
     return (
         isMediaName(name) &&
+        extension !== 'jpeg' &&
         ((IMAGE_EXTENSIONS as readonly string[]).includes(extension) ||
             (VIDEO_EXTENSIONS as readonly string[]).includes(extension))
     );
@@ -47,11 +51,42 @@ export function baseNameOf(name: string): string {
 }
 
 /**
- * A file name as a rename may give it: lowercase letters and digits, single underscores between them, and a lowercase
- * extension. Uploads keep the name the file came with; renaming is where the gallery tidies one.
+ * A media name as the sanitizer makes one and as an upload or a rename may give one: lowercase letters and digits,
+ * single underscores between them, and a stored extension. The gallery copied from AWS holds older names that only
+ * `isStoredMediaName` admits.
  */
 export function isStrictMediaName(name: string): boolean {
-    return STRICT_MEDIA_NAME.test(name);
+    return STRICT_MEDIA_NAME.test(name) && isStoredMediaName(name);
+}
+
+/**
+ * A strict media name made from a file's name: lowercased, every run of anything else an underscore, none at either
+ * end of the name, and `jpeg` spelled `jpg`. The extension is otherwise left as it is, so a file the gallery does not
+ * take stays refusable by its name.
+ */
+export function sanitizeMediaFilename(fileName: string): string {
+    const dot = fileName.lastIndexOf('.');
+    if (dot === -1) {
+        return sanitizeMediaBaseName(fileName);
+    }
+    const baseName = sanitizeMediaBaseName(fileName.slice(0, dot)).replace(/_$/v, '');
+    const extension = fileName
+        .slice(dot + 1)
+        .toLowerCase()
+        .replace(/^jpeg$/v, 'jpg');
+    return `${baseName}.${extension}`;
+}
+
+/**
+ * The name half of `sanitizeMediaFilename`, for a name being typed: a trailing underscore stays, since the next
+ * character may be coming, and the strict rule refuses it if it is still there when the name is submitted.
+ */
+export function sanitizeMediaBaseName(baseName: string): string {
+    return baseName
+        .toLowerCase()
+        .replaceAll(/[^0-9_a-z]+/gv, '_')
+        .replaceAll(/_+/gv, '_')
+        .replace(/^_/v, '');
 }
 
 /** The extension of a media name, lowercased and without the dot: `felix.JPG` is `jpg`. */

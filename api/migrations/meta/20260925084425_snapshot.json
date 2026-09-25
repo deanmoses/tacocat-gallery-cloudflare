@@ -1,6 +1,6 @@
 {
-  "id": "6c65d90d-b895-4a67-87fc-1b349f489fc6",
-  "prevId": "0da72116-cb43-46ec-9765-fff6e18ebfb1",
+  "id": "a5fc59bf-5857-4066-9124-fde024f0fcce",
+  "prevId": "2de631a9-2931-4a05-8ca5-6778a731a212",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -282,7 +282,7 @@
         },
         "item_path_check": {
           "name": "item_path_check",
-          "value": "CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '[0-9][0-9][0-9][0-9]') OR (parent_path GLOB '/[0-9][0-9][0-9][0-9]/' AND item_name GLOB '[0-9][0-9]-[0-9][0-9]') ELSE parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*' END"
+          "value": "CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '[0-9][0-9][0-9][0-9]') OR (parent_path GLOB '/[0-9][0-9][0-9][0-9]/' AND item_name GLOB '[0-9][0-9]-[0-9][0-9]') ELSE parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*' AND lower(item_name) NOT GLOB '*.jpeg' END"
         },
         "item_file_check": {
           "name": "item_file_check",
@@ -854,11 +854,11 @@
         },
         "upload_path_check": {
           "name": "upload_path_check",
-          "value": "parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*'"
+          "value": "parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*' AND lower(item_name) NOT GLOB '*.jpeg'"
         },
         "upload_target_check": {
           "name": "upload_target_check",
-          "value": "(target_path IS NULL AND target_id IS NULL) OR target_path IS NOT NULL AND substr(target_path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(target_path, 13) GLOB '?*.?*' AND substr(target_path, 13) NOT GLOB '*.*.*' AND substr(target_path, 13) NOT GLOB '*/*'"
+          "value": "(target_path IS NULL AND target_id IS NULL) OR target_path IS NOT NULL AND substr(target_path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(target_path, 13) GLOB '?*.?*' AND substr(target_path, 13) NOT GLOB '*.*.*' AND substr(target_path, 13) NOT GLOB '*/*' AND lower(substr(target_path, 13)) NOT GLOB '*.jpeg'"
         },
         "upload_completed_at_format": {
           "name": "upload_completed_at_format",
@@ -919,7 +919,7 @@
       "checkConstraints": {
         "upload_error_path_check": {
           "name": "upload_error_path_check",
-          "value": "path IS NOT NULL AND substr(path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(path, 13) GLOB '?*.?*' AND substr(path, 13) NOT GLOB '*.*.*' AND substr(path, 13) NOT GLOB '*/*'"
+          "value": "path IS NOT NULL AND substr(path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(path, 13) GLOB '?*.?*' AND substr(path, 13) NOT GLOB '*.*.*' AND substr(path, 13) NOT GLOB '*/*' AND lower(substr(path, 13)) NOT GLOB '*.jpeg'"
         },
         "upload_error_message_check": {
           "name": "upload_error_message_check",

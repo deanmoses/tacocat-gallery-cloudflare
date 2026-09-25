@@ -12,8 +12,8 @@
         getParentFromPath,
         isValidMediaNameWithoutExtensionStrict,
         isValidMediaPath,
-        sanitizeMediaNameWithoutExtension,
     } from '$lib/utils/galleryPathUtils';
+    import { sanitizeMediaBaseName } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
     import { mediaRenameMachine } from '$lib/stores/admin/MediaRenameMachine.svelte';
@@ -69,7 +69,7 @@
         initialValue={originalMediaName()}
         label="New Filename"
         onNewValue={onNewMediaName}
-        sanitizor={sanitizeMediaNameWithoutExtension}
+        sanitizor={sanitizeMediaBaseName}
         validator={validateMediaName}
     />
 {/if}

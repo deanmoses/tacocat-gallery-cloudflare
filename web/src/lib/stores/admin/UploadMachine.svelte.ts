@@ -6,13 +6,12 @@ import {
     getParentFromPath,
     hasValidMediaExtension,
     isValidMediaPath,
-    sanitizeMediaFilename,
 } from '$lib/utils/galleryPathUtils';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
 import { fetchPresignedUrls, uploadToS3 } from '$lib/utils/s3Upload';
-import type { PresignedUpload } from 'tacocat-gallery-shared';
+import { type PresignedUpload, sanitizeMediaFilename } from 'tacocat-gallery-shared';
 import { getMediaPath, getProcessingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 

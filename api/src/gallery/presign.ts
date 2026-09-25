@@ -5,7 +5,7 @@ import {
     type PresignResponse,
     albumKey,
     baseNameOf,
-    hasMediaExtension,
+    isStrictMediaName,
     mediaKey,
     mediaPath,
 } from 'tacocat-gallery-shared';
@@ -103,8 +103,13 @@ function plan(albumPath: string, entries: PresignRequest): Planned[] | { refused
     const seen = new Set<string>();
     for (const { path, replaces } of entries) {
         const key = mediaKey(path);
-        if (key === null || !hasMediaExtension(key.itemName)) {
+        if (key === null) {
             return { refused: `Invalid media path [${path}]` };
+        }
+        if (!isStrictMediaName(key.itemName)) {
+            return {
+                refused: `Invalid media name [${key.itemName}]: lowercase letters, digits and single underscores, with an extension the gallery takes, jpg not jpeg`,
+            };
         }
         if (key.parentPath !== albumPath) {
             return { refused: `Media [${path}] not in album [${albumPath}]` };

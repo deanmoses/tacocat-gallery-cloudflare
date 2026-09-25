@@ -58,7 +58,25 @@ describe('asking for upload URLs', () => {
             what: 'a file type the gallery does not take',
             albumPath: DAY,
             body: [{ path: `${DAY}notes.txt` }],
-            message: 'Invalid media path',
+            message: 'Invalid media name',
+        },
+        {
+            what: 'a name the sanitizer would have lowercased',
+            albumPath: DAY,
+            body: [{ path: `${DAY}IMG_0001.HEIC` }],
+            message: 'Invalid media name',
+        },
+        {
+            what: 'a name with a hyphen',
+            albumPath: DAY,
+            body: [{ path: `${DAY}my-photo.jpg` }],
+            message: 'Invalid media name',
+        },
+        {
+            what: 'a name spelled jpeg',
+            albumPath: DAY,
+            body: [{ path: `${DAY}felix.jpeg` }],
+            message: 'Invalid media name',
         },
         {
             what: 'a name with no extension',

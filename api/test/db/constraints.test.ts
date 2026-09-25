@@ -55,6 +55,8 @@ describe('an item row', () => {
             row: { ...IMAGE, itemName: '.jpg' },
             constraint: 'item_path_check',
         },
+        { name: 'a media name spelled jpeg', row: { ...IMAGE, itemName: 'felix.jpeg' }, constraint: 'item_path_check' },
+        { name: 'a media name spelled JPEG', row: { ...IMAGE, itemName: 'FELIX.JPEG' }, constraint: 'item_path_check' },
         { name: 'an album with a version', row: { ...DAY, versionId: 'v1' }, constraint: 'item_file_check' },
         { name: 'an album with a size', row: { ...DAY, width: 1, height: 1 }, constraint: 'item_file_check' },
         { name: 'media without a version', row: { ...IMAGE, versionId: null }, constraint: 'item_file_check' },
@@ -265,6 +267,7 @@ describe('an upload row', () => {
             row: { ...UPLOAD, itemName: 'a.b.jpg' },
             constraint: 'upload_path_check',
         },
+        { name: 'an upload named jpeg', row: { ...UPLOAD, itemName: 'felix.jpeg' }, constraint: 'upload_path_check' },
         {
             name: 'a target path that is an album',
             row: { ...UPLOAD, targetPath: '/2001/06-15/' },
@@ -330,6 +333,12 @@ describe('the other rows', () => {
             name: 'an upload error for an album',
             insert: async () =>
                 database().insert(schema.uploadError).values({ path: '/2001/06-15/', message: 'x' }).run(),
+            constraint: 'upload_error_path_check',
+        },
+        {
+            name: 'an upload error for a name spelled jpeg',
+            insert: async () =>
+                database().insert(schema.uploadError).values({ path: '/2001/06-15/a.jpeg', message: 'x' }).run(),
             constraint: 'upload_error_path_check',
         },
         {

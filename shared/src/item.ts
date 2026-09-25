@@ -1,7 +1,7 @@
 import * as valibot from 'valibot';
 import { galleryRecordSchema, rectangleSchema } from './album';
 import { mediaTypeSchema } from './item-type';
-import { albumKey, albumPath, isAlbumPath, isVideoName, mediaKey, mediaPath } from './paths';
+import { albumKey, albumPath, isAlbumPath, isStoredMediaName, isVideoName, mediaKey, mediaPath } from './paths';
 
 function clearable<T extends valibot.GenericSchema>(
     schema: T,
@@ -57,7 +57,7 @@ export const itemWriteSchema = valibot.pipe(
     valibot.forward(
         valibot.check(
             isGalleryKey,
-            'an album is a year in / or a day in a year, and media a file in a day album, a video by its extension',
+            'an album is a year in / or a day in a year, and media a file in a day album with an extension the gallery stores, jpg not jpeg, a video by its extension',
         ),
         ['itemName'],
     ),
@@ -81,6 +81,7 @@ function isGalleryKey(item: ItemWrite): boolean {
     return (
         key?.parentPath === parentPath &&
         key.itemName === itemName &&
+        isStoredMediaName(itemName) &&
         isVideoName(itemName) === (item.mediaType === 'video')
     );
 }
