@@ -7,11 +7,19 @@ const YEAR_PATH = '/2001/';
 const DAY_PATH = '/2001/06-15/';
 const NEXT_DAY_PATH = '/2001/07-04/';
 
+/** The year the admin journeys create, rename and delete albums in; the reader journeys never open it. */
+export const ADMIN_YEAR_PATH = '/2003/';
+/** The day album the admin journeys upload into, holding the one photo they caption, crop and replace. */
+export const ADMIN_DAY_PATH = '/2003/08-01/';
+export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo.jpg`;
+const ADMIN_PHOTO_VERSION = 'e2e-photo';
+
 /**
  * The gallery every e2e test starts from, written once when the server starts. Tests read it and never change it, since
- * they share one server and run in parallel; a test that writes makes an album of its own. The photos are rows alone,
- * with no file behind them: R2 event notifications, which carry an upload into the gallery, have no local stand-in,
- * so a test asserts which image the page asks for rather than that it arrived.
+ * they share one server and run in parallel; a test that writes makes an album of its own, in the admin year. The
+ * photos are rows alone, with no file behind them, but for the admin photo, whose original ORIGINALS puts into local
+ * R2 so its thumbnail can be cut: R2 event notifications, which carry an upload into the gallery, have no local
+ * stand-in, so a test asserts which image the page asks for rather than that it arrived.
  */
 const GALLERY = {
     year: { parentPath: '/', itemName: '2001', itemType: 'album', published: true },
@@ -39,7 +47,28 @@ const GALLERY = {
         width: 3024,
         height: 4032,
     },
+    adminYear: { parentPath: '/', itemName: '2003', itemType: 'album', published: true },
+    adminDay: { parentPath: ADMIN_YEAR_PATH, itemName: '08-01', itemType: 'album', published: true },
+    adminPhoto: {
+        parentPath: ADMIN_DAY_PATH,
+        itemName: 'photo.jpg',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Photo',
+        versionId: ADMIN_PHOTO_VERSION,
+        width: 4032,
+        height: 3024,
+    },
 } as const satisfies Record<string, ItemWrite>;
+
+/** The files behind the gallery's photos, as `<bucket>/<key>` in the media bucket the Worker's top-level config names. */
+export const ORIGINALS = [
+    {
+        objectPath: `tacocat-staging-media/originals/${ADMIN_PHOTO_VERSION}`,
+        file: 'fixtures/FullMetadata.jpg',
+        contentType: 'image/jpeg',
+    },
+] as const;
 
 /**
  * An album that answers only once the rest of the gallery is written, since it is written last: the server is ready

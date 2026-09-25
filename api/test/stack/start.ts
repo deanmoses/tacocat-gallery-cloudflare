@@ -51,6 +51,24 @@ async function buildWebApp(): Promise<void> {
     await npm(['run', '--silent', 'build', '--workspace', 'web'], REPO_DIR, 'building the web app failed');
 }
 
+/**
+ * Puts a file into the local R2 storage under `persistTo`, as `wrangler r2 object put --local` does, so a Worker started
+ * on that storage finds it. `objectPath` is `<bucket>/<key>`, the bucket by its name in wrangler.jsonc.
+ */
+export async function putLocalObject(
+    persistTo: string,
+    objectPath: string,
+    file: string,
+    contentType: string,
+): Promise<void> {
+    const put = ['r2', 'object', 'put', objectPath, '--file', file, '--content-type', contentType, '--local'];
+    await npm(
+        ['exec', '--no', '--', 'wrangler', ...put, '--persist-to', persistTo],
+        API_DIR,
+        `putting ${objectPath} into local R2 failed`,
+    );
+}
+
 async function migrate(persistTo: string): Promise<void> {
     const apply = ['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', persistTo];
     await npm(['exec', '--no', '--', 'wrangler', ...apply], API_DIR, 'migrating the local database failed');
