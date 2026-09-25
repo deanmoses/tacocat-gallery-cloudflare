@@ -5,8 +5,7 @@
 //
 // Each becomes a `PUT /api/item` to a Worker, `wrangler dev` by default, which answers 400 with the shared schema's
 // message or the constraint's name for a row it refuses. The report groups the refusals by message, with the paths.
-// Nothing is repaired here: the rules are what is on trial, and a rule that turns out to refuse real rows is changed
-// while the table is empty, or the copy learns to repair those rows.
+// Nothing is repaired here: the report says which rows the copy has to repair, and which rule, if any, to loosen.
 //
 // Usage: node api/scripts/check-gallery.ts prod-items.json [--site http://localhost:8787] [--paths]
 import { readFile } from 'node:fs/promises';
