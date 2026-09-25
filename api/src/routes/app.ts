@@ -19,11 +19,11 @@ import {
     createAlbumRoute,
     deleteAlbumRoute,
     getAlbum,
-    headMedia,
     renameAlbumRoute,
     setAlbumThumbnail,
     updateAlbumRoute,
 } from './albums';
+import { deleteMediaRoute, headMedia, recutThumbnailRoute, renameMediaRoute, updateMediaRoute } from './media';
 import { debugImage } from './debug';
 import { uploadErrors } from './errors';
 import { derivedViaCacheApi, derivedViaCdn, raw } from './images';
@@ -133,6 +133,10 @@ export function createApp(): Hono<App> {
     app.delete('/api/album/*', async (context) => deleteAlbumRoute(context.req.raw, context.env));
     app.post('/api/album-rename/*', async (context) => renameAlbumRoute(context.req.raw, context.env));
     app.patch('/api/album-thumb/*', async (context) => setAlbumThumbnail(context.req.raw, context.env));
+    app.patch('/api/media/*', async (context) => updateMediaRoute(context.req.raw, context.env));
+    app.delete('/api/media/*', async (context) => deleteMediaRoute(context.req.raw, context.env));
+    app.post('/api/media-rename/*', async (context) => renameMediaRoute(context.req.raw, context.env));
+    app.patch('/api/thumb/*', async (context) => recutThumbnailRoute(context.req.raw, context.env));
     return app;
 }
 

@@ -4,6 +4,7 @@ import * as valibot from 'valibot';
 import { type AlbumGalleryItem, type AlbumWrite, type ItemKey, albumKey, albumPath } from 'tacocat-gallery-shared';
 import { type Orm, schema } from '../db';
 import { type Row, type Rows, selectRecords, toAlbumRecord, toRecord } from './records';
+import { type Written, caption, isKey, written } from './writes';
 
 export interface AlbumRead {
     album: AlbumGalleryItem | null;
@@ -100,15 +101,6 @@ export async function mediaExists(database: Orm, key: ItemKey, admin: boolean): 
     return { exists: found.results.length > 0, meta: found.meta };
 }
 
-// Every write's conditions are in its statement, since D1's one atomic unit is a batch of statements fixed before any
-// runs: the statement's changes say whether the rule held, and `describeAlbum` then says why it did not.
-
-/** What a write did: how many rows it changed, and D1's account of it, which a batch does not give. */
-export interface Written {
-    changes: number;
-    meta: D1Meta | null;
-}
-
 /** Makes the album, with what the admin wrote about it. Changes no row if one is there already. */
 export async function createAlbum(database: Orm, key: ItemKey, fields: AlbumWrite): Promise<Written> {
     const { item } = schema;
@@ -193,10 +185,6 @@ export async function renameAlbum(database: Orm, key: ItemKey, newName: string):
     return { changes: album.length, meta: null };
 }
 
-function written(result: D1Result): Written {
-    return { changes: result.meta.changes, meta: result.meta };
-}
-
 /** What a write that changed nothing can be told: whether the album is there and what stood in the way. */
 export interface AlbumFacts {
     exists: boolean;
@@ -260,14 +248,6 @@ function toColumns(fields: AlbumWrite): Pick<schema.NewItem, 'description' | 'su
         ...('summary' in fields && { summary: caption(fields.summary) }),
         ...(fields.published !== undefined && { published: fields.published }),
     };
-}
-
-function caption(text: string | null | undefined): string | null {
-    return text === undefined || text === null || text.trim() === '' ? null : text;
-}
-
-function isKey(table: typeof schema.item | typeof ALBUM, key: ItemKey): SQL {
-    return and(eq(table.parentPath, key.parentPath), eq(table.itemName, key.itemName)) ?? sql`1`;
 }
 
 /**

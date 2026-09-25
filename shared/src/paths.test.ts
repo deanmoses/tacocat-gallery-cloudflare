@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { albumKey, albumsEnclosing, isAlbumPath, isDayAlbumPath, isMediaName, isMediaPath, mediaKey } from './paths';
+import {
+    albumKey,
+    albumsEnclosing,
+    extensionOf,
+    isAlbumPath,
+    isDayAlbumPath,
+    isMediaName,
+    isMediaPath,
+    isStrictMediaName,
+    mediaKey,
+} from './paths';
 
 describe(isAlbumPath, () => {
     it.each(['/', '/2001/', '/2001/06-15/'])('accepts %s', (path) => {
@@ -29,6 +39,32 @@ describe(isMediaName, () => {
 
     it.each(['', 'felix', '.jpg', 'felix.', 'a.b.jpg', 'dir/felix.jpg', '06-15'])('rejects %s', (name) => {
         expect(isMediaName(name)).toBe(false);
+    });
+});
+
+describe(isStrictMediaName, () => {
+    it.each(['felix.jpg', 'img_0001.heic', 'a1_b2_c3.mov'])('accepts %s', (name) => {
+        expect(isStrictMediaName(name)).toBe(true);
+    });
+
+    it.each([
+        'Felix.jpg',
+        'felix.JPG',
+        'felix-1.jpg',
+        'felix__1.jpg',
+        '_felix.jpg',
+        'felix_.jpg',
+        'felix',
+        'a.b.jpg',
+        'félix.jpg',
+    ])('rejects %s', (name) => {
+        expect(isStrictMediaName(name)).toBe(false);
+    });
+});
+
+describe(extensionOf, () => {
+    it('is lowercase and without the dot', () => {
+        expect(extensionOf('IMG_0001.HEIC')).toBe('heic');
     });
 });
 

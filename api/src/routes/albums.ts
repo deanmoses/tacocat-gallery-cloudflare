@@ -10,23 +10,21 @@ import {
     mediaKey,
     renameSchema,
 } from 'tacocat-gallery-shared';
-import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { d1Header, round } from '../db/timing';
 import {
-    type Written,
     albumExists,
     createAlbum,
     deleteAlbum,
     describeAlbum,
-    mediaExists,
     readAlbum,
     renameAlbum,
     setThumbnail,
     updateAlbum,
 } from '../gallery/albums';
-import { BOOKMARK_HEADER, requestBookmark, written } from '../http/bookmark';
+import { parsedBody, wrote } from './requests';
+import { BOOKMARK_HEADER, requestBookmark } from '../http/bookmark';
 import { pathAfter } from '../http/paths';
 import { failure, json, notFound } from '../http/responses';
 
@@ -47,7 +45,9 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
         bookmark ?? (url.searchParams.get('consistency') === 'primary' ? 'first-primary' : 'first-unconstrained');
     const session = env.DB.withSession(constraint);
     if (request.method === 'HEAD') {
-        return existence(await albumExists(orm(session), path, admin));
+        const { exists, meta } = await albumExists(orm(session), path, admin);
+        const headers = meta === null ? {} : { 'x-d1': d1Header(meta, 0) };
+        return exists ? new Response(null, { status: 200, headers }) : notFound();
     }
     const read = await readAlbum(orm(session), path, admin);
     if (read.album === null) {
@@ -82,29 +82,6 @@ function writableAlbum(request: Request, prefix: string, verb: string): ItemKey 
     }
     const key = albumKey(path);
     return key ?? failure(400, `Cannot ${verb} the root album`);
-}
-
-/** The body as `shape`, or the 400 for one that is not; nothing at all is an empty body. */
-async function parsedBody<T extends valibot.GenericSchema>(
-    request: Request,
-    shape: T,
-): Promise<{ output: valibot.InferOutput<T> } | { response: Response }> {
-    const text = await request.text();
-    const parsed = valibot.safeParse(shape, text.trim() === '' ? {} : parseJson(text));
-    return parsed.success ? { output: parsed.output } : { response: failure(400, valibot.summarize(parsed.issues)) };
-}
-
-function parseJson(text: string): unknown {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return undefined;
-    }
-}
-
-/** The bookmark to read the write back with, and what it cost. */
-function wrote(session: D1DatabaseSession, write: Written, started: number): Response {
-    return written(session, write.meta === null ? {} : { 'x-d1': d1Header(write.meta, performance.now() - started) });
 }
 
 /** `PUT /api/album/<path>` makes a year or day album, with whatever of its fields the body holds. */
@@ -230,26 +207,6 @@ export async function setAlbumThumbnail(request: Request, env: Env): Promise<Res
     return facts.exists
         ? failure(400, `Media not found: [${body.output.mediaPath}]`)
         : notFound(`Album not found: [${path}]`);
-}
-
-/** `HEAD /api/media/<path>`: whether the media item is there for this caller. There is nothing to GET. */
-export async function headMedia(request: Request, env: Env): Promise<Response> {
-    if (request.method !== 'HEAD') {
-        return failure(405, 'Method Not Allowed');
-    }
-    const key = mediaKey(`/${pathAfter(new URL(request.url), '/api/media/')}`);
-    if (key === null) {
-        return notFound();
-    }
-    const admin = (await currentAdmin(request, env)) !== null;
-    const session = env.DB.withSession(requestBookmark(request) ?? 'first-unconstrained');
-    return existence(await mediaExists(orm(session), key, admin));
-}
-
-/** 200 or 404 and no body, with what the lookup cost. */
-function existence({ exists, meta }: { exists: boolean; meta: D1Meta | null }): Response {
-    const headers = meta === null ? {} : { 'x-d1': d1Header(meta, 0) };
-    return exists ? new Response(null, { status: 200, headers }) : notFound();
 }
 
 function withTrailingSlash(path: string): string {

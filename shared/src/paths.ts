@@ -6,6 +6,7 @@ const DAY_NAME = /^\d{2}-\d{2}$/v;
 const MEDIA_NAME = /^[^.\/]+\.[^.\/]+$/v;
 const VIDEO_NAME = /\.(?:avi|m4v|mov|mp4)$/iv;
 const HEIC_NAME = /\.(?:heic|heif)$/iv;
+const STRICT_MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*\.[0-9a-z]+$/v;
 
 export function isYearName(name: string): boolean {
     return YEAR_NAME.test(name);
@@ -23,6 +24,19 @@ export function isMediaName(name: string): boolean {
 /** Videos are told apart by extension; these four are every kind the gallery has ever held. */
 export function isVideoName(name: string): boolean {
     return VIDEO_NAME.test(name);
+}
+
+/**
+ * A file name as a rename may give it: lowercase letters and digits, single underscores between them, and a lowercase
+ * extension. Uploads keep the name the file came with; renaming is where the gallery tidies one.
+ */
+export function isStrictMediaName(name: string): boolean {
+    return STRICT_MEDIA_NAME.test(name);
+}
+
+/** The extension of a media name, lowercased and without the dot: `felix.JPG` is `jpg`. */
+export function extensionOf(name: string): string {
+    return name.slice(name.lastIndexOf('.') + 1).toLowerCase();
 }
 
 /** A HEIC, which only Safari can show, so the raw route offers it as a JPEG. */

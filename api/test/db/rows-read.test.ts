@@ -15,6 +15,7 @@ import {
 import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
 import { searchItems } from '../../src/gallery/search';
+import { deleteMedia, describeMedia, recutThumbnail, renameMedia, updateMedia } from '../../src/gallery/media';
 import { inSequence } from '../../src/util/sequence';
 
 // D1 bills by rows read, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
@@ -195,6 +196,49 @@ describe('rows read on a gallery-sized table', () => {
         // More than one where the search index's trigger wrote too.
         expect(result.changes).toBeGreaterThan(0);
         expect(result.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    it.each([
+        {
+            what: 'captioning a photo',
+            write: async () =>
+                updateMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }, { title: 'Nachos' }),
+        },
+        {
+            what: 'deleting a photo',
+            write: async () => deleteMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }),
+        },
+        {
+            what: 'renaming a photo',
+            write: async () => renameMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }, 'nachos.jpg'),
+        },
+        {
+            what: "recutting a photo's thumbnail",
+            write: async () =>
+                recutThumbnail(
+                    database,
+                    { parentPath: dayPath(4), itemName: 'img_1.jpg' },
+                    { x: 10, y: 10, width: 50, height: 50 },
+                ),
+        },
+    ])('$what reads a few rows', async ({ write }) => {
+        const result = await write();
+
+        expect(result.changes).toBeGreaterThan(0);
+        expect(result.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD);
+    });
+
+    it('explaining a refused media write reads a few rows', async () => {
+        const key = { parentPath: dayPath(4), itemName: 'img_1.jpg' };
+        const facts = await describeMedia(database, key, { newName: 'img_2.jpg' });
+        const cost = await database
+            .select({ id: item.id })
+            .from(item)
+            .where(and(eq(item.parentPath, key.parentPath), eq(item.itemName, key.itemName)))
+            .run();
+
+        expect(facts).toStrictEqual({ exists: true, taken: true });
+        expect(cost.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
 
     it('refusing to delete a day with photos reads a few rows', async () => {

@@ -104,6 +104,28 @@ export const albumWriteSchema = valibot.strictObject({
     published: valibot.optional(valibot.boolean()),
 });
 
+/** The body of `PATCH /api/media/<path>`: what an admin writes about a photo or video, every field optional. */
+export const mediaWriteSchema = valibot.strictObject({
+    title: valibot.optional(valibot.nullable(valibot.string())),
+    description: valibot.optional(valibot.nullable(valibot.string())),
+});
+
+const percent = valibot.pipe(valibot.number(), valibot.minValue(0), valibot.maxValue(100));
+
+/** The body of `PATCH /api/thumb/<path>`: the rectangle to cut the thumbnail from, in percent of the image. */
+export const cropPercentSchema = valibot.pipe(
+    valibot.strictObject({
+        x: percent,
+        y: percent,
+        width: valibot.pipe(percent, valibot.minValue(Number.EPSILON, 'has no width')),
+        height: valibot.pipe(percent, valibot.minValue(Number.EPSILON, 'has no height')),
+    }),
+    valibot.check((crop) => crop.x + crop.width <= 100 && crop.y + crop.height <= 100, 'runs off the image'),
+);
+
+export type MediaWrite = valibot.InferOutput<typeof mediaWriteSchema>;
+export type CropPercent = valibot.InferOutput<typeof cropPercentSchema>;
+
 /** The body of `POST /api/album-rename/<path>` and `POST /api/media-rename/<path>`. */
 export const renameSchema = valibot.strictObject({ newName: valibot.string() });
 
