@@ -108,6 +108,8 @@ CLOUDFLARE_API_TOKEN=$(grep '^CLOUDFLARE_TERRAFORM_API_TOKEN=' ../api/.dev.vars 
 
 On a new account, R2 has to be enabled once in the dashboard before `tofu apply` can create a bucket.
 
+`infra/tacocat.tf` also declares the `tacocat.com` zone with every record DreamHost serves today, ahead of moving the nameservers; until GoDaddy points at the nameservers `tofu output tacocat_name_servers` prints, nothing in it is live, and Cloudflare deletes a zone left pending 28 days, so apply again before the switch. Before switching, run the Zone diff workflow from the Actions tab with those nameservers: `scripts/zone-diff.sh` compares every record on both and must see authoritative answers, which a home network that intercepts DNS never gives it.
+
 The S3 credentials for presigned uploads come from an account API token: the access key is the token's id, and the secret is the SHA-256 of the token.
 
 Adding `routes` to `api/wrangler.jsonc` switches off `workers.dev` unless `workers_dev` is set.

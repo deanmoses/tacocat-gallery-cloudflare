@@ -1,0 +1,32 @@
+name: Zone diff
+
+# Checks that the tacocat.com zone on Cloudflare answers exactly as DreamHost does, from a runner that reaches both
+# nameservers directly; a home network that intercepts DNS cannot (see scripts/zone-diff.sh). Run it before moving
+# the nameservers at GoDaddy, with the two nameservers `tofu output tacocat_name_servers` prints.
+on:
+    workflow_dispatch:
+        inputs:
+            from:
+                description: 'The nameserver whose answers are the reference'
+                default: 'ns1.dreamhost.com'
+                required: true
+            to:
+                description: 'The nameserver to check against it'
+                required: true
+
+permissions:
+    contents: read
+
+jobs:
+    diff:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - name: Compare every record on both nameservers
+              env:
+                  FROM: ${{ inputs.from }}
+                  TO: ${{ inputs.to }}
+              run: scripts/zone-diff.sh "$FROM" "$TO"
