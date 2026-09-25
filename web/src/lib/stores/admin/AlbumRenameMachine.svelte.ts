@@ -38,6 +38,13 @@ class AlbumRenameMachine {
         });
     }
 
+    #renamed(oldAlbumPath: string): void {
+        const rename = albumState.albumRenames.get(oldAlbumPath);
+        if (rename) {
+            albumState.albumRenames.set(oldAlbumPath, { ...rename, status: RenameStatus.RENAMED });
+        }
+    }
+
     #success(oldAlbumPath: string): void {
         albumState.albumRenames.delete(oldAlbumPath);
     }
@@ -72,12 +79,9 @@ class AlbumRenameMachine {
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
-            // Fetch parent album to get renamed album added to it, without waiting,
-            // because we want the UI to move to the new album now
-            const parentAlbumPath = getParentFromPath(oldAlbumPath);
-            void albumLoadMachine.reloadAfterChange(parentAlbumPath);
-            // Remove old album from album store, without waiting,
-            // because we want the UI to move away from the old album first
+            // The page at the old path moves to the new one on seeing this, while the parent is re-read
+            this.#renamed(oldAlbumPath);
+            await albumLoadMachine.fetchFromServer(getParentFromPath(oldAlbumPath));
             void albumLoadMachine.removeFromMemoryAndDisk(oldAlbumPath);
             this.#success(oldAlbumPath);
         } catch (error) {

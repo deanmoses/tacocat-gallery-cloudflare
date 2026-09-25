@@ -1,13 +1,15 @@
 import adapter from '@sveltejs/adapter-static';
 
 /**
- * Runes mode for every component of the app, and legacy mode for a dependency, since @zerodevx/svelte-toast and
- * svelte-easy-crop ship Svelte 4 source.
+ * Runes mode for every component of the app. A dependency keeps the compiler's default, which reads the mode off each
+ * component, since @zerodevx/svelte-toast ships Svelte 4 source and svelte-easy-crop is written with runes; forcing
+ * either mode on both breaks one of them at run time.
  * @param {{ filename: string }} file
- * @returns {boolean}
+ * @returns {boolean | undefined}
  */
 function inTheApp({ filename }) {
-    return !filename.includes('/node_modules/') && !filename.includes('\\node_modules\\');
+    const inDependency = filename.includes('/node_modules/') || filename.includes('\\node_modules\\');
+    return !inDependency || undefined;
 }
 
 /** @type {import('@sveltejs/kit').Config} */

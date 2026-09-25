@@ -1,9 +1,8 @@
 import { getTableColumns, sql } from 'drizzle-orm';
-import type { BatchItem } from 'drizzle-orm/batch';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
-import type { ItemKey } from 'tacocat-gallery-shared';
 import * as schema from './schema';
+import { NOW } from './schema';
 
 /** Drizzle over D1 or over a Sessions API session. */
 export function orm(d1: D1Database | D1DatabaseSession): Orm {
@@ -45,29 +44,17 @@ export function upsertItem(database: Orm, values: schema.NewItem): ItemUpsert {
         .onConflictDoUpdate({ target: [item.parentPath, item.itemName], set: ITEM_UPSERT_SET });
 }
 
-/** SQLite's clock in the format the schema defaults to. */
-export const NOW = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
-
 // Built from the table so a column added to `item` is overwritten by an upsert without anyone remembering to list it.
-// The id and path identify the row, so they stay.
-const KEPT_ON_UPSERT = new Set(['id', 'parentPath', 'itemName', 'updatedOn']);
+// The id and path identify the row, so they stay, as does when it was made.
+const KEPT_ON_UPSERT = new Set(['id', 'parentPath', 'itemName', 'createdAt', 'updatedAt']);
 const ITEM_UPSERT_SET = {
     ...Object.fromEntries(
         Object.entries(getTableColumns(schema.item))
             .filter(([key]) => !KEPT_ON_UPSERT.has(key))
             .map(([key, column]) => [key, sql`excluded.${sql.identifier(column.name)}`]),
     ),
-    updatedOn: NOW,
+    updatedAt: NOW,
 };
 
-/** Creates an album unless one exists; an existing album keeps every field, whatever it was given here. */
-export function insertAlbumIfMissing(database: Orm, key: ItemKey): BatchItem<'sqlite'> {
-    const { item } = schema;
-    // Unpublished until an admin decides the album is ready for visitors.
-    return database
-        .insert(item)
-        .values({ ...key, itemType: 'album', published: false })
-        .onConflictDoNothing({ target: [item.parentPath, item.itemName] });
-}
-
+export { NOW } from './schema';
 export * as schema from './schema';

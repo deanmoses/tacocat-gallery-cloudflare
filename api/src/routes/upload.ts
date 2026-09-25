@@ -1,23 +1,20 @@
-import { pathAfter } from '../http/paths';
-import { json } from '../http/responses';
-import { presign } from '../storage/presign';
+import { currentAdmin } from '../auth/passkeys';
+import { acceptLocalUpload } from '../gallery/local';
+import { failure, notFound } from '../http/responses';
+
+const VERSION_ID = /^[\w\-.]+$/v;
 
 /**
- * Stand-in for the browser's presigned PUT: writes straight to R2 so the event notification path can be
- * exercised before S3 API credentials exist.
+ * `PUT /upload/<versionId>` under `wrangler dev`, the URL presign hands out there in place of a signed one: the file
+ * goes into the local bucket and its event onto the local queue. Deployed, the path is not there.
  */
-export async function upload(request: Request, env: Env): Promise<Response> {
-    const key = pathAfter(new URL(request.url), '/upload/');
-    const contentType = request.headers.get('content-type');
-    const object = await env.MEDIA.put(`inbox/${key}`, request.body, {
-        httpMetadata: contentType === null ? {} : { contentType },
-    });
-    return json({ key: object.key, size: object.size });
-}
-
-/** Presigned PUT straight to R2's S3 endpoint, so upload bytes never pass through the Worker. */
-export async function uploadUrl(request: Request, env: Env): Promise<Response> {
-    const { path, contentType } = await request.json<{ path: string; contentType: string }>();
-    const url = await presign(env, { method: 'PUT', key: `inbox/${path.replace(/^\//v, '')}`, contentType });
-    return json({ url, contentType });
+export async function localUploadRoute(request: Request, env: Env, versionId: string): Promise<Response> {
+    if (env.UPLOADS !== 'local' || !VERSION_ID.test(versionId)) {
+        return notFound();
+    }
+    if ((await currentAdmin(request, env)) === null) {
+        return failure(401, 'Unauthorized');
+    }
+    await acceptLocalUpload(env, versionId, await request.arrayBuffer(), request.headers.get('content-type'));
+    return new Response(null, { status: 200 });
 }

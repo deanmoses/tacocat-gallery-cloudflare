@@ -1,62 +1,10 @@
-import { type SQL, and, eq, exists, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { type SQL, and, asc, eq, exists, isNull, notExists, sql } from 'drizzle-orm';
 import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
-import {
-    type AlbumGalleryItem,
-    type AlbumRecord,
-    type AlbumThumbnailRecord,
-    type GalleryRecord,
-    type ItemKey,
-    type MediaRecord,
-    albumKey,
-    albumPath,
-    mediaPath,
-    mediaTypeSchema,
-    rectangleSchema,
-} from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
-import { NOW, type Orm, schema } from '../db';
-
-// A crop as the column stores it, JSON text.
-const CROP = valibot.pipe(
-    valibot.string(),
-    valibot.transform((text): unknown => JSON.parse(text)),
-    rectangleSchema,
-);
-
-// A row of `item` joined to its thumbnail's row, as D1 returns it under SQL column names: run() is the query method
-// that returns D1's meta, and its rows are untyped.
-const ROW_FIELDS = {
-    parent_path: valibot.string(),
-    item_name: valibot.string(),
-    title: valibot.nullable(valibot.string()),
-    description: valibot.nullable(valibot.string()),
-    summary: valibot.nullable(valibot.string()),
-    tags: valibot.nullable(valibot.string()),
-    version_id: valibot.nullable(valibot.string()),
-    published: valibot.number(),
-    updated_on: valibot.string(),
-    width: valibot.nullable(valibot.number()),
-    height: valibot.nullable(valibot.number()),
-    duration_seconds: valibot.nullable(valibot.number()),
-    thumbnail_crop: valibot.nullable(CROP),
-    thumb_parent_path: valibot.nullable(valibot.string()),
-    thumb_item_name: valibot.nullable(valibot.string()),
-    thumb_version_id: valibot.nullable(valibot.string()),
-    thumb_crop: valibot.nullable(CROP),
-};
-const ROW = valibot.variant('item_type', [
-    valibot.object({ item_type: valibot.literal('album'), media_type: valibot.null(), ...ROW_FIELDS }),
-    valibot.object({ item_type: valibot.literal('media'), media_type: mediaTypeSchema, ...ROW_FIELDS }),
-]);
-const ROWS = valibot.array(ROW);
-type Row = valibot.InferOutput<typeof ROW>;
-type AlbumRow = Extract<Row, { item_type: 'album' }>;
-type MediaRow = Extract<Row, { item_type: 'media' }>;
-
-interface Rows {
-    rows: Row[];
-    meta: D1Meta;
-}
+import { type AlbumGalleryItem, type AlbumWrite, type ItemKey, albumKey, albumPath } from 'tacocat-gallery-shared';
+import { type Orm, schema } from '../db';
+import { type Row, type Rows, selectRecords, toAlbumRecord, toRecord } from './records';
+import { type Written, caption, isKey, written } from './writes';
 
 export interface AlbumRead {
     album: AlbumGalleryItem | null;
@@ -65,7 +13,13 @@ export interface AlbumRead {
     d1Ms: number;
 }
 
-const THUMB = alias(schema.item, 'thumb');
+/** Whether something is there, with what the lookup read; the root album is not a row and reads nothing. */
+export interface Existence {
+    exists: boolean;
+    meta: D1Meta | null;
+}
+
+const ALBUM = alias(schema.item, 'album');
 
 /**
  * The album at `path` with its children, as `admin` or a guest sees it. Nothing in it comes from outside the album's
@@ -91,6 +45,211 @@ export async function readAlbum(database: Orm, path: string, admin: boolean): Pr
     };
 }
 
+/** Whether the album at `path` is there for `admin` or a guest to see, without reading it. */
+export async function albumExists(database: Orm, path: string, admin: boolean): Promise<Existence> {
+    const { item } = schema;
+    const key = albumKey(path);
+    if (key === null) {
+        return { exists: true, meta: null };
+    }
+    const found = await database
+        .select({ id: item.id })
+        .from(item)
+        .where(
+            and(
+                eq(item.parentPath, key.parentPath),
+                eq(item.itemName, key.itemName),
+                eq(item.itemType, 'album'),
+                ...(admin ? [] : [eq(item.published, true)]),
+            ),
+        )
+        .run();
+    return { exists: found.results.length > 0, meta: found.meta };
+}
+
+/** Whether the media item at `key` is there for `admin` or a guest to see: a guest sees it if its album is published. */
+export async function mediaExists(database: Orm, key: ItemKey, admin: boolean): Promise<Existence> {
+    const { item } = schema;
+    const album = albumKey(key.parentPath);
+    const albumPublished =
+        album === null
+            ? sql`0`
+            : exists(
+                  database
+                      .select({ id: ALBUM.id })
+                      .from(ALBUM)
+                      .where(
+                          and(
+                              eq(ALBUM.parentPath, album.parentPath),
+                              eq(ALBUM.itemName, album.itemName),
+                              eq(ALBUM.published, true),
+                          ),
+                      ),
+              );
+    const found = await database
+        .select({ id: item.id })
+        .from(item)
+        .where(
+            and(
+                eq(item.parentPath, key.parentPath),
+                eq(item.itemName, key.itemName),
+                eq(item.itemType, 'media'),
+                ...(admin ? [] : [albumPublished]),
+            ),
+        )
+        .run();
+    return { exists: found.results.length > 0, meta: found.meta };
+}
+
+/** Makes the album, with what the admin wrote about it. Changes no row if one is there already. */
+export async function createAlbum(database: Orm, key: ItemKey, fields: AlbumWrite): Promise<Written> {
+    const { item } = schema;
+    const result = await database
+        .insert(item)
+        .values({ ...key, itemType: 'album', ...toColumns(fields) })
+        .onConflictDoNothing({ target: [item.parentPath, item.itemName] })
+        .run();
+    return written(result);
+}
+
+/**
+ * Changes what the admin wrote about the album. A day album is published only while its year is, which is a condition
+ * of the statement, so the row is left as it was when the year is not.
+ */
+export async function updateAlbum(database: Orm, key: ItemKey, fields: AlbumWrite): Promise<Written> {
+    const { item } = schema;
+    const year = albumKey(key.parentPath);
+    const yearPublished =
+        fields.published === true && year !== null
+            ? [
+                  exists(
+                      database
+                          .select({ id: ALBUM.id })
+                          .from(ALBUM)
+                          .where(and(isKey(ALBUM, year), eq(ALBUM.published, true))),
+                  ),
+              ]
+            : [];
+    const result = await database
+        .update(item)
+        .set(toColumns(fields))
+        .where(and(isKey(item, key), eq(item.itemType, 'album'), ...yearPublished))
+        .run();
+    return written(result);
+}
+
+/** Removes the album, unless something is in it. */
+export async function deleteAlbum(database: Orm, key: ItemKey): Promise<Written> {
+    const { item } = schema;
+    const children = database
+        .select({ id: ALBUM.id })
+        .from(ALBUM)
+        .where(eq(ALBUM.parentPath, albumPath(key.parentPath, key.itemName)));
+    const result = await database
+        .delete(item)
+        .where(and(isKey(item, key), eq(item.itemType, 'album'), notExists(children)))
+        .run();
+    return written(result);
+}
+
+/**
+ * Renames a day album, moving everything in it, as one batch: the children first, then the album, each on the
+ * condition that the album is there and nothing has the new name yet, so that a batch in which the rename cannot
+ * happen moves nothing either. Thumbnails point at rows by id, so the albums that show one of the moved photos keep
+ * it.
+ */
+export async function renameAlbum(database: Orm, key: ItemKey, newName: string): Promise<Written> {
+    const { item } = schema;
+    const renamed = { parentPath: key.parentPath, itemName: newName };
+    const canRename = and(
+        exists(
+            database
+                .select({ id: ALBUM.id })
+                .from(ALBUM)
+                .where(and(isKey(ALBUM, key), eq(ALBUM.itemType, 'album'))),
+        ),
+        notExists(database.select({ id: ALBUM.id }).from(ALBUM).where(isKey(ALBUM, renamed))),
+    );
+    const [, album] = await database.batch([
+        database
+            .update(item)
+            .set({ parentPath: albumPath(renamed.parentPath, renamed.itemName) })
+            .where(and(eq(item.parentPath, albumPath(key.parentPath, key.itemName)), canRename))
+            .returning({ id: item.id }),
+        database
+            .update(item)
+            .set({ itemName: newName })
+            .where(and(isKey(item, key), eq(item.itemType, 'album'), canRename))
+            .returning({ id: item.id }),
+    ]);
+    return { changes: album.length, meta: null };
+}
+
+/** What a write that changed nothing can be told: whether the album is there and what stood in the way. */
+export interface AlbumFacts {
+    exists: boolean;
+    /** Null for a year album, which has no year above it. */
+    yearPublished: boolean | null;
+    children: number;
+    /** Whether an album of `newName` is there beside this one. */
+    taken: boolean;
+    /** Whether `mediaPath` names a media item. */
+    mediaExists: boolean;
+}
+
+const FACTS = valibot.array(
+    valibot.object({
+        found: valibot.nullable(valibot.number()),
+        year_published: valibot.nullable(valibot.number()),
+        children: valibot.number(),
+        taken: valibot.nullable(valibot.number()),
+        media_found: valibot.nullable(valibot.number()),
+    }),
+);
+
+/** One read that answers why a write to the album at `key` changed nothing. */
+export async function describeAlbum(
+    database: Orm,
+    key: ItemKey,
+    { newName = '', mediaPath = '' }: { newName?: string; mediaPath?: string } = {},
+): Promise<AlbumFacts> {
+    const { item } = schema;
+    const year = albumKey(key.parentPath);
+    const path = albumPath(key.parentPath, key.itemName);
+    const cut = mediaPath.lastIndexOf('/');
+    const media = { parentPath: mediaPath.slice(0, cut + 1), itemName: mediaPath.slice(cut + 1) };
+    // A builder is changed by what is called on it, so each subquery starts from its own.
+    const found = (where: SQL): SQL => sql`(${database.select({ id: item.id }).from(item).where(where)})`;
+    const result = await database.run(
+        sql`SELECT
+            ${found(and(isKey(item, key), eq(item.itemType, 'album')) ?? sql`1`)} AS found,
+            (${year === null ? sql`NULL` : database.select({ published: item.published }).from(item).where(isKey(item, year))}) AS year_published,
+            (${database
+                .select({ count: sql`count(*)` })
+                .from(item)
+                .where(eq(item.parentPath, path))}) AS children,
+            ${found(isKey(item, { parentPath: key.parentPath, itemName: newName }))} AS taken,
+            ${found(and(isKey(item, media), eq(item.itemType, 'media')) ?? sql`1`)} AS media_found`,
+    );
+    const [facts] = valibot.parse(FACTS, result.results);
+    return {
+        exists: facts?.found !== null && facts?.found !== undefined,
+        yearPublished: year === null ? null : facts?.year_published === 1,
+        children: facts?.children ?? 0,
+        taken: facts?.taken !== null && facts?.taken !== undefined,
+        mediaExists: facts?.media_found !== null && facts?.media_found !== undefined,
+    };
+}
+
+/** The columns an album write sets: a caption that is blank once trimmed clears its field. */
+function toColumns(fields: AlbumWrite): Pick<schema.NewItem, 'description' | 'summary' | 'published'> {
+    return {
+        ...('description' in fields && { description: caption(fields.description) }),
+        ...('summary' in fields && { summary: caption(fields.summary) }),
+        ...(fields.published !== undefined && { published: fields.published }),
+    };
+}
+
 /**
  * Points `album` at `media` as its thumbnail. Changes no row unless both exist, or, with `onlyIfNone`, if the album
  * already has one.
@@ -103,17 +262,17 @@ export function setThumbnail(
 ): SQLiteUpdate<typeof schema.item, 'async', D1Result> {
     const { item } = schema;
     const mediaId = database
-        .select({ id: item.id })
-        .from(item)
-        .where(and(eq(item.parentPath, media.parentPath), eq(item.itemName, media.itemName)));
+        .select({ id: ALBUM.id })
+        .from(ALBUM)
+        .where(and(isKey(ALBUM, media), eq(ALBUM.itemType, 'media')));
     return database
         .update(item)
-        .set({ thumbnailId: sql`(${mediaId})`, updatedOn: NOW })
+        .set({ thumbnailId: sql`(${mediaId})` })
         .$dynamic()
         .where(
             and(
-                eq(item.parentPath, album.parentPath),
-                eq(item.itemName, album.itemName),
+                isKey(item, album),
+                eq(item.itemType, 'album'),
                 exists(mediaId),
                 ...(onlyIfNone ? [isNull(item.thumbnailId)] : []),
             ),
@@ -122,21 +281,7 @@ export function setThumbnail(
 
 /** The items matching `where`, in name order, each with its thumbnail's row beside it. */
 async function rowsWhere(database: Orm, where: SQL | undefined): Promise<Rows> {
-    const { item } = schema;
-    const result = await database
-        .select({
-            ...getTableColumns(item),
-            thumb_parent_path: sql`${THUMB.parentPath}`.as('thumb_parent_path'),
-            thumb_item_name: sql`${THUMB.itemName}`.as('thumb_item_name'),
-            thumb_version_id: sql`${THUMB.versionId}`.as('thumb_version_id'),
-            thumb_crop: sql`${THUMB.thumbnailCrop}`.as('thumb_crop'),
-        })
-        .from(item)
-        .leftJoin(THUMB, eq(THUMB.id, item.thumbnailId))
-        .where(where)
-        .orderBy(item.itemName)
-        .run();
-    return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
+    return selectRecords(database, { where, orderBy: [asc(schema.item.itemName)] });
 }
 
 /**
@@ -151,54 +296,4 @@ function assemble(children: Row[], self: Row[] | null, admin: boolean): AlbumGal
     }
     const row = self.find(visible);
     return row?.item_type === 'album' ? { ...toAlbumRecord(row), children: shown } : null;
-}
-
-function toRecord(row: Row): GalleryRecord {
-    return row.item_type === 'album' ? toAlbumRecord(row) : toMediaRecord(row);
-}
-
-function toAlbumRecord(row: AlbumRow): AlbumRecord {
-    const thumbnail = toThumbnail(row);
-    return {
-        itemType: 'album',
-        path: albumPath(row.parent_path, row.item_name),
-        parentPath: row.parent_path,
-        itemName: row.item_name,
-        updatedOn: row.updated_on,
-        ...(row.description !== null && { description: row.description }),
-        published: row.published === 1,
-        ...(thumbnail !== undefined && { thumbnail }),
-        ...(row.summary !== null && { summary: row.summary }),
-    };
-}
-
-function toMediaRecord(row: MediaRow): MediaRecord {
-    const record = {
-        itemType: 'media' as const,
-        path: mediaPath(row.parent_path, row.item_name),
-        parentPath: row.parent_path,
-        itemName: row.item_name,
-        updatedOn: row.updated_on,
-        ...(row.description !== null && { description: row.description }),
-        // A media item comes with its file and its size; rows from before that was required say nothing of either.
-        versionId: row.version_id ?? '',
-        dimensions: { width: row.width ?? 0, height: row.height ?? 0 },
-        ...(row.thumbnail_crop !== null && { thumbnail: row.thumbnail_crop }),
-        ...(row.title !== null && { title: row.title }),
-        ...(row.tags !== null && { tags: row.tags.split(',') }),
-    };
-    return row.media_type === 'video'
-        ? { ...record, mediaType: 'video', duration: row.duration_seconds ?? 0 }
-        : { ...record, mediaType: 'image' };
-}
-
-/** Undefined for an album with no thumbnail, or one whose media has no file yet. */
-function toThumbnail(row: Row): AlbumThumbnailRecord | undefined {
-    return row.thumb_parent_path === null || row.thumb_item_name === null || row.thumb_version_id === null
-        ? undefined
-        : {
-              path: mediaPath(row.thumb_parent_path, row.thumb_item_name),
-              versionId: row.thumb_version_id,
-              ...(row.thumb_crop !== null && { crop: row.thumb_crop }),
-          };
 }

@@ -7,6 +7,6 @@ describe('the local stack', () => {
             headers: { cookie: await adminCookie() },
         });
 
-        await expect(response.json()).resolves.toStrictEqual({ admin: 'Test Admin' });
+        await expect(response.json()).resolves.toStrictEqual({ admin: 'moses' });
     });
 });

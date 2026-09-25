@@ -69,12 +69,13 @@ report() {
 }
 
 # The files a check covers. Staged: added, copied, modified or renamed in the index, so a deletion is not linted.
-# Full: tracked files plus new ones not yet added, so a file is linted before its first commit.
+# Full: tracked files plus new ones not yet added, so a file is linted before its first commit, less any deleted in
+# the working tree and not yet staged, which the index still lists.
 files() {
     if [ "$STAGED" = "1" ]; then
         git diff --cached --name-only --diff-filter=ACMR -- "$@"
     else
-        git ls-files --cached --others --exclude-standard -- "$@"
+        comm -23 <(git ls-files --cached --others --exclude-standard -- "$@" | sort) <(git ls-files --deleted -- "$@" | sort)
     fi
 }
 
@@ -182,6 +183,15 @@ over_files stylelint --max-warnings 0 -- '*.css' '*.svelte'
 # a renamed one would run twice.
 echo -n "Migrations: committed ones are unchanged... "
 frozen=$(changed_migrations MDR)
+# A reset starts the migrations over from one baseline, after every database has been emptied by hand. A new migration
+# whose top says `-- resets: <reason>` lets the committed ones be deleted alongside it, and a new one that git pairs
+# with a deleted one as a rename, because their content is the same, counts as deleted too; a committed migration
+# still cannot be changed.
+for migration in $(changed_migrations A); do
+    if grep -qE '^--[[:space:]]*resets:[[:space:]]*[^[:space:]]' "$migration"; then
+        frozen=$(comm -23 <(sort <<<"$frozen") <(changed_migrations DR | sort) | sed '/^$/d')
+    fi
+done
 if [ -z "$frozen" ]; then
     report 0
 else

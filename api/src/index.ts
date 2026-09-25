@@ -1,13 +1,14 @@
 import { purgeSpentChallenges } from './auth/passkeys';
 import { orm } from './db';
 import { purgeUploadErrors } from './gallery/errors';
-import { type R2EventMessage, processUploadEvent } from './gallery/upload';
+import { startUploadPipeline } from './gallery/pipeline';
+import type { R2EventMessage } from './gallery/upload';
 import { backupDatabase } from './ops/backup';
 import { startBrowserRuns } from './ops/browser-runs';
 import { probeIdleLatency } from './ops/probes';
 import { createApp } from './routes/app';
-import { inSequence } from './util/sequence';
 
+export { UploadPipeline } from './gallery/pipeline';
 export { Transcoder } from './media/transcoder';
 
 const app = createApp();
@@ -20,11 +21,10 @@ export default {
     fetch: app.fetch,
 
     async queue(batch, env): Promise<void> {
-        // One upload at a time: each holds its whole file in memory.
-        await inSequence(batch.messages, async (message) => {
-            await processUploadEvent(message.body, env);
+        for (const message of batch.messages) {
+            await startUploadPipeline(env, message.body);
             message.ack();
-        });
+        }
     },
 
     async scheduled(controller, env): Promise<void> {

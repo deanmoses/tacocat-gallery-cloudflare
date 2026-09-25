@@ -41,7 +41,7 @@ Before each test, `api/test/setup.ts` calls `reset()`, which empties every bindi
 - The admin cookie is signed independently of `api/src/auth/session.ts`, so a change to the cookie format fails a test.
 - Passkeys come from `SoftwareAuthenticator` in `api/test/authenticator.ts`, which builds what a browser sends from a real P-256 key, so the Worker's WebAuthn checks run unchanged. `api/test/integration/passkeys.test.ts` drives registration and login with it, and `api/scripts/passkey-selftest.ts` uses it against `wrangler dev`.
 - A stack test may import a constant from `api/src` when it holds a copy of something to the Worker's value, as `api/test/stack/headers.test.ts` holds `web/static/_headers` to `SITE_HEADERS`; it runs in Node, so what it imports has to be free of Worker types.
-- Drive the queue with `createMessageBatch` and read what was acked with `getQueueResult`; drive a cron with `createScheduledController`. `api/test/integration/media.test.ts` and `scheduled.test.ts` show both.
+- Drive the queue with `createMessageBatch` and read what was acked with `getQueueResult`; drive a cron with `createScheduledController`. The consumer starts a Workflow instance per upload event, named by the version id, so a pipeline test makes an introspector for that id with `introspectWorkflowInstance` before delivering the event, waits on it with `waitForStatus`, and disposes it, which `await using` does; `modify` can fail a step once or skip the delays between retries. The instance runs in the test's isolate, so a spy on a binding reaches it, which is how the transcoder is stood in. A step a test makes fail is logged by the local engine as an uncaught exception, which is not a failing test. `api/test/integration/media.test.ts` and `scheduled.test.ts` show all of this.
 - Files from `api/fixtures/` load with a `?inline` import.
 
 ## Rows read
@@ -69,7 +69,9 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - While writing tests, run `node e2e/server.ts` in a terminal: Playwright reuses a server already on the port, which skips the build. Restart it after changing the web app, the Worker or the gallery.
 - Walk a journey in one test with a `test.step` per page, since a later page is usually reached from the one before it, and the step says where it failed. `e2e/navigation.e2e.ts` is the example.
 - Locators follow the web app's rule, and lint enforces it: roles and names, no CSS selectors, no `.first()` or `.nth()`.
-- The gallery holds no originals in R2 and the ffmpeg container does not run, so a thumbnail is a broken image. Assert on text and links.
+- The gallery's photos have no file behind them, but for the one the admin journeys crop, which `e2e/server.ts` puts into local R2 before the Worker starts, and the ffmpeg container does not run; so a thumbnail is a broken image, apart from that one and the ones the upload journey makes. Assert on text and links.
+- Uploads complete: the stack runs with `UPLOADS=local`, as `wrangler dev` does, so the Worker takes the browser's PUT into its local bucket and raises the event itself, and the upload journey ends with the item in the album.
+- An admin journey signs in with `signInAsAdmin` in `e2e/support.ts`, the test cookie added to the browser context, and reveals the control strip with `revealAdminControls`, since the strip shows only under the pointer. Admin journeys write into the year `e2e/gallery.ts` reserves for them, so the reader journeys' albums never change.
 - A failure keeps a trace and a screenshot under `e2e/test-results/`. `npx playwright show-report e2e/playwright-report` opens the HTML report, trace included.
 
 ## Coverage

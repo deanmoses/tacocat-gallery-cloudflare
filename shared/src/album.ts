@@ -62,16 +62,14 @@ const videoRecord = valibot.object({
 
 const mediaRecordSchema = valibot.variant('mediaType', [imageRecord, videoRecord]);
 
-const galleryRecordSchema = valibot.variant('itemType', [albumRecord, mediaRecordSchema]);
+/** Any item as the API sends it: an album, an image or a video. */
+export const galleryRecordSchema = valibot.variant('itemType', [albumRecord, mediaRecordSchema]);
 
 /** An album with its children: its media, or its albums. */
 const albumGalleryItem = valibot.object({
     ...albumRecord.entries,
     children: valibot.optional(valibot.array(galleryRecordSchema)),
 });
-
-/** The body of `POST /api/album/<path>/thumbnail`: the media item, in that album or any other, to show it by. */
-export const setThumbnailSchema = valibot.object({ path: valibot.string() });
 
 export type Rectangle = valibot.InferOutput<typeof rectangleSchema>;
 export type Size = valibot.InferOutput<typeof sizeSchema>;

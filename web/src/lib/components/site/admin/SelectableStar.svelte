@@ -27,7 +27,7 @@
         selecting = false;
     });
 
-    function onEmptyStarClick(): void {
+    function onStarClick(): void {
         selecting = true;
         if (onSelected) {
             onSelected(path);
@@ -37,17 +37,32 @@
 
 {#if selected}
     <div class="selected"><FilledStarIcon height="2em" width="2em" /></div>
-{:else if selecting}
-    <div class="selecting"><TransitionStarIcon onclick={onEmptyStarClick} /></div>
 {:else}
-    <div class="not-selected"><EmptyStarIcon onclick={onEmptyStarClick} /></div>
+    <button
+        class={selecting ? 'selecting' : 'not-selected'}
+        aria-label="Set as album thumbnail"
+        onclick={onStarClick}
+        type="button"
+    >
+        {#if selecting}<TransitionStarIcon />{:else}<EmptyStarIcon />{/if}
+    </button>
 {/if}
 
 <style>
-    div {
+    div,
+    button {
         position: absolute;
         top: 10px;
         left: 10px;
+    }
+
+    button {
+        padding: 0;
+        border: 0;
+        background: none;
+        font-size: inherit;
+        line-height: 0;
+        cursor: pointer;
     }
 
     .selected,
@@ -55,12 +70,17 @@
         color: #ffff00;
     }
 
+    /* Faded rather than removed, so a keyboard can still reach it; the edit page shows it when its thumbnail is hovered */
     .not-selected {
         color: #ffffff;
-        display: none;
+        opacity: 0;
     }
 
     .not-selected:hover {
         color: #ffff00;
+    }
+
+    .not-selected:focus-visible {
+        opacity: 1;
     }
 </style>

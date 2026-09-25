@@ -4,7 +4,6 @@
   Button to rename a day album
 -->
 <script lang="ts">
-    import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
     import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
@@ -33,7 +32,6 @@
     function onNewAlbumName(newAlbumName: string): void {
         const newAlbumPath = albumNameToPath(newAlbumName);
         albumRenameMachine.renameDayAlbum(albumPath, newAlbumPath);
-        void goto(getParentFromPath(newAlbumPath));
     }
 
     async function validateDayAlbumName(albumName: string): Promise<string | undefined> {

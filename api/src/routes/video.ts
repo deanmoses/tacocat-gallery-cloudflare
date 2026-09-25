@@ -1,10 +1,18 @@
+import { parseMediaVersion } from 'tacocat-gallery-shared';
 import { pathAfter } from '../http/paths';
-import { notFound } from '../http/responses';
+import { failure, notFound } from '../http/responses';
+import { videoKey } from '../storage/keys';
 
-/** Byte-range serving, which video playback and seeking depend on. */
+/**
+ * `GET /v/<media path>/<versionId>`: the MP4 the transcoder wrote for that version, with byte ranges, which playback
+ * and seeking depend on. The version is the key; the path in the URL is for whoever reads it.
+ */
 export async function media(request: Request, env: Env): Promise<Response> {
-    const key = pathAfter(new URL(request.url), '/v/');
-    const object = await env.MEDIA.get(key, { range: request.headers });
+    const wanted = parseMediaVersion(pathAfter(new URL(request.url), '/v'));
+    if (wanted === null) {
+        return failure(400, 'expected /v/<media path>/<versionId>');
+    }
+    const object = await env.DERIVED.get(videoKey(wanted.versionId), { range: request.headers });
     if (!object) {
         return notFound();
     }

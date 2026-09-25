@@ -40,6 +40,9 @@ export default defineConfig({
                             bindings: {
                                 TEST_MIGRATIONS: await readD1Migrations('./migrations'),
                                 ...TEST_SECRETS,
+                                // Uploads are presigned into the bucket, whatever a developer's .dev.vars says; a test
+                                // of local uploads passes UPLOADS itself.
+                                UPLOADS: 'signed',
                             },
                         },
                     })),

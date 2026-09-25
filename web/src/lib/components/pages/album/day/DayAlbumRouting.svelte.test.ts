@@ -1,8 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { goto } from '$app/navigation';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import { createRawSnippet } from 'svelte';
 import DayAlbumRouting from './DayAlbumRouting.svelte';
+
+// The routing component moves the page after a rename lands, which is the one navigation a page makes on its own
+vi.mock(import('$app/navigation'), () => ({ goto: vi.fn<typeof goto>() }));
 import { albumState } from '$lib/stores/AlbumState.svelte';
 import { AlbumLoadStatus, CreateStatus, DeleteStatus, RenameStatus } from '$lib/models/album';
 import { resetAlbumState } from '$lib/test-support/albumState';
@@ -209,5 +213,46 @@ describe(DayAlbumRouting, () => {
         show();
 
         await expect.element(page.getByRole('link', { name: 'Go back Home?' })).toBeVisible();
+    });
+
+    /**
+     * A rename keeps the reader on the album it started on, which shows the rename in progress; when the server has
+     * renamed the album the page moves to the new path, in place of the old one, so the back button never lands on a
+     * path that no longer exists. The page at the new path sees the same rename until the parent has been re-read.
+     */
+    describe('a rename', () => {
+        const NEW_PATH = '/2001/12-30/';
+
+        beforeEach(() => {
+            vi.mocked(goto).mockClear();
+        });
+
+        it('is shown in progress at its new path as well', async () => {
+            albumState.albumRenames.set(OTHER_PATH, renameEntry(OTHER_PATH, '12-31/', RenameStatus.RENAMED));
+
+            show();
+
+            await expect.element(page.getByText('Rename in progress')).toBeVisible();
+            expect(goto).not.toHaveBeenCalled();
+        });
+
+        it('keeps the page while the server is still renaming', async () => {
+            albumState.albumRenames.set(PATH, renameEntry(PATH, '12-30/', RenameStatus.IN_PROGRESS));
+
+            show();
+
+            await expect.element(page.getByText('Rename in progress')).toBeVisible();
+            expect(goto).not.toHaveBeenCalled();
+        });
+
+        it('moves to the new path once the server has renamed the album', async () => {
+            albumState.albumRenames.set(PATH, renameEntry(PATH, '12-30/', RenameStatus.RENAMED));
+
+            show();
+
+            await vi.waitFor(() => {
+                expect(goto).toHaveBeenCalledExactlyOnceWith(NEW_PATH, { replaceState: true });
+            });
+        });
     });
 });

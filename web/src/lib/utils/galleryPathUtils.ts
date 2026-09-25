@@ -1,8 +1,13 @@
-/** Supported image extensions */
-export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'];
+import {
+    IMAGE_EXTENSIONS as SHARED_IMAGE_EXTENSIONS,
+    VIDEO_EXTENSIONS as SHARED_VIDEO_EXTENSIONS,
+} from 'tacocat-gallery-shared';
 
-/** Supported video extensions */
-export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'mpg', 'mpeg'];
+/** Supported image extensions, the ones the server accepts an upload of */
+export const IMAGE_EXTENSIONS: string[] = [...SHARED_IMAGE_EXTENSIONS];
+
+/** Supported video extensions, the ones the server accepts an upload of */
+export const VIDEO_EXTENSIONS: string[] = [...SHARED_VIDEO_EXTENSIONS];
 
 /** Pattern matching any valid media extension */
 const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].toSorted().join('|');
@@ -83,48 +88,6 @@ export function isValidMediaNameWithoutExtensionStrict(filename: string): boolea
     // ReDoS-safe because _ and [a-z0-9] are disjoint character classes (no ambiguity)
     // Old vulnerable pattern: /^[a-z0-9]+([a-z0-9_]*[a-z0-9]+)*$/
     return /^[0-9a-z]+(?:_[0-9a-z]+)*$/v.test(filename);
-}
-
-/**
- * Return sanitized version of the specified extensionless media filename.
- *
- * @param name media filename without extension like some-image (no .jpg)
- */
-export function sanitizeMediaNameWithoutExtension(name: string): string {
-    return (name || '')
-        .toLowerCase()
-        .replaceAll(/[^0-9_a-z]+/gv, '_') // any invalid chars to _
-        .replaceAll(/_+/gv, '_') // multiple _ to _
-        .replace(/^_/v, ''); // remove leading underscore
-    // Note: trailing underscores are NOT removed here to allow underscores
-    // while the user is in the middle of typing a new name.
-    // The strict validator will reject trailing underscores on submit.
-}
-
-/**
- * Return sanitized extension: lowercase, jpeg -> jpg
- */
-function sanitizeMediaExtension(ext: string): string {
-    return (ext || '').toLowerCase().replace(/^jpeg$/v, 'jpg');
-}
-
-/**
- * Return sanitized version of the specified media filename.
- *  - IMAGE.JPG -> image.jpg
- *  - image-1.jpg -> image_1.jpg
- *  - image 1.jpg -> image_1.jpg
- * Does not check whether it's a valid media name for the gallery.
- *
- * @param filename filename like some-image.jpg
- */
-export function sanitizeMediaFilename(filename: string): string {
-    if (!filename) return '';
-    const dotIndex = filename.lastIndexOf('.');
-    if (dotIndex === -1) return sanitizeMediaNameWithoutExtension(filename);
-    let name = sanitizeMediaNameWithoutExtension(filename.slice(0, dotIndex));
-    name = name.replace(/_$/v, ''); // remove trailing underscore before extension
-    const ext = sanitizeMediaExtension(filename.slice(dotIndex + 1));
-    return `${name}.${ext}`;
 }
 
 export function sanitizeDayAlbumName(albumName: string): string {

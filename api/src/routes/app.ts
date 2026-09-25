@@ -14,15 +14,23 @@ import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
 import { failure, html, json, notFound } from '../http/responses';
 import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
-import { readYourWrites } from '../ops/ryw';
 import { seed } from '../ops/seed';
-import { getAlbum, setAlbumThumbnail } from './albums';
+import {
+    createAlbumRoute,
+    deleteAlbumRoute,
+    getAlbum,
+    renameAlbumRoute,
+    setAlbumThumbnail,
+    updateAlbumRoute,
+} from './albums';
+import { deleteMediaRoute, headMedia, recutThumbnailRoute, renameMediaRoute, updateMediaRoute } from './media';
 import { debugImage } from './debug';
 import { uploadErrors } from './errors';
 import { derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { putItem } from './items';
+import { localUploadRoute } from './upload';
+import { presignRoute } from './presigned';
 import { search } from './search';
-import { upload, uploadUrl } from './upload';
 import { media } from './video';
 
 /** The bindings, and the site a passkey request comes from, which the origin check below leaves for its handlers. */
@@ -95,16 +103,21 @@ export function createApp(): Hono<App> {
     );
     app.post('/api/auth/logout', async () => logout());
 
-    // Reads never refuse: a guest gets the published view.
+    // Reads never refuse: a guest gets the published view. A HEAD arrives at the GET handler with its own method.
     app.get('/api/album/*', async (context) => getAlbum(context.req.raw, context.env));
-    app.get('/api/search', async (context) => search(context.req.raw, context.env));
+    app.get('/api/media/*', async (context) => headMedia(context.req.raw, context.env));
+    app.get('/api/search/*', async (context) => search(context.req.raw, context.env));
     app.get('/api/health', async (context) => health(context.env));
-    app.get('/api/ryw', async (context) => readYourWrites(context.env));
     app.get('/raw/*', async (context) => raw(context.req.raw, context.env));
     app.get('/v/*', async (context) => media(context.req.raw, context.env));
     app.get('/i/*', async (context) => derivedViaCacheApi(context.req.raw, context.env, context.executionCtx));
     app.get('/i2/*', async (context) => derivedViaCdn(context.req.raw, context.env));
-    app.get('/debug/image/*', async (context) => debugImage(context.req.raw, context.env));
+    // What it reports about an object is for whoever can upload one.
+    app.get('/debug/image/*', async (context) =>
+        (await currentAdmin(context.req.raw, context.env)) === null
+            ? failure(401, 'Unauthorized')
+            : debugImage(context.req.raw, context.env),
+    );
 
     // Every write needs a logged-in admin. This comes after the login routes, which answer before it would run, and
     // before every route it guards, since Hono runs what matches in the order it was registered.
@@ -114,13 +127,20 @@ export function createApp(): Hono<App> {
     app.put('/api/item', async (context) => putItem(context.req.raw, context.env));
     app.post('/api/seed', async (context) => seed(context.req.raw, context.env));
     app.post('/api/backup', async (context) => json(await backupDatabase(context.env)));
-    app.post('/api/upload-url', async (context) => uploadUrl(context.req.raw, context.env));
-    app.post('/api/errors', async (context) => uploadErrors(context.req.raw, context.env));
-    // A wildcard between two segments spans only one, so the path's own tail says whether this is the thumbnail route.
-    app.post('/api/album/*', async (context) =>
-        context.req.path.endsWith('/thumbnail') ? setAlbumThumbnail(context.req.raw, context.env) : notFound(),
+    app.post('/api/presigned/*', async (context) => presignRoute(context.req.raw, context.env));
+    app.put('/upload/:versionId', async (context) =>
+        localUploadRoute(context.req.raw, context.env, context.req.param('versionId')),
     );
-    app.put('/upload/*', async (context) => upload(context.req.raw, context.env));
+    app.post('/api/errors', async (context) => uploadErrors(context.req.raw, context.env));
+    app.put('/api/album/*', async (context) => createAlbumRoute(context.req.raw, context.env));
+    app.patch('/api/album/*', async (context) => updateAlbumRoute(context.req.raw, context.env));
+    app.delete('/api/album/*', async (context) => deleteAlbumRoute(context.req.raw, context.env));
+    app.post('/api/album-rename/*', async (context) => renameAlbumRoute(context.req.raw, context.env));
+    app.patch('/api/album-thumb/*', async (context) => setAlbumThumbnail(context.req.raw, context.env));
+    app.patch('/api/media/*', async (context) => updateMediaRoute(context.req.raw, context.env));
+    app.delete('/api/media/*', async (context) => deleteMediaRoute(context.req.raw, context.env));
+    app.post('/api/media-rename/*', async (context) => renameMediaRoute(context.req.raw, context.env));
+    app.patch('/api/thumb/*', async (context) => recutThumbnailRoute(context.req.raw, context.env));
     return app;
 }
 

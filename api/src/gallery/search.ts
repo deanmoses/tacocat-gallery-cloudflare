@@ -1,62 +1,104 @@
-import { sql } from 'drizzle-orm';
-import { type SearchResult, albumPath, mediaPath, mediaTypeSchema } from 'tacocat-gallery-shared';
+import { type SQL, and, asc, desc, exists, gte, inArray, lte, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
+import type { GalleryRecord } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
-import type { Orm } from '../db';
+import { type Orm, schema } from '../db';
+import { selectRecords, toRecord } from './records';
 
-// A search match as D1 returns it, under SQL column names.
-const SEARCH_ROW_FIELDS = {
-    parent_path: valibot.string(),
-    item_name: valibot.string(),
-    title: valibot.nullable(valibot.string()),
-    snippet: valibot.nullable(valibot.string()),
-};
-const SEARCH_ROWS = valibot.array(
-    valibot.variant('item_type', [
-        valibot.object({ item_type: valibot.literal('album'), media_type: valibot.null(), ...SEARCH_ROW_FIELDS }),
-        valibot.object({ item_type: valibot.literal('media'), media_type: mediaTypeSchema, ...SEARCH_ROW_FIELDS }),
-    ]),
-);
+/** A search as the web app asks for one: words, a span of years, a direction and a page. */
+export interface SearchQuery {
+    terms: string;
+    oldestYear?: number;
+    newestYear?: number;
+    oldestFirst: boolean;
+    startAt: number;
+    pageSize: number;
+}
 
 export interface Found {
-    results: SearchResult[];
-    meta: D1Meta;
+    total: number;
+    items: GalleryRecord[];
+    /** The count's and the page's, in that order. */
+    meta: D1Meta[];
 }
 
+const ALBUM = alias(schema.item, 'album');
+
 /**
- * The best 50 items for an FTS5 query, each with a snippet of its description. Unless `admin`, only what the album
- * pages show a guest: published albums, and media whose album is published.
+ * The items whose name, captions or tags hold every word of `terms`, in gallery-path order, newest first unless
+ * `oldestFirst`, within the years asked for, one page of them and how many there are in all. Unless `admin`, only
+ * what the album pages show a guest: published albums, and media whose album is published.
  */
-export async function searchItems(database: Orm, query: string, admin: boolean): Promise<Found> {
-    // FTS5 is outside Drizzle's model, so this is raw SQL with a bound parameter.
-    const found = await database.run(
-        sql`SELECT i.parent_path, i.item_name, i.item_type, i.media_type,
-                CASE WHEN i.item_type = 'album' THEN i.summary ELSE i.title END AS title,
-                snippet(item_fts, 2, '[', ']', '…', 8) AS snippet
-            FROM item_fts JOIN item i ON i.id = item_fts.rowid
-            ${admin ? sql`` : GUEST_VISIBLE_JOIN}
-            WHERE item_fts MATCH ${query}
-            ${admin ? sql`` : GUEST_VISIBLE_FILTER}
-            ORDER BY rank LIMIT 50`,
+export async function searchItems(database: Orm, query: SearchQuery, admin: boolean): Promise<Found> {
+    const { item } = schema;
+    const where = and(
+        // FTS5 is outside Drizzle's model, so the match is raw SQL with a bound parameter.
+        inArray(item.id, sql`(SELECT rowid FROM item_fts WHERE item_fts MATCH ${ftsQuery(query.terms)})`),
+        ...(query.oldestYear === undefined ? [] : [gte(YEAR, String(query.oldestYear).padStart(4, '0'))]),
+        ...(query.newestYear === undefined ? [] : [lte(YEAR, String(query.newestYear).padStart(4, '0'))]),
+        ...(admin ? [] : [visibleToGuest(database)]),
     );
-    const results = valibot.parse(SEARCH_ROWS, found.results).map((row): SearchResult => {
-        const shared = { itemName: row.item_name, title: row.title, snippet: row.snippet };
-        return row.item_type === 'album'
-            ? { itemType: 'album', path: albumPath(row.parent_path, row.item_name), ...shared }
-            : {
-                  itemType: 'media',
-                  mediaType: row.media_type,
-                  path: mediaPath(row.parent_path, row.item_name),
-                  ...shared,
-              };
+    const order = query.oldestFirst ? asc : desc;
+    // Two statements rather than one batch, since batch() returns rows without D1's meta and the cost is watched.
+    // Named in SQL, since run() returns the rows under their SQL names.
+    const counted = await database
+        .select({ total: sql`count(*)`.as('total') })
+        .from(item)
+        .where(where)
+        .run();
+    const page = await selectRecords(database, {
+        where,
+        orderBy: [order(GALLERY_PATH)],
+        limit: query.pageSize,
+        offset: query.startAt,
     });
-    return { results, meta: found.meta };
+    return {
+        total: valibot.parse(COUNTED, counted.results)[0]?.total ?? 0,
+        items: page.rows.map(toRecord),
+        meta: [counted.meta, page.meta],
+    };
 }
+
+const COUNTED = valibot.array(valibot.object({ total: valibot.number() }));
+
+/**
+ * The words of `terms` as an FTS5 query, each quoted, so that no input is a syntax error and every word must match.
+ * A double quote inside a word is doubled, which is how FTS5 escapes one.
+ */
+export function ftsQuery(terms: string): string {
+    return terms
+        .split(/\s+/v)
+        .filter((word) => word !== '')
+        .map((word) => `"${word.replaceAll('"', '""')}"`)
+        .join(' ');
+}
+
+// The gallery path, which is chronological: an album sorts before what is in it, and a day before the next.
+const GALLERY_PATH = sql`${schema.item.parentPath} || ${schema.item.itemName}`;
+
+// The year an item belongs to, which is its parent path's first segment, or its own name for a year album.
+const YEAR = sql`CASE WHEN ${schema.item.parentPath} = '/' THEN ${schema.item.itemName} ELSE substr(${schema.item.parentPath}, 2, 4) END`;
 
 // The album an item is in, found from its parent path: of '/2001/06-15/' without its trailing slash, rtrim() strips
 // every character but '/' from the end, leaving the album's parent path '/2001/', and the rest is its name '06-15'.
 // The key is computed from the matched item alone, so finding the album is a lookup on the (parent_path, item_name) index.
-const PARENT = sql.raw(`rtrim(i.parent_path, '/')`);
+const PARENT = sql`rtrim(${schema.item.parentPath}, '/')`;
 const ALBUM_PARENT_PATH = sql`rtrim(${PARENT}, replace(${PARENT}, '/', ''))`;
-const GUEST_VISIBLE_JOIN = sql`LEFT JOIN item album
-    ON album.parent_path = ${ALBUM_PARENT_PATH} AND album.item_name = substr(${PARENT}, length(${ALBUM_PARENT_PATH}) + 1)`;
-const GUEST_VISIBLE_FILTER = sql`AND CASE WHEN i.item_type = 'album' THEN i.published = 1 ELSE album.published = 1 END`;
+
+/** A published album, or media whose album is published. */
+function visibleToGuest(database: Orm): SQL {
+    const { item } = schema;
+    const albumPublished = exists(
+        database
+            .select({ id: ALBUM.id })
+            .from(ALBUM)
+            .where(
+                and(
+                    sql`${ALBUM.parentPath} = ${ALBUM_PARENT_PATH}`,
+                    sql`${ALBUM.itemName} = substr(${PARENT}, length(${ALBUM_PARENT_PATH}) + 1)`,
+                    sql`${ALBUM.published} = 1`,
+                ),
+            ),
+    );
+    return sql`CASE WHEN ${item.itemType} = 'album' THEN ${item.published} = 1 ELSE ${albumPublished} END`;
+}

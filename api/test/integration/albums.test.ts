@@ -8,15 +8,76 @@ const CROP = { x: 10, y: 20, width: 300, height: 300 };
 const IMAGE = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 async function setThumbnail(albumPath: string, mediaPath: string, asAdmin = true): Promise<Response> {
-    return (asAdmin ? callAsAdmin : call)(`/api/album${albumPath}thumbnail`, {
-        method: 'POST',
-        body: JSON.stringify({ path: mediaPath }),
+    return (asAdmin ? callAsAdmin : call)(`/api/album-thumb${albumPath}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ mediaPath }),
     });
 }
 
 async function album(path: string, asAdmin = false): Promise<AlbumGalleryItem> {
     return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/album${path}`), parseAlbum);
 }
+
+describe('HEAD, which the app asks before creating or renaming', () => {
+    beforeEach(async () => {
+        await Promise.all([
+            putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
+            putItem({ parentPath: '/1982/', itemName: '01-01', itemType: 'album', published: true }),
+            putItem({ parentPath: '/1982/', itemName: '02-02', itemType: 'album', published: false }),
+            putItem({ parentPath: '/1982/01-01/', itemName: 'shown.jpg', ...IMAGE, versionId: 'v1' }),
+            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden.jpg', ...IMAGE, versionId: 'v1' }),
+        ]);
+    });
+
+    async function head(path: string, asAdmin = false): Promise<Response> {
+        const response = await (asAdmin ? callAsAdmin : call)(path, { method: 'HEAD' });
+        await response.body?.cancel();
+        return response;
+    }
+
+    it.each([
+        { what: 'the root', path: '/api/album/' },
+        { what: 'a published year', path: '/api/album/1982/' },
+        { what: 'a published day', path: '/api/album/1982/01-01/' },
+        { what: 'a day without its slash', path: '/api/album/1982/01-01' },
+        { what: 'media in a published day', path: '/api/media/1982/01-01/shown.jpg' },
+    ])('says $what is there for a guest, with no body', async ({ path }) => {
+        const response = await head(path);
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-auth-status')).toBe('guest');
+    });
+
+    it.each([
+        { what: 'an unpublished day', path: '/api/album/1982/02-02/' },
+        { what: 'media in an unpublished day', path: '/api/media/1982/02-02/hidden.jpg' },
+    ])('hides $what from a guest and shows it to an admin', async ({ path }) => {
+        const [guest, admin] = await Promise.all([head(path), head(path, true)]);
+
+        expect(guest.status).toBe(404);
+        expect(admin.status).toBe(200);
+    });
+
+    it.each([
+        { what: 'a year that does not exist', path: '/api/album/1983/' },
+        { what: 'a day that does not exist', path: '/api/album/1982/03-03/' },
+        { what: 'media that does not exist', path: '/api/media/1982/01-01/nope.jpg' },
+        { what: 'media asked for as an album', path: '/api/album/1982/01-01/shown.jpg' },
+        { what: 'an album asked for as media', path: '/api/media/1982/01-01/' },
+        { what: 'something that is no path at all', path: '/api/album/tacos/' },
+    ])('says $what is not there', async ({ path }) => {
+        const response = await head(path);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('has nothing to GET for media', async () => {
+        const response = await call('/api/media/1982/01-01/shown.jpg');
+
+        expect(response.status).toBe(405);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Method Not Allowed' });
+    });
+});
 
 describe('an album', () => {
     beforeEach(async () => {
@@ -33,9 +94,8 @@ describe('an album', () => {
                 title: 'Beach',
                 tags: ['sand', 'sea'],
                 versionId: 'v1',
-                width: 40,
-                height: 30,
-                published: true,
+                width: 4000,
+                height: 3000,
                 thumbnailCrop: CROP,
             }),
             putItem({
@@ -47,7 +107,6 @@ describe('an album', () => {
                 width: 16,
                 height: 9,
                 durationSeconds: 9.5,
-                published: false,
             }),
         ]);
         await setThumbnail(DAY, '/1981/01-01/a.jpg');
@@ -75,7 +134,7 @@ describe('an album', () => {
                     itemName: 'a.jpg',
                     updatedOn: expect.any(String),
                     versionId: 'v1',
-                    dimensions: { width: 40, height: 30 },
+                    dimensions: { width: 4000, height: 3000 },
                     thumbnail: CROP,
                     title: 'Beach',
                     tags: ['sand', 'sea'],
@@ -253,24 +312,44 @@ describe('an album thumbnail', () => {
         expect(response.status).toBe(401);
     });
 
-    it.each([
-        { what: 'a media item that does not exist', albumPath: '/1982/05-05/', mediaPath: '/1982/05-05/nope.jpg' },
-        { what: 'an album that does not exist', albumPath: '/1982/06-06/', mediaPath: '/1982/05-05/a.jpg' },
-    ])('is not found for $what, and changes nothing', async ({ albumPath, mediaPath }) => {
-        const response = await setThumbnail(albumPath, mediaPath);
-        await response.body?.cancel();
+    it('is not found for an album that does not exist, and changes nothing', async () => {
+        const response = await setThumbnail('/1982/06-06/', '/1982/06-06/a.jpg');
 
         expect(response.status).toBe(404);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Album not found: [/1982/06-06/]' });
         expect((await album('/1982/05-05/')).thumbnail).toBeUndefined();
     });
 
     it.each([
-        { what: 'the root album', albumPath: '/', mediaPath: '/1982/05-05/a.jpg' },
-        { what: 'an album path as the media', albumPath: '/1982/05-05/', mediaPath: '/1982/05-05/' },
-    ])('is refused for $what', async ({ albumPath, mediaPath }) => {
+        {
+            what: 'a media item that does not exist',
+            albumPath: '/1982/05-05/',
+            mediaPath: '/1982/05-05/nope.jpg',
+            message: 'Media not found: [/1982/05-05/nope.jpg]',
+        },
+        {
+            what: 'a media item in another album',
+            albumPath: '/1982/05-05/',
+            mediaPath: '/1982/06-06/a.jpg',
+            message: 'Media [/1982/06-06/a.jpg] is not in album [/1982/05-05/]',
+        },
+        {
+            what: 'the root album',
+            albumPath: '/',
+            mediaPath: '/1982/05-05/a.jpg',
+            message: 'Cannot set a thumbnail on the root album',
+        },
+        {
+            what: 'an album path as the media',
+            albumPath: '/1982/05-05/',
+            mediaPath: '/1982/05-05/',
+            message: 'Invalid media path: [/1982/05-05/]',
+        },
+    ])('is refused for $what, saying why, and changes nothing', async ({ albumPath, mediaPath, message }) => {
         const response = await setThumbnail(albumPath, mediaPath);
-        await response.body?.cancel();
 
         expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: message });
+        expect((await album('/1982/05-05/')).thumbnail).toBeUndefined();
     });
 });

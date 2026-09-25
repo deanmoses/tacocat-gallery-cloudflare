@@ -25,12 +25,12 @@
             "/api/*",
             "/login",
             "/invite/*",
-            "/upload/*",
             "/raw/*",
             "/v/*",
             "/i/*",
             "/i2/*",
             "/debug/*",
+            "/upload/*",
         ],
     },
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
@@ -51,10 +51,15 @@
         "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
         // The derived bucket's custom domain, which /i2/* fetches derivatives through.
         "DERIVED_ORIGIN": "https://staging-img.deanmoses.com",
-        // The bucket presigned uploads and transcodes go to, by its S3 name.
+        // The buckets by their S3 names: uploads are presigned into the first, and the transcoder writes into the second.
         "MEDIA_BUCKET": "tacocat-staging-media",
+        "DERIVED_BUCKET": "tacocat-staging-derived",
         // What the idle-latency probes measure.
         "PROBE_TARGET": "tacocat-gallery-cloudflare-staging.tacocat-gallery-cloudflare.workers.dev",
+        // Where the browser puts an upload: "signed" is a presigned URL into the media bucket, whose event R2 sends to
+        // the queue. A local Worker can consume no real queue, so `wrangler dev` sets this to "local" in .dev.vars
+        // and the Worker takes the PUT itself, into its local bucket, and raises the event.
+        "UPLOADS": "signed",
     },
     "d1_databases": [
         {
@@ -72,10 +77,14 @@
     // The running version's id, which /api/health answers with so a release can prove its check reached the new code.
     "version_metadata": { "binding": "CF_VERSION_METADATA" },
     "queues": {
+        // The producer is for local uploads only; deployed, R2's event notification is the producer.
+        "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "tacocat-staging-uploads" }],
         "consumers": [
             {
                 "queue": "tacocat-staging-uploads",
-                "max_batch_size": 10,
+                // One event per batch, delivered as it arrives: the consumer only starts a pipeline instance per event,
+                // so waiting to fill a batch would add the batch timeout to every upload for nothing.
+                "max_batch_size": 1,
                 "max_batch_timeout": 1,
                 "max_retries": 5,
                 // Seconds, so a short D1 or R2 outage can pass before the next attempt.
@@ -91,6 +100,15 @@
             "17 9 * * *",
         ],
     },
+    "workflows": [
+        {
+            // Each upload's processing runs as its own instance, so a drop of fifty photos is fifty pipelines at once,
+            // each with a Worker's memory to itself and each step retried on its own.
+            "name": "tacocat-staging-upload-pipeline",
+            "binding": "UPLOAD_PIPELINE",
+            "class_name": "UploadPipeline",
+        },
+    ],
     "containers": [
         {
             "class_name": "Transcoder",
@@ -118,7 +136,9 @@
                 "SITE_ORIGIN": "https://pix.deanmoses.com",
                 "DERIVED_ORIGIN": "https://img.deanmoses.com",
                 "MEDIA_BUCKET": "tacocat-proto-media",
+                "DERIVED_BUCKET": "tacocat-proto-derived",
                 "PROBE_TARGET": "tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev",
+                "UPLOADS": "signed",
             },
             "d1_databases": [
                 {
@@ -135,10 +155,11 @@
             "images": { "binding": "IMAGES" },
             "version_metadata": { "binding": "CF_VERSION_METADATA" },
             "queues": {
+                "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "tacocat-proto-uploads" }],
                 "consumers": [
                     {
                         "queue": "tacocat-proto-uploads",
-                        "max_batch_size": 10,
+                        "max_batch_size": 1,
                         "max_batch_timeout": 1,
                         "max_retries": 5,
                         "retry_delay": 60,
@@ -149,17 +170,22 @@
             "triggers": {
                 "crons": [
                     "17 9 * * *",
-                    // Idle-latency probes (src/ops/probes.ts) at doubling gaps; src/index.ts runs these for every cron it does
-                    // not pick by name.
-                    // Production only: they measure the site readers use.
-                    "23 0,1,3,7,15 * * *",
-                    // DebugBear browser runs of every page (src/ops/browser-runs.ts), cold then warm fifteen minutes later,
-                    // two hours from every probe run so neither finds the site just warmed by the other. src/index.ts
-                    // picks the run by these exact strings, so change both together.
+                    // DebugBear browser runs of every page (src/ops/browser-runs.ts), cold then warm fifteen minutes later.
+                    // Production only: they measure the site readers use. src/index.ts picks the run by these exact
+                    // strings, so change both together. The idle-latency probes (src/ops/probes.ts) ran here too, at
+                    // "23 0,1,3,7,15 * * *", until their question was answered; src/index.ts still runs them for any
+                    // cron it does not pick by name, so putting that line back is all it takes to resume them.
                     "23 5,11,19,22 * * *",
                     "38 5,11,19,22 * * *",
                 ],
             },
+            "workflows": [
+                {
+                    "name": "tacocat-proto-upload-pipeline",
+                    "binding": "UPLOAD_PIPELINE",
+                    "class_name": "UploadPipeline",
+                },
+            ],
             "containers": [
                 {
                     "class_name": "Transcoder",

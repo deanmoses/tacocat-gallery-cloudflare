@@ -44,11 +44,10 @@ function seedYear(database: Orm, yearIndex: number): ItemUpsert[] {
                     mediaType: 'image',
                     title: `${word} ${imageIndex}`,
                     description: `A photo about ${word} on ${year}-${day}`,
-                    tags: word,
+                    tags: [word],
                     versionId: crypto.randomUUID(),
                     width: 4032,
                     height: 3024,
-                    published: true,
                 }),
             );
         }

@@ -21,9 +21,7 @@
     }
     let { album }: Props = $props();
     let neighbours = $derived(albumNav(album.path, getParentAlbum(album.path)));
-    let uploads: UploadEntry[] = $derived(
-        albumState.uploads.filter((upload) => upload.mediaPath.startsWith(album.path)),
-    );
+    let uploads: UploadEntry[] = $derived(albumState.uploads.filter((upload) => upload.path.startsWith(album.path)));
 </script>
 
 <DayAlbumPageLayout published={album.published} title={album.title}>
@@ -69,7 +67,7 @@
                   so that non-admins aren't forced to download the code.
               -->
             {#await import('$lib/components/site/admin/UploadThumbnail.svelte') then { default: UploadThumbnail }}
-                {#each uploads as upload (upload.uploadPath)}
+                {#each uploads as upload (upload.path)}
                     <UploadThumbnail {upload} />
                 {/each}
             {/await}

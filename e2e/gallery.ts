@@ -7,11 +7,24 @@ const YEAR_PATH = '/2001/';
 const DAY_PATH = '/2001/06-15/';
 const NEXT_DAY_PATH = '/2001/07-04/';
 
+/** The year the admin journeys create, rename and delete albums in; the reader journeys never open it. */
+export const ADMIN_YEAR_PATH = '/2003/';
+/** The day album the admin journeys upload into, holding the one photo they caption, crop and replace. */
+export const ADMIN_DAY_PATH = '/2003/08-01/';
+export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo.jpg`;
+/** A second photo in that day, so one of the two is always not the day's thumbnail and can be made it. */
+export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second.jpg`;
+/** The day the upload journey drops files into, and the photo it replaces, which changes name with each replacement. */
+export const ADMIN_UPLOAD_DAY_PATH = '/2003/09-01/';
+export const ADMIN_REPLACED_BASE_NAME = 'replace_me';
+const ADMIN_PHOTO_VERSION = 'e2e-photo';
+
 /**
  * The gallery every e2e test starts from, written once when the server starts. Tests read it and never change it, since
- * they share one server and run in parallel; a test that writes makes an album of its own. The photos are rows alone,
- * with no file behind them: R2 event notifications, which carry an upload into the gallery, have no local stand-in,
- * so a test asserts which image the page asks for rather than that it arrived.
+ * they share one server and run in parallel; a test that writes makes an album of its own, in the admin year. The
+ * photos are rows alone, with no file behind them, but for the admin photo, whose original ORIGINALS puts into local
+ * R2 so its thumbnail can be cut: R2 event notifications, which carry an upload into the gallery, have no local
+ * stand-in, so a test asserts which image the page asks for rather than that it arrived.
  */
 const GALLERY = {
     year: { parentPath: '/', itemName: '2001', itemType: 'album', published: true },
@@ -39,7 +52,49 @@ const GALLERY = {
         width: 3024,
         height: 4032,
     },
+    adminYear: { parentPath: '/', itemName: '2003', itemType: 'album', published: true },
+    adminDay: { parentPath: ADMIN_YEAR_PATH, itemName: '08-01', itemType: 'album', published: true },
+    adminPhoto: {
+        parentPath: ADMIN_DAY_PATH,
+        itemName: 'photo.jpg',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Photo',
+        versionId: ADMIN_PHOTO_VERSION,
+        width: 4032,
+        height: 3024,
+    },
+    adminSecondPhoto: {
+        parentPath: ADMIN_DAY_PATH,
+        itemName: 'second.jpg',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Second',
+        versionId: 'e2e-second',
+        width: 4032,
+        height: 3024,
+    },
+    adminUploadDay: { parentPath: ADMIN_YEAR_PATH, itemName: '09-01', itemType: 'album', published: true },
+    adminReplaced: {
+        parentPath: ADMIN_UPLOAD_DAY_PATH,
+        itemName: `${ADMIN_REPLACED_BASE_NAME}.jpg`,
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Replace me',
+        versionId: 'e2e-replaced',
+        width: 4032,
+        height: 3024,
+    },
 } as const satisfies Record<string, ItemWrite>;
+
+/** The files behind the gallery's photos, as `<bucket>/<key>` in the media bucket the Worker's top-level config names. */
+export const ORIGINALS = [
+    {
+        objectPath: `tacocat-staging-media/originals/${ADMIN_PHOTO_VERSION}`,
+        file: 'fixtures/FullMetadata.jpg',
+        contentType: 'image/jpeg',
+    },
+] as const;
 
 /**
  * An album that answers only once the rest of the gallery is written, since it is written last: the server is ready
@@ -51,7 +106,19 @@ export const READY_PATH = `/api/album${NEXT_DAY_PATH}`;
 export async function seedGallery(origin: string): Promise<void> {
     const { nextDay, ...rest } = GALLERY;
     await Promise.all(Object.values(rest).map(async (item) => putItem(origin, item)));
+    await setThumbnail(origin, ADMIN_DAY_PATH, ADMIN_PHOTO_PATH);
     await putItem(origin, nextDay);
+}
+
+async function setThumbnail(origin: string, albumPath: string, mediaPath: string): Promise<void> {
+    const response = await fetch(new URL(`/api/album-thumb${albumPath}`, origin), {
+        method: 'PATCH',
+        headers: { cookie: await adminCookie() },
+        body: JSON.stringify({ mediaPath }),
+    });
+    if (!response.ok) {
+        throw new Error(`setting ${albumPath}'s thumbnail failed: ${response.status} ${await response.text()}`);
+    }
 }
 
 async function putItem(origin: string, item: ItemWrite): Promise<void> {

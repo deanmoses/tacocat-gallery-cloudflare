@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { derivedPrefix, imageUrl } from 'tacocat-gallery-shared';
+import { imageUrl } from 'tacocat-gallery-shared';
 import { describe, expect, it } from 'vitest';
 import { MEDIA_HEADERS, SITE_HEADERS } from '../../src/http/headers';
+import { derivedPrefix } from '../../src/storage/keys';
 import { call } from '../helpers';
 
 /** The response's values for the headers named in `expected`, keyed as `expected` is. */
@@ -28,7 +29,7 @@ describe("the site's headers", () => {
             size: { width: 200, height: 200 },
             crop: null,
         });
-        await env.DERIVED.put(`${derivedPrefix('/2001/01-01/a.jpg', 'v1')}/200x200-jpeg`, 'jpeg bytes');
+        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-jpeg`, 'jpeg bytes');
 
         const response = await call(path);
         await response.body?.cancel();

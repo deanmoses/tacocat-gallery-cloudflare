@@ -38,6 +38,13 @@ class MediaRenameMachine {
         });
     }
 
+    #renamed(oldPath: string): void {
+        const rename = albumState.mediaRenames.get(oldPath);
+        if (rename) {
+            albumState.mediaRenames.set(oldPath, { ...rename, status: RenameStatus.RENAMED });
+        }
+    }
+
     #success(oldPath: string): void {
         albumState.mediaRenames.delete(oldPath);
     }
@@ -73,7 +80,8 @@ class MediaRenameMachine {
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
-            await albumLoadMachine.reloadAfterChange(albumPath); // update the album
+            this.#renamed(oldMediaPath);
+            await albumLoadMachine.fetchFromServer(albumPath); // update the album
             this.#success(oldMediaPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

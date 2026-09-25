@@ -1,8 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { goto } from '$app/navigation';
 import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import { createRawSnippet } from 'svelte';
 import MediaRouting from './MediaRouting.svelte';
+
+// The routing component moves the page after a rename lands, which is the one navigation a page makes on its own
+vi.mock(import('$app/navigation'), () => ({ goto: vi.fn<typeof goto>() }));
 import { albumState } from '$lib/stores/AlbumState.svelte';
 import { AlbumLoadStatus, DeleteStatus, RenameStatus, UploadState } from '$lib/models/album';
 import type { Media } from '$lib/models/GalleryItemInterfaces';
@@ -62,7 +66,7 @@ const setStatus =
 const setUpload =
     (status: UploadState): Seed =>
     ({ mediaPath: itemPath }) => {
-        albumState.uploads.push(uploadEntry({ mediaPath: itemPath, status }));
+        albumState.uploads.push(uploadEntry({ path: itemPath, status }));
     };
 
 /** States whose page puts no words on the screen, leaving the title to carry it */
@@ -275,11 +279,57 @@ describe(MediaRouting, () => {
     });
 
     it('an unrecognized upload status shows the status on a titled page', async () => {
-        albumState.uploads.push(uploadEntry({ mediaPath: MEDIA_PATH, status: 'WAT' as UploadState }));
+        albumState.uploads.push(uploadEntry({ path: MEDIA_PATH, status: 'WAT' as UploadState }));
 
         show();
 
         expect(document.title).toBe('Error');
         await expect.element(page.getByText('Unknown upload status: [WAT]')).toBeVisible();
+    });
+
+    /**
+     * A rename keeps the reader on the page it started on, which shows the rename in progress; when the server has
+     * renamed the item the page moves to the new path, in place of the old one, so the back button never lands on a
+     * path that no longer exists. The page at the new path sees the same rename until the album has been re-read.
+     */
+    describe('a rename', () => {
+        const NEW_NAME = 'renamed.jpg';
+        const NEW_PATH = mediaPath(NEW_NAME);
+
+        beforeEach(() => {
+            vi.mocked(goto).mockClear();
+        });
+
+        it('is shown in progress at its new path as well', async () => {
+            albumState.mediaRenames.set(
+                OTHER.mediaPath,
+                renameEntry(OTHER.mediaPath, 'image.jpg', RenameStatus.RENAMED),
+            );
+            albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
+
+            show({ media: undefined });
+
+            await expect.element(page.getByRole('heading', { name: 'Rename In Progress' })).toBeVisible();
+            expect(goto).not.toHaveBeenCalled();
+        });
+
+        it('keeps the page while the server is still renaming', async () => {
+            albumState.mediaRenames.set(MEDIA_PATH, renameEntry(MEDIA_PATH, NEW_NAME, RenameStatus.IN_PROGRESS));
+
+            show();
+
+            await expect.element(page.getByRole('heading', { name: 'Rename In Progress' })).toBeVisible();
+            expect(goto).not.toHaveBeenCalled();
+        });
+
+        it('moves to the new path once the server has renamed the item', async () => {
+            albumState.mediaRenames.set(MEDIA_PATH, renameEntry(MEDIA_PATH, NEW_NAME, RenameStatus.RENAMED));
+
+            show();
+
+            await vi.waitFor(() => {
+                expect(goto).toHaveBeenCalledExactlyOnceWith(NEW_PATH, { replaceState: true });
+            });
+        });
     });
 });

@@ -91,7 +91,7 @@
             <p>Drop images and videos or a 📁</p>
         {/if}
         {#if uploads.length > 0}
-            {#each uploads as upload (upload.uploadPath)}
+            {#each uploads as upload (upload.path)}
                 <UploadThumbnail {upload} />
             {/each}
         {/if}
@@ -106,7 +106,7 @@
 
     :global(.thumbnail:hover .not-selected) {
         animation: fade-in 1400ms;
-        display: inherit;
+        opacity: 1;
     }
 
     @keyframes fade-in {

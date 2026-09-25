@@ -10,7 +10,7 @@
     import { albumState } from '$lib/stores/AlbumState.svelte';
     import { getSanitizedFiles, uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
     import { isValidDayAlbumPath, validMediaExtensionsString } from '$lib/utils/galleryPathUtils';
-    import { enrichWithPreviousVersionIds } from '$lib/utils/uploadUtils';
+    import { markReplacements } from '$lib/utils/uploadUtils';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import UploadReplaceConfirmDialog from './UploadReplaceConfirmDialog.svelte';
 
@@ -32,7 +32,7 @@
         console.log(`I'll upload [${files.length}] images to album [${albumPath}]`);
         imagesToUpload = getSanitizedFiles(files, albumPath);
         const album = albumState.albums.get(albumPath)?.album;
-        const collidingNames = enrichWithPreviousVersionIds(imagesToUpload, album);
+        const collidingNames = markReplacements(imagesToUpload, album);
         if (collidingNames.length > 0) {
             dialog?.show(collidingNames);
         } else {

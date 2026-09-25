@@ -16,6 +16,8 @@ interface StackOptions {
      * has no tables.
      */
     persistTo?: string;
+    /** Plain-text bindings, over the vars in wrangler.jsonc, as .dev.vars would set them for `wrangler dev`. */
+    vars?: Record<string, string>;
 }
 
 /**
@@ -23,7 +25,7 @@ interface StackOptions {
  * secrets in place of .dev.vars. The build is a fresh one unless WEB_BUILD_READY is set, which scripts/test.sh does
  * after building once for every suite it runs.
  */
-export async function startStack({ port, persistTo }: StackOptions): Promise<Stack> {
+export async function startStack({ port, persistTo, vars = {} }: StackOptions): Promise<Stack> {
     if (process.env['WEB_BUILD_READY'] === undefined) {
         await buildWebApp();
     }
@@ -33,9 +35,12 @@ export async function startStack({ port, persistTo }: StackOptions): Promise<Sta
     return unstable_startWorker({
         config: fileURLToPath(new URL('../../wrangler.jsonc', import.meta.url)),
         // A secret binding passed here wins over the same name in .dev.vars.
-        bindings: Object.fromEntries(
-            Object.entries(TEST_SECRETS).map(([name, value]) => [name, { type: 'secret_text', value }]),
-        ),
+        bindings: {
+            ...Object.fromEntries(
+                Object.entries(TEST_SECRETS).map(([name, value]) => [name, { type: 'secret_text', value }]),
+            ),
+            ...Object.fromEntries(Object.entries(vars).map(([name, value]) => [name, { type: 'plain_text', value }])),
+        },
         dev: {
             server: { port },
             inspector: false,
@@ -49,6 +54,24 @@ export async function startStack({ port, persistTo }: StackOptions): Promise<Sta
 
 async function buildWebApp(): Promise<void> {
     await npm(['run', '--silent', 'build', '--workspace', 'web'], REPO_DIR, 'building the web app failed');
+}
+
+/**
+ * Puts a file into the local R2 storage under `persistTo`, as `wrangler r2 object put --local` does, so a Worker started
+ * on that storage finds it. `objectPath` is `<bucket>/<key>`, the bucket by its name in wrangler.jsonc.
+ */
+export async function putLocalObject(
+    persistTo: string,
+    objectPath: string,
+    file: string,
+    contentType: string,
+): Promise<void> {
+    const put = ['r2', 'object', 'put', objectPath, '--file', file, '--content-type', contentType, '--local'];
+    await npm(
+        ['exec', '--no', '--', 'wrangler', ...put, '--persist-to', persistTo],
+        API_DIR,
+        `putting ${objectPath} into local R2 failed`,
+    );
 }
 
 async function migrate(persistTo: string): Promise<void> {

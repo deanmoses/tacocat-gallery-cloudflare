@@ -5,92 +5,22 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1790132604264,
-      "tag": "20260923030324_drizzle_baseline",
+      "when": 1790325865064,
+      "tag": "20260925084425_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1790132605754,
-      "tag": "20260923030325_admin_passkeys",
+      "when": 1790325865527,
+      "tag": "20260925084425_fts_index",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "6",
-      "when": 1790143085473,
-      "tag": "20260923055805_upload_error",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1790155388237,
-      "tag": "20260923092308_album_thumbnails",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1790182400904,
-      "tag": "20260923165320_spent_challenge",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1790202651091,
-      "tag": "20260923223051_two_level_item_type",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1790202652861,
-      "tag": "20260923223052_two_level_item_type_checks",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1790202654432,
-      "tag": "20260923223054_fts_triggers_after_rebuild",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1790203807628,
-      "tag": "20260923225007_album_summary",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "6",
-      "when": 1790203809209,
-      "tag": "20260923225009_fts_indexes_summary",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "6",
-      "when": 1790239815509,
-      "tag": "20260924085015_drop_admin_logins",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "6",
-      "when": 1790239846751,
-      "tag": "20260924085046_user_tables",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "6",
-      "when": 1790239848130,
-      "tag": "20260924085048_seed_users",
+      "when": 1790325865963,
+      "tag": "20260925084425_seed_users",
       "breakpoints": true
     }
   ]

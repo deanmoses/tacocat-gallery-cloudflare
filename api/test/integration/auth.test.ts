@@ -14,7 +14,7 @@ describe('session', () => {
     it('reports the admin with a signed cookie', async () => {
         const response = await callAsAdmin('/api/auth/status');
 
-        await expect(response.json()).resolves.toStrictEqual({ admin: 'Test Admin' });
+        await expect(response.json()).resolves.toStrictEqual({ admin: 'moses' });
         expect(response.headers.get('x-auth-status')).toBe('admin');
     });
 

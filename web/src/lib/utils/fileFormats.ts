@@ -1,101 +1,14 @@
-/**
- * File format handler registry.
- *
- * This module centralizes all knowledge about how to handle different file formats.
- * For example, HEIC files are converted to JPG by the backend.
- *
- * This provides a single source of truth for:
- * - Which files get renamed on the server and how
- * - Which files can't be validated in the browser
- */
+import { isHeicName, isVideoName } from 'tacocat-gallery-shared';
 
-import { VIDEO_EXTENSIONS } from './galleryPathUtils';
-
-const heicHandler: FileFormatHandler = {
-    extensions: ['heic', 'heif'],
-    getMediaPath: (uploadPath) => uploadPath.replace(/\.(?:heic|heif)$/iv, '.jpg'),
-    browserCanDisplay: false,
-};
-
-const videoHandler: FileFormatHandler = {
-    extensions: VIDEO_EXTENSIONS,
-    getMediaPath: (uploadPath) => uploadPath, // No rename
-    browserCanDisplay: false, // Can't validate in <img>
-    processingTimeoutMs: 180_000, // 3 minutes for video transcoding
-};
-
-const handlers: FileFormatHandler[] = [heicHandler, videoHandler];
-
-/**
- * Defines how to handle a specific file format.
- * Each handler knows whether it applies to a file, how the server will rename it,
- * and whether browsers can validate it.
- */
-interface FileFormatHandler {
-    /**
-     * File extensions this handler applies to (without dots, lowercase)
-     */
-    extensions: string[];
-
-    /**
-     * Given an upload path, returns the expected mediaPath in the album, after server processing
-     */
-    getMediaPath: (uploadPath: string) => string;
-
-    /**
-     * Whether browsers can natively display this format (false for HEIC/videos, true for JPG/PNG)
-     */
-    browserCanDisplay: boolean;
-
-    /**
-     * Custom timeout for processing (videos take longer than images)
-     */
-    processingTimeoutMs?: number;
-}
-
-/** Returns true if the filename ends with one of the given extensions */
-function hasExtension(fileName: string, extensions: string[]): boolean {
-    const extPattern = extensions.join('|');
-    const regex = new RegExp(String.raw`\.(${extPattern})$`, 'i');
-    return regex.test(fileName);
-}
-
-/**
- * Get handler for a file, if any applies
- * @param fileNameOrPath Accepts filename or full path.
- */
-function getHandler(fileNameOrPath: string): FileFormatHandler | undefined {
-    return handlers.find((handler) => hasExtension(fileNameOrPath, handler.extensions));
-}
-
-/** Get the expected final mediaPath in the album after the server changes the file format */
-export function getMediaPath(uploadPath: string): string {
-    const handler = getHandler(uploadPath);
-    return handler ? handler.getMediaPath(uploadPath) : uploadPath;
-}
-
-/** Does the server rename this file (e.g., HEIC → JPG)? */
-export function isRenamedOnServer(uploadPath: string): boolean {
-    return getMediaPath(uploadPath) !== uploadPath;
-}
-
-/**
- * Can browsers natively display this file format?
- * @param fileNameOrPath Accepts filename or full path.
- * @returns true for JPG/PNG, false for HEIC/videos
- */
+/** Whether a browser can show the file in an `<img>`: neither a HEIC, which only Safari decodes, nor a video. */
 export function browserCanDisplay(fileNameOrPath: string): boolean {
-    return getHandler(fileNameOrPath)?.browserCanDisplay ?? true;
+    return !isHeicName(fileNameOrPath) && !isVideoName(fileNameOrPath);
 }
 
-/**
- * Get the processing timeout for a file format.
- * Videos take longer to process than images.
- * @param fileNameOrPath Accepts filename or full path.
- */
+/** How long to watch for the server to make an upload into an item before giving up. A video is transcoded first. */
 export function getProcessingTimeout(fileNameOrPath: string): number {
-    return getHandler(fileNameOrPath)?.processingTimeoutMs ?? DEFAULT_PROCESSING_TIMEOUT_MS;
+    return isVideoName(fileNameOrPath) ? VIDEO_PROCESSING_TIMEOUT_MS : IMAGE_PROCESSING_TIMEOUT_MS;
 }
 
-/** Default processing timeout for images (15 seconds) */
-const DEFAULT_PROCESSING_TIMEOUT_MS = 15_000;
+const IMAGE_PROCESSING_TIMEOUT_MS = 15_000;
+const VIDEO_PROCESSING_TIMEOUT_MS = 180_000;

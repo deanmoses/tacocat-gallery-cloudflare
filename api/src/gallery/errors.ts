@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
-import { type Orm, orm, schema } from '../db';
+import { NOW, type Orm, orm, schema } from '../db';
 
 // A day is long enough for the admin UI to show a failed upload; the log has the rest.
 const KEEP_HOURS = 24;
@@ -18,7 +18,7 @@ export function uploadErrorUpsert(
         .values({ path, message })
         .onConflictDoUpdate({
             target: uploadError.path,
-            set: { message: sql`excluded.message`, createdAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))` },
+            set: { message: sql`excluded.message`, updatedAt: NOW },
         });
 }
 
@@ -31,14 +31,14 @@ export function uploadErrorDelete(database: Orm, path: string): BatchItem<'sqlit
 export async function recentUploadErrors(database: Orm, paths: string[]): Promise<Record<string, string>> {
     const { uploadError } = schema;
     const asked = inArray(uploadError.path, paths);
-    const recent = gt(uploadError.createdAt, cutoff());
+    const recent = gt(uploadError.updatedAt, cutoff());
     const rows = paths.length === 0 ? [] : await database.select().from(uploadError).where(and(asked, recent)).all();
     return Object.fromEntries(rows.map((row) => [row.path, row.message]));
 }
 
 export async function purgeUploadErrors(env: Pick<Env, 'DB'>): Promise<void> {
     const { uploadError } = schema;
-    const purged = await orm(env.DB).delete(uploadError).where(lt(uploadError.createdAt, cutoff())).run();
+    const purged = await orm(env.DB).delete(uploadError).where(lt(uploadError.updatedAt, cutoff())).run();
     console.info({ event: 'upload_errors_purged', rows: purged.meta.changes });
 }
 

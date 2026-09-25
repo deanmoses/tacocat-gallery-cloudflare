@@ -17,7 +17,7 @@ const ENCODER = new TextEncoder();
  * cookie format fails a test.
  */
 export async function adminCookie(
-    name = 'Test Admin',
+    name = 'moses',
     expiresAt = Date.now() + 60_000,
     secret = TEST_SECRETS.SESSION_SECRET,
 ): Promise<string> {
