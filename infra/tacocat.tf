@@ -72,7 +72,9 @@ resource "cloudflare_dns_record" "tacocat" {
   zone_id  = cloudflare_zone.tacocat.id
   name     = each.value.name
   type     = each.value.type
-  content  = each.value.content
+  # Cloudflare stores a target in lower case, and would otherwise want to change the MX targets, which DreamHost serves in
+  # upper case, on every plan. TXT values are data, and the DKIM key's case is part of it.
+  content  = each.value.type == "TXT" ? each.value.content : lower(each.value.content)
   priority = lookup(each.value, "priority", null)
   proxied  = false
   # DreamHost serves every record with a 60 s TTL.
