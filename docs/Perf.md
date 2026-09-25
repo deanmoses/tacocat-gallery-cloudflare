@@ -4,21 +4,21 @@ Whether pix.tacocat.com on Cloudflare would feel faster than it does on AWS toda
 
 ## Where it stands
 
-Browser runs of the email reader's visit to `/2025/09-29` on 2026-09-24, as medians in ms, Cloudflare / AWS; the faster of each pair is in bold. Page TTFB and album LCP are from five rounds (08:11, 10:16, 15:52, 19:23 and 22:23 UTC); the photo columns are from the two rounds after the cache header fix (19:23 and 22:23), since that fix changed them. Cloudflare in South Carolina leaves out its runs from 08:13 to 10:19, a network fault (see the log), so its first two columns have three runs.
+Browser runs of the email reader's visit to `/2025/09-29` on 2026-09-24 and 25, as medians in ms, Cloudflare / AWS; the faster of each pair is in bold. Page TTFB and album LCP are from six rounds (08:11, 10:16, 15:52, 19:23 and 22:23 UTC on the 24th, 05:23 on the 25th); the photo columns are from the three rounds after the cache header fix (19:23, 22:23 and 05:23), since that fix changed them. Cloudflare in South Carolina leaves out its runs from 08:13 to 10:19 on the 24th, a network fault (see the log), so its first two columns have four runs.
 
 | Location       | Run  | Page TTFB     | Album LCP         | First photo   | Later photos |
 | -------------- | ---- | ------------- | ----------------- | ------------- | ------------ |
-| France         | cold | **55** / 412  | 1,536 / **1,368** | 126 / **102** | **28** / 37  |
-| France         | warm | **65** / 413  | **1,284** / 1,444 | 128 / **116** | **33** / 40  |
-| California     | cold | **101** / 302 | **1,128** / 1,348 | 219 / **138** | **34** / 46  |
-| California     | warm | **94** / 322  | 1,424 / **1,384** | 208 / **120** | **29** / 40  |
-| South Carolina | cold | **121** / 256 | 1,876 / **1,652** | 708 / **242** | **44** / 46  |
-| South Carolina | warm | **91** / 188  | **1,052** / 1,264 | **191** / 214 | **33** / 38  |
+| France         | cold | **54** / 412  | 1,506 / **1,364** | 133 / **114** | **28** / 38  |
+| France         | warm | **60** / 422  | **1,286** / 1,394 | 121 / 121     | **30** / 38  |
+| California     | cold | **98** / 298  | **1,184** / 1,420 | 187 / **139** | **38** / 42  |
+| California     | warm | **90** / 310  | **1,278** / 1,384 | 148 / **131** | **28** / 50  |
+| South Carolina | cold | **114** / 264 | 1,820 / **1,740** | 269 / **205** | 43 / **39**  |
+| South Carolina | warm | **87** / 184  | 1,246 / **1,208** | 205 / **110** | 36 / **35**  |
 
 - **Page TTFB:** the album page arrives two to seven and a half times sooner on Cloudflare everywhere.
-- **Album LCP** (when the first thumbnail appears): even so far. Each site wins three cells, by 40 to 224 ms, and a cell's runs spread over 300 to 1,100 ms, so five runs cannot separate them yet.
-- **First photo** (click to photo decoded): AWS is ahead in five cells, by 12 to 88 ms in France and California and by 466 ms in South Carolina cold, where Cloudflare's two runs took 269 and 1,147 ms; Cloudflare is ahead in South Carolina warm. The Worker answers a first photo in 6 to 15 ms from its cache, so the rest is network and transfer.
-- **Later photos:** 28 to 46 ms on both sites, since both apps preload the next and previous photo during the reader's 2.3 s on each; Cloudflare is a little faster in every cell. This is most of a visit: photo requests outnumber album opens about ten to one.
+- **Album LCP** (when the first thumbnail appears): even so far. Each site wins three cells, by 38 to 236 ms, and a cell's runs spread over 300 to 1,100 ms, so six runs cannot separate them yet. After the longest idle gap so far, seven hours before 05:23, Cloudflare won the cold album page in all three locations.
+- **First photo** (click to photo decoded): AWS is ahead or level in every cell, by 17 to 95 ms. The Worker answers a first photo in 6 to 15 ms from its cache, so the rest is network and transfer.
+- **Later photos:** 28 to 50 ms on both sites, since both apps preload the next and previous photo during the reader's 2.3 s on each; Cloudflare is faster in France and California, and within 4 ms in South Carolina. This is most of a visit: photo requests outnumber album opens about ten to one.
 - **Louisiana** has no browser location nearer than South Carolina.
 
 ## Goal
@@ -64,7 +64,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 ### From the browser runs
 
 - **The first photo waited on the browser, until the cache header fix.** On the click the app loads the photo page's JS and CSS, which the browser already holds from the album page. AWS's `public, max-age=31536000, immutable` lets the browser use them at once; Workers static assets default to `public, max-age=0, must-revalidate`, so the browser asked Cloudflare about each file first, 26 to 86 ms, before it could request the photo. With the same header in `web/static/_headers`, the click reaches the photo's request as quickly on Cloudflare as on AWS, 22 to 36 ms against 26 to 35 ms.
-- **The Worker is not where the rest of the first-photo time goes.** In the 22:23 round every derived image was a hit in its colo's cache, the photos left there by the 19:23 round three hours earlier, and the Worker answered each photo in 6 to 15 ms of wall time and each thumbnail in 13 to 17 ms at the median (the album page asks for about 30 thumbnails at once). No request read R2, so how long a colo's first read from R2 takes is still unmeasured; the 151 to 165 ms of server wait on a first photo in the 19:23 round came before the Worker timed its steps.
+- **The Worker is not where the rest of the first-photo time goes.** In the 22:23 round every derived image was a hit in its colo's cache, the photos left there by the 19:23 round three hours earlier, and in the 05:23 round, after seven hours, all 234 still were, in Atlanta, Paris, San Jose and Los Angeles. In the 22:23 round the Worker answered each photo in 6 to 15 ms of wall time and each thumbnail in 13 to 17 ms at the median (the album page asks for about 30 thumbnails at once). No request read R2, so how long a colo's first read from R2 takes is still unmeasured; the 151 to 165 ms of server wait on a first photo in the 19:23 round came before the Worker timed its steps.
 - **DebugBear's California machine reaches Cloudflare in San Jose**, not Los Angeles.
 - **The first runs, at 01:53, measured a photo instead of the album page's LCP** and are left out above; see the log.
 
@@ -127,6 +127,7 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-24, 19:23 and 19:38 UTC:** the first runs the Worker's cron started, on time, the cold one two hours after the release. The first photo's click now reaches its request as quickly as on AWS.
 - **2026-09-24, 19:52 UTC:** a derived image served through the Worker's cache now reports its cache lookup and, on a miss, its R2 read, in `Server-Timing` and a `derived_image` log line with the colo, so the next runs show how much of a colo's first-photo wait is the R2 read.
 - **2026-09-24, 22:23 and 22:38 UTC:** the second round from the Worker's cron, and the first with the derived-image timing: every derived image was a cache hit in its colo, answered in 6 to 17 ms. First photos came within 5 to 45 ms of AWS's in France and California.
+- **2026-09-25, 05:23 and 05:38 UTC:** the first round after seven idle hours, the longest gap so far. Cloudflare won the cold album page in all three locations, by 36 to 516 ms; AWS won the warm one in South Carolina by 588 ms, one run. Every derived image was still a cache hit, so no colo had dropped the album's photos in seven hours; DebugBear's California machine reached Cloudflare in Los Angeles this time, where it had reached San Jose.
 - **2026-09-25, 06:11 UTC:** the merge of the `tacocat.com` zone, the diff script and the backup workflow released production, an hour before the 07:23 UTC probe run, so that run's primary was not idle; nothing in the release touched the Worker's code.
 
 ## Appendix: the journey script
