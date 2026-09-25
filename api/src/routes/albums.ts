@@ -9,7 +9,7 @@ import {
 import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
-import { d1Header } from '../db/timing';
+import { d1Header, round } from '../db/timing';
 import { readAlbum, setThumbnail } from '../gallery/albums';
 import { BOOKMARK_HEADER, requestBookmark, written } from '../http/bookmark';
 import { pathAfter } from '../http/paths';
@@ -34,6 +34,19 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
     if (read.album === null) {
         return notFound();
     }
+    // Browser runs record only what reaches the browser, so this is where an album read is matched to the D1 copy
+    // that answered it.
+    console.info({
+        event: 'album_read',
+        colo: request.cf?.colo,
+        path,
+        bookmark: bookmark !== null,
+        d1Region: read.meta.served_by_region,
+        d1Colo: read.meta.served_by_colo,
+        d1Primary: read.meta.served_by_primary,
+        d1Ms: round(read.d1Ms),
+        rows: read.rowsRead,
+    });
     return json(read.album satisfies AlbumGalleryItem, 200, {
         [BOOKMARK_HEADER]: session.getBookmark() ?? '',
         'x-d1': d1Header(read.meta, read.d1Ms, read.rowsRead),

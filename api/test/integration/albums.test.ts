@@ -1,5 +1,5 @@
 import { type AlbumGalleryItem, parseAlbum } from 'tacocat-gallery-shared';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { call, callAsAdmin, callForJson, parseExactly, putItem } from '../helpers';
 
 const YEAR = '/1981/';
@@ -162,6 +162,23 @@ describe('an album', () => {
 
         expect(response.headers.get('x-d1-bookmark')).not.toBe('');
         expect(response.headers.get('x-d1')).toMatch(/^rows=\d+ region=/v);
+    });
+
+    it('logs where D1 answered, so browser runs can be matched to the D1 copy that served them', async () => {
+        const info = vi.spyOn(console, 'info').mockReturnValue();
+        const response = await call(`/api/album${DAY}`);
+        await response.body?.cancel();
+        const logged = info.mock.calls
+            .map(([line]: unknown[]) => line)
+            .find(
+                (line) => typeof line === 'object' && line !== null && 'event' in line && line.event === 'album_read',
+            );
+
+        expect(logged).toMatchObject({ event: 'album_read', path: DAY, bookmark: false, rows: expect.any(Number) });
+        expect(logged).toHaveProperty('d1Region');
+        expect(logged).toHaveProperty('d1Colo');
+        expect(logged).toHaveProperty('d1Primary');
+        expect(logged).toHaveProperty('d1Ms');
     });
 
     it('leaves caching open to a read without a bookmark', async () => {
