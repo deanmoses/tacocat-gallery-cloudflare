@@ -1,0 +1,42 @@
+name: Backup originals
+
+# Nightly copy of the production media bucket to storage outside Cloudflare (scripts/backup-originals.sh), an hour
+# after the Worker's cron has written the D1 dump into that bucket. A failed run is the alert: GitHub mails the
+# repository owner when a scheduled workflow fails.
+#
+# Secrets: R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, the S3 credentials of an account API token that can read the
+# bucket, and BACKUP_TARGET, the rclone path to back up to as a connection string carrying the target's own
+# credentials, such as ':b2,account=<key id>,key=<key>:<bucket>'.
+on:
+    schedule:
+        - cron: '17 10 * * *'
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+
+jobs:
+    backup:
+        runs-on: ubuntu-latest
+        # The first run copies everything, 145 GB when the real gallery is in; after that, the night's uploads.
+        timeout-minutes: 240
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - name: Install rclone
+              run: sudo apt-get install -y --no-install-recommends rclone
+            - name: Copy the bucket
+              env:
+                  RCLONE_CONFIG_R2_TYPE: s3
+                  RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+                  RCLONE_CONFIG_R2_REGION: auto
+                  RCLONE_CONFIG_R2_ENDPOINT: https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com
+                  RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+                  RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+                  BACKUP_TARGET: ${{ secrets.BACKUP_TARGET }}
+              run: scripts/backup-originals.sh r2:tacocat-proto-media
