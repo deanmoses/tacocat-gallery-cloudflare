@@ -279,6 +279,7 @@ For the sessions doing the rest, things a fresh session would otherwise find out
 - `eslint --fix` turns `expect(a > b).toBe(true)` into `toBeGreaterThan`, which throws on strings. Compare timestamps with `Date.parse`.
 - Presign takes only strict media names, what the app's sanitizer makes, so a test stages an upload under a lowercase name with underscores, not a fixture file's own.
 - D1 binds at most 100 parameters to one statement, so rows go in as a batch of single-row inserts, never one multi-row insert; a drop of 52 photos found the presign insert doing the latter. Local D1 enforces the limit, so a test with a day's worth of rows catches it.
+- A local Worker can consume no real queue, Wrangler's remote bindings leave Queues out, so under `wrangler dev` an upload could never complete: the browser's PUT went to the account's bucket and its event to the deployed Worker. Step 5 removed the prototype's stand-in on the grounds that the tests drive the queue themselves, which a person cannot. `UPLOADS=local` in `.dev.vars` brings the stand-in back as Cloudflare's local-first workflow wants it: presign answers with the Worker's own URL, `PUT /upload/<versionId>` puts the file in the local inbox and sends the local queue the message R2 would, and the pipeline runs unchanged. The e2e stack runs the same way, so its upload journey ends with the item in the album.
 
 ## Afterwards: copying the gallery
 

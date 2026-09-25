@@ -14,6 +14,9 @@ export const ADMIN_DAY_PATH = '/2003/08-01/';
 export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo.jpg`;
 /** A second photo in that day, so one of the two is always not the day's thumbnail and can be made it. */
 export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second.jpg`;
+/** The day the upload journey drops files into, and the photo it replaces, which changes name with each replacement. */
+export const ADMIN_UPLOAD_DAY_PATH = '/2003/09-01/';
+export const ADMIN_REPLACED_BASE_NAME = 'replace_me';
 const ADMIN_PHOTO_VERSION = 'e2e-photo';
 
 /**
@@ -68,6 +71,17 @@ const GALLERY = {
         mediaType: 'image',
         title: 'Second',
         versionId: 'e2e-second',
+        width: 4032,
+        height: 3024,
+    },
+    adminUploadDay: { parentPath: ADMIN_YEAR_PATH, itemName: '09-01', itemType: 'album', published: true },
+    adminReplaced: {
+        parentPath: ADMIN_UPLOAD_DAY_PATH,
+        itemName: `${ADMIN_REPLACED_BASE_NAME}.jpg`,
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Replace me',
+        versionId: 'e2e-replaced',
         width: 4032,
         height: 3024,
     },

@@ -28,6 +28,7 @@ import { debugImage } from './debug';
 import { uploadErrors } from './errors';
 import { derivedViaCacheApi, derivedViaCdn, raw } from './images';
 import { putItem } from './items';
+import { localUploadRoute } from './upload';
 import { presignRoute } from './presigned';
 import { search } from './search';
 import { media } from './video';
@@ -127,6 +128,9 @@ export function createApp(): Hono<App> {
     app.post('/api/seed', async (context) => seed(context.req.raw, context.env));
     app.post('/api/backup', async (context) => json(await backupDatabase(context.env)));
     app.post('/api/presigned/*', async (context) => presignRoute(context.req.raw, context.env));
+    app.put('/upload/:versionId', async (context) =>
+        localUploadRoute(context.req.raw, context.env, context.req.param('versionId')),
+    );
     app.post('/api/errors', async (context) => uploadErrors(context.req.raw, context.env));
     app.put('/api/album/*', async (context) => createAlbumRoute(context.req.raw, context.env));
     app.patch('/api/album/*', async (context) => updateAlbumRoute(context.req.raw, context.env));

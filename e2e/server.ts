@@ -14,7 +14,8 @@ await rm(STATE, { recursive: true, force: true });
 for (const { objectPath, file, contentType } of ORIGINALS) {
     await putLocalObject(STATE, objectPath, file, contentType);
 }
-const stack = await startStack({ port: E2E_PORT, persistTo: STATE });
+// Uploads complete locally, as under `wrangler dev`: the Worker takes the PUT and raises the event itself.
+const stack = await startStack({ port: E2E_PORT, persistTo: STATE, vars: { UPLOADS: 'local' } });
 const { origin } = await stack.url;
 await seedGallery(origin);
 console.log(`e2e site ready on ${origin}`);

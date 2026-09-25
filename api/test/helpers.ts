@@ -17,10 +17,10 @@ type Init = RequestInit<IncomingRequestCfProperties>;
  * running with waitUntil(), such as a cache write, so that the next test's reset() cannot pull storage out from under
  * it.
  */
-export async function call(path: string, init: Init = {}): Promise<Response> {
+export async function call(path: string, init: Init = {}, bindings: Partial<Env> = {}): Promise<Response> {
     const request = new Request<unknown, IncomingRequestCfProperties>(new URL(path, ORIGIN), init);
     const ctx = createExecutionContext();
-    const response = await worker.fetch(request, env, ctx);
+    const response = await worker.fetch(request, { ...env, ...bindings }, ctx);
     await waitOnExecutionContext(ctx);
     return response;
 }
@@ -46,10 +46,10 @@ export async function parseExactly<T>(response: Response, parse: (input: unknown
 }
 
 /** Sends a request with a valid admin session. */
-export async function callAsAdmin(path: string, init: Init = {}): Promise<Response> {
+export async function callAsAdmin(path: string, init: Init = {}, bindings: Partial<Env> = {}): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set('cookie', await adminCookie());
-    return call(path, { ...init, headers });
+    return call(path, { ...init, headers }, bindings);
 }
 
 /** Saves an item as an admin through the write API. */

@@ -27,6 +27,15 @@ export function derivedImageKey(versionId: string, name: string): string {
 }
 
 /** Where the browser puts an upload, under the version id minted for it. */
+/**
+ * Where a local Worker takes an upload itself, in place of a presigned URL into the bucket: a path on the site, which
+ * the browser resolves against the page it is on, since under `wrangler dev` the Worker sees its route's hostname in
+ * every request rather than the one the browser used.
+ */
+export function localUploadUrl(versionId: string): string {
+    return `/upload/${versionId}`;
+}
+
 export function inboxKey(versionId: string): string {
     return `inbox/${versionId}`;
 }

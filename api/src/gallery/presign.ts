@@ -11,12 +11,12 @@ import {
     mediaPath,
 } from 'tacocat-gallery-shared';
 import { type Orm, schema } from '../db';
-import { inboxKey, mintVersionId } from '../storage/keys';
+import { inboxKey, localUploadUrl, mintVersionId } from '../storage/keys';
 import { type S3Credentials, presign } from '../storage/s3';
 import { isKey } from './writes';
 
-/** What issuing upload URLs takes: the credentials and the bucket the browser puts into. */
-export type PresignEnv = S3Credentials & Pick<Env, 'MEDIA_BUCKET'>;
+/** What issuing upload URLs takes: the credentials, the bucket the browser puts into, and whether uploads are local. */
+export type PresignEnv = S3Credentials & Pick<Env, 'MEDIA_BUCKET' | 'UPLOADS'>;
 
 export type Presigned = { uploads: PresignResponse; rowsRead: number } | { refused: string };
 
@@ -31,7 +31,8 @@ interface Planned {
  * Issues a presigned PUT per upload into `albumPath`, a day album, each under a freshly minted version id, and records
  * what each is for in the upload table, which is how the pipeline later knows what an inbox object is. Refuses the
  * whole request with the message for the first thing wrong: the rules are the ones the pipeline applies again when
- * the object lands, so that what is refused here is what would have failed then.
+ * the object lands, so that what is refused here is what would have failed then. Under `wrangler dev` the URL is the
+ * Worker's own, which takes the PUT into its local bucket.
  */
 export async function presignUploads(
     env: PresignEnv,
@@ -96,7 +97,10 @@ export async function presignUploads(
     }
     const uploads = await Promise.all(
         rows.map(async (row) => {
-            const url = await presign(env, { method: 'PUT', bucket: env.MEDIA_BUCKET, key: inboxKey(row.versionId) });
+            const url =
+                env.UPLOADS === 'local'
+                    ? localUploadUrl(row.versionId)
+                    : await presign(env, { method: 'PUT', bucket: env.MEDIA_BUCKET, key: inboxKey(row.versionId) });
             return [mediaPath(row.parentPath, row.itemName), { url, versionId: row.versionId }] as const;
         }),
     );

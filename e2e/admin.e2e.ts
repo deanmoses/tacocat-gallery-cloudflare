@@ -1,6 +1,14 @@
 import { type Page, expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { ADMIN_DAY_PATH, ADMIN_PHOTO_PATH, ADMIN_SECOND_PHOTO_PATH, ADMIN_YEAR_PATH } from './gallery.ts';
+import {
+    ADMIN_DAY_PATH,
+    ADMIN_PHOTO_PATH,
+    ADMIN_REPLACED_BASE_NAME,
+    ADMIN_SECOND_PHOTO_PATH,
+    ADMIN_UPLOAD_DAY_PATH,
+    ADMIN_YEAR_PATH,
+} from './gallery.ts';
 import { revealAdminControls, signInAsAdmin } from './support.ts';
 
 const JPEG_FIXTURE = fileURLToPath(new URL('../api/fixtures/FullMetadata.jpg', import.meta.url));
@@ -17,6 +25,34 @@ const MONTHS = [
 function cropperImageLoaded(): boolean {
     const image = document.querySelector<HTMLImageElement>('section[aria-label="Media"] img');
     return image !== null && image.complete && image.naturalWidth > 0;
+}
+
+/** How long the local pipeline may take to make an upload into an item: two derivatives through the Images binding. */
+const PIPELINE_TIMEOUT = 30_000;
+
+/**
+ * The replacement to make next: the photo is a JPEG or a PNG depending on what the last run left, and the file dropped
+ * on it is the other format, so each run changes its extension and a rerun has something to replace.
+ */
+function replacementFor(albumJson: unknown): { target: string; fixture: string; mimeType: string; result: string } {
+    const children =
+        typeof albumJson === 'object' &&
+        albumJson !== null &&
+        'children' in albumJson &&
+        Array.isArray(albumJson.children)
+            ? albumJson.children
+            : [];
+    const isPng = children.some(
+        (child: unknown) =>
+            typeof child === 'object' &&
+            child !== null &&
+            'path' in child &&
+            child.path === `${ADMIN_UPLOAD_DAY_PATH}${ADMIN_REPLACED_BASE_NAME}.png`,
+    );
+    const base = `${ADMIN_UPLOAD_DAY_PATH}${ADMIN_REPLACED_BASE_NAME}`;
+    return isPng
+        ? { target: `${base}.png`, fixture: JPEG_FIXTURE, mimeType: 'image/jpeg', result: `${base}.jpg` }
+        : { target: `${base}.jpg`, fixture: PNG_FIXTURE, mimeType: 'image/png', result: `${base}.png` };
 }
 
 /** Of the admin day's two photos, the one that is not its thumbnail in the API's answer for the album. */
@@ -176,48 +212,58 @@ test.describe('an admin', () => {
         });
     });
 
-    test('uploads a photo into a day, and replaces a photo with one in another format', async ({ page }) => {
-        // The browser PUTs to the account's bucket, which no test reaches; the URL is what presign signed for it.
-        const puts: string[] = [];
-        await page.route('https://*.r2.cloudflarestorage.com/**', async (route) => {
-            puts.push(route.request().url());
-            await route.fulfill({ status: 200 });
-        });
+    test('uploads a photo into a day and sees it arrive, then replaces a photo with one in another format', async ({
+        page,
+    }, testInfo) => {
+        // A retry runs against the same site, where the earlier attempt's upload is already an item
+        const uploadName = `upload_${testInfo.retry}.jpg`;
 
-        await test.step('the upload button asks for files and presigns a URL per file', async () => {
-            await page.goto(ADMIN_DAY_PATH);
+        await test.step('a dropped photo is presigned, put, and made into an item with the caption the file carries', async () => {
+            await page.goto(ADMIN_UPLOAD_DAY_PATH);
             await revealAdminControls(page);
             const chooser = page.waitForEvent('filechooser');
-            const presigned = page.waitForResponse(`/api/presigned${ADMIN_DAY_PATH}`);
+            const presigned = page.waitForResponse(`/api/presigned${ADMIN_UPLOAD_DAY_PATH}`);
             await page.getByRole('button', { name: 'Upload' }).click();
-            await (await chooser).setFiles(JPEG_FIXTURE);
+            await (
+                await chooser
+            ).setFiles({ name: uploadName, mimeType: 'image/jpeg', buffer: await readFile(JPEG_FIXTURE) });
 
-            const response = await presigned;
-            expect(response.status()).toBe(200);
-            const uploads: unknown = await response.json();
-            expect(uploads).toStrictEqual({
-                [`${ADMIN_DAY_PATH}fullmetadata.jpg`]: { url: expect.any(String), versionId: expect.any(String) },
-            });
-            await expect.poll(() => puts).toHaveLength(1);
-            expect(puts[0]).toContain('/inbox/');
-            await expect(page.getByText('1 processing')).toBeVisible();
+            expect((await presigned).status()).toBe(200);
+            // The local pipeline can finish before the app's first poll, so the "processing" status may never show
+            await expect
+                .poll(async () => album(page, ADMIN_UPLOAD_DAY_PATH), { timeout: PIPELINE_TIMEOUT })
+                .toMatchObject({
+                    children: expect.arrayContaining([
+                        expect.objectContaining({
+                            path: `${ADMIN_UPLOAD_DAY_PATH}${uploadName}`,
+                            title: 'My Image Title',
+                        }),
+                    ]),
+                });
+            await expect(page.getByText('1 processing')).toBeHidden();
         });
 
-        await test.step('replacing a photo with a PNG keeps its name, and goes to the album to watch', async () => {
-            await page.goto(ADMIN_PHOTO_PATH);
+        await test.step('a file in another format replaces the photo under its own name, and the album shows it', async () => {
+            const { target, fixture, mimeType, result } = replacementFor(await album(page, ADMIN_UPLOAD_DAY_PATH));
+            await page.goto(target);
             await revealAdminControls(page);
             const chooser = page.waitForEvent('filechooser');
-            const presigned = page.waitForResponse(`/api/presigned${ADMIN_DAY_PATH}`);
+            const presigned = page.waitForResponse(`/api/presigned${ADMIN_UPLOAD_DAY_PATH}`);
             await page.getByRole('button', { name: 'Replace' }).click();
-            await (await chooser).setFiles(PNG_FIXTURE);
+            await (
+                await chooser
+            ).setFiles({ name: `new.${fixture.split('.').pop() ?? ''}`, mimeType, buffer: await readFile(fixture) });
 
             const response = await presigned;
             expect(response.status()).toBe(200);
-            expect(response.request().postDataJSON()).toStrictEqual([
-                { path: `${ADMIN_DAY_PATH}photo.png`, replaces: ADMIN_PHOTO_PATH },
-            ]);
-            await expect(page).toHaveURL('/2003/08-01');
-            await expect(page.getByText('pngFormat.png')).toBeVisible();
+            expect(response.request().postDataJSON()).toStrictEqual([{ path: result, replaces: target }]);
+            await expect(page).toHaveURL(ADMIN_UPLOAD_DAY_PATH.slice(0, -1));
+            await expect
+                .poll(async () => album(page, ADMIN_UPLOAD_DAY_PATH), { timeout: PIPELINE_TIMEOUT })
+                .toMatchObject({
+                    children: expect.arrayContaining([expect.objectContaining({ path: result, title: 'Replace me' })]),
+                });
+            await expect(page.getByText('1 processing')).toBeHidden();
         });
     });
 });

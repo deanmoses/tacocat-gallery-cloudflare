@@ -69,7 +69,8 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - While writing tests, run `node e2e/server.ts` in a terminal: Playwright reuses a server already on the port, which skips the build. Restart it after changing the web app, the Worker or the gallery.
 - Walk a journey in one test with a `test.step` per page, since a later page is usually reached from the one before it, and the step says where it failed. `e2e/navigation.e2e.ts` is the example.
 - Locators follow the web app's rule, and lint enforces it: roles and names, no CSS selectors, no `.first()` or `.nth()`.
-- The gallery's photos have no file behind them, but for the one the admin journeys crop, which `e2e/server.ts` puts into local R2 before the Worker starts, and the ffmpeg container does not run; so a thumbnail is a broken image, apart from that one. Assert on text and links.
+- The gallery's photos have no file behind them, but for the one the admin journeys crop, which `e2e/server.ts` puts into local R2 before the Worker starts, and the ffmpeg container does not run; so a thumbnail is a broken image, apart from that one and the ones the upload journey makes. Assert on text and links.
+- Uploads complete: the stack runs with `UPLOADS=local`, as `wrangler dev` does, so the Worker takes the browser's PUT into its local bucket and raises the event itself, and the upload journey ends with the item in the album.
 - An admin journey signs in with `signInAsAdmin` in `e2e/support.ts`, the test cookie added to the browser context, and reveals the control strip with `revealAdminControls`, since the strip shows only under the pointer. Admin journeys write into the year `e2e/gallery.ts` reserves for them, so the reader journeys' albums never change.
 - A failure keeps a trace and a screenshot under `e2e/test-results/`. `npx playwright show-report e2e/playwright-report` opens the HTML report, trace included.
 

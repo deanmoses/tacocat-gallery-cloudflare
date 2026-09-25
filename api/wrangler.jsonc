@@ -21,7 +21,17 @@
         "not_found_handling": "single-page-application",
         // Every path the Worker serves, and only those; the rest are the app's files. Once this is a list, a request it
         // does not match never reaches the Worker, navigation or not, so a new route here has to be added to it.
-        "run_worker_first": ["/api/*", "/login", "/invite/*", "/raw/*", "/v/*", "/i/*", "/i2/*", "/debug/*"],
+        "run_worker_first": [
+            "/api/*",
+            "/login",
+            "/invite/*",
+            "/raw/*",
+            "/v/*",
+            "/i/*",
+            "/i2/*",
+            "/debug/*",
+            "/upload/*",
+        ],
     },
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,
@@ -46,6 +56,10 @@
         "DERIVED_BUCKET": "tacocat-staging-derived",
         // What the idle-latency probes measure.
         "PROBE_TARGET": "tacocat-gallery-cloudflare-staging.tacocat-gallery-cloudflare.workers.dev",
+        // Where the browser puts an upload: "signed" is a presigned URL into the media bucket, whose event R2 sends to
+        // the queue. A local Worker can consume no real queue, so `wrangler dev` sets this to "local" in .dev.vars
+        // and the Worker takes the PUT itself, into its local bucket, and raises the event.
+        "UPLOADS": "signed",
     },
     "d1_databases": [
         {
@@ -63,6 +77,8 @@
     // The running version's id, which /api/health answers with so a release can prove its check reached the new code.
     "version_metadata": { "binding": "CF_VERSION_METADATA" },
     "queues": {
+        // The producer is for local uploads only; deployed, R2's event notification is the producer.
+        "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "tacocat-staging-uploads" }],
         "consumers": [
             {
                 "queue": "tacocat-staging-uploads",
@@ -111,6 +127,7 @@
                 "MEDIA_BUCKET": "tacocat-proto-media",
                 "DERIVED_BUCKET": "tacocat-proto-derived",
                 "PROBE_TARGET": "tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev",
+                "UPLOADS": "signed",
             },
             "d1_databases": [
                 {
@@ -127,6 +144,7 @@
             "images": { "binding": "IMAGES" },
             "version_metadata": { "binding": "CF_VERSION_METADATA" },
             "queues": {
+                "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "tacocat-proto-uploads" }],
                 "consumers": [
                     {
                         "queue": "tacocat-proto-uploads",
