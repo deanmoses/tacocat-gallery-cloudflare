@@ -82,9 +82,8 @@
         "consumers": [
             {
                 "queue": "tacocat-staging-uploads",
-                // One upload per invocation. Queues adds consumers only between batches, so a batch of ten walked one
-                // upload at a time, each holding its whole file in memory, kept a drop of 52 photos on one consumer for
-                // most of two minutes; one per batch gives the scaler a decision every upload.
+                // One event per batch, delivered as it arrives: the consumer only starts a pipeline instance per event,
+                // so waiting to fill a batch would add the batch timeout to every upload for nothing.
                 "max_batch_size": 1,
                 "max_batch_timeout": 1,
                 "max_retries": 5,
@@ -101,6 +100,15 @@
             "17 9 * * *",
         ],
     },
+    "workflows": [
+        {
+            // Each upload's processing runs as its own instance, so a drop of fifty photos is fifty pipelines at once,
+            // each with a Worker's memory to itself and each step retried on its own.
+            "name": "tacocat-staging-upload-pipeline",
+            "binding": "UPLOAD_PIPELINE",
+            "class_name": "UploadPipeline",
+        },
+    ],
     "containers": [
         {
             "class_name": "Transcoder",
@@ -173,6 +181,13 @@
                     "38 5,11,19,22 * * *",
                 ],
             },
+            "workflows": [
+                {
+                    "name": "tacocat-proto-upload-pipeline",
+                    "binding": "UPLOAD_PIPELINE",
+                    "class_name": "UploadPipeline",
+                },
+            ],
             "containers": [
                 {
                     "class_name": "Transcoder",

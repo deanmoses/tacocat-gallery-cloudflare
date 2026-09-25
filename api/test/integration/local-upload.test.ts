@@ -1,4 +1,9 @@
-import { createExecutionContext, createMessageBatch, waitOnExecutionContext } from 'cloudflare:test';
+import {
+    createExecutionContext,
+    createMessageBatch,
+    introspectWorkflowInstance,
+    waitOnExecutionContext,
+} from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { parsePresigned } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -78,9 +83,11 @@ describe('local uploads', () => {
         const batch = createMessageBatch<R2EventMessage>('tacocat-staging-uploads', [
             { id: '1', timestamp: new Date(), attempts: 1, body: event },
         ]);
+        await using instance = await introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId);
         const ctx = createExecutionContext();
         await handler.queue(batch, { ...env, ...LOCAL });
         await waitOnExecutionContext(ctx);
+        await instance.waitForStatus('complete');
 
         await expect(storedItem(DAY, 'felix.jpg')).resolves.toMatchObject({ versionId, title: 'My Image Title' });
     });

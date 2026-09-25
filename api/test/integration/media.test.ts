@@ -1,4 +1,10 @@
-import { createExecutionContext, createMessageBatch, getQueueResult, waitOnExecutionContext } from 'cloudflare:test';
+import {
+    createExecutionContext,
+    createMessageBatch,
+    getQueueResult,
+    introspectWorkflowInstance,
+    waitOnExecutionContext,
+} from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
@@ -8,7 +14,7 @@ import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from 'tac
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
 import worker from '../../src/index';
-import { type R2EventMessage, type UploadEnv, processUploadEvent } from '../../src/gallery/upload';
+import type { R2EventMessage } from '../../src/gallery/upload';
 import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
 
@@ -55,12 +61,30 @@ function uploadBatch(versionIds: string[]): MessageBatch<R2EventMessage> {
     );
 }
 
-/** Delivers one upload event through the queue and reports whether the consumer acked it. */
-async function deliver(versionId: string): Promise<string[]> {
+type Introspector = Awaited<ReturnType<typeof introspectWorkflowInstance>>;
+type Modify = Parameters<Introspector['modify']>[0];
+
+interface Delivery {
+    /** The status the pipeline instance is expected to end in. */
+    until?: 'complete' | 'errored';
+    /** Changes to the instance's behaviour, applied before it starts. */
+    modify?: Modify;
+}
+
+/**
+ * Delivers one upload event through the queue, waits for the pipeline instance it starts to end, and reports whether
+ * the consumer acked the event.
+ */
+async function deliver(versionId: string, { until = 'complete', modify }: Delivery = {}): Promise<string[]> {
+    await using instance = await introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId);
+    if (modify !== undefined) {
+        await instance.modify(modify);
+    }
     const batch = uploadBatch([versionId]);
     const ctx = createExecutionContext();
     await handler.queue?.(batch, env, ctx);
     await waitOnExecutionContext(ctx);
+    await instance.waitForStatus(until);
     const result = await getQueueResult(batch, ctx);
     return result.explicitAcks;
 }
@@ -99,20 +123,12 @@ async function upload(path: string, file: Uint8Array, staged: Staged = {}): Prom
     return versionId;
 }
 
-/** Makes R2 refuse to read `failing`, as it might in an outage, while every other key reads as usual. */
-function failReading(failing: string): void {
-    const read = env.MEDIA.get.bind(env.MEDIA);
-    vi.spyOn(env.MEDIA, 'get').mockImplementation(async (key: string) => {
-        if (key === failing) {
-            throw new Error('R2 unavailable');
-        }
-        return read(key);
-    });
-}
-
-/** The bindings with the transcoder container replaced by something that answers every request with `respond`. */
-function withTranscoder(respond: () => Promise<Response>): UploadEnv {
-    return { ...env, TRANSCODER: { getByName: () => ({ fetch: respond }) } };
+/** Stands the transcoder container in with something that answers every request with `respond`. */
+function standInTranscoder(respond: (init?: RequestInit) => Promise<Response>): void {
+    const stub = { fetch: async (_input: RequestInfo | URL, init?: RequestInit) => respond(init) };
+    vi.spyOn(env.TRANSCODER, 'getByName').mockReturnValue(
+        stub as unknown as ReturnType<typeof env.TRANSCODER.getByName>,
+    );
 }
 
 /** What the container reports for a portrait iPhone clip: landscape frames with a quarter-turn display matrix. */
@@ -299,6 +315,24 @@ describe('upload pipeline', () => {
         expect(first?.id).toBeDefined();
         expect(day?.thumbnailId).toBe(first?.id);
     });
+
+    it('finishes after a step that failed once, as in an R2 outage, since the step is retried', async () => {
+        const versionId = await stage(`${DAY}retried.jpg`, jpg);
+        await deliver(versionId, {
+            modify: async (modifier) => {
+                await modifier.disableRetryDelays();
+                await modifier.mockStepError(
+                    { name: 'read the image, store the original and make its derivatives' },
+                    new Error('R2 unavailable'),
+                    1,
+                );
+            },
+        });
+        const [item, inbox] = await Promise.all([storedItem(DAY, 'retried.jpg'), env.MEDIA.head(inboxKey(versionId))]);
+
+        expect(item?.versionId).toBe(versionId);
+        expect(inbox).toBeNull();
+    });
 });
 
 describe('replacing a media item', () => {
@@ -407,7 +441,8 @@ describe('replacing a media item', () => {
             replaces: `${DAY}felix.jpg`,
             contentType: 'video/quicktime',
         });
-        await processUploadEvent(uploadEvent(versionId), withTranscoder(transcoding));
+        standInTranscoder(transcoding);
+        await deliver(versionId);
         const clip = await storedItem(DAY, 'felix.mov');
 
         expect(clip).toMatchObject({
@@ -444,24 +479,29 @@ describe('image uploads', () => {
 describe('a batch of uploads', () => {
     beforeEach(seedDay);
 
-    it('acks each upload as it is stored, and leaves the one that fails and those after it for a retry', async () => {
+    it('starts a pipeline instance per event and acks each, so the uploads run side by side', async () => {
         const versionIds = await Promise.all(
             ['first', 'second', 'third'].map(async (name) => stage(`${DAY}${name}.jpg`, jpg)),
         );
-        const [, second = '', third = ''] = versionIds;
-        failReading(inboxKey(second));
-        const batch = uploadBatch(versionIds);
-        const ctx = createExecutionContext();
-
-        await expect(handler.queue?.(batch, env, ctx)).rejects.toThrow('R2 unavailable');
-
-        const result = await getQueueResult(batch, ctx);
-        const inbox = await env.MEDIA.list({ prefix: 'inbox/' });
-
-        expect(result.explicitAcks).toStrictEqual(['1']);
-        expect(inbox.objects.map((object) => object.key).toSorted()).toStrictEqual(
-            [inboxKey(second), inboxKey(third)].toSorted(),
+        const instances = await Promise.all(
+            versionIds.map(async (versionId) => introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId)),
         );
+        try {
+            const batch = uploadBatch(versionIds);
+            const ctx = createExecutionContext();
+            await handler.queue?.(batch, env, ctx);
+            await waitOnExecutionContext(ctx);
+            await Promise.all(instances.map(async (instance) => instance.waitForStatus('complete')));
+            const result = await getQueueResult(batch, ctx);
+            const originals = await env.MEDIA.list({ prefix: 'originals/' });
+
+            expect(result.explicitAcks).toStrictEqual(['1', '2', '3']);
+            expect(originals.objects.map((object) => object.key).toSorted()).toStrictEqual(
+                versionIds.map(originalKey).toSorted(),
+            );
+        } finally {
+            await Promise.all(instances.map(async (instance) => instance.dispose()));
+        }
     });
 });
 
@@ -469,8 +509,8 @@ describe('video uploads', () => {
     beforeEach(seedDay);
 
     it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
-        const versionId = await stage(`${DAY}broken.mov`, new Uint8Array(10), { contentType: 'video/quicktime' });
-        await processUploadEvent(uploadEvent(versionId), withTranscoder(rejecting));
+        standInTranscoder(rejecting);
+        const versionId = await upload(`${DAY}broken.mov`, new Uint8Array(10), { contentType: 'video/quicktime' });
         const [item, originals, inbox, errors] = await Promise.all([
             storedItem(DAY, 'broken.mov'),
             env.MEDIA.list({ prefix: 'originals/' }),
@@ -486,10 +526,10 @@ describe('video uploads', () => {
     });
 
     it('clears the error once a later upload of the same path succeeds', async () => {
-        const first = await stage(`${DAY}again.mov`, new Uint8Array(10));
-        await processUploadEvent(uploadEvent(first), withTranscoder(rejecting));
-        const second = await stage(`${DAY}again.mov`, new Uint8Array(10));
-        await processUploadEvent(uploadEvent(second), withTranscoder(transcoding));
+        standInTranscoder(rejecting);
+        await upload(`${DAY}again.mov`, new Uint8Array(10));
+        standInTranscoder(transcoding);
+        await upload(`${DAY}again.mov`, new Uint8Array(10));
         const { uploadError } = schema;
         const remaining = await orm(env.DB)
             .select()
@@ -504,27 +544,26 @@ describe('video uploads', () => {
 describe('video upload retries', () => {
     beforeEach(seedDay);
 
-    it('leaves the upload in the inbox when the transcoder cannot be reached', async () => {
-        const versionId = await stage(`${DAY}later.mov`, new Uint8Array(10));
-        const down = withTranscoder(async () => {
+    it('leaves the upload in the inbox when the transcoder cannot be reached, once the retries are spent', async () => {
+        standInTranscoder(async () => {
             throw new Error('container unreachable');
         });
-        const attempt = processUploadEvent(uploadEvent(versionId), down);
+        const versionId = await stage(`${DAY}later.mov`, new Uint8Array(10));
+        const acks = await deliver(versionId, {
+            until: 'errored',
+            modify: async (modifier) => modifier.disableRetryDelays(),
+        });
 
-        await expect(attempt).rejects.toThrow('container unreachable');
+        expect(acks).toStrictEqual(['1']);
         await expect(env.MEDIA.head(inboxKey(versionId))).resolves.not.toBeNull();
         await expect(env.MEDIA.list({ prefix: 'originals/' })).resolves.toMatchObject({ objects: [] });
     });
 
-    it('does the same event twice without a second write, and drops the object a redelivery finds', async () => {
+    it('writes nothing twice when the event is delivered again after success, as Queues may do', async () => {
+        standInTranscoder(transcoding);
         const versionId = await stage(`${DAY}clip.mov`, new Uint8Array(10), { contentType: 'video/quicktime' });
-        const event = uploadEvent(versionId);
-        await processUploadEvent(event, withTranscoder(transcoding));
-        // Redelivered after success, as Queues may do, with the inbox object gone; and once more with it back, as
-        // when the delete at the end was what failed.
-        await processUploadEvent(event, withTranscoder(transcoding));
-        await env.MEDIA.put(inboxKey(versionId), new Uint8Array(10));
-        await processUploadEvent(event, withTranscoder(transcoding));
+        await deliver(versionId);
+        await deliver(versionId);
         const [item, originals, inbox] = await Promise.all([
             storedItem(DAY, 'clip.mov'),
             env.MEDIA.list({ prefix: 'originals/' }),
@@ -545,20 +584,11 @@ describe('video upload retries', () => {
     it('has the container write the MP4 and poster for the version into the derived bucket', async () => {
         const versionId = await stage(`${DAY}clip.mov`, new Uint8Array(10));
         const jobs: Record<string, string>[] = [];
-        const recording: UploadEnv = {
-            ...env,
-            TRANSCODER: {
-                getByName: () => ({
-                    fetch: async (_input, init): Promise<Response> => {
-                        jobs.push(
-                            JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, string>,
-                        );
-                        return transcoding();
-                    },
-                }),
-            },
-        };
-        await processUploadEvent(uploadEvent(versionId), recording);
+        standInTranscoder(async (init) => {
+            jobs.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, string>);
+            return transcoding();
+        });
+        await deliver(versionId);
         const paths = Object.fromEntries(
             Object.entries(jobs[0] ?? {}).map(([name, url]) => [name, new URL(url).pathname]),
         );
