@@ -11,6 +11,7 @@
             "entry": [
                 "scripts/passkey-selftest.ts",
                 "scripts/import-album.ts",
+                "scripts/check-gallery.ts",
                 "scripts/debugbear.ts",
                 "transcoder/server.ts",
             ],
