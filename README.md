@@ -49,6 +49,8 @@ The nightly cron dumps the D1 tables, not the FTS table, to R2 as JSON. To resto
 
 For an in-place undo, Time Travel restores `item` and `item_fts` consistently, but a restore to a timestamp can land minutes early. Before anything risky, note the current bookmark with `npx wrangler d1 time-travel info DB --env production` in `api/`, and restore to that with `npx wrangler d1 time-travel restore DB --env production --bookmark=<bookmark>`.
 
+The originals, and that dump with them, are copied out of Cloudflare every night by the Backup originals workflow, which runs `scripts/backup-originals.sh` with rclone: `current/` on the target mirrors the production media bucket, and whatever a night's sync deleted or replaced waits under `deleted/<date>/` for 35 days. It needs three repository secrets, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` for the bucket and `BACKUP_TARGET`, an rclone connection string for the other provider's bucket with its credentials in it; the workflow's header has the shape. To restore, rclone copy from `current/`, or from the dated tree, back into the bucket.
+
 ## Development
 
 `npm run quality` formats, lints, type-checks and tests. The lint step needs `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`; without them it warns and skips those checks, where CI fails.
