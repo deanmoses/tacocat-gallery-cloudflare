@@ -10,7 +10,8 @@
     import HomeIcon from '$lib/components/site/icons/HomeIcon.svelte';
     import AlbumProcessingPage from '../AlbumProcessingPage.svelte';
     import type { Snippet } from 'svelte';
-    import { albumState } from '$lib/stores/AlbumState.svelte';
+    import { albumState, getAlbumRename } from '$lib/stores/AlbumState.svelte';
+    import { goto } from '$app/navigation';
 
     interface Props {
         albumPath: string;
@@ -19,15 +20,23 @@
     let { albumPath, loaded }: Props = $props();
     let loadStatus = $derived(albumState.albums.get(albumPath)?.loadStatus);
     let createStatus = $derived(albumState.albumCreates.get(albumPath)?.status);
-    let renameStatus = $derived(albumState.albumRenames.get(albumPath)?.status);
+    let rename = $derived(getAlbumRename(albumPath));
+    let renameStatus = $derived(rename?.status);
     let deleteStatus = $derived(albumState.albumDeletes.get(albumPath)?.status);
+
+    // Once the server has renamed the album this page's path is the old one, so move to the new, in place of it in history
+    $effect(() => {
+        if (rename?.status === RenameStatus.RENAMED && rename.oldPath === albumPath) {
+            void goto(rename.newPath, { replaceState: true });
+        }
+    });
 </script>
 
 {#if CreateStatus.IN_PROGRESS === createStatus}
     <AlbumProcessingPage title="Create in progress" />
 {:else if DeleteStatus.IN_PROGRESS === deleteStatus}
     <AlbumProcessingPage title="Delete in progress" />
-{:else if RenameStatus.IN_PROGRESS === renameStatus}
+{:else if RenameStatus.IN_PROGRESS === renameStatus || RenameStatus.RENAMED === renameStatus}
     <AlbumProcessingPage title="Rename in progress" />
 {:else if !loadStatus}
     <AlbumLoadingPage />

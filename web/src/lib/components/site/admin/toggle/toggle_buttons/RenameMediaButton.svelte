@@ -4,7 +4,6 @@
   Button to rename a media item (image or video)
 -->
 <script lang="ts">
-    import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
     import {
@@ -40,8 +39,6 @@
     function onNewMediaName(newMediaName: string): void {
         const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
         mediaRenameMachine.renameMediaItem(mediaPath, newMediaPath);
-        const albumPath = getParentFromPath(newMediaPath);
-        void goto(albumPath);
     }
 
     async function validateMediaName(newMediaName: string): Promise<string | undefined> {

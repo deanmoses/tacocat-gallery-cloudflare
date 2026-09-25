@@ -133,7 +133,9 @@ test.describe('an admin', () => {
             await page.getByLabel('New Album Name').fill(`${month}-02`);
             await page.getByRole('button', { name: 'Confirm' }).click();
 
-            await expect(page).toHaveURL('/2003');
+            await expect(page).toHaveURL(`/2003/${month}-02`);
+            await expect(page).toHaveTitle(`${monthName} 2, 2003`);
+            await page.goto(ADMIN_YEAR_PATH);
             await expect(page.getByRole('link', { name: `${monthAbbreviation} 2`, exact: true })).toBeVisible();
             await expect(page.getByRole('link', { name: `${monthAbbreviation} 1`, exact: true })).toBeHidden();
         });

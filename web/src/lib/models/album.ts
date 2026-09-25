@@ -100,6 +100,8 @@ export interface RenameEntry {
 
 export const RenameStatus = {
     IN_PROGRESS: 'In Progress',
+    /** The server has renamed it; the album has not been re-read yet, so the page at the old path can move to the new */
+    RENAMED: 'Renamed',
 } as const;
 export type RenameStatus = (typeof RenameStatus)[keyof typeof RenameStatus];
 

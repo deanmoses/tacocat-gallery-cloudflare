@@ -11,7 +11,8 @@
     import MediaProcessingPage from './MediaProcessingPage.svelte';
     import AlbumErrorPage from '../album/AlbumErrorPage.svelte';
     import type { Snippet } from 'svelte';
-    import { albumState, getUpload } from '$lib/stores/AlbumState.svelte';
+    import { albumState, getMediaRename, getUpload } from '$lib/stores/AlbumState.svelte';
+    import { goto } from '$app/navigation';
 
     interface Props {
         albumPath: string;
@@ -23,8 +24,16 @@
 
     let albumLoadStatus = $derived(albumState.albums.get(albumPath)?.loadStatus);
     let uploadStatus = $derived(getUpload(mediaPath)?.status);
-    let renameStatus = $derived(albumState.mediaRenames.get(mediaPath)?.status);
+    let rename = $derived(getMediaRename(mediaPath));
+    let renameStatus = $derived(rename?.status);
     let deleteStatus = $derived(albumState.mediaDeletes.get(mediaPath)?.status);
+
+    // Once the server has renamed the item this page's path is the old one, so move to the new, in place of it in history
+    $effect(() => {
+        if (rename?.status === RenameStatus.RENAMED && rename.oldPath === mediaPath) {
+            void goto(rename.newPath, { replaceState: true });
+        }
+    });
 </script>
 
 {#if uploadStatus}
@@ -37,7 +46,7 @@
     {:else}
         <AlbumErrorPage>Unknown upload status: [{uploadStatus}]</AlbumErrorPage>
     {/if}
-{:else if RenameStatus.IN_PROGRESS === renameStatus}
+{:else if RenameStatus.IN_PROGRESS === renameStatus || RenameStatus.RENAMED === renameStatus}
     <MediaProcessingPage title="Rename In Progress" />
 {:else if DeleteStatus.IN_PROGRESS === deleteStatus}
     <MediaProcessingPage title="Delete In Progress" />
