@@ -8,6 +8,7 @@ import { readImage } from '../media/exif';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../media/transcoder';
 import { originalKey, posterKey, videoKey } from '../storage/keys';
 import { type S3Credentials, presign } from '../storage/s3';
+import { warmDerivatives } from './derivatives';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 
 /** Shape of an R2 event notification delivered through a Queue. */
@@ -21,7 +22,7 @@ export interface R2EventMessage {
 /** What signing the transcoder's URLs takes: the credentials, and which bucket is which. */
 type S3Env = S3Credentials & Pick<Env, 'MEDIA_BUCKET' | 'DERIVED_BUCKET'>;
 
-export type UploadEnv = TranscodeEnv & S3Env & Pick<Env, 'DB' | 'MEDIA'>;
+export type UploadEnv = TranscodeEnv & S3Env & Pick<Env, 'DB' | 'MEDIA' | 'DERIVED' | 'IMAGES'>;
 
 export type Upload = typeof schema.upload.$inferSelect;
 
@@ -41,8 +42,9 @@ const OTHER = alias(schema.item, 'other');
  * Turns an inbox object into a media item, or into an upload error the admin can read. The object's key is a version
  * id, and its upload row says what the id was minted for; an object nobody presigned is left alone, and one whose
  * upload is already complete is a redelivery, so it is dropped. A delivery that dies part way leaves nothing a retry
- * cannot finish: the original is written under a key that never changes, the item and the upload's completion are one
- * batch, and the inbox object goes last.
+ * cannot finish: the original is written under a key that never changes, its first derivatives are made from it
+ * before the item exists, so a file the Images binding refuses never reaches an album, the item and the upload's
+ * completion are one batch, and the inbox object goes last.
  */
 export async function processUploadEvent(event: R2EventMessage, env: UploadEnv): Promise<void> {
     const { key } = event.object;
@@ -74,6 +76,11 @@ export async function processUploadEvent(event: R2EventMessage, env: UploadEnv):
         httpMetadata: object.httpMetadata ?? {},
         customMetadata: { path },
     });
+    const warmed = await warmDerivatives(env, path, versionId, read.facts);
+    if (!warmed.ok) {
+        await reject(env, key, path, warmed.error);
+        return;
+    }
     const outcome = await recordUpload(database, upload, read.facts);
     if (!outcome.ok) {
         await uploadErrorUpsert(database, path, outcome.error).run();

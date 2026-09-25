@@ -1,18 +1,9 @@
 import { isHeicName, parseImageRequest, parseMediaVersion } from 'tacocat-gallery-shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
-import {
-    type Derivation,
-    type Derivative,
-    IMMUTABLE,
-    type Steps,
-    asJpeg,
-    derivativeName,
-    derivedImage,
-    outputFormat,
-    timed,
-} from '../media/images';
-import { derivedImageKey, originalKey, posterKey } from '../storage/keys';
+import { derivationFor } from '../gallery/derivatives';
+import { type Derivation, type Derivative, IMMUTABLE, type Steps, asJpeg, derivedImage, timed } from '../media/images';
+import { originalKey } from '../storage/keys';
 
 /**
  * `GET /raw/<media path>/<versionId>`: that version's original, as uploaded. Only Safari can show a HEIC, so one comes
@@ -128,17 +119,7 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
 /** What the URL asks for and where its derivative and sources are, or null for a URL imageUrl would not write. */
 function derivation(url: URL, prefix: string): Derivation | null {
     const request = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);
-    if (request === null) {
-        return null;
-    }
-    const format = outputFormat(url.searchParams.get('format'));
-    return {
-        request,
-        format,
-        key: derivedImageKey(request.versionId, derivativeName(request, format)),
-        poster: posterKey(request.versionId),
-        original: originalKey(request.versionId),
-    };
+    return request === null ? null : derivationFor(request, url.searchParams.get('format'));
 }
 
 function generated(derivative: Derivative): Response {

@@ -62,10 +62,7 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
     // Detail image/poster sizing
 
     get detailUrl(): string {
-        const width = this.detailWidth;
-        const height = this.detailHeight;
-        const sizing = width > height ? width.toString() : `x${height.toString()}`;
-        return detailImageUrl(this.json.path, this.json.versionId, sizing);
+        return detailImageUrl(this.json.path, this.json.versionId, this.json.dimensions);
     }
 
     get detailWidth(): number {

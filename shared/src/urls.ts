@@ -1,4 +1,4 @@
-import type { Rectangle } from './album';
+import type { Rectangle, Size } from './album';
 import { isMediaPath } from './paths';
 
 // The URLs the web app asks the Worker for media by. Both ends build and read them here, and the Worker keys a stored
@@ -27,6 +27,25 @@ export interface MediaVersion {
 }
 
 const DEFAULT_SIZE: ImageSize = { width: 1024, height: null };
+
+/** The long side of the image the media page shows. */
+const DETAIL_LONG_SIDE = 1024;
+
+/** The size of a day album's thumbnails, which are square. */
+export const THUMBNAIL_SIZE: ImageSize = { width: 200, height: 200 };
+
+/**
+ * The size the media page asks for: the long side at most 1024 and the image never enlarged, so a small image is asked
+ * for at its own size. Both the app's request and the pipeline's pre-generation come from here, since a stored
+ * derivative is found only by a URL spelled the same way.
+ */
+export function detailSize({ width, height }: Size): ImageSize {
+    const longest = Math.max(width, height);
+    const scale = longest <= DETAIL_LONG_SIDE ? 1 : DETAIL_LONG_SIDE / longest;
+    return width > height
+        ? { width: Math.round(width * scale), height: null }
+        : { width: null, height: Math.round(height * scale) };
+}
 const VERSION_ID = /^[\w\-.]+$/v;
 const SIZE = /^(?<width>[1-9]\d*)?(?:x(?<height>[1-9]\d*))?$/v;
 const COORDINATE = /^(?:0|[1-9]\d*)(?:\.\d+)?$/v;

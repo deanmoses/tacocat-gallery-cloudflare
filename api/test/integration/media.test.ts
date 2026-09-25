@@ -126,6 +126,21 @@ async function transcoding(): Promise<Response> {
     return Response.json(TRANSCODED);
 }
 
+/**
+ * Stands the Images binding in with one that answers every transformation with the JPEG fixture. Miniflare's local
+ * binding has no HEIF decoder, where the real one decodes an 8-bit HEIC, so a HEIC's derivatives cannot be made here.
+ */
+function decodingAnyImage(): void {
+    const result = {
+        response: () => new Response(jpg, { headers: { 'content-type': 'image/jpeg' } }),
+    } as ImageTransformationResult;
+    const transformer = {
+        transform: (): ImageTransformer => transformer,
+        output: async (): Promise<ImageTransformationResult> => result,
+    } as unknown as ImageTransformer;
+    vi.spyOn(env.IMAGES, 'input').mockReturnValue(transformer);
+}
+
 /** The errors the admin UI would be shown for `paths`. */
 async function uploadErrors(paths: string[]): Promise<Record<string, string>> {
     const listed = await callAsAdmin('/api/errors', { method: 'POST', body: JSON.stringify({ paths }) });
@@ -169,7 +184,48 @@ describe('upload pipeline', () => {
         expect(row?.completedAt).not.toBeNull();
     });
 
+    it('makes the thumbnail and the detail image before anyone asks, so the first reader is served what is stored', async () => {
+        const versionId = await upload(`${DAY}FullMetadata.jpg`, jpg);
+        const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
+        const thumbnail = await call(
+            imageUrl({ path: `${DAY}FullMetadata.jpg`, versionId, size: { width: 200, height: 200 }, crop: null }),
+        );
+        const detail = await call(
+            imageUrl({ path: `${DAY}FullMetadata.jpg`, versionId, size: { width: 300, height: null }, crop: null }),
+        );
+        await Promise.all([thumbnail.body?.cancel(), detail.body?.cancel()]);
+
+        // The JPEG is 300 by 225, so its detail image is its own width.
+        expect(stored.objects.map((object) => object.key).toSorted()).toStrictEqual([
+            `${derivedPrefix(versionId)}/200x200-jpeg`,
+            `${derivedPrefix(versionId)}/300-jpeg`,
+        ]);
+        expect(thumbnail.headers.get('x-derived')).toBe('stored');
+        expect(detail.headers.get('x-derived')).toBe('stored');
+    });
+
+    it('records a HEIC the Images binding cannot decode as an upload error, not an item', async () => {
+        vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
+            throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
+        });
+        const versionId = await upload(`${DAY}tenbit.heic`, heic, { contentType: 'image/heic' });
+        const [item, inbox, errors, row] = await Promise.all([
+            storedItem(DAY, 'tenbit.heic'),
+            env.MEDIA.head(inboxKey(versionId)),
+            uploadErrors([`${DAY}tenbit.heic`]),
+            uploadRow(versionId),
+        ]);
+
+        expect(item).toBeUndefined();
+        expect(inbox).toBeNull();
+        expect(errors[`${DAY}tenbit.heic`]).toBe(
+            'the image cannot be decoded: IMAGES_TRANSFORM_ERROR 9412: Unsupported image type',
+        );
+        expect(row?.completedAt).toBeNull();
+    });
+
     it('records the XMP caption of a HEIC, which has no IPTC, and the album lists its tags', async () => {
+        decodingAnyImage();
         await upload(`${DAY}photo.heic`, heic, { contentType: 'image/heic' });
         const album = await parseExactly(await callAsAdmin(`/api/album${DAY}`), parseAlbum);
 

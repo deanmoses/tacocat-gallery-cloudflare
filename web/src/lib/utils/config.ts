@@ -1,7 +1,7 @@
 import type { Rectangle } from '$lib/models/impl/server';
 import { isValidAlbumPath, isValidMediaPath } from './galleryPathUtils';
 import type { SearchQuery } from '$lib/models/search';
-import { type ImageSize, imageUrl, originalUrl, videoUrl } from 'tacocat-gallery-shared';
+import { type Size, THUMBNAIL_SIZE, detailSize, imageUrl, originalUrl, videoUrl } from 'tacocat-gallery-shared';
 
 /**
  * The API, the media and the login are all served by the Worker on the site's own origin, so every URL is a path.
@@ -17,20 +17,17 @@ function baseApiUrl(): string {
  * @param crop Optional crop rectangle
  */
 export function thumbnailUrl(mediaPath: string, versionId: string, crop?: Rectangle): string {
-    return imageUrl({ path: mediaPath, versionId, size: { width: 200, height: 200 }, crop: crop ?? null });
+    return imageUrl({ path: mediaPath, versionId, size: THUMBNAIL_SIZE, crop: crop ?? null });
 }
 
 /**
  * URL to image optimized for display on the media detail page
  * @param mediaPath Path to the source media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
  * @param versionId Version of the source media
- * @param size size like '1024' (landscape) or 'x1024' (portrait)
+ * @param dimensions Size of the source media, from which the detail size follows
  */
-export function detailImageUrl(mediaPath: string, versionId: string, size: string): string {
-    const imageSize: ImageSize = size.startsWith('x')
-        ? { width: null, height: Number(size.slice(1)) }
-        : { width: Number(size), height: null };
-    return imageUrl({ path: mediaPath, versionId, size: imageSize, crop: null });
+export function detailImageUrl(mediaPath: string, versionId: string, dimensions: Size): string {
+    return imageUrl({ path: mediaPath, versionId, size: detailSize(dimensions), crop: null });
 }
 
 /**
