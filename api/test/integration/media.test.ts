@@ -200,23 +200,28 @@ describe('upload pipeline', () => {
         expect(row?.completedAt).not.toBeNull();
     });
 
-    it('makes the thumbnail and the detail image before anyone asks, so the first reader is served what is stored', async () => {
+    it('makes both thumbnails and the detail image before anyone asks, so the first reader is served what is stored', async () => {
         const versionId = await upload(`${DAY}full_metadata.jpg`, jpg);
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
         const thumbnail = await call(
             imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 200, height: 200 }, crop: null }),
         );
+        const thumbnail2x = await call(
+            imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 400, height: 400 }, crop: null }),
+        );
         const detail = await call(
             imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 300, height: null }, crop: null }),
         );
-        await Promise.all([thumbnail.body?.cancel(), detail.body?.cancel()]);
+        await Promise.all([thumbnail.body?.cancel(), thumbnail2x.body?.cancel(), detail.body?.cancel()]);
 
         // The JPEG is 300 by 225, so its detail image is its own width.
         expect(stored.objects.map((object) => object.key).toSorted()).toStrictEqual([
-            `${derivedPrefix(versionId)}/200x200-jpeg`,
+            `${derivedPrefix(versionId)}/200x200-webp`,
             `${derivedPrefix(versionId)}/300-jpeg`,
+            `${derivedPrefix(versionId)}/400x400-webp`,
         ]);
         expect(thumbnail.headers.get('x-derived')).toBe('stored');
+        expect(thumbnail2x.headers.get('x-derived')).toBe('stored');
         expect(detail.headers.get('x-derived')).toBe('stored');
     });
 
@@ -755,7 +760,7 @@ describe('serving media', () => {
         async (path) => {
             await env.DERIVED.put(posterKey('v1'), jpg);
             const response = await call(`/i${path}/v1?size=200x200`);
-            const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-jpeg`);
+            const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-webp`);
 
             expect(response.status).toBe(200);
             expect(response.headers.get('x-derived')).toBe('generated');
@@ -766,13 +771,25 @@ describe('serving media', () => {
     it('generates a derivative once, then serves it from the cache', async () => {
         await env.MEDIA.put(originalKey('v1'), jpg);
         const first = await call('/i/2024/06-15/d.jpg/v1?size=200x200');
-        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-jpeg`);
+        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-webp`);
         const second = await call('/i/2024/06-15/d.jpg/v1?size=200x200');
 
         expect(first.headers.get('x-derived')).toBe('generated');
-        expect(first.headers.get('content-type')).toBe('image/jpeg');
+        expect(first.headers.get('content-type')).toBe('image/webp');
         expect(stored).not.toBeNull();
         expect(second.headers.get('x-derived')).toBe('cache-api-hit');
+    });
+
+    it('serves the media page its image as JPEG, whatever the browser accepts, since readers drag it into other apps', async () => {
+        await env.MEDIA.put(originalKey('v1'), jpg);
+        const response = await call('/i/2024/06-15/d.jpg/v1?size=300', {
+            headers: { accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
+        });
+        await response.body?.cancel();
+        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/300-jpeg`);
+
+        expect(response.headers.get('content-type')).toBe('image/jpeg');
+        expect(stored).not.toBeNull();
     });
 
     it('stores a cropped thumbnail under the size and crop the web app asks for', async () => {
@@ -784,7 +801,7 @@ describe('serving media', () => {
             crop: { x: 1, y: 2, width: 30, height: 30 },
         });
         const response = await call(url);
-        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/20x20-1,2,30,30-jpeg`);
+        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/20x20-1,2,30,30-webp`);
 
         expect(response.status).toBe(200);
         expect(stored).not.toBeNull();

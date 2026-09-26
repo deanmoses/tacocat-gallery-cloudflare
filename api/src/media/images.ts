@@ -1,8 +1,8 @@
-import { type ImageRequest, cropText, sizeText } from 'tacocat-gallery-shared';
+import { type ImageRequest, type ImageSize, cropText, sizeText } from 'tacocat-gallery-shared';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
-// Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets a
-// JPEG.
+// Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets the
+// default.
 const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
     'image/jpeg',
     'image/png',
@@ -112,9 +112,25 @@ export async function asJpeg(env: Pick<Env, 'IMAGES'>, bytes: ArrayBuffer): Prom
     }
 }
 
-/** The format a URL's `format` parameter asks for, when the binding can write it. */
-export function outputFormat(requested: string | null): ImageOutputOptions['format'] {
-    return OUTPUT_FORMATS.find((known) => known === requested) ?? 'image/jpeg';
+/**
+ * The format a URL's `format` parameter asks for, when the binding can write it. Otherwise a thumbnail, which asks for
+ * both sides, is WebP, or JPEG for a client whose `Accept` header does not name `image/webp`; and an image asked for
+ * by one side, the media page's, is JPEG, since readers drag it into other apps, most of which cannot open a WebP. A
+ * JPEG from the binding carries the original's IPTC and XMP blocks whole and most of its EXIF, GPS position included,
+ * whatever its `metadata` option is set to, and on a thumbnail that is three quarters of the bytes; its WebP carries
+ * nothing. Only an explicit `image/webp` counts, since a Safari too old to show WebP still accepts `image/*`.
+ */
+export function outputFormat(
+    requested: string | null,
+    accept: string | null,
+    size: ImageSize,
+): ImageOutputOptions['format'] {
+    const asked = OUTPUT_FORMATS.find((known) => known === requested);
+    if (asked !== undefined) {
+        return asked;
+    }
+    const thumbnail = size.width !== null && size.height !== null;
+    return thumbnail && (accept === null || accept.includes('image/webp')) ? 'image/webp' : 'image/jpeg';
 }
 
 /**

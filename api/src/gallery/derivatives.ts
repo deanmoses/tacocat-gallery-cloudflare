@@ -1,10 +1,24 @@
-import { type ImageRequest, type MediaType, type Size, THUMBNAIL_SIZE, detailSize } from 'tacocat-gallery-shared';
+import {
+    type ImageRequest,
+    type MediaType,
+    type Size,
+    THUMBNAIL_SIZE,
+    THUMBNAIL_SIZE_2X,
+    detailSize,
+} from 'tacocat-gallery-shared';
 import { type Derivation, derivativeName, derivedImage, outputFormat } from '../media/images';
 import { derivedImageKey, originalKey, posterKey } from '../storage/keys';
 
-/** Where the derivative an image URL asks for lives, in the format its `format` parameter asks for, and its sources. */
-export function derivationFor(request: ImageRequest, requestedFormat: string | null): Derivation {
-    const format = outputFormat(requestedFormat);
+/**
+ * Where the derivative an image URL asks for lives, in the format its `format` parameter asks for or the client's
+ * `Accept` header allows, and its sources.
+ */
+export function derivationFor(
+    request: ImageRequest,
+    requestedFormat: string | null,
+    accept: string | null,
+): Derivation {
+    const format = outputFormat(requestedFormat, accept, request.size);
     return {
         request,
         format,
@@ -17,8 +31,8 @@ export function derivationFor(request: ImageRequest, requestedFormat: string | n
 export type Warmed = { ok: true } | { ok: false; error: string };
 
 /**
- * Makes the two derivatives the album page and the media page are about to ask for, the thumbnail and the detail
- * image, so the first reader of an upload never waits for a transformation. Made from what the URLs will ask for, so
+ * Makes the derivatives the album page and the media page are about to ask for, the thumbnail at both densities and
+ * the detail image, so the first reader of an upload never waits for a transformation. Made from what the URLs will ask for, so
  * they are found again by them. A file the Images binding refuses, as it does some HEICs, surfaces here rather than
  * as a broken image in the album. A video's stills come from its poster and from nothing else, since the binding
  * cannot read the video itself, so a video whose transcoder wrote no poster, which only a test's stand-in does, is
@@ -34,10 +48,10 @@ export async function warmDerivatives(
         console.warn({ event: 'derivative_not_warmed', versionId, missing: posterKey(versionId) });
         return { ok: true };
     }
-    for (const size of [THUMBNAIL_SIZE, detailSize(facts)]) {
+    for (const size of [THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize(facts)]) {
         const request: ImageRequest = { path, versionId, size, crop: null };
         try {
-            const made = await derivedImage(env, derivationFor(request, null), {});
+            const made = await derivedImage(env, derivationFor(request, null, null), {});
             if ('missing' in made) {
                 throw new Error(`no source for ${made.missing}`);
             }
