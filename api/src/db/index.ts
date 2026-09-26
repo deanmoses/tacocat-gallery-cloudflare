@@ -30,7 +30,8 @@ function unsupported(method: string): () => never {
     };
 }
 
-export type Orm = DrizzleD1Database<typeof schema>;
+/** Drizzle over the schema, with the D1 client it wraps for the statements Drizzle cannot send. */
+export type Orm = DrizzleD1Database<typeof schema> & { $client: D1Database };
 
 /** An item upsert, ready to run, await or batch. */
 export type ItemUpsert = SQLiteInsertBase<typeof schema.item, 'async', D1Result>;

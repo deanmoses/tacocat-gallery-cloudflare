@@ -3,7 +3,7 @@ import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
 import * as valibot from 'valibot';
 import { type AlbumGalleryItem, type AlbumWrite, type ItemKey, albumKey, albumPath } from 'tacocat-gallery-shared';
 import { type Orm, schema } from '../db';
-import { type Row, type Rows, selectRecords, toAlbumRecord, toRecord } from './records';
+import { type Row, type Selection, selectRecords, selectRecordsBatch, toAlbumRecord, toRecord } from './records';
 import { type Written, caption, isKey, written } from './writes';
 
 export interface AlbumRead {
@@ -30,17 +30,21 @@ export async function readAlbum(database: Orm, path: string, admin: boolean): Pr
     const { item } = schema;
     const key = albumKey(path);
     const started = performance.now();
-    const [children, self] = await Promise.all([
-        rowsWhere(database, eq(item.parentPath, path)),
+    // One request to D1 for both, since a reader far from the primary pays a round trip per request; the root is not
+    // a row, so its read is its children alone.
+    const children = selection(eq(item.parentPath, path));
+    const [childRows, selfRows] =
         key === null
-            ? null
-            : rowsWhere(database, and(eq(item.parentPath, key.parentPath), eq(item.itemName, key.itemName))),
-    ]);
+            ? [await selectRecords(database, children), null]
+            : await selectRecordsBatch(database, [
+                  children,
+                  selection(and(eq(item.parentPath, key.parentPath), eq(item.itemName, key.itemName))),
+              ]);
     const d1Ms = performance.now() - started;
     return {
-        album: assemble(children.rows, self?.rows ?? null, admin),
-        meta: children.meta,
-        rowsRead: children.meta.rows_read + (self?.meta.rows_read ?? 0),
+        album: assemble(childRows.rows, selfRows?.rows ?? null, admin),
+        meta: childRows.meta,
+        rowsRead: childRows.meta.rows_read + (selfRows?.meta.rows_read ?? 0),
         d1Ms,
     };
 }
@@ -280,8 +284,8 @@ export function setThumbnail(
 }
 
 /** The items matching `where`, in name order, each with its thumbnail's row beside it. */
-async function rowsWhere(database: Orm, where: SQL | undefined): Promise<Rows> {
-    return selectRecords(database, { where, orderBy: [asc(schema.item.itemName)] });
+function selection(where: SQL | undefined): Selection {
+    return { where, orderBy: [asc(schema.item.itemName)] };
 }
 
 /**
