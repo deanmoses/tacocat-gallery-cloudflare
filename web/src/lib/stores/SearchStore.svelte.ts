@@ -8,6 +8,7 @@ import { searchUrl } from '$lib/utils/config';
 import { longDate } from '$lib/utils/date-utils';
 import { albumPathToDate, getParentFromPath } from '$lib/utils/galleryPathUtils';
 import type { GalleryRecord, ImageRecord, VideoRecord } from '$lib/models/impl/server';
+import { errorMessageOf } from 'tacocat-gallery-shared';
 import { isAlbumRecord, isImageRecord, isVideoRecord } from '$lib/models/impl/server';
 import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
 import { SvelteMap } from 'svelte/reactivity';
@@ -77,7 +78,8 @@ class SearchStore {
         try {
             const response = await fetch(searchUrl(query, startAt, pageSize));
             if (!response.ok) {
-                throw new Error(response.statusText);
+                this.#handleFetchError(query, new Error(response.statusText), await refusal(response));
+                return;
             }
             const json: unknown = await response.json();
             console.log(`Search`, query, `fetched from server`, json);
@@ -108,17 +110,18 @@ class SearchStore {
         }
     }
 
-    #handleFetchError(query: SearchQuery, error: unknown): void {
+    /** `message` is what the server said when it refused the search. */
+    #handleFetchError(query: SearchQuery, error: unknown, message?: string): void {
         console.error(`Search error fetching from server:`, query, error);
         const status = this.#getLoadStatus(query);
         switch (status) {
             case SearchLoadStatus.LOADING:
             case SearchLoadStatus.NOT_LOADED:
-                this.#setLoadStatus(query, SearchLoadStatus.ERROR_LOADING);
+                this.#setLoadStatus(query, SearchLoadStatus.ERROR_LOADING, message);
                 break;
             case SearchLoadStatus.LOADING_MORE_RESULTS:
             case SearchLoadStatus.LOADED:
-                this.#setLoadStatus(query, SearchLoadStatus.ERROR_LOADING_MORE_RESULTS);
+                this.#setLoadStatus(query, SearchLoadStatus.ERROR_LOADING_MORE_RESULTS, message);
                 break;
             case SearchLoadStatus.ERROR_LOADING:
             case SearchLoadStatus.ERROR_LOADING_MORE_RESULTS:
@@ -144,10 +147,11 @@ class SearchStore {
     /**
      * Set the load status of the search
      */
-    #setLoadStatus(query: SearchQuery, loadStatus: SearchLoadStatus): void {
+    #setLoadStatus(query: SearchQuery, loadStatus: SearchLoadStatus, error?: string): void {
         const searchEntry = this.#getOrCreateWritableStore(query);
         const newState = produce(searchEntry, (draftState: Search) => {
             draftState.status = loadStatus;
+            draftState.error = error;
         });
         this.#searches.set(query, newState);
     }
@@ -225,6 +229,15 @@ export const searchStore: SearchStore = new SearchStore();
 interface ServerSearchResults {
     total: number;
     items: GalleryRecord[];
+}
+
+/** What the server said when it refused the search. */
+async function refusal(response: Response): Promise<string | undefined> {
+    try {
+        return errorMessageOf(await response.json());
+    } catch {
+        return undefined;
+    }
 }
 
 /**

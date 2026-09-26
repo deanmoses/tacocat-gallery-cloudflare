@@ -65,7 +65,7 @@ The gallery is a tree, and a path is a URL:
 Cloudflare D1 (SQLite) holds everything but the media files. Tables:
 
 - `item`: every album and media item, one row each
-- `item_fts`: the search index over item's names, captions, tags and summaries
+- `item_fts` and `item_fts_exact`: the search indexes, stemmed and as typed, built over `item_indexed`, a view of `item` that splits letters from digits in every name and caption and adds the words photo, image and picture to an image's tags and movie, video and clip to a video's
 - `upload`: every upload the Worker has handed out a URL for, and whether it finished
 - `upload_error`: errors during async media upload/processing, for the admin UI to show
 - `user`: admins
@@ -77,8 +77,8 @@ The schema defined in Drizzle in `api/src/db/schema.ts`.
 
 An `item` row is identified by `(parent_path, item_name)`, so `felix.jpg` in `/2001/06-15/`, and referenced by its integer `id`.
 
-- **Search** is SQLite's FTS5, in the same database. Triggers keep `item_fts` in step with `item`, firing only when a column the index holds changes.
-- **Migrations** are written by drizzle-kit from `schema.ts` into `api/migrations/`. The search index and its triggers are raw SQL in a migration, since Drizzle models neither.
+- **Search** is SQLite's FTS5, in the same database. Words and phrases are matched in `item_fts`, the porter stemmer over the unicode61 tokenizer, which folds case and accents; a prefix is matched in `item_fts_exact`, unicode61 alone, since the stemmer would stem the prefix too and `vacati` is no prefix of `vacat`. Triggers keep both in step with `item` by reading the changed row through the view, firing only when a column the view reads changes.
+- **Migrations** are written by drizzle-kit from `schema.ts` into `api/migrations/`. The search index, its view and its triggers are raw SQL in a migration, since Drizzle models none of them.
 - **Read replicas.** Reads go through a D1 session, so the nearest replica can answer. Every write answers with the session's bookmark, as a header and a short-lived cookie, and a read that brings a bookmark back is served by a copy at least that new, so an admin sees their own save from whichever replica answers.
 
 **Why the rules are in the database.** Every rule about a single row, the path grammar, required fields, formats, one type's fields being empty for the other, a crop fitting inside its image, is a named constraint in `schema.ts`, so nothing, a hand-run script included, can write a row that breaks one. What a constraint cannot express, a rule that looks at another row, is checked in `api/src/gallery/`, and so is every rule a user should see explained. So a broken rule the user can fix is a 400 with a message, and a constraint failing is a bug, answered with a 500.
@@ -124,7 +124,7 @@ The app works out the previous and next albums from the parent's children, so a 
 
 The album page's own headers, from `web/static/_headers`, name this request and the parent's as preloads, so the browser sends them as the page arrives rather than after the app's JS has loaded and run; with the zone's Early Hints on, it sends them before the page's body.
 
-**Search** matches every word of the query against the search index. Results come in gallery-path order, which is chronological; guests see published albums and what is in them.
+**Search** takes the syntax the gallery's search has always had, RediSearch's: words anywhere, `"an exact phrase"`, `pre*` for a prefix, `-not this`, `this|that`, `@title:word` or `@title|tags:(some words)` to look in a field, and parentheses to group; the fields are name, title, description, tags and summary. `api/src/gallery/query.ts` compiles it to a tree of FTS5 matches that the search joins in SQL, so that nothing typed is a syntax error, dropping the stop words RediSearch dropped and splitting letters from digits as the index does, so `pat` and `pat1` both find `pat1.jpg`. A search that asks for nothing, or only for words to leave out, or names a field the index lacks, or has more than 32 words or parentheses nested more than 8 deep, is refused with a message, which the search page shows. Results come by day, newest first unless asked otherwise, each day's album before its media in album order; guests see published albums and what is in them.
 
 ## Writing
 

@@ -20,7 +20,9 @@
 {:else if SearchLoadStatus.LOADING === status}
     <SearchLoadingPage {returnPath} {searchTerms} />
 {:else if SearchLoadStatus.ERROR_LOADING === status}
-    <BlankSearchPageLayout {returnPath} {searchTerms}>There was an error searching</BlankSearchPageLayout>
+    <BlankSearchPageLayout {returnPath} {searchTerms}
+        >{search?.error ?? 'There was an error searching'}</BlankSearchPageLayout
+    >
 {:else if SearchLoadStatus.LOADED === status || SearchLoadStatus.LOADING_MORE_RESULTS === status || SearchLoadStatus.ERROR_LOADING_MORE_RESULTS === status}
     <SearchResultsPage {query} {results} {returnPath} {status} />
 {:else}

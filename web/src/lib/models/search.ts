@@ -16,6 +16,8 @@ export interface SearchQuery {
 export interface Search {
     status: SearchLoadStatus;
     results?: SearchResults;
+    /** Why the server refused the search, in its words, when it said */
+    error?: string | undefined;
 }
 
 /**

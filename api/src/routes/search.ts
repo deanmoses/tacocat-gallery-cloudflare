@@ -3,6 +3,7 @@ import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { d1Header } from '../db/timing';
+import { ftsQuery } from '../gallery/query';
 import { type SearchQuery, searchItems } from '../gallery/search';
 import { pathAfter } from '../http/paths';
 import { failure, json } from '../http/responses';
@@ -26,19 +27,22 @@ const PARAMS = valibot.object({
     pageSize: valibot.optional(valibot.pipe(COUNT, valibot.minValue(1), valibot.maxValue(MAX_PAGE_SIZE))),
 });
 
-/** `GET /api/search/<terms>?oldest=&newest=&oldestFirst=&startAt=&pageSize=`, the terms percent-encoded. */
+/**
+ * `GET /api/search/<terms>?oldest=&newest=&oldestFirst=&startAt=&pageSize=`, the terms percent-encoded and in the
+ * syntax `ftsQuery` reads.
+ */
 export async function search(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const terms = pathAfter(url, '/api/search/').trim();
-    if (terms === '') {
-        return failure(400, 'No search terms supplied');
+    const compiled = ftsQuery(pathAfter(url, '/api/search/'));
+    if ('error' in compiled) {
+        return failure(400, compiled.error);
     }
     const params = valibot.safeParse(PARAMS, Object.fromEntries(url.searchParams));
     if (!params.success) {
         return failure(400, valibot.summarize(params.issues));
     }
     const query: SearchQuery = {
-        terms,
+        query: compiled.query,
         ...(params.output.oldest !== undefined && { oldestYear: params.output.oldest }),
         ...(params.output.newest !== undefined && { newestYear: params.output.newest }),
         oldestFirst: params.output.oldestFirst === 'true',
