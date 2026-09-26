@@ -170,11 +170,12 @@
             "triggers": {
                 "crons": [
                     "17 9 * * *",
-                    // Two measurements ran here, production only, and are paused until a change needs measuring again:
-                    // the DebugBear browser runs of every page (src/ops/browser-runs.ts), cold at "23 5,11,19,22 * * *"
-                    // and warm at "38 5,11,19,22 * * *", and the idle-latency probes (src/ops/probes.ts) at
-                    // "23 0,1,3,7,15 * * *". src/index.ts still runs each for that exact string, so putting its line
-                    // back here resumes it.
+                    // The DebugBear browser runs of every page (src/ops/browser-runs.ts), production only: a cold
+                    // round, then a warm one fifteen minutes later. src/index.ts picks each job by its exact string.
+                    "23 5,11,19,22 * * *",
+                    "38 5,11,19,22 * * *",
+                    // The idle-latency probes (src/ops/probes.ts) ran at "23 0,1,3,7,15 * * *" and are paused with their
+                    // question answered; putting that line back here resumes them.
                 ],
             },
             "workflows": [
