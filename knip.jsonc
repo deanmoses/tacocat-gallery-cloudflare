@@ -8,13 +8,7 @@
         },
         "api": {
             // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
-            "entry": [
-                "scripts/passkey-selftest.ts",
-                "scripts/import-album.ts",
-                "scripts/check-gallery.ts",
-                "scripts/media.ts",
-                "transcoder/server.ts",
-            ],
+            "entry": ["scripts/*.ts", "transcoder/server.ts"],
         },
         "web": {},
         "shared": {},
