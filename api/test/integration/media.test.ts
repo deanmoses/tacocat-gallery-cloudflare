@@ -635,7 +635,27 @@ describe('serving a video', () => {
         expect(response.status).toBe(206);
         expect(response.headers.get('content-range')).toBe('bytes 10-19/100');
         expect(response.headers.get('content-type')).toBe('video/mp4');
+        expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
         expect(body.byteLength).toBe(10);
+    });
+
+    it('serves the last bytes for a suffix range, which a player asks for to find the index', async () => {
+        await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
+        const response = await call(videoUrl('/2024/06-15/clip.mov', 'v1'), { headers: { range: 'bytes=-10' } });
+        const body = await response.arrayBuffer();
+
+        expect(response.status).toBe(206);
+        expect(response.headers.get('content-range')).toBe('bytes 90-99/100');
+        expect(body.byteLength).toBe(10);
+    });
+
+    it('refuses a range past the end of the MP4, saying how long it is', async () => {
+        await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
+        const response = await call(videoUrl('/2024/06-15/clip.mov', 'v1'), { headers: { range: 'bytes=100-199' } });
+        await response.body?.cancel();
+
+        expect(response.status).toBe(416);
+        expect(response.headers.get('content-range')).toBe('bytes */100');
     });
 
     it('is not found for a version with no MP4, and refuses a URL that names no version', async () => {
