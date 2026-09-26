@@ -12,6 +12,7 @@
 #      the root album's JSON must parse, the app shell must be the app, and the app's files must be the build just
 #      uploaded. A miss ends the release with traffic untouched.
 #   4. Switch the new version to 100%, check it again without the header, and roll back if that fails.
+#   5. Apply the config's triggers, the crons and the custom domain, which a version release leaves as they were.
 #
 # Four things are not part of this and ship with `npm run deploy --workspace api` (or deploy:production), the plain
 # `wrangler deploy`: the container's image, which `wrangler versions upload` never publishes, so a change under
@@ -211,6 +212,11 @@ if ! expect_version "$new"; then
     wrangler rollback "$previous" --yes --message "release $short failed its check after the switch"
     exit 1
 fi
+
+step "Applying triggers"
+# A version carries code and bindings; the schedule and the domain are the Worker's, and `versions upload` does not touch
+# them, so a cron added or dropped in wrangler.jsonc would otherwise never reach the account.
+wrangler triggers deploy
 
 step "Released $short to $1"
 if [ -n "$previous_broken" ]; then
