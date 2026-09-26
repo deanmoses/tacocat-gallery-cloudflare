@@ -179,7 +179,7 @@ export function localSearchUrl(query: SearchQuery, returnPath: string): string {
  * Turn them into dumb quotes.
  */
 function ensureDumbQuotes(searchTerms: string): string {
-    return searchTerms.replaceAll(/[‘’]/gv, "'").replaceAll(/[“”]/gv, '"');
+    return searchTerms.replaceAll(/[‘’]/gu, "'").replaceAll(/[“”]/gu, '"');
 }
 
 /**

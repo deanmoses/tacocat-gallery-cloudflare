@@ -1,0 +1,8 @@
+# The browsers the web app has to load and render in. The floor is iOS 15.6, the last iOS the iPhone 6s, 7 and first
+# SE got, because one reader visits from one and will keep doing so. The other lines are that summer's releases, each
+# with every language feature Safari 15.6 has, so the floor's JavaScript is one set.
+iOS >= 15.6
+Safari >= 15.6
+Chrome >= 103
+Edge >= 103
+Firefox >= 104

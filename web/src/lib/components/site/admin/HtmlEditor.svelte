@@ -78,7 +78,7 @@
             if (quill && onChange) {
                 // TODO: remove the replaceAll() workaround once Quill fixes this bug: https://github.com/slab/quill/issues/4509
                 //onChange(quill.getSemanticHTML());
-                onChange(quill.getSemanticHTML().replaceAll(/&nbsp;(?!&nbsp;)/gv, ' '));
+                onChange(quill.getSemanticHTML().replaceAll(/&nbsp;(?!&nbsp;)/gu, ' '));
             }
         });
     }

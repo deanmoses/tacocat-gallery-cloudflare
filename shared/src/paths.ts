@@ -7,11 +7,11 @@ export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'] as
 /** The video formats an upload may have. Which of them the transcoder can read is ffmpeg's business. */
 export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'mpg', 'mpeg'] as const;
 
-const YEAR_NAME = /^\d{4}$/v;
-const DAY_NAME = /^\d{2}-\d{2}$/v;
-const MEDIA_NAME = /^[^.\/]+\.[^.\/]+$/v;
-const HEIC_NAME = /\.(?:heic|heif)$/iv;
-const STRICT_MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*\.[0-9a-z]+$/v;
+const YEAR_NAME = /^\d{4}$/u;
+const DAY_NAME = /^\d{2}-\d{2}$/u;
+const MEDIA_NAME = /^[^./]+\.[^./]+$/u;
+const HEIC_NAME = /\.(?:heic|heif)$/iu;
+const STRICT_MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*\.[0-9a-z]+$/u;
 
 export function isYearName(name: string): boolean {
     return YEAR_NAME.test(name);
@@ -78,11 +78,11 @@ export function sanitizeMediaFilename(fileName: string): string {
     if (dot === -1) {
         return sanitizeMediaBaseName(fileName);
     }
-    const baseName = sanitizeMediaBaseName(fileName.slice(0, dot)).replace(/_$/v, '');
+    const baseName = sanitizeMediaBaseName(fileName.slice(0, dot)).replace(/_$/u, '');
     const extension = fileName
         .slice(dot + 1)
         .toLowerCase()
-        .replace(/^jpeg$/v, 'jpg');
+        .replace(/^jpeg$/u, 'jpg');
     return `${baseName}.${extension}`;
 }
 
@@ -93,9 +93,9 @@ export function sanitizeMediaFilename(fileName: string): string {
 export function sanitizeMediaBaseName(baseName: string): string {
     return baseName
         .toLowerCase()
-        .replaceAll(/[^0-9_a-z]+/gv, '_')
-        .replaceAll(/_+/gv, '_')
-        .replace(/^_/v, '');
+        .replaceAll(/[^0-9_a-z]+/gu, '_')
+        .replaceAll(/_+/gu, '_')
+        .replace(/^_/u, '');
 }
 
 /** The extension of a media name, lowercased and without the dot: `felix.JPG` is `jpg`. */

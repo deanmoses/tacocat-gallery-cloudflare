@@ -84,6 +84,7 @@ The account is on Workers Paid ($5/month), so going past an allowance costs mone
 - **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
 - **Never print, commit or paste secrets** from `api/.dev.vars` or the Worker's secrets.
 - **Tests.** Never change production behavior without a test that fails without the change. Read `docs/Testing.md` before writing one.
+- **The web app runs on iOS 15.6.** `.browserslistrc` is the floor, for one reader's phone that will not be replaced; Front end in `README.md` says how lint and the build hold it. Nothing runs the app in a browser that old, so Chromium passing says nothing about the floor.
 - **No `eslint-disable` comments.** Fix the code, or ask the user if you can turn the rule off in `eslint.config.ts` with the reason.
 - `npm run lint:fix` fixers can change what code means; review the diff.
 - **New checks go in `scripts/lint.sh` or `scripts/test.sh`**, never only in the pre-commit hook.

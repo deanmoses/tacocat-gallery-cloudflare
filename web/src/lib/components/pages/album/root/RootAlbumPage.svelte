@@ -23,7 +23,7 @@
 
     let { album }: Props = $props();
 
-    let sortedAlbums = $derived(album.albums.toSorted((first, second) => second.path.localeCompare(first.path)));
+    let sortedAlbums = $derived([...album.albums].sort((first, second) => second.path.localeCompare(first.path)));
     import { albumActivity } from '$lib/stores/AlbumState.svelte';
 </script>
 

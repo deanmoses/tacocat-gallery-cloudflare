@@ -49,9 +49,9 @@ export function detailSize({ width, height }: Size): ImageSize {
         ? { width: Math.round(width * scale), height: null }
         : { width: null, height: Math.round(height * scale) };
 }
-const VERSION_ID = /^[\w\-.]+$/v;
-const SIZE = /^(?<width>[1-9]\d*)?(?:x(?<height>[1-9]\d*))?$/v;
-const COORDINATE = /^(?:0|[1-9]\d*)(?:\.\d+)?$/v;
+const VERSION_ID = /^[\w\-.]+$/u;
+const SIZE = /^(?<width>[1-9]\d*)?(?:x(?<height>[1-9]\d*))?$/u;
+const COORDINATE = /^(?:0|[1-9]\d*)(?:\.\d+)?$/u;
 
 /** `/i/2001/06-15/felix.jpg/v1?size=200x200&crop=10,20,300,300` */
 export function imageUrl({ path, versionId, size, crop }: ImageRequest): string {

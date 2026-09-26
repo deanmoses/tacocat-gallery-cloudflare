@@ -10,15 +10,15 @@ export const IMAGE_EXTENSIONS: string[] = [...SHARED_IMAGE_EXTENSIONS];
 export const VIDEO_EXTENSIONS: string[] = [...SHARED_VIDEO_EXTENSIONS];
 
 /** Pattern matching any valid media extension */
-const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].toSorted().join('|');
+const MEDIA_EXT_PATTERN = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].sort().join('|');
 
 /** Regex for validating media file extensions */
-const VALID_MEDIA_EXT_REGEX = new RegExp(String.raw`^.+\.(?:${MEDIA_EXT_PATTERN})$`, 'iv');
+const VALID_MEDIA_EXT_REGEX = new RegExp(String.raw`^.+\.(?:${MEDIA_EXT_PATTERN})$`, 'iu');
 
 /** Regex for validating full media paths like /2001/12-31/image.jpg */
 const VALID_MEDIA_PATH_REGEX = new RegExp(
-    String.raw`^/\d{4}/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])/[\w\-]+\.(?:${MEDIA_EXT_PATTERN})$`,
-    'iv',
+    String.raw`^/\d{4}/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])/[\w-]+\.(?:${MEDIA_EXT_PATTERN})$`,
+    'iu',
 );
 
 /**
@@ -60,21 +60,21 @@ export function isValidMediaPath(path: string): boolean {
  * like / or /2001/ or /2001/12-31/
  */
 export function isValidAlbumPath(path: string): boolean {
-    return /^(?:\/\d{4}(?:\/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?)?\/$/v.test(path);
+    return /^(?:\/\d{4}(?:\/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?)?\/$/u.test(path);
 }
 
 /**
  * Return true if specified string is a valid year album path like /2001/
  */
 export function isValidYearAlbumPath(path: string): boolean {
-    return /^\/\d{4}\/$/v.test(path);
+    return /^\/\d{4}\/$/u.test(path);
 }
 
 /**
  * Return true if specified string is a valid day album path like /2001/12-31/
  */
 export function isValidDayAlbumPath(path: string): boolean {
-    return /^\/\d{4}\/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\/$/v.test(path);
+    return /^\/\d{4}\/(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\/$/u.test(path);
 }
 
 /**
@@ -87,15 +87,15 @@ export function isValidMediaNameWithoutExtensionStrict(filename: string): boolea
     // Pattern: alphanumeric start, then optional groups of (single underscore + alphanumeric)
     // ReDoS-safe because _ and [a-z0-9] are disjoint character classes (no ambiguity)
     // Old vulnerable pattern: /^[a-z0-9]+([a-z0-9_]*[a-z0-9]+)*$/
-    return /^[0-9a-z]+(?:_[0-9a-z]+)*$/v.test(filename);
+    return /^[0-9a-z]+(?:_[0-9a-z]+)*$/u.test(filename);
 }
 
 export function sanitizeDayAlbumName(albumName: string): string {
     return (albumName || '')
-        .replaceAll(/[A-Za-z]+/gv, '') // letters to nothing
-        .replaceAll(/[^\-0-9]+/gv, '-') // any other invalid chars to -
-        .replaceAll(/-+/gv, '-') // multple - to single -
-        .replaceAll(/^-/gv, ''); // remove leading -
+        .replaceAll(/[A-Za-z]+/gu, '') // letters to nothing
+        .replaceAll(/[^\-0-9]+/gu, '-') // any other invalid chars to -
+        .replaceAll(/-+/gu, '-') // multple - to single -
+        .replaceAll(/^-/gu, ''); // remove leading -
 }
 
 /**
@@ -184,7 +184,7 @@ export function albumPathToDate(albumPath: string): Date {
     if (albumPath === '/') {
         return new Date(1826, 0, 1); // Date of first surviving photograph
     }
-    const groups = /^\/(?<year>\d{4})\/(?:(?<month>\d{2})-(?<day>\d{2})\/)?$/v.exec(albumPath)?.groups;
+    const groups = /^\/(?<year>\d{4})\/(?:(?<month>\d{2})-(?<day>\d{2})\/)?$/u.exec(albumPath)?.groups;
     const yearDigits = groups?.['year'];
     if (groups === undefined || yearDigits === undefined || yearDigits === '') throw new Error(`Error matching`);
     const year = Number(yearDigits);
