@@ -614,6 +614,12 @@ describe('upload errors', () => {
         expect(response.status).toBe(400);
     });
 
+    it('rejects a body that is not JSON', async () => {
+        const response = await callAsAdmin('/api/errors', { method: 'POST', body: 'paths' });
+
+        expect(response.status).toBe(400);
+    });
+
     it('answers for more paths than D1 binds to one statement, as a large drop asks', async () => {
         await orm(env.DB)
             .insert(schema.uploadError)
