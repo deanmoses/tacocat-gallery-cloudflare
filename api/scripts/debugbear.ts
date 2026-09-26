@@ -41,6 +41,7 @@ const PROJECT = valibot.object({
             region: valibot.string(),
             tags: valibot.array(valibot.string()),
             device: valibot.object({ name: valibot.string() }),
+            testSchedules: valibot.array(valibot.object({ name: valibot.string() })),
             advancedSettings: valibot.array(valibot.object({ name: valibot.string() })),
         }),
     ),
@@ -217,7 +218,7 @@ async function repoint(albumPath: string): Promise<void> {
 
 /**
  * Creates, for every page without the warm-browser tag whose site and location have no tagged twin yet, a page with
- * the same URL, location, device and settings plus the tag. DebugBear's API attaches settings by name but has no field
+ * the same URL, location, device, schedule and settings plus the tag. DebugBear's API attaches settings by name but has no field
  * for Warm Load, so that is switched on in the dashboard afterwards.
  */
 async function addWarmPages(): Promise<void> {
@@ -234,6 +235,8 @@ async function addWarmPages(): Promise<void> {
             url: page.url,
             region: page.region,
             deviceName: page.device.name,
+            // Without this DebugBear gives a new page its own daily test; the Worker's cron starts every round.
+            testScheduleName: page.testSchedules[0]?.name,
             advancedSettings: page.advancedSettings.map((setting) => setting.name),
             tags: [...page.tags, WARM_BROWSER_TAG],
         };
