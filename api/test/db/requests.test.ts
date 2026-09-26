@@ -69,7 +69,7 @@ describe(searchItems, () => {
 
         const found = await searchItems(
             database,
-            { terms: 'felix', oldestFirst: false, startAt: 0, pageSize: 10 },
+            { query: { index: 'stemmed', match: 'felix' }, oldestFirst: false, startAt: 0, pageSize: 10 },
             false,
         );
 

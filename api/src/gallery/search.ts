@@ -1,13 +1,14 @@
-import { type SQL, and, asc, desc, exists, gte, inArray, lte, sql } from 'drizzle-orm';
+import { type SQL, and, asc, desc, exists, gte, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { GalleryRecord } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
 import { type Orm, batchRun, schema } from '../db';
+import type { Match, Query } from './query';
 import { recordsQuery, toRecord, toRows } from './records';
 
-/** A search as the web app asks for one: words, a span of years, a direction and a page. */
+/** A search as the web app asks for one. */
 export interface SearchQuery {
-    terms: string;
+    query: Query;
     oldestYear?: number;
     newestYear?: number;
     oldestFirst: boolean;
@@ -25,15 +26,14 @@ export interface Found {
 const ALBUM = alias(schema.item, 'album');
 
 /**
- * The items whose name, captions or tags hold every word of `terms`, in gallery-path order, newest first unless
- * `oldestFirst`, within the years asked for, one page of them and how many there are in all. Unless `admin`, only
- * what the album pages show a guest: published albums, and media whose album is published.
+ * The items the search index matches, by day, newest first unless `oldestFirst`, and in album order within a day,
+ * within the years asked for, one page of them and how many there are in all. Unless `admin`, only what the album
+ * pages show a guest: published albums, and media whose album is published.
  */
 export async function searchItems(database: Orm, query: SearchQuery, admin: boolean): Promise<Found> {
     const { item } = schema;
     const where = and(
-        // FTS5 is outside Drizzle's model, so the match is raw SQL with a bound parameter.
-        inArray(item.id, sql`(SELECT rowid FROM item_fts WHERE item_fts MATCH ${ftsQuery(query.terms)})`),
+        matches(query.query),
         ...(query.oldestYear === undefined ? [] : [gte(YEAR, String(query.oldestYear).padStart(4, '0'))]),
         ...(query.newestYear === undefined ? [] : [lte(YEAR, String(query.newestYear).padStart(4, '0'))]),
         ...(admin ? [] : [visibleToGuest(database)]),
@@ -46,7 +46,7 @@ export async function searchItems(database: Orm, query: SearchQuery, admin: bool
         .where(where);
     const paged = recordsQuery(database, {
         where,
-        orderBy: [order(GALLERY_PATH)],
+        orderBy: [order(DAY), asc(GALLERY_PATH)],
         limit: query.pageSize,
         offset: query.startAt,
     });
@@ -64,20 +64,32 @@ export async function searchItems(database: Orm, query: SearchQuery, admin: bool
 
 const COUNTED = valibot.array(valibot.object({ total: valibot.number() }));
 
-/**
- * The words of `terms` as an FTS5 query, each quoted, so that no input is a syntax error and every word must match.
- * A double quote inside a word is doubled, which is how FTS5 escapes one.
- */
-export function ftsQuery(terms: string): string {
-    return terms
-        .split(/\s+/v)
-        .filter((word) => word !== '')
-        .map((word) => `"${word.replaceAll('"', '""')}"`)
-        .join(' ');
+const INDEXES = { stemmed: sql.identifier('item_fts'), exact: sql.identifier('item_fts_exact') };
+
+// FTS5 is outside Drizzle's model, so the match is raw SQL with a bound parameter.
+function lookup(match: Match): SQL {
+    const index = INDEXES[match.index];
+    return sql`${schema.item.id} IN (SELECT rowid FROM ${index} WHERE ${index} MATCH ${match.match})`;
 }
 
-// The gallery path, which is chronological: an album sorts before what is in it, and a day before the next.
+/** The rows a query matches, each match a lookup in its index. */
+function matches(query: Query): SQL {
+    if ('match' in query) return lookup(query);
+    if ('any' in query) return sql`(${sql.join(query.any.map(matches), sql` OR `)})`;
+    const all = sql.join(query.all.map(matches), sql` AND `);
+    return query.not.length === 0
+        ? sql`(${all})`
+        : sql`(${all} AND NOT (${sql.join(query.not.map(matches), sql` OR `)}))`;
+}
+
+// The gallery path without its trailing slash, which is chronological: a day album sorts before what is in it, and a
+// day before the next.
 const GALLERY_PATH = sql`${schema.item.parentPath} || ${schema.item.itemName}`;
+
+// The day an item belongs to, as the gallery path of its day album, or its own for a year album: the first eleven
+// characters of '/2001/06-15/felix.jpg' and of '/2001/06-15'. Ordering on it and then on the whole path lists the
+// days in either direction with each day's album first and its media in album order.
+const DAY = sql`substr(${GALLERY_PATH}, 1, ${'/2001/06-15'.length})`;
 
 // The year an item belongs to, which is its parent path's first segment, or its own name for a year album.
 const YEAR = sql`CASE WHEN ${schema.item.parentPath} = '/' THEN ${schema.item.itemName} ELSE substr(${schema.item.parentPath}, 2, 4) END`;

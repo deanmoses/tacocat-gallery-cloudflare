@@ -14,6 +14,7 @@ import {
 } from '../../src/gallery/albums';
 import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
+import { type Query, ftsQuery } from '../../src/gallery/query';
 import { searchItems } from '../../src/gallery/search';
 import { deleteMedia, describeMedia, recutThumbnail, renameMedia, updateMedia } from '../../src/gallery/media';
 import { presignUploads } from '../../src/gallery/presign';
@@ -25,6 +26,9 @@ import { TEST_SECRETS } from '../secrets';
 // Local D1 counts the rows a trigger reads in the meta of the statement that fired it, so a query that scans instead of
 // seeking reads thousands of rows here, where the table is gallery-sized.
 const OVERHEAD = 10;
+// What the search indexes' delete triggers read, selecting the changed row through the view the indexes are built on:
+// the row and its index entry, once per search index.
+const VIEW_READ = 4;
 const DAYS = 100;
 const IMAGES_PER_DAY = 20;
 const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4032, height: 3024 } as const;
@@ -168,7 +172,7 @@ describe('rows read on a gallery-sized table', () => {
 
         // More than one, since changes include what the FTS trigger writes.
         expect(result.meta.changes).toBeGreaterThan(0);
-        expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
+        expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD + VIEW_READ);
     });
 
     it.each([dayPath(4), '/2001/'])(
@@ -337,6 +341,7 @@ describe('rows read on a gallery-sized table', () => {
         {
             what: 'deleting a photo',
             write: async () => deleteMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }),
+            extra: VIEW_READ,
         },
         {
             what: 'renaming a photo',
@@ -351,11 +356,11 @@ describe('rows read on a gallery-sized table', () => {
                     { x: 10, y: 10, width: 50, height: 50 },
                 ),
         },
-    ])('$what reads a few rows', async ({ write }) => {
+    ])('$what reads a few rows', async ({ write, extra = 0 }) => {
         const result = await write();
 
         expect(result.changes).toBeGreaterThan(0);
-        expect(result.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD);
+        expect(result.meta?.rows_read).toBeLessThanOrEqual(OVERHEAD + extra);
     });
 
     it('explaining a refused media write reads a few rows', async () => {
@@ -440,7 +445,7 @@ describe('rows read on a gallery-sized table', () => {
         { who: 'an admin', admin: true },
     ])('searching for a rare word as $who reads only its matches', async ({ admin }) => {
         await upsertItem(database, { parentPath: dayPath(9), itemName: 'q.jpg', ...IMAGE, title: 'Quesadilla' }).run();
-        const found = await searchItems(database, { ...SEARCH, terms: 'quesadilla' }, admin);
+        const found = await searchItems(database, { ...SEARCH, query: compiled('quesadilla') }, admin);
 
         expect(found.items).toHaveLength(1);
         expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
@@ -456,7 +461,7 @@ describe('rows read on a gallery-sized table', () => {
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
     ])('searching for a common word as $who reads a few rows per match', async ({ admin }) => {
-        const found = await searchItems(database, { ...SEARCH, terms: 'taco' }, admin);
+        const found = await searchItems(database, { ...SEARCH, query: compiled('taco') }, admin);
         const matches = DAYS * IMAGES_PER_DAY;
 
         expect(found.total).toBe(matches);
@@ -466,7 +471,57 @@ describe('rows read on a gallery-sized table', () => {
             expect.toSatisfy((read: number) => read <= matches * 5 + OVERHEAD),
         ]);
     });
+
+    // Each word or phrase is its own lookup in an index, and the syntax combines them in SQL, so each form of the
+    // syntax reads its matches once per lookup and nothing else. The prefix is two letters, the least the syntax
+    // allows, so its range of the vocabulary is the widest a search can ask for.
+    it.each([
+        { terms: 'ta*', lookups: 1 },
+        { terms: '"taco 3"', lookups: 1 },
+        { terms: '@title:taco', lookups: 1 },
+        { terms: 'taco | quesadilla', lookups: 1 },
+        { terms: 'taco -quesadilla', lookups: 1 },
+        { terms: 'taco photo', lookups: 1 },
+        { terms: 'taco ta*', lookups: 2 },
+        { terms: 'taco -qu*', lookups: 2 },
+    ])('searching for $terms reads a few rows per match per lookup', async ({ terms, lookups }) => {
+        const found = await searchItems(database, { ...SEARCH, query: compiled(terms) }, true);
+        const matches = found.total;
+
+        expect(matches).toBeGreaterThan(0);
+        expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
+            expect.toSatisfy((read: number) => read <= matches * (3 + lookups) + OVERHEAD),
+            expect.toSatisfy((read: number) => read <= matches * (4 + lookups) + OVERHEAD),
+        ]);
+    });
+
+    // A rare word and a common one together cost what the rare one costs: FTS5 reads the rare word's entries and
+    // skips through the common word's to them, which combining the two lookups in SQL could not.
+    it.each(['quesadilla photo', 'photo quesadilla', 'quesadilla -taco', '@title:quesadilla photo'])(
+        'searching for %s reads the rare word',
+        async (terms) => {
+            await upsertItem(database, {
+                parentPath: dayPath(9),
+                itemName: 'q.jpg',
+                ...IMAGE,
+                title: 'Quesadilla',
+            }).run();
+            const found = await searchItems(database, { ...SEARCH, query: compiled(terms) }, true);
+
+            expect(found.total).toBe(1);
+            expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
+                expect.toSatisfy((read: number) => read <= OVERHEAD),
+                expect.toSatisfy((read: number) => read <= 3 + OVERHEAD),
+            ]);
+        },
+    );
 });
+
+function compiled(terms: string): Query {
+    const result = ftsQuery(terms);
+    if ('error' in result) throw new Error(result.error);
+    return result.query;
+}
 
 describe('rows read on spent login challenges', () => {
     const EXPIRED = 5;

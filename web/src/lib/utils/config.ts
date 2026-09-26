@@ -174,9 +174,7 @@ export function localSearchUrl(query: SearchQuery, returnPath: string): string {
 }
 
 /**
- * Phones insert smart quotes.
- * The search engine doesn't understand them.
- * Turn them into dumb quotes.
+ * Phones insert smart quotes. The search reads those as quotes too, but the URL is plainer with dumb ones.
  */
 function ensureDumbQuotes(searchTerms: string): string {
     return searchTerms.replaceAll(/[‘’]/gu, "'").replaceAll(/[“”]/gu, '"');
