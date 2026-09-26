@@ -18,15 +18,14 @@ const PROBE_LOCATIONS: { name: string; options: ProbeFrom[] }[] = [
 
 interface ProbeStep {
     path: string;
-    query?: string;
 }
 
 // The first request at each location is the one that finds the isolate and replica idle; the repeats, from the
 // Same probe, are the warm baseline.
-const PROBE_SEQUENCE: ProbeStep[] = [
+export const PROBE_SEQUENCE: ProbeStep[] = [
     { path: '/api/album/2001/' },
     { path: '/api/album/2001/' },
-    { path: '/api/search', query: 'q=marseille' },
+    { path: '/api/search/marseille' },
 ];
 
 interface GlobalpingMeasurement {
