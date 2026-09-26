@@ -23,7 +23,7 @@ Browser runs of the email reader's visit to `/2025/09-29` on 2026-09-24 and 25, 
 
 ## Goal
 
-Perceived performance strictly better than the AWS site, or at least better in almost every case. A case is a scenario: a reader in California, Louisiana or France loading an album page, either cold, after an hour or more in which nobody has touched the site (the usual case at this traffic), or warm, just after someone else was there. Each scenario is judged on the whole page load as the reader sees it, not step by step: Cloudflare can lose one step, such as the album JSON, and still win the page. Timings of single steps explain a result; they do not decide it.
+Perceived performance strictly better than the AWS site, or at least better in almost every case. A case is a scenario: a reader in California, Louisiana or France loading an album page, either cold, after an hour or more in which nobody has touched the site (the usual case at this traffic), or warm, just after someone else was there. Each scenario is judged on the whole page load as the reader sees it, not step by step: Cloudflare can lose one step, such as the album JSON, and still win the page. Timings of single steps explain a result; they do not decide it. The app is part of the site: `web/` started as the AWS app unchanged, so the rounds to 2026-09-25 compared the platforms alone, and from 2026-09-26 it changes wherever that makes the site faster, with each difference from the AWS app noted here so a result is read against what both sites were doing.
 
 The verdict is a page load in a real browser from a reader's region. Timings of single requests are for finding out why a page is slow, not whether it is: they miss what a browser does with connection hints, HTTP/3 and connection reuse, which is why the local `npm run perf` script in `tacocat-gallery-sveltekit` is not a verdict either (its bundled Chromium ignores `preconnect`).
 
@@ -139,6 +139,7 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-25, 11:23, 19:23 and 22:23 UTC:** the first rounds with album reads logged; every one went to the San Jose primary.
 - **2026-09-25, 22:37 UTC:** the port's release left `/2025/09-29` missing on Cloudflare until it was written back at 22:49, so Cloudflare's warm runs at 22:39 found no album and recorded no LCP or photos.
 - **2026-09-26:** the browser runs paused, with their cron triggers taken out of production's config; the last scheduled round was 22:23 UTC on the 25th.
+- **2026-09-26:** the app is no longer held to the AWS app. The rounds so far compared the platforms behind one app; from here the site is compared as a whole, and every difference between the two apps is noted here.
 
 ## Appendix: the journey script
 

@@ -31,9 +31,21 @@ This file provides guidance to AI programming agents when working with code in t
 
 END_AGENTS
 
-The pix.tacocat.com photo gallery on Cloudflare: the back end that replaces the AWS one, and the web app it serves. It began as a prototype to decide whether to move, and the main goal is still a site that feels faster to its readers than it does on AWS; the goals and the comparison with Bunny.net, the other candidate, are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. `docs/Architecture.md` says how the pieces fit together; `docs/plans/AwsMigration.md` records the decisions behind them and what is left to do.
+This project is a production-quality prototype of the <https://pix.tacocat.com> photo gallery on Cloudflare. The current production gallery is on AWS; this repo is to prove out that it improves performance and developer ergonomics over the AWS version. I'm using the word 'prototype' because we haven't made the decision to switch, but if we decide to switch, this code DOES become production. A goal is to make this higher quality and more robust than the AWS version.
 
-`docs/Risks.md` is the record of what has been tested against the real account (see Spending): a risk that is failing or open is tested and what was found goes in its row, with the numbers and a status. A risk that fails is a finding, not a setback; write it down as plainly as a success. Performance is judged in real browsers against the AWS site, as `docs/Perf.md` describes, and its measurements and experiments are logged there.
+The prototype's original goals are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. Those two docs are all about performance, but since they were written we've found we like the developer ergonomics and 1-repo simplicity of Cloudflare enough that we might switch even if performance is merely slightly better rather than dramatically better. We're making the decision to move by closing down all the risks in `docs/Risks.md`.
+
+## This repo
+
+Three npm workspaces:
+
+- `api/`: one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, deployed as two environments, staging (the config's top level, also what tests and `wrangler dev` run) and production (`--env production`), each with its own data.
+- `web/`: the SvelteKit front end.
+- `shared/`: code shared between `api/` and `web/`, such as the album schema and path helpers.
+
+These workspaces run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has how to run, deploy and restore. See `docs/Architecture.md` for more detail.
+
+`web/` started as the AWS app, `tacocat-gallery-sveltekit` at commit 8c57e5f of its `claude/getalbum-caching-nextprev-as8yq8` branch, so the Worker answers in the AWS API's record shapes (`shared/src/album.ts`) and the app parsed them unchanged; that is why the shapes look the way they do. Keeping the two apps identical was for measuring the platforms alone, but that phase is over: change the app wherever it makes the system more ergonomic, long term maintainable, faster; note each difference from the AWS app in `docs/Perf.md`, since a measurement is read against what both sites were doing at the time. Performance is judged in real browsers, as `docs/Perf.md` describes; `docs/Risks.md` holds what has been tested against the real account, and a risk that fails is a finding, not a setback: write it down as plainly as a success. `docs/plans/AwsMigration.md` records the decisions behind the design and what is left to do.
 
 ## The AWS site
 
@@ -47,12 +59,6 @@ The site this one has to beat runs on AWS from four repos, checked out beside th
 | `tacocat-gallery-auth`        | Cognito login, which the passkey login here replaces                              | `template.yaml`                                                                                                                  |
 
 Search is Redis Labs, configured by hand in its dashboard, with no repo.
-
-## This repo
-
-Three npm workspaces: `shared/` holds the album schema and path helpers both sides agree on, `api/` is one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, deployed as two environments, staging (the config's top level, also what tests and `wrangler dev` run) and production (`--env production`), each with its own data, and `web/` is the SvelteKit front end. They run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker. `README.md` has how to run, deploy and restore.
-
-`web/` is the AWS app ported, not rewritten: `tacocat-gallery-sveltekit` at commit 8c57e5f of its `claude/getalbum-caching-nextprev-as8yq8` branch, with only what the platform forces changed: the URLs in `src/lib/utils/config.ts`, the session check and login page, the presign contract, the naming rule now shared with the Worker, and this repo's lint and test tooling. The Worker answers in the AWS API's record shapes (`shared/src/album.ts`) so the app parses them unchanged, and every route the app calls answers in the AWS shape the app already sends and expects. Never rebuild a feature the AWS app already has; a difference between the two apps makes every performance comparison measure the apps instead of the platforms.
 
 ## Spending
 
