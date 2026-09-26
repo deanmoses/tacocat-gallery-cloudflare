@@ -1,5 +1,5 @@
 import { type SQL, eq, getTableColumns, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/sqlite-core';
+import { type SQLiteSelect, alias } from 'drizzle-orm/sqlite-core';
 import {
     type AlbumRecord,
     type AlbumThumbnailRecord,
@@ -75,6 +75,24 @@ export interface Rows {
 
 /** The items of a selection, each with its thumbnail's row beside it, checked before anything reads them. */
 export async function selectRecords(database: Orm, selection: Selection): Promise<Rows> {
+    const result = await recordsQuery(database, selection).run();
+    return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
+}
+
+/**
+ * The items of each selection, read in one request to D1. Drizzle's own batch maps each result to rows and drops
+ * D1's meta, which the response header and the rows-read budget need, so the statements go to the client directly.
+ */
+export async function selectRecordsBatch(database: Orm, selections: Selection[]): Promise<Rows[]> {
+    const statements = selections.map((selection) => {
+        const { sql: text, params } = recordsQuery(database, selection).toSQL();
+        return database.$client.prepare(text).bind(...params);
+    });
+    const results = await database.$client.batch(statements);
+    return results.map((result) => ({ rows: valibot.parse(ROWS, result.results), meta: result.meta }));
+}
+
+function recordsQuery(database: Orm, selection: Selection): SQLiteSelect<'item', 'async', D1Result> {
     const { item } = schema;
     const query = database
         .select({
@@ -89,9 +107,7 @@ export async function selectRecords(database: Orm, selection: Selection): Promis
         .$dynamic()
         .where(selection.where)
         .orderBy(...selection.orderBy);
-    const paged = selection.limit === undefined ? query : query.limit(selection.limit).offset(selection.offset ?? 0);
-    const result = await paged.run();
-    return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
+    return selection.limit === undefined ? query : query.limit(selection.limit).offset(selection.offset ?? 0);
 }
 
 export function toRecord(row: Row): GalleryRecord {
