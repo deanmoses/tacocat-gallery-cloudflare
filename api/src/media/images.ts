@@ -12,6 +12,14 @@ const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
     'rgba',
 ];
 
+/**
+ * Where a cover crop is centred when the URL brings no crop of its own: halfway across and a third of the way down,
+ * where a standing person's face is likelier to be than in the middle. The AWS image CDN centred every thumbnail
+ * nobody had recut on that point, so the gallery's thumbnails keep the framing they have had for years; `box-center`
+ * is the mode that centres the cut on the point rather than aligning proportions.
+ */
+const DEFAULT_FOCUS = { x: 0.5, y: 1 / 3, mode: 'box-center' } as const;
+
 /** How long each step of serving a derivative took, in milliseconds, keyed by its Server-Timing name. */
 export type Steps = Record<string, number>;
 
@@ -66,21 +74,26 @@ export async function derivedImage(
         return { missing: wanted.original };
     }
 
-    const { width, height } = request.size;
     let transformer = env.IMAGES.input(byteStream(source.body));
     if (request.crop !== null) {
         const { x: left, y: top, width: cropWidth, height: cropHeight } = request.crop;
         transformer = transformer.transform({ trim: { left, top, width: cropWidth, height: cropHeight } });
     }
-    transformer = transformer.transform({
-        ...(width !== null && { width }),
-        ...(height !== null && { height }),
-        fit: width !== null && height !== null ? 'cover' : 'scale-down',
-    });
-    const output = await transformer.output({ format, quality: 85 });
+    const output = await transformer.transform(resize(request)).output({ format, quality: 85 });
     const bytes = await output.response().arrayBuffer();
     await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
     return { body: bytes, format, how: 'generated' };
+}
+
+/**
+ * The resize a request asks for. Both sides given means the image is cut to cover them, from the default focus unless
+ * the request brought its own crop, which has chosen the frame already; one side means it is scaled to that side and
+ * never enlarged.
+ */
+export function resize({ size: { width, height }, crop }: ImageRequest): ImageTransform {
+    return width !== null && height !== null
+        ? { width, height, fit: 'cover', ...(crop === null && { gravity: DEFAULT_FOCUS }) }
+        : { ...(width !== null && { width }), ...(height !== null && { height }), fit: 'scale-down' };
 }
 
 /**
