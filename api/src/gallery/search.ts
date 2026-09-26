@@ -2,8 +2,8 @@ import { type SQL, and, asc, desc, exists, gte, inArray, lte, sql } from 'drizzl
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { GalleryRecord } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
-import { type Orm, schema } from '../db';
-import { selectRecords, toRecord } from './records';
+import { type Orm, batchRun, schema } from '../db';
+import { recordsQuery, toRecord, toRows } from './records';
 
 /** A search as the web app asks for one: words, a span of years, a direction and a page. */
 export interface SearchQuery {
@@ -39,23 +39,26 @@ export async function searchItems(database: Orm, query: SearchQuery, admin: bool
         ...(admin ? [] : [visibleToGuest(database)]),
     );
     const order = query.oldestFirst ? asc : desc;
-    // Two statements rather than one batch, since batch() returns rows without D1's meta and the cost is watched.
-    // Named in SQL, since run() returns the rows under their SQL names.
-    const counted = await database
+    // Named in SQL, since the rows come back under their SQL names.
+    const counted = database
         .select({ total: sql`count(*)`.as('total') })
         .from(item)
-        .where(where)
-        .run();
-    const page = await selectRecords(database, {
+        .where(where);
+    const paged = recordsQuery(database, {
         where,
         orderBy: [order(GALLERY_PATH)],
         limit: query.pageSize,
         offset: query.startAt,
     });
+    // One batch, so the total and the page are counted from the same state.
+    const [count, page] = await batchRun(database, [counted, paged]);
+    if (count === undefined || page === undefined) {
+        throw new Error('D1 answered fewer statements than the search sent');
+    }
     return {
-        total: valibot.parse(COUNTED, counted.results)[0]?.total ?? 0,
-        items: page.rows.map(toRecord),
-        meta: [counted.meta, page.meta],
+        total: valibot.parse(COUNTED, count.results)[0]?.total ?? 0,
+        items: toRows(page).rows.map(toRecord),
+        meta: [count.meta, page.meta],
     };
 }
 

@@ -50,18 +50,15 @@ export async function presignUploads(
         return { refused: `Invalid day album path [${albumPath}]` };
     }
     const { item } = schema;
-    const [albumRow, children] = await Promise.all([
+    // One batch, so the album and its children are read from one state of the database.
+    const [albumRows, children] = await database.batch([
         database
             .select({ id: item.id })
             .from(item)
-            .where(and(isKey(item, album), eq(item.itemType, 'album')))
-            .get(),
-        database
-            .select({ id: item.id, itemName: item.itemName })
-            .from(item)
-            .where(eq(item.parentPath, albumPath))
-            .all(),
+            .where(and(isKey(item, album), eq(item.itemType, 'album'))),
+        database.select({ id: item.id, itemName: item.itemName }).from(item).where(eq(item.parentPath, albumPath)),
     ]);
+    const albumRow = albumRows[0];
     if (albumRow === undefined) {
         return { refused: `Album does not exist: [${albumPath}]` };
     }

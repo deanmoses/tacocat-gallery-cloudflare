@@ -11,7 +11,7 @@ import {
     rectangleSchema,
 } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
-import { type Orm, schema } from '../db';
+import { type Orm, batchRun, schema } from '../db';
 
 // An item's row joined to its thumbnail's, as the album and search reads select it, and the API record made from it.
 
@@ -75,24 +75,25 @@ export interface Rows {
 
 /** The items of a selection, each with its thumbnail's row beside it, checked before anything reads them. */
 export async function selectRecords(database: Orm, selection: Selection): Promise<Rows> {
-    const result = await recordsQuery(database, selection).run();
+    return toRows(await recordsQuery(database, selection).run());
+}
+
+/** The items of each selection, read together in one batch. */
+export async function selectRecordsBatch(database: Orm, selections: Selection[]): Promise<Rows[]> {
+    const results = await batchRun(
+        database,
+        selections.map((selection) => recordsQuery(database, selection)),
+    );
+    return results.map(toRows);
+}
+
+/** The rows of a records query's result, checked before anything reads them. */
+export function toRows(result: D1Result): Rows {
     return { rows: valibot.parse(ROWS, result.results), meta: result.meta };
 }
 
-/**
- * The items of each selection, read in one request to D1. Drizzle's own batch maps each result to rows and drops
- * D1's meta, which the response header and the rows-read budget need, so the statements go to the client directly.
- */
-export async function selectRecordsBatch(database: Orm, selections: Selection[]): Promise<Rows[]> {
-    const statements = selections.map((selection) => {
-        const { sql: text, params } = recordsQuery(database, selection).toSQL();
-        return database.$client.prepare(text).bind(...params);
-    });
-    const results = await database.$client.batch(statements);
-    return results.map((result) => ({ rows: valibot.parse(ROWS, result.results), meta: result.meta }));
-}
-
-function recordsQuery(database: Orm, selection: Selection): SQLiteSelect<'item', 'async', D1Result> {
+/** The statement `selectRecords` runs, for a batch that reads it beside other statements. */
+export function recordsQuery(database: Orm, selection: Selection): SQLiteSelect<'item', 'async', D1Result> {
     const { item } = schema;
     const query = database
         .select({

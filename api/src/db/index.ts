@@ -1,4 +1,4 @@
-import { getTableColumns, sql } from 'drizzle-orm';
+import { type Query, getTableColumns, sql } from 'drizzle-orm';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
 import * as schema from './schema';
@@ -32,6 +32,19 @@ function unsupported(method: string): () => never {
 
 /** Drizzle over the schema, with the D1 client it wraps for the statements Drizzle cannot send. */
 export type Orm = DrizzleD1Database<typeof schema> & { $client: D1Database };
+
+/**
+ * Sends the queries to D1 as one batch, one transaction on one instance, so that together they read one state of the
+ * database: consecutive requests from a colo can be answered by different instances, and a write can land between
+ * them. Each statement's D1 result comes back with its meta, which Drizzle's own batch drops.
+ */
+export async function batchRun(database: Orm, queries: readonly { toSQL: () => Query }[]): Promise<D1Result[]> {
+    const statements = queries.map((query) => {
+        const { sql: text, params } = query.toSQL();
+        return database.$client.prepare(text).bind(...params);
+    });
+    return database.$client.batch(statements);
+}
 
 /** An item upsert, ready to run, await or batch. */
 export type ItemUpsert = SQLiteInsertBase<typeof schema.item, 'async', D1Result>;
