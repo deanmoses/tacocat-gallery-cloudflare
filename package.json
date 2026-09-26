@@ -1,7 +1,7 @@
 {
     "name": "tacocat-gallery-cloudflare",
     "version": "0.0.1",
-    "description": "Prototype to de-risk moving pix.tacocat.com to Cloudflare",
+    "description": "The pix.tacocat.com photo gallery on Cloudflare",
     "workspaces": [
         "shared",
         "api",
