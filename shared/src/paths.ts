@@ -163,6 +163,50 @@ export function mediaPath(parentPath: string, itemName: string): string {
     return `${parentPath}${itemName}`;
 }
 
+// The same rules as SQL, for the database's check constraints, so that what the code refuses the database refuses too,
+// and a test holds each pair to the same answers. GLOB patterns have character classes but no repetition, so a
+// fixed-width format is spelled out, and D1 refuses a pattern longer than 50 characters, so a longer format is checked
+// in pieces. A check whose expression comes out NULL passes, so a rule on a nullable column says it wants a value.
+
+const YEAR_GLOB = '[0-9][0-9][0-9][0-9]';
+const DAY_GLOB = '[0-9][0-9]-[0-9][0-9]';
+const DAY_ALBUM_PATH_GLOB = `/${YEAR_GLOB}/${DAY_GLOB}/`;
+const DAY_ALBUM_PATH_LENGTH = '/2001/06-15/'.length;
+
+/** `isYearName` as SQL. */
+export function yearNameSql(column: string): string {
+    return `${column} GLOB '${YEAR_GLOB}'`;
+}
+
+/** `isDayName` as SQL. */
+export function dayNameSql(column: string): string {
+    return `${column} GLOB '${DAY_GLOB}'`;
+}
+
+/** `column` is the path of a year album: `/2001/`. */
+export function yearAlbumPathSql(column: string): string {
+    return `${column} GLOB '/${YEAR_GLOB}/'`;
+}
+
+/** `isDayAlbumPath` as SQL. */
+export function dayAlbumPathSql(column: string): string {
+    return `${column} GLOB '${DAY_ALBUM_PATH_GLOB}'`;
+}
+
+/**
+ * `column` is a media file name: one dot with something on each side, no slash, and not `.jpeg`, since the gallery
+ * stores a JPEG as `.jpg` and the sanitizer spells it so before the name reaches a table. That is `isMediaName` with
+ * the one extension `isStoredMediaName` also refuses; the extension list itself is not in the constraint.
+ */
+export function mediaNameSql(column: string): string {
+    return `${column} GLOB '?*.?*' AND ${column} NOT GLOB '*.*.*' AND ${column} NOT GLOB '*/*' AND lower(${column}) NOT GLOB '*.jpeg'`;
+}
+
+/** `column` is the path of a media item in a day album: `/2001/06-15/felix.jpg`, its name as `mediaNameSql` has it. */
+export function mediaPathSql(column: string): string {
+    return `${column} IS NOT NULL AND substr(${column}, 1, ${DAY_ALBUM_PATH_LENGTH}) GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${mediaNameSql(`substr(${column}, ${DAY_ALBUM_PATH_LENGTH + 1})`)}`;
+}
+
 /** The albums from the top down to `path` itself, the root left out: `/2001/06-15/` gives `/2001/` then itself. */
 export function albumsEnclosing(path: string): ItemKey[] {
     const key = isAlbumPath(path) ? albumKey(path) : null;

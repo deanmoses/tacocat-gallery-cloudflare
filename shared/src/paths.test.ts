@@ -13,7 +13,7 @@ import {
     mediaKey,
     sanitizeMediaBaseName,
     sanitizeMediaFilename,
-} from './paths';
+} from './paths.ts';
 
 describe(isAlbumPath, () => {
     it.each(['/', '/2001/', '/2001/06-15/'])('accepts %s', (path) => {

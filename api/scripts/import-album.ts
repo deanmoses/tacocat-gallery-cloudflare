@@ -13,6 +13,7 @@
 // put` gave the deployed Workers.
 import { setTimeout as sleep } from 'node:timers/promises';
 import * as valibot from 'valibot';
+import { isDayAlbumPath } from 'tacocat-gallery-shared';
 import { adminCookie } from './admin-cookie.ts';
 import { devVars } from './dev-vars.ts';
 
@@ -134,13 +135,12 @@ function targetOf(name: string): keyof typeof TARGETS {
     throw new Error(usage());
 }
 
-/** The year of a day album's path, or the usage message for anything else. */
+/** The year of a day album's path, `/2001/06-15/`, or the usage message for anything else. */
 function yearOf(candidate: string): string {
-    const match = /^\/(?<year>\d{4})\/\d{2}-\d{2}\/$/v.exec(candidate);
-    if (match?.groups === undefined) {
+    if (!isDayAlbumPath(candidate)) {
         throw new Error(usage());
     }
-    return match.groups['year'] ?? '';
+    return candidate.slice(1, 5);
 }
 
 /** The secret the target Worker signs sessions with. */

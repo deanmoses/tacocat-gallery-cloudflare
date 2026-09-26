@@ -10,6 +10,7 @@
 // Usage: node api/scripts/check-gallery.ts prod-items.json [--site http://localhost:8787] [--paths]
 import { readFile } from 'node:fs/promises';
 import * as valibot from 'valibot';
+import { albumPath, mediaPath } from 'tacocat-gallery-shared';
 import { adminCookie } from './admin-cookie.ts';
 import { devVars } from './dev-vars.ts';
 
@@ -102,7 +103,7 @@ await inParallel(
     rows.filter((row) => !unknownTypes.includes(row)),
     AT_ONCE,
     async (row) => {
-        const itemPath = `${row.parentPath ?? '?'}${row.itemName ?? '?'}${row.itemType === 'album' ? '/' : ''}`;
+        const itemPath = (row.itemType === 'album' ? albumPath : mediaPath)(row.parentPath ?? '?', row.itemName ?? '?');
         const found = await put(toWrite(row), itemPath);
         if (found.length === 0) {
             written += 1;
@@ -181,20 +182,22 @@ async function put(body: unknown, itemPath: string): Promise<Refusal[]> {
 /** Album thumbnails that name a media row the export does not hold, which the copy could not point at. */
 function danglingThumbnails(items: AwsItem[]): Refusal[] {
     const mediaPaths = new Set(
-        items.filter((row) => row.itemType === 'image').map((row) => `${row.parentPath ?? ''}${row.itemName ?? ''}`),
+        items
+            .filter((row) => row.itemType === 'image')
+            .map((row) => mediaPath(row.parentPath ?? '', row.itemName ?? '')),
     );
     const named = valibot.object({ path: valibot.string() });
     return items
         .filter((row) => row.itemType === 'album' && row.thumbnail !== undefined)
         .flatMap((row) => {
             const thumbnail = valibot.safeParse(named, row.thumbnail);
-            const albumPath = `${row.parentPath ?? ''}${row.itemName ?? ''}/`;
+            const path = albumPath(row.parentPath ?? '', row.itemName ?? '');
             if (!thumbnail.success) {
-                return [{ path: albumPath, message: 'album thumbnail is not { path }' }];
+                return [{ path, message: 'album thumbnail is not { path }' }];
             }
             return mediaPaths.has(thumbnail.output.path)
                 ? []
-                : [{ path: albumPath, message: 'album thumbnail names a media item that has no row' }];
+                : [{ path, message: 'album thumbnail names a media item that has no row' }];
         });
 }
 

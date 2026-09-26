@@ -1,7 +1,7 @@
 import * as valibot from 'valibot';
-import { galleryRecordSchema, rectangleSchema } from './album';
-import { mediaTypeSchema } from './item-type';
-import { albumKey, albumPath, isAlbumPath, isStoredMediaName, isVideoName, mediaKey, mediaPath } from './paths';
+import { galleryRecordSchema, rectangleSchema } from './album.ts';
+import { mediaTypeSchema } from './item-type.ts';
+import { albumKey, albumPath, isAlbumPath, isStoredMediaName, isVideoName, mediaKey, mediaPath } from './paths.ts';
 
 function clearable<T extends valibot.GenericSchema>(
     schema: T,

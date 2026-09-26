@@ -7,7 +7,7 @@ import {
     parseImageRequest,
     parseMediaVersion,
     videoUrl,
-} from './urls';
+} from './urls.ts';
 
 /** Reads a URL as the Worker does: the path after `/i`, and the query. */
 function parse(url: string): ImageRequest | null {

@@ -1,4 +1,4 @@
-import type { SearchResponse } from 'tacocat-gallery-shared';
+import { type SearchResponse, isYearName } from 'tacocat-gallery-shared';
 import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
@@ -13,7 +13,7 @@ const MAX_PAGE_SIZE = 100;
 
 const YEAR = valibot.pipe(
     valibot.string(),
-    valibot.regex(/^\d{4}$/v, 'is a four-digit year'),
+    valibot.check(isYearName, 'is a four-digit year'),
     valibot.transform(Number),
 );
 const COUNT = valibot.pipe(valibot.string(), valibot.regex(/^\d+$/v, 'is a whole number'), valibot.transform(Number));
