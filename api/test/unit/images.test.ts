@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resize } from '../../src/media/images';
+import { outputFormat, resize } from '../../src/media/images';
 
 const PHOTO = { path: '/2001/06-15/felix.jpg', versionId: 'v1' };
 
@@ -24,5 +24,16 @@ describe(resize, () => {
         { name: 'a height', size: { width: null, height: 1024 }, expected: { height: 1024, fit: 'scale-down' } },
     ] as const)('scales down to $name alone, never enlarging', ({ size, expected }) => {
         expect(resize({ ...PHOTO, size, crop: null })).toStrictEqual(expected);
+    });
+});
+
+describe(outputFormat, () => {
+    it.each([
+        { name: 'nothing', requested: null, format: 'image/jpeg' },
+        { name: 'WebP', requested: 'image/webp', format: 'image/webp' },
+        { name: 'raw pixels', requested: 'rgb', format: 'image/jpeg' },
+        { name: 'a word', requested: 'bmp', format: 'image/jpeg' },
+    ])('answers $name asked for with $format', ({ requested, format }) => {
+        expect(outputFormat(requested)).toBe(format);
     });
 });

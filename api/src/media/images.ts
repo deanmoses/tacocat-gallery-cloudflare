@@ -1,15 +1,14 @@
 import { type ImageRequest, cropText, sizeText } from 'tacocat-gallery-shared';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
-// Every format the Images binding can write; anything else asked for gets a JPEG.
+// Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets a
+// JPEG.
 const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
     'image/jpeg',
     'image/png',
     'image/gif',
     'image/webp',
     'image/avif',
-    'rgb',
-    'rgba',
 ];
 
 /**
