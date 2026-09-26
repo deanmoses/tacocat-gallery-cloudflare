@@ -613,6 +613,17 @@ describe('upload errors', () => {
 
         expect(response.status).toBe(400);
     });
+
+    it('answers for more paths than D1 binds to one statement, as a large drop asks', async () => {
+        await orm(env.DB)
+            .insert(schema.uploadError)
+            .values({ path: `${DAY}img_149.jpg`, message: 'the image cannot be decoded' });
+        const paths = Array.from({ length: 150 }, (_, index) => `${DAY}img_${index}.jpg`);
+
+        await expect(uploadErrors(paths)).resolves.toStrictEqual({
+            [`${DAY}img_149.jpg`]: 'the image cannot be decoded',
+        });
+    });
 });
 
 describe('serving a video', () => {
