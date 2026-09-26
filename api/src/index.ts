@@ -16,6 +16,7 @@ const app = createApp();
 const BACKUP_CRON = '17 9 * * *';
 const BROWSER_COLD_CRON = '23 5,11,19,22 * * *';
 const BROWSER_WARM_CRON = '38 5,11,19,22 * * *';
+const PROBE_CRON = '23 0,1,3,7,15 * * *';
 
 export default {
     fetch: app.fetch,
@@ -43,8 +44,14 @@ export default {
                 await startBrowserRuns(env, 'warm');
                 break;
             }
-            default: {
+            case PROBE_CRON: {
                 await probeIdleLatency(env);
+                break;
+            }
+            default: {
+                // A schedule this code does not name is a trigger left behind by an older release, and doing
+                // nothing is the safe answer to it.
+                console.warn({ event: 'unknown_cron', cron: controller.cron });
             }
         }
     },

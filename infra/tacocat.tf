@@ -10,6 +10,20 @@ resource "cloudflare_zone" "tacocat" {
   name    = "tacocat.com"
 }
 
+# The same edge settings as deanmoses.com, ready for the day the gallery's hostnames are proxied here. Nothing is
+# proxied yet, so they change nothing today.
+resource "cloudflare_zone_setting" "tacocat_always_use_https" {
+  zone_id    = cloudflare_zone.tacocat.id
+  setting_id = "always_use_https"
+  value      = "on"
+}
+
+resource "cloudflare_zone_setting" "tacocat_min_tls_version" {
+  zone_id    = cloudflare_zone.tacocat.id
+  setting_id = "min_tls_version"
+  value      = "1.2"
+}
+
 locals {
   tacocat_records = [
     { name = "tacocat.com", type = "A", content = "205.196.220.123" },

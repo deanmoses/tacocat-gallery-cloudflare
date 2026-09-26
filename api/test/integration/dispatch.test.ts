@@ -21,6 +21,18 @@ describe('a request the Worker has no route for', () => {
     });
 });
 
+describe('a path that is not valid percent-encoding', () => {
+    it.each(['/api/album/%', '/raw/%zz', '/v/2001/06-15/a.mov/%'])(
+        '%s is not found or refused, never an exception',
+        async (path) => {
+            const response = await call(path);
+            await response.body?.cancel();
+
+            expect([400, 404]).toContain(response.status);
+        },
+    );
+});
+
 describe('HEAD', () => {
     it('reaches the GET handler and answers without a body', async () => {
         const response = await call('/api/health', { method: 'HEAD' });

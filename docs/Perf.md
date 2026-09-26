@@ -4,21 +4,21 @@ Whether pix.tacocat.com on Cloudflare would feel faster than it does on AWS toda
 
 ## Where it stands
 
-Browser runs of the email reader's visit to `/2025/09-29` on 2026-09-24 and 25, as medians in ms, Cloudflare / AWS; the faster of each pair is in bold. Page TTFB and album LCP are from six rounds (08:11, 10:16, 15:52, 19:23 and 22:23 UTC on the 24th, 05:23 on the 25th); the photo columns are from the three rounds after the cache header fix (19:23, 22:23 and 05:23), since that fix changed them. Cloudflare in South Carolina leaves out its runs from 08:13 to 10:19 on the 24th, a network fault (see the log), so its first two columns have four runs.
+Browser runs of the email reader's visit to `/2025/09-29` on 2026-09-24 and 25, as medians in ms, Cloudflare / AWS; the faster of each pair is in bold. Page TTFB and album LCP are from nine rounds (08:11, 10:16, 15:52, 19:23 and 22:23 UTC on the 24th; 05:23, 11:23, 19:23 and 22:23 on the 25th); the photo columns are from the six rounds after the cache header fix, from 19:23 on the 24th, since that fix changed them. Left out: Cloudflare in South Carolina from 08:13 to 10:19 on the 24th, a network fault, and Cloudflare's warm runs at 22:39 on the 25th, which found no album while the port's release rewrote it (see the log).
 
 | Location       | Run  | Page TTFB     | Album LCP         | First photo   | Later photos |
 | -------------- | ---- | ------------- | ----------------- | ------------- | ------------ |
-| France         | cold | **54** / 412  | 1,506 / **1,364** | 133 / **114** | **28** / 38  |
-| France         | warm | **60** / 422  | **1,286** / 1,394 | 121 / 121     | **30** / 38  |
-| California     | cold | **98** / 298  | **1,184** / 1,420 | 187 / **139** | **38** / 42  |
-| California     | warm | **90** / 310  | **1,278** / 1,384 | 148 / **131** | **28** / 50  |
-| South Carolina | cold | **114** / 264 | 1,820 / **1,740** | 269 / **205** | 43 / **39**  |
-| South Carolina | warm | **87** / 184  | 1,246 / **1,208** | 205 / **110** | 36 / **35**  |
+| France         | cold | **55** / 412  | 1,536 / **1,368** | 132 / **118** | **28** / 38  |
+| France         | warm | **60** / 405  | **1,314** / 1,384 | 125 / **108** | **30** / 38  |
+| California     | cold | **92** / 303  | **1,096** / 1,420 | 182 / **124** | **30** / 41  |
+| California     | warm | **78** / 296  | **1,160** / 1,384 | 148 / **122** | **31** / 40  |
+| South Carolina | cold | **106** / 256 | 1,764 / **1,652** | 199 / **178** | **41** / 42  |
+| South Carolina | warm | **83** / 179  | 1,446 / **1,264** | 206 / **138** | **38** / 40  |
 
 - **Page TTFB:** the album page arrives two to seven and a half times sooner on Cloudflare everywhere.
-- **Album LCP** (when the first thumbnail appears): even so far. Each site wins three cells, by 38 to 236 ms, and a cell's runs spread over 300 to 1,100 ms, so six runs cannot separate them yet. After the longest idle gap so far, seven hours before 05:23, Cloudflare won the cold album page in all three locations.
-- **First photo** (click to photo decoded): AWS is ahead or level in every cell, by 17 to 95 ms. The Worker answers a first photo in 6 to 15 ms from its cache, so the rest is network and transfer.
-- **Later photos:** 28 to 50 ms on both sites, since both apps preload the next and previous photo during the reader's 2.3 s on each; Cloudflare is faster in France and California, and within 4 ms in South Carolina. This is most of a visit: photo requests outnumber album opens about ten to one.
+- **Album LCP** (when the first thumbnail appears) follows the distance to D1's primary in San Jose. Cloudflare wins California by 224 to 324 ms, where D1 is next door; it loses cold France by 168 ms and South Carolina by 112 to 182 ms, where every album read crosses to San Jose, and wins warm France by 70 ms. See _From the browser runs_ for how the time splits.
+- **First photo** (click to photo decoded): AWS is ahead in every cell, by 14 to 68 ms. The Worker answers a first photo in 6 to 15 ms from its cache, so the rest is network and transfer.
+- **Later photos:** 28 to 42 ms on both sites, since both apps preload the next and previous photo during the reader's 2.3 s on each; Cloudflare is faster in every cell. This is most of a visit: photo requests outnumber album opens about ten to one.
 - **Louisiana** has no browser location nearer than South Carolina.
 
 ## Goal
@@ -55,9 +55,9 @@ So the scenario that matters most is clicking from one photo to the next, and th
 - **Locations:** France (Paris), US West CA (California) and US East (South Carolina). South Carolina stands in for Louisiana and Atlanta; DebugBear has nothing nearer.
 - **Device:** `Desktop unthrottled`, a device defined in the project with no added latency, no bandwidth cap and no CPU slowdown. The built-in `Desktop` adds 40 ms to every round trip.
 - **Visit:** DebugBear loads the album page and records its time to first byte. The `Vienna Journey` setting (in the appendix) starts with the page, as DebugBear runs every snippet, so it waits for the page's load event and a reader's median 2.3 s on the album before opening the first photo, and records the album page's LCP as `album-lcp` just before it clicks. DebugBear's own LCP measures the photo: Chrome stops updating LCP at a person's input, not a script's, so the open photo becomes the largest paint. It then steps through the next seven at 2.3 s a photo, recording each from click to photo decoded as `photo-01` to `photo-08`. With eleven photos, every Cloudflare run stopped after the tenth, about 26 s after the page started loading, where the AWS runs, whose journeys started earlier, got all eleven; eight leaves room.
-- **Schedule:** the production Worker's cron (`src/ops/browser-runs.ts`) starts a test of every page at 05:23, 11:23, 19:23 and 22:23 UTC, and again fifteen minutes later for the warm run, two hours from every idle-probe run. The pages have no DebugBear schedule of their own. A GitHub Actions schedule did this at first, but GitHub started its first run five hours late; `.github/workflows/perf.yml` now only starts a run by hand, through `node api/scripts/debugbear.ts run`.
+- **Schedule:** the production Worker's cron (`src/ops/browser-runs.ts`) started a test of every page at 05:23, 11:23, 19:23 and 22:23 UTC, and again fifteen minutes later for the warm run, until the runs were paused on 2026-09-26 with the album reads' question answered; putting the two trigger lines back in production's `crons` in `api/wrangler.jsonc` resumes them. The pages have no DebugBear schedule of their own. A GitHub Actions schedule did this at first, but GitHub started its first run five hours late; `.github/workflows/perf.yml` only starts a run by hand, through `node api/scripts/debugbear.ts run`, and still works while the crons are paused.
 - **Cold or warm:** `node api/scripts/debugbear.ts report` marks a run warm when the same page ran in the 30 minutes before it, and cold otherwise, so a run is classed by what reached the site before it rather than by which request started it. Creating or editing a page in DebugBear starts a test of its own.
-- **Background traffic:** the idle probes hit the Cloudflare site five times a day, and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California. A Paris probe can leave D1's London replica active for a Paris browser run that follows it. Every merge to `main` releases production, whose checks reach the site a few times, so a merge in the hour before a probe run makes that run less idle.
+- **Background traffic:** the idle probes hit the Cloudflare site five times a day until they were retired on 2026-09-25, and Grafana checks hit the AWS API and page from Paris, Ohio and Northern California. A Paris probe can leave D1's London replica active for a Paris browser run that follows it. Every merge to `main` releases production, whose checks reach the site a few times, so a merge in the hour before a probe run makes that run less idle.
 
 ## What is known
 
@@ -66,6 +66,9 @@ So the scenario that matters most is clicking from one photo to the next, and th
 - **The first photo waited on the browser, until the cache header fix.** On the click the app loads the photo page's JS and CSS, which the browser already holds from the album page. AWS's `public, max-age=31536000, immutable` lets the browser use them at once; Workers static assets default to `public, max-age=0, must-revalidate`, so the browser asked Cloudflare about each file first, 26 to 86 ms, before it could request the photo. With the same header in `web/static/_headers`, the click reaches the photo's request as quickly on Cloudflare as on AWS, 22 to 36 ms against 26 to 35 ms.
 - **The Worker is not where the rest of the first-photo time goes.** In the 22:23 round every derived image was a hit in its colo's cache, the photos left there by the 19:23 round three hours earlier, and in the 05:23 round, after seven hours, all 234 still were, in Atlanta, Paris, San Jose and Los Angeles. In the 22:23 round the Worker answered each photo in 6 to 15 ms of wall time and each thumbnail in 13 to 17 ms at the median (the album page asks for about 30 thumbnails at once). No request read R2, so how long a colo's first read from R2 takes is still unmeasured; the 151 to 165 ms of server wait on a first photo in the 19:23 round came before the Worker timed its steps.
 - **DebugBear's California machine reaches Cloudflare in San Jose**, not Los Angeles.
+- **The album JSON decides the album LCP.** Splitting each run since the cache header fix into steps: Cloudflare's page and JS arrive sooner, so it starts the album request 130 to 400 ms before AWS does; from Paris its album JSON then takes 412 to 806 ms against AWS's 152 to 208, almost all of it waiting on the server, which undoes the head start. From California cold the two take about the same, 108 to 140 ms against 103 to 130, and the head start holds; warm, Cloudflare's took anywhere from 89 to 334 ms. Thumbnails take about as long on both sites. AWS's slow case is a Lambda starting cold: 693 to 827 ms for the album JSON in whichever location's test runs first in a round, usually South Carolina.
+- **Every album read goes to D1's primary in San Jose.** The Worker logs an `album_read` line with where D1 answered. Of the 49 album reads from 09:20 to 22:25 UTC on 2026-09-25, three rounds of browser runs and a few other requests, the San Jose primary answered all of them and no replica answered any, at a median of 36 ms from San Jose, 38 ms from Los Angeles, 350 ms from Atlanta and 421 ms from Paris. The album read sends its two queries at once, so the time from Paris is two and a half to four round trips to San Jose, not queries waiting on each other.
+- **The ported app also fetches the parent album** (`/api/album/2025/`) beside the album, since the AWS branch it was ported from finds previous and next there; production AWS gets them in the album's own answer and makes no second request. The two requests run side by side and take about as long, so it adds little to the album LCP, but it is a difference between the apps rather than the platforms.
 - **The first runs, at 01:53, measured a photo instead of the album page's LCP** and are left out above; see the log.
 
 ### AWS today
@@ -108,7 +111,8 @@ CloudFront serves an album page through its error response for the single-page a
 
 ## Open questions
 
-- How long a D1 replica stays active after its last read, and whether a Durable Object in Western Europe reading every few minutes keeps Paris on the London replica.
+- Whether running the album reads next to D1 closes the gap: Cloudflare can place a Worker beside its database, so an API-only Worker placed there would cost a reader in Paris one round trip to San Jose, about 150 ms, plus local D1 at about 35 ms, against 400 to 800 ms today. Placing the whole Worker would also move its photo cache lookups to San Jose.
+- How long a D1 replica stays active after its last read, and whether a Durable Object in Western Europe reading every few minutes keeps Paris on the London replica; at this traffic no replica has answered a read.
 - Whether a Durable Object in Western Europe holding the album JSON answers a cold Paris read in tens of milliseconds.
 - Whether `<link rel="preload">` for the album JSON, starting it alongside the JS, is worth the roughly 120 ms of page download it would overlap.
 
@@ -131,6 +135,10 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-25, 06:11 UTC:** the merge of the `tacocat.com` zone, the diff script and the backup workflow released production, an hour before the 07:23 UTC probe run, so that run's primary was not idle; nothing in the release touched the Worker's code.
 - **2026-09-25, 22:29 UTC:** production's database emptied for the port of the AWS back end, its probe history exported first (156 rows, 2026-09-23 03:23 to 2026-09-25 15:23 UTC, the last idle-probe run; the probes are retired with this release, their question answered). The merge that follows releases the port, under which every object is keyed by version id, so every image URL changes and every edge and browser cache starts cold, and production holds only `/2025/09-29`, imported again after the merge, until the full gallery is copied. The browser runs on either side of the gap are not comparable: the 22:23 round is the last on the prototype, and the first round after the merge is the first on the port.
 - **2026-09-25, 22:34 to 22:49 UTC:** the port merged (#37) and released to production at 22:37; the plain deploy at 22:46 created production's upload Workflow, which a version release binds to by name but does not create, and pushed the transcoder image; and `/2025/09-29` was imported again at 22:49 through presign and the pipeline, so its 30 originals, thumbnails and detail images are new objects under new version ids. The first browser round on the port is 05:23 on the 26th.
+- **2026-09-25, 09:20 UTC:** the Worker logs an `album_read` line for each album read, with where D1 answered.
+- **2026-09-25, 11:23, 19:23 and 22:23 UTC:** the first rounds with album reads logged; every one went to the San Jose primary.
+- **2026-09-25, 22:37 UTC:** the port's release left `/2025/09-29` missing on Cloudflare until it was written back at 22:49, so Cloudflare's warm runs at 22:39 found no album and recorded no LCP or photos.
+- **2026-09-26:** the browser runs paused, with their cron triggers taken out of production's config; the last scheduled round was 22:23 UTC on the 25th.
 
 ## Appendix: the journey script
 

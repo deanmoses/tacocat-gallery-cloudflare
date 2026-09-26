@@ -28,7 +28,7 @@ export interface MediaVersion {
 
 const DEFAULT_SIZE: ImageSize = { width: 1024, height: null };
 
-/** The long side of the image the media page shows. */
+/** The long side of the image the media page shows, and the most any side of a derivative may be asked to be. */
 const DETAIL_LONG_SIDE = 1024;
 
 /** The size of a day album's thumbnails, which are square. */
@@ -58,7 +58,9 @@ export function imageUrl({ path, versionId, size, crop }: ImageRequest): string 
 
 /**
  * Reads an image URL, given its path after the route prefix (`/2001/06-15/felix.jpg/v1`) and its query. Null for
- * anything `imageUrl` would not have written, apart from a missing size, which is the default.
+ * anything `imageUrl` would not have written, apart from a missing size, which is the default. A side past the detail
+ * size is refused rather than served: nothing the app shows is larger, and each size asked for is a transformation
+ * paid for and a derivative stored, so the route answers only sizes something asks for.
  */
 export function parseImageRequest(rest: string, query: Query): ImageRequest | null {
     const cut = rest.lastIndexOf('/');
@@ -108,6 +110,11 @@ function parseSize(text: string): ImageSize | null {
     const match = SIZE.exec(text);
     const width = match?.groups?.['width'];
     const height = match?.groups?.['height'];
+    const size = sideOrSides(width, height);
+    return size !== null && Math.max(size.width ?? 0, size.height ?? 0) <= DETAIL_LONG_SIDE ? size : null;
+}
+
+function sideOrSides(width: string | undefined, height: string | undefined): ImageSize | null {
     if (width !== undefined) {
         return { width: Number(width), height: height === undefined ? null : Number(height) };
     }

@@ -8,6 +8,13 @@ const MEDIA = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4
 
 describe('saving an item', () => {
     const { item } = schema;
+
+    it('refuses a body that is not JSON', async () => {
+        const response = await callAsAdmin('/api/item', { method: 'PUT', body: 'not json' });
+
+        expect(response.status).toBe(400);
+    });
+
     const UNCOMPARED = new Set(['id', 'parentPath', 'createdAt', 'updatedAt']);
     // A value for every column an item of each type may hold, so a column the upsert fails to overwrite shows up. A
     // column the constraints forbid for the type is left null, since the row could not be saved otherwise.

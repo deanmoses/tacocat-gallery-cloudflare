@@ -1,9 +1,9 @@
 import { itemWriteSchema } from 'tacocat-gallery-shared';
-import * as valibot from 'valibot';
 import { orm, upsertItem } from '../db';
 import { d1Header } from '../db/timing';
 import { written } from '../http/bookmark';
 import { failure } from '../http/responses';
+import { parsedBody } from './requests';
 
 /**
  * `PUT /api/item` with an `ItemWrite` saves every field of that item, clearing any left out. A row the database's
@@ -11,9 +11,9 @@ import { failure } from '../http/responses';
  * broke.
  */
 export async function putItem(request: Request, env: Env): Promise<Response> {
-    const body = valibot.safeParse(itemWriteSchema, await request.json());
-    if (!body.success) {
-        return failure(400, valibot.summarize(body.issues));
+    const body = await parsedBody(request, itemWriteSchema);
+    if ('response' in body) {
+        return body.response;
     }
     const session = env.DB.withSession('first-primary');
     const started = performance.now();

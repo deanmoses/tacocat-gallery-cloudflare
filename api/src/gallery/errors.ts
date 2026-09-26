@@ -27,13 +27,22 @@ export function uploadErrorDelete(database: Orm, path: string): BatchItem<'sqlit
     return database.delete(uploadError).where(eq(uploadError.path, path));
 }
 
+// D1 binds at most 100 parameters to one statement: one is the cutoff, and each path asked about is another.
+const PATHS_PER_QUERY = 99;
+
 /** Errors from the last day for the paths asked about, keyed by path. */
 export async function recentUploadErrors(database: Orm, paths: string[]): Promise<Record<string, string>> {
     const { uploadError } = schema;
-    const asked = inArray(uploadError.path, paths);
     const recent = gt(uploadError.updatedAt, cutoff());
-    const rows = paths.length === 0 ? [] : await database.select().from(uploadError).where(and(asked, recent)).all();
-    return Object.fromEntries(rows.map((row) => [row.path, row.message]));
+    const found: Record<string, string> = {};
+    for (let start = 0; start < paths.length; start += PATHS_PER_QUERY) {
+        const asked = inArray(uploadError.path, paths.slice(start, start + PATHS_PER_QUERY));
+        const rows = await database.select().from(uploadError).where(and(asked, recent)).all();
+        for (const row of rows) {
+            found[row.path] = row.message;
+        }
+    }
+    return found;
 }
 
 export async function purgeUploadErrors(env: Pick<Env, 'DB'>): Promise<void> {

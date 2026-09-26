@@ -74,7 +74,13 @@ export function createApp(): Hono<App> {
         if (error instanceof HTTPException) {
             return failure(error.status, error.message);
         }
-        console.error({ event: 'server_exception', path: context.req.path, error: String(error) });
+        console.error({
+            event: 'server_exception',
+            path: context.req.path,
+            error: String(error),
+            stack: error.stack,
+            cause: error.cause instanceof Error ? error.cause.stack : error.cause,
+        });
         return failure(500, 'Server Error');
     });
 

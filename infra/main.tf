@@ -15,6 +15,20 @@ resource "cloudflare_zone" "deanmoses" {
   name    = "deanmoses.com"
 }
 
+# Plain HTTP is answered with a redirect and TLS below 1.2 is refused, on every proxied hostname in the zone. The R2
+# custom domains set their own floor, since the zone's does not reach them.
+resource "cloudflare_zone_setting" "deanmoses_always_use_https" {
+  zone_id    = cloudflare_zone.deanmoses.id
+  setting_id = "always_use_https"
+  value      = "on"
+}
+
+resource "cloudflare_zone_setting" "deanmoses_min_tls_version" {
+  zone_id    = cloudflare_zone.deanmoses.id
+  setting_id = "min_tls_version"
+  value      = "1.2"
+}
+
 # Smart Tiered Cache needs both: tiered caching on, and the smart topology that picks upper tiers near the origin.
 resource "cloudflare_argo_tiered_caching" "deanmoses" {
   zone_id = cloudflare_zone.deanmoses.id

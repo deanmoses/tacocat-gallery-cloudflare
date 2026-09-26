@@ -87,6 +87,21 @@ describe('nightly cron', () => {
     });
 });
 
+describe('a cron the Worker does not name', () => {
+    it('runs nothing, so a schedule an older release left behind is harmless', async () => {
+        const warn = vi.spyOn(console, 'warn').mockReturnValue();
+        await runCron('0 0 1 1 *');
+        const [dumps, probes] = await Promise.all([
+            env.MEDIA.list({ prefix: 'backups/d1/' }),
+            orm(env.DB).select().from(schema.probeResult),
+        ]);
+
+        expect(dumps.objects).toHaveLength(0);
+        expect(probes).toHaveLength(0);
+        expect(warn).toHaveBeenCalledWith({ event: 'unknown_cron', cron: '0 0 1 1 *' });
+    });
+});
+
 describe('idle latency probe cron', () => {
     it("asks Globalping to probe the environment's site, with the account token", async () => {
         const requests = stubGlobalping();
