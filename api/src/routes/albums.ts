@@ -69,8 +69,10 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
     return json(read.album satisfies AlbumGalleryItem, 200, {
         [BOOKMARK_HEADER]: session.getBookmark() ?? '',
         'x-d1': d1Header(read.meta, read.d1Ms, read.rowsRead),
-        // What one browser sees just after its own write is no answer for anyone else.
-        ...(bookmark !== null && { 'cache-control': 'private, no-store' }),
+        // The answer is the reader's own, since an admin sees albums a guest does not: no shared cache may keep it,
+        // and a browser asks again before reusing its copy, which still lets it hand a response the page preloaded to
+        // the app's own request. What one browser sees just after its own write is no answer for anyone else.
+        'cache-control': bookmark === null ? 'private, no-cache' : 'private, no-store',
     });
 }
 

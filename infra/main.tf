@@ -29,6 +29,14 @@ resource "cloudflare_zone_setting" "deanmoses_min_tls_version" {
   value      = "1.2"
 }
 
+# The Link headers an album page sends (web/static/_headers) go out as a 103 Early Hints before the page itself, so the
+# browser starts the album JSON request on the first bytes back from the edge.
+resource "cloudflare_zone_setting" "deanmoses_early_hints" {
+  zone_id    = cloudflare_zone.deanmoses.id
+  setting_id = "early_hints"
+  value      = "on"
+}
+
 # Smart Tiered Cache needs both: tiered caching on, and the smart topology that picks upper tiers near the origin.
 resource "cloudflare_argo_tiered_caching" "deanmoses" {
   zone_id = cloudflare_zone.deanmoses.id

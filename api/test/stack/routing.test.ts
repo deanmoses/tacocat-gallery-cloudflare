@@ -41,6 +41,36 @@ describe('the asset router', () => {
     );
 });
 
+describe('preloading the album JSON', () => {
+    const preload = (path: string): string => `<${path}>; rel=preload; as=fetch; crossorigin`;
+    const album = preload('/api/album/2001/06-15/');
+    const year = preload('/api/album/2001/');
+
+    it.each([
+        ['a day album', '/2001/06-15', [album, year]],
+        ['a day album with a trailing slash', '/2001/06-15/', [album, year]],
+        ['a photo', '/2001/06-15/felix.jpg', [album]],
+    ])(
+        'names the JSON %s needs in the page headers, so the browser asks before the app runs',
+        async (_what, path, links) => {
+            const response = await navigate(path);
+            await response.body?.cancel();
+
+            expect(response.headers.get('link')).toBe(links.join(', '));
+        },
+    );
+
+    it.each(['/', '/2001', '/2001/', '/search', '/search/tacos', '/robots.txt'])(
+        'preloads nothing for %s',
+        async (path) => {
+            const response = await navigate(path);
+            await response.body?.cancel();
+
+            expect(response.headers.has('link')).toBe(false);
+        },
+    );
+});
+
 describe('browser caching of the web app', () => {
     it('lets a browser keep a hashed app chunk for a year without asking the server again', async () => {
         const entries = await readdir(new URL('../../../web/build/_app/immutable/entry/', import.meta.url));

@@ -162,7 +162,10 @@ class AlbumLoadMachine {
      */
     async fetchFromServer(path: string): Promise<void> {
         try {
-            const response = await fetch(albumUrl(path), this.#buildFetchConfig());
+            // In the browser's default cache mode: the album page's headers preload this URL, and a browser hands the
+            // preloaded response only to a request made the same way. A request that bypassed the cache would fetch
+            // the album a second time.
+            const response = await fetch(albumUrl(path));
             if (response.status === 404) {
                 this.#notFound(path);
                 void this.#removeFromDisk(path); // Delete album from local disk
@@ -213,29 +216,10 @@ class AlbumLoadMachine {
 
         // Then check server
         console.log(`Checking if album [${path}] exists on server`);
-        const url = albumUrl(path);
-        const requestConfig = this.#buildFetchConfig();
-        requestConfig.method = 'HEAD';
-        const response = await fetch(url, requestConfig);
+        const response = await fetch(albumUrl(path), { method: 'HEAD' });
         if (response.status === 404) return false;
         if (response.ok) return true;
         throw new Error(`Unexpected response [${response.status}] fetching album [${path}]`);
-    }
-
-    /**
-     * Build the configuration for the HTTP fetch
-     */
-    #buildFetchConfig(): RequestInit {
-        const requestConfig: RequestInit = {};
-
-        // no-store: bypass the HTTP cache completely.
-        // This will make the browser not look into the HTTP cache
-        // on the way to the network, and never store the resulting
-        // response in the HTTP cache.
-        // Fetch() will behave as if no HTTP cache exists.
-        requestConfig.cache = 'no-store';
-
-        return requestConfig;
     }
 
     /**

@@ -240,11 +240,11 @@ describe('an album', () => {
         expect(logged).toHaveProperty('d1Ms');
     });
 
-    it('leaves caching open to a read without a bookmark', async () => {
+    it("is the reader's own answer: kept by no shared cache, and checked with the server before a browser reuses it", async () => {
         const response = await call(`/api/album${DAY}`);
         await response.body?.cancel();
 
-        expect(response.headers.get('cache-control')).toBeNull();
+        expect(response.headers.get('cache-control')).toBe('private, no-cache');
     });
 
     it.each([
@@ -254,7 +254,7 @@ describe('an album', () => {
         const response = await call(`/api/album${DAY}`, { headers: { cookie } });
 
         expect(response.status).toBe(200);
-        expect(response.headers.get('cache-control')).toBeNull();
+        expect(response.headers.get('cache-control')).toBe('private, no-cache');
         expect((await parseExactly(response, parseAlbum)).path).toBe(DAY);
     });
 });
