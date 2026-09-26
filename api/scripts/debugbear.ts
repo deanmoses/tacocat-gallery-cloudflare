@@ -1,11 +1,19 @@
 // Runs the photo-album journey against both sites from every DebugBear location, and reports what the runs measured.
 // Each page in the DebugBear project is one site tested from one location, with the journey script attached as an
-// advanced setting; which site a page tests is read from its URL.
+// advanced setting; which site a page tests is read from its URL. A page tagged `warm-browser` has DebugBear's Warm
+// Load setting on, so its browser has the site's files cached when the test starts, as most readers' browsers do.
 //
 // Usage: node api/scripts/debugbear.ts run                         a cold run of every page, then a warm one
 //        node api/scripts/debugbear.ts report [--from YYYY-MM-DD]  every run since that day, and their medians
 //        node api/scripts/debugbear.ts requests <analysis id>      when one run's page, first script and album
 //                                                                  requests started and ended; `report` prints the id
+//        node api/scripts/debugbear.ts pages                       every page: id, location, URL, tags and settings
+//        node api/scripts/debugbear.ts repoint /2026/09-13/        point every page at that album on its own site
+//        node api/scripts/debugbear.ts add-warm-pages              a `warm-browser` twin of every page that has none,
+//                                                                  with the same settings; Warm Load itself is then
+//                                                                  switched on in the dashboard, under Show advanced
+//
+// Changing or creating a page starts a test of it, which a report excludes by time.
 //
 // Reads DEBUGBEAR_API_KEY from the environment, or else from api/.dev.vars.
 import { readFile } from 'node:fs/promises';
@@ -22,9 +30,20 @@ const RUN_TIMEOUT_MS = 15 * 60_000;
 // as a visitor just before would.
 const WARM_WITHIN_MS = 30 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
+const WARM_BROWSER_TAG = 'warm-browser';
 
 const PROJECT = valibot.object({
-    pages: valibot.array(valibot.object({ id: valibot.string(), url: valibot.string(), region: valibot.string() })),
+    pages: valibot.array(
+        valibot.object({
+            id: valibot.string(),
+            name: valibot.string(),
+            url: valibot.string(),
+            region: valibot.string(),
+            tags: valibot.array(valibot.string()),
+            device: valibot.object({ name: valibot.string() }),
+            advancedSettings: valibot.array(valibot.object({ name: valibot.string() })),
+        }),
+    ),
 });
 const TRIGGERED = valibot.object({
     analysis: valibot.object({ id: valibot.union([valibot.string(), valibot.number()]) }),
@@ -50,6 +69,8 @@ interface Run {
     date: Date;
     location: string;
     site: string;
+    /** Whether the browser already held the site's files when the test started. */
+    cached: boolean;
     warm: boolean;
     ttfb: number | undefined;
     lcp: number | undefined;
@@ -73,9 +94,21 @@ switch (command ?? '') {
         await albumRequests(options[0] ?? '');
         break;
     }
+    case 'pages': {
+        await listPages();
+        break;
+    }
+    case 'repoint': {
+        await repoint(options[0] ?? '');
+        break;
+    }
+    case 'add-warm-pages': {
+        await addWarmPages();
+        break;
+    }
     default: {
         throw new Error(
-            'Usage: node api/scripts/debugbear.ts run | report [--from YYYY-MM-DD] | requests <analysis id>',
+            'Usage: node api/scripts/debugbear.ts run | report [--from YYYY-MM-DD] | requests <analysis id> | pages | repoint <album path> | add-warm-pages',
         );
     }
 }
@@ -93,13 +126,16 @@ async function report(from: Date): Promise<void> {
     const pages = await projectPages();
     const runs = (await Promise.all(pages.map(async (page) => pageRuns(page, from)))).flat();
     runs.sort((one, other) => one.date.getTime() - other.date.getTime());
-    console.info('UTC               location  site        kind  TTFB   LCP  photo 1  later photos (median)  analysis');
+    console.info(
+        'UTC               location  site        browser  kind  TTFB   LCP  photo 1  later photos (median)  analysis',
+    );
     for (const run of runs) {
         console.info(
             [
                 run.date.toISOString().slice(0, 16).replace('T', ' '),
                 run.location.padEnd(9),
                 run.site.padEnd(10),
+                browserOf(run).padEnd(7),
                 (run.warm ? 'warm' : 'cold').padEnd(4),
                 ms(run.ttfb, 5),
                 ms(run.lcp, 5),
@@ -109,15 +145,19 @@ async function report(from: Date): Promise<void> {
             ].join(' '),
         );
     }
-    console.info('\nMedians: location  site        kind  runs  TTFB   LCP  photo 1');
-    const groups = Map.groupBy(runs, (run) => `${run.location} ${run.site} ${run.warm ? 'warm' : 'cold'}`);
+    console.info('\nMedians: location  site        browser  kind  runs  TTFB   LCP  photo 1');
+    const groups = Map.groupBy(
+        runs,
+        (run) => `${run.location} ${run.site} ${browserOf(run)} ${run.warm ? 'warm' : 'cold'}`,
+    );
     for (const [key, group] of [...groups].toSorted(([one], [other]) => one.localeCompare(other))) {
-        const [location = '', site = '', kind = ''] = key.split(' ', 3);
+        const [location = '', site = '', browser = '', kind = ''] = key.split(' ', 4);
         console.info(
             [
                 ' '.repeat(8),
                 location.padEnd(9),
                 site.padEnd(10),
+                browser.padEnd(7),
                 kind.padEnd(4),
                 String(group.length).padStart(4),
                 ms(median(group.flatMap((run) => run.ttfb ?? [])), 5),
@@ -154,6 +194,58 @@ async function albumRequests(analysisId: string): Promise<void> {
     }
 }
 
+async function listPages(): Promise<void> {
+    for (const page of await projectPages()) {
+        console.info(
+            `${page.id}  ${page.region.padEnd(8)} ${page.url}  ${page.name}  [${page.tags.join(', ')}]  ${page.device.name}; ${page.advancedSettings.map((setting) => setting.name).join(', ')}`,
+        );
+    }
+}
+
+/** Points every page at `albumPath` on the site it already tests, and says what DebugBear answered for each. */
+async function repoint(albumPath: string): Promise<void> {
+    if (!/^\/\d{4}\/\d{2}-\d{2}\/?$/v.test(albumPath)) {
+        throw new Error('repoint takes a day album path, as in /2026/09-13/');
+    }
+    const albumRoute = albumPath.replace(/\/$/v, '');
+    for (const page of await projectPages()) {
+        const url = `${new URL(page.url).origin}${albumRoute}`;
+        await debugbear(`/pages/${page.id}`, { url }, 'PATCH');
+        console.info(`${page.id} ${page.region.padEnd(8)} ${page.name}: now ${url}`);
+    }
+}
+
+/**
+ * Creates, for every page without the warm-browser tag whose site and location have no tagged twin yet, a page with
+ * the same URL, location, device and settings plus the tag. DebugBear's API attaches settings by name but has no field
+ * for Warm Load, so that is switched on in the dashboard afterwards.
+ */
+async function addWarmPages(): Promise<void> {
+    const pages = await projectPages();
+    const twinned = new Set(
+        pages.filter((page) => page.tags.includes(WARM_BROWSER_TAG)).map((page) => `${page.url} ${page.region}`),
+    );
+    for (const page of pages) {
+        if (page.tags.includes(WARM_BROWSER_TAG) || twinned.has(`${page.url} ${page.region}`)) {
+            continue;
+        }
+        const body = {
+            name: `${page.name} warm browser`,
+            url: page.url,
+            region: page.region,
+            deviceName: page.device.name,
+            advancedSettings: page.advancedSettings.map((setting) => setting.name),
+            tags: [...page.tags, WARM_BROWSER_TAG],
+        };
+        await debugbear(`/projects/${PROJECT_ID}/pages`, body);
+        console.info(`created ${body.name} in ${page.region}; switch Warm Load on for it in the dashboard`);
+    }
+}
+
+function browserOf(run: Run): string {
+    return run.cached ? 'cached' : 'fresh';
+}
+
 async function projectPages(): Promise<Page[]> {
     return valibot.parse(PROJECT, await debugbear(`/projects/${PROJECT_ID}`)).pages;
 }
@@ -188,6 +280,7 @@ async function pageRuns(page: Page, from: Date): Promise<Run[]> {
             date,
             location: page.region,
             site: new URL(page.url).hostname === 'pix.tacocat.com' ? 'AWS' : 'Cloudflare',
+            cached: page.tags.includes(WARM_BROWSER_TAG),
             warm: previous !== undefined && date.getTime() - previous.getTime() < WARM_WITHIN_MS,
             ttfb: numeric(row['performance.ttfb']),
             // DebugBear's own LCP keeps counting through the journey's clicks, so it measures a photo.
@@ -200,9 +293,9 @@ async function pageRuns(page: Page, from: Date): Promise<Run[]> {
     });
 }
 
-async function debugbear(route: string, body?: object): Promise<unknown> {
+async function debugbear(route: string, body?: object, method = body === undefined ? 'GET' : 'POST'): Promise<unknown> {
     const response = await fetch(`${API}${route}`, {
-        method: body === undefined ? 'GET' : 'POST',
+        method,
         headers: {
             'x-api-key': apiKey,
             // DebugBear refuses some default client user agents.

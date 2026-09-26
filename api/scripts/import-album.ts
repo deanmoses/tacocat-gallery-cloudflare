@@ -3,7 +3,10 @@
 // album's and photos' words, crops and thumbnail go through the admin write routes. Tags are not written: the pipeline
 // reads them from each file's XMP keywords, which is where the AWS gallery's came from.
 //
-// Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production|local] [--user moses]
+// Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production|local] [--user moses] [--resume]
+//
+// --resume finishes an import that stopped partway: it uploads only the photos the target album does not list yet and
+// then writes the words and thumbnails for all of them, where a plain run uploads every photo again as a new version.
 //
 // The session cookie is signed with the target Worker's SESSION_SECRET, which api/.dev.vars holds for each: as
 // SESSION_SECRET for local, and as SESSION_SECRET_STAGING and SESSION_SECRET_PRODUCTION the values `wrangler secret
@@ -24,6 +27,9 @@ const SOURCES = {
 };
 const UPLOADS_AT_ONCE = 4;
 const PROCESSING_TIMEOUT_MS = 5 * 60_000;
+// R2 answers the odd PUT with a 503 that a second try does not see.
+const PUT_ATTEMPTS = 3;
+const PUT_RETRY_MS = 2000;
 
 // The AWS API's album, as far as this script reads it. 'image' there means any media item; a video says so in
 // mediaType. A photo's thumbnail is its crop, in pixels of the image.
@@ -84,8 +90,12 @@ await ensureAlbum(albumPath, {
 });
 
 const existing = await existingNames();
+const toUpload = process.argv.includes('--resume') ? photos.filter((photo) => !existing.has(photo.itemName)) : photos;
+if (toUpload.length < photos.length) {
+    console.log(`resuming: ${photos.length - toUpload.length} already there, ${toUpload.length} to upload`);
+}
 const versions = new Map<string, string>();
-await inParallel(photos, UPLOADS_AT_ONCE, async (photo) => {
+await inParallel(toUpload, UPLOADS_AT_ONCE, async (photo) => {
     versions.set(photo.itemName, await upload(photo));
     console.log(`uploaded ${photo.path}`);
 });
@@ -108,7 +118,7 @@ if (thumbnail !== undefined && photos.some((photo) => photo.path === thumbnail))
 console.log(`done: ${site}${albumPath.slice(0, -1)}`);
 
 function usage(): string {
-    return 'Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production|local] [--user moses]';
+    return 'Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production|local] [--user moses] [--resume]';
 }
 
 /** The value after `flag` on the command line, if it is there. */
@@ -207,21 +217,28 @@ async function upload(photo: AwsMedia): Promise<string> {
     // Under wrangler dev the URL is a path on the Worker, which a browser resolves against the site and sends its
     // cookie to; a presigned URL is R2's and gets no cookie.
     const url = new URL(target.url, site);
-    const put = await fetch(url, {
-        method: 'PUT',
-        headers: { 'content-type': contentType, ...(url.origin === site && { cookie }) },
-        body,
-    });
-    if (!put.ok) {
-        throw new Error(`uploading ${photo.path} failed: ${put.status} ${await put.text()}`);
+    for (let attempt = 1; ; attempt++) {
+        const put = await fetch(url, {
+            method: 'PUT',
+            headers: { 'content-type': contentType, ...(url.origin === site && { cookie }) },
+            body,
+        });
+        if (put.ok) {
+            await put.body?.cancel();
+            return target.versionId;
+        }
+        const reason = `${put.status} ${await put.text()}`;
+        if (put.status < 500 || attempt === PUT_ATTEMPTS) {
+            throw new Error(`uploading ${photo.path} failed: ${reason}`);
+        }
+        console.log(`retrying ${photo.path} after ${reason.slice(0, 40)}`);
+        await sleep(PUT_RETRY_MS);
     }
-    await put.body?.cancel();
-    return target.versionId;
 }
 
 /** The names the target album already lists, which an upload of the same name has to say it replaces. */
 async function existingNames(): Promise<Set<string>> {
-    const response = await fetch(`${site}/api/album${albumPath}`, { headers: { cookie } });
+    const response = await fetch(`${site}/api/album${albumPath}?consistency=primary`, { headers: { cookie } });
     if (!response.ok) {
         await response.body?.cancel();
         return new Set();
