@@ -78,6 +78,20 @@ describe('albumLoadMachine', () => {
             await expect(diskKeys()).resolves.toStrictEqual([PATH]);
         });
 
+        // A browser hands a response preloaded from the page's headers only to a request made in the same cache mode
+        it("asks the server in the browser's default cache mode, so a response the page preloaded is used", async () => {
+            const server = fakeServer();
+            server.get(ROUTE, jsonResponse(record()));
+
+            albumLoadMachine.fetch(PATH);
+
+            await vi.waitFor(() => {
+                expect(loadStatus()).toBe(AlbumLoadStatus.LOADED);
+            });
+
+            expect(server.rawCalls.map((call) => call.init?.cache)).toStrictEqual([undefined]);
+        });
+
         it('marks the album LOADING before any of that has happened', () => {
             const server = fakeServer();
             server.get(ROUTE, jsonResponse(record()));

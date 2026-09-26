@@ -29,6 +29,7 @@ The verdict is a page load in a real browser from a reader's region. Timings of 
 
 ### Differences from the AWS app
 
+- **2026-09-26: the album page preloads its JSON.** The page's headers (`web/static/_headers`) name the album's JSON and its year's as `Link: rel=preload`, so the browser requests them as the page's headers arrive, and with Early Hints on for the zone, before its body; the AWS app asks only once its JS has loaded and run. For that to count as the app's request the app's fetch had to stop bypassing the browser's cache, which it did with `cache: 'no-store'`. Unmeasured until the browser runs resume.
 - **2026-09-26: thumbnails offer a 400x400 for 2x screens.** Each thumbnail's `srcset` carries the 200x200 and a 400x400, and the pipeline makes both, so a phone or Retina laptop draws the thumbnail pixel for pixel where the AWS app upscales the 200. It costs those screens about three times the thumbnail bytes on the album page, by choice: a better image is worth more than the milliseconds, so a slower album page on a 2x screen against AWS is not a loss to win back.
 
 ## How readers use the site
@@ -121,7 +122,6 @@ CloudFront serves an album page through its error response for the single-page a
 - Whether running the album reads next to D1 closes the gap: Cloudflare can place a Worker beside its database, so an API-only Worker placed there would cost a reader in Paris one round trip to San Jose, about 150 ms, plus local D1 at about 35 ms, against 400 to 800 ms today. Placing the whole Worker would also move its photo cache lookups to San Jose.
 - How long a D1 replica stays active after its last read, and whether a Durable Object in Western Europe reading every few minutes keeps Paris on the London replica; at this traffic no replica has answered a read.
 - Whether a Durable Object in Western Europe holding the album JSON answers a cold Paris read in tens of milliseconds.
-- Whether `<link rel="preload">` for the album JSON, starting it alongside the JS, is worth the roughly 120 ms of page download it would overlap.
 
 ## Log
 
@@ -147,6 +147,7 @@ CloudFront serves an album page through its error response for the single-page a
 - **2026-09-25, 22:37 UTC:** the port's release left `/2025/09-29` missing on Cloudflare until it was written back at 22:49, so Cloudflare's warm runs at 22:39 found no album and recorded no LCP or photos.
 - **2026-09-26, 01:20 UTC:** the Images binding's `metadata` option tested against the real binding from a throwaway Worker on `wrangler dev`, about a dozen transformations: no effect on a JPEG in any placement or value, and WebP and AVIF clean (`docs/Risks.md` row 23). The comparison album is to move to the first album uploaded to AWS after its metadata fix of 2026-09-12, rather than regenerating AWS's copies of `/2025/09-29`; DebugBear's six pages and the journey script's first-thumbnail selector change by hand when the runs resume. One stray `1024x768` derivative of `a_hotel_imperial1.jpg` was generated on production while comparing sizes; the app never asks for it.
 - **2026-09-26:** the browser runs paused, with their cron triggers taken out of production's config; the last scheduled round was 22:23 UTC on the 25th.
+- **2026-09-26:** the album page's headers preload the album JSON and the year's, Early Hints is on for the zone, and the app's album fetch no longer bypasses the browser's cache (see _Differences from the AWS app_). What it is worth is the time between the page's headers arriving and the app's own request, which the existing rounds put at 130 to 400 ms for a fresh browser and which a reader with the JS cached, as most are, sees as the JS's parse and route step only. The next DebugBear run's waterfall says whether the album request starts at the page's headers and whether there is one of it or two.
 - **2026-09-26:** the app is no longer held to the AWS app. The rounds so far compared the platforms behind one app; from here the site is compared as a whole, and every difference between the two apps is noted here.
 
 ## Appendix: the journey script

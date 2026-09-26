@@ -13,3 +13,21 @@
 # ask whether its copy is current. The same Cache-Control the AWS site's CloudFront sets on these files.
 /_app/immutable/*
   Cache-Control: public, max-age=31536000, immutable
+
+# A page's headers name the JSON its JS will ask for, so the browser requests it as the headers arrive rather than once
+# the app has loaded and run, and with the zone's Early Hints on, before the page's body. `crossorigin` makes the
+# preload the same request as the app's fetch(), which a browser matches by mode as well as URL; without it the browser
+# fetches twice. A day album's page also fetches its year, where the app finds the previous and next albums. A reader
+# arrives from the email at a day album or a photo, so those are the pages that preload.
+/:year/:day
+  Link: </api/album/:year/:day/>; rel=preload; as=fetch; crossorigin, </api/album/:year/>; rel=preload; as=fetch; crossorigin
+
+/:year/:day/
+  Link: </api/album/:year/:day/>; rel=preload; as=fetch; crossorigin, </api/album/:year/>; rel=preload; as=fetch; crossorigin
+
+/:year/:day/:media
+  Link: </api/album/:year/:day/>; rel=preload; as=fetch; crossorigin
+
+# A search page's URL has a day album's shape, and there is no album to preload for it.
+/search/*
+  ! Link

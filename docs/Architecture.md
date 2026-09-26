@@ -122,6 +122,8 @@ The app reads `GET /api/album/2001/06-15/`:
 
 The app works out the previous and next albums from the parent's children, so a read never depends on anything outside the album's own subtree.
 
+The album page's own headers, from `web/static/_headers`, name this request and the parent's as preloads, so the browser sends them as the page arrives rather than after the app's JS has loaded and run; with the zone's Early Hints on, it sends them before the page's body.
+
 **Search** matches every word of the query against the search index. Results come in gallery-path order, which is chronological; guests see published albums and what is in them.
 
 ## Writing
