@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { workerReport } from '../../src/ops/probes';
+import { ftsQuery } from '../../src/gallery/query';
+import { pathAfter } from '../../src/http/paths';
+import { PROBE_SEQUENCE, workerReport } from '../../src/ops/probes';
+
+describe('PROBE_SEQUENCE', () => {
+    it('searches with terms where the search route reads them', () => {
+        const searches = PROBE_SEQUENCE.filter(({ path }) => path.startsWith('/api/search')).map(({ path }) =>
+            ftsQuery(pathAfter(new URL(path, 'https://probe.test'), '/api/search/')),
+        );
+
+        expect(searches).toStrictEqual([{ query: expect.anything() }]);
+    });
+});
 
 describe(workerReport, () => {
     it('reads where the Worker and D1 ran, and how long each took', () => {
