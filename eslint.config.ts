@@ -4,6 +4,8 @@ import js from '@eslint/js';
 import json from '@eslint/json';
 import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
+import compat from 'eslint-plugin-compat';
+import esx from 'eslint-plugin-es-x';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import importX from 'eslint-plugin-import-x';
 import node from 'eslint-plugin-n';
@@ -15,6 +17,7 @@ import type { Linter } from 'eslint';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
+import { BROWSER_FLOOR_RULES } from './browser-floor.ts';
 import svelteConfig from './web/svelte.config.js';
 
 // Every plugin's recommended rules are on, so a rule its maintainers add to them arrives with the upgrade. Rules beyond
@@ -25,6 +28,8 @@ import svelteConfig from './web/svelte.config.js';
 const CODE = ['**/*.ts', '**/*.mjs', '**/*.js', '**/*.svelte'];
 // Components, and modules whose `.svelte.` infix lets them use runes.
 const SVELTE = ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'];
+// Code a reader's browser runs: the web app and what it shares with the Worker.
+const BROWSER = ['web', 'shared'].flatMap((dir) => CODE.map((glob) => `${dir}/${glob}`));
 
 /** Core and typescript-eslint rules beyond their recommended sets. */
 const PICKED_RULES: Record<string, 'error'> = Object.fromEntries(
@@ -703,6 +708,24 @@ export default defineConfig(
             // Wants every function prop named on*. The app's function props are predicates and transforms a parent
             // injects, such as which files a drop zone accepts, and an on* name would present them as events.
             'svelte/require-event-prefix': 'off',
+        },
+    },
+    {
+        // The browsers in .browserslistrc, whose floor is iOS 15.6, have to load and run this code. The Worker, on
+        // today's V8, is held to none of it, nor are the files here that only Node or the test browser run.
+        name: 'browser floor',
+        files: BROWSER,
+        ignores: ['web/*.ts', 'web/*.js', 'shared/*.ts', '**/*.test.ts', 'web/src/lib/test-support/**'],
+        extends: asErrors(compat.configs['flat/recommended']),
+        plugins: { 'es-x': esx },
+        rules: {
+            ...BROWSER_FLOOR_RULES,
+            // The v flag (Safari 17), toSorted and toReversed (16), the iterator helpers (18.4) and lookbehind (16.4).
+            'regexp/require-unicode-sets-regexp': 'off',
+            'regexp/prefer-lookaround': 'off',
+            'unicorn/no-array-sort': 'off',
+            'unicorn/no-array-reverse': 'off',
+            'unicorn/prefer-iterator-helpers': 'off',
         },
     },
     {

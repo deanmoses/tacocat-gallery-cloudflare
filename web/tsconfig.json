@@ -1,5 +1,9 @@
 {
     // The repo's strict settings, then what `svelte-kit sync` generates for this app: path aliases, the DOM lib, and
     // which files are in the project. Later entries win.
-    "extends": ["../tsconfig.base.json", "./.svelte-kit/tsconfig.json"]
+    "extends": ["../tsconfig.base.json", "./.svelte-kit/tsconfig.json"],
+    "compilerOptions": {
+        // Node resolves an import of a repo-level module only with its extension, and Vite bundles it either way.
+        "allowImportingTsExtensions": true
+    }
 }

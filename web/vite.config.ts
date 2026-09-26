@@ -1,13 +1,18 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { playwright } from '@vitest/browser-playwright';
+import path from 'node:path';
+import browserslistToEsbuild from 'browserslist-to-esbuild';
+import { ESLint } from 'eslint';
+import esx from 'eslint-plugin-es-x';
 import type { Plugin, ProxyOptions } from 'vite';
 import { defaultExclude, defineConfig } from 'vitest/config';
+import { BROWSER_FLOOR_RULES_UNTYPED } from '../browser-floor.ts';
 
 // The Worker, which `npm run dev --workspace api` serves with the app's build. `vite dev` serves the app itself, with
 // hot reloading, and passes the Worker's own routes through to it.
 const WORKER = 'http://localhost:8787';
 const workerProxy: Record<string, ProxyOptions> = Object.fromEntries(
-    ['/api', '/i', '/v', '/raw', '/login', '/invite'].map((path) => [path, { target: WORKER }]),
+    ['/api', '/i', '/v', '/raw', '/login', '/invite'].map((route) => [route, { target: WORKER }]),
 );
 
 /**
@@ -30,8 +35,60 @@ function notFoundUnderTest(): Plugin {
     };
 }
 
+/**
+ * Rolldown lowers the syntax the build target lacks, except a regular expression it cannot rewrite, which it leaves as
+ * a `RegExp(source, flags)` call: the browser then throws where it would have refused to parse, and at module level
+ * that is before the app starts. A dependency, meanwhile, is bundled as written.
+ */
+function browserFloor(): Plugin {
+    return {
+        name: 'browser-floor',
+        apply: 'build',
+        // The server build's chunks run in Node, where Kit's runtime is free to use what a browser lacks.
+        applyToEnvironment: (environment) => environment.config.consumer === 'client',
+        async generateBundle(_options, bundle): Promise<void> {
+            for (const [fileName, output] of Object.entries(bundle)) {
+                if (output.type !== 'chunk') {
+                    continue;
+                }
+                const findings = await browserFloorFindings(output.code, fileName);
+                if (findings.length > 0) {
+                    throw new Error(
+                        `${fileName} uses what the browsers in .browserslistrc lack:\n  ${findings.join('\n  ')}`,
+                    );
+                }
+            }
+        },
+    };
+}
+
+let floorLint: ESLint | undefined;
+
+export async function browserFloorFindings(code: string, fileName: string): Promise<string[]> {
+    floorLint ??= new ESLint({
+        cwd: import.meta.dirname,
+        overrideConfigFile: true,
+        overrideConfig: [
+            {
+                files: ['**/*.js'],
+                plugins: { 'es-x': esx },
+                settings: { 'es-x': { aggressive: true } },
+                languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+                rules: BROWSER_FLOOR_RULES_UNTYPED,
+            },
+        ],
+    });
+    const results = await floorLint.lintText(code, { filePath: path.join(import.meta.dirname, 'build', fileName) });
+    return results.flatMap((result) =>
+        result.messages.map((message) => `${message.ruleId ?? 'parse'}: ${message.message}`),
+    );
+}
+
 export default defineConfig({
-    plugins: [notFoundUnderTest(), sveltekit()],
+    plugins: [notFoundUnderTest(), sveltekit(), browserFloor()],
+    // The browsers in .browserslistrc: Rolldown lowers the syntax they lack and Lightning CSS the CSS, media query
+    // ranges included.
+    build: { target: browserslistToEsbuild() },
     test: {
         // Undoes vi.spyOn() after each test, so no test needs an afterEach hook for it.
         restoreMocks: true,

@@ -21,7 +21,7 @@
         // I'm having a problem with a /n being added at some point where I'm
         // then not able to remove it.  This is a blunt intstrument, but maybe
         // converting any whitespace to a regular space and then trimming it all.
-        editedText = editedText.replaceAll(/\s/gv, ' ');
+        editedText = editedText.replaceAll(/\s/gu, ' ');
         editedText = editedText.trim();
         draftMachine.setTitle(editedText);
     }

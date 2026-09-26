@@ -42,7 +42,7 @@
         }
 
         // remove empty months
-        return months.filter(Boolean).toReversed();
+        return months.filter(Boolean).reverse();
     }
 
     function getTitle(albumPath: string): string {

@@ -248,7 +248,7 @@ e2e/               Playwright journeys through the built app and a local Worker
 
 **The shapes live in `shared/`.** The Worker maps rows to its schemas and the app parses responses with them; neither side imports the other, and `shared/` imports neither.
 
-**The web app** is the AWS SvelteKit app ported to this back end, so the API answers in the shapes it was written against; it changes wherever that makes the site faster for its readers, and `docs/Perf.md` records each difference from the AWS app. Which paths reach the Worker rather than the app's files is the `run_worker_first` list in `api/wrangler.jsonc`, so a new Worker route has to be added there; any other path with no file gets the app, which routes it in the browser.
+**The web app** is the AWS SvelteKit app ported to this back end, so the API answers in the shapes it was written against; it changes wherever that makes the site faster for its readers, and `docs/Perf.md` records each difference from the AWS app. It has to load in iOS 15.6, the floor in `.browserslistrc`, which lint and the build enforce (Front end in `README.md`). Which paths reach the Worker rather than the app's files is the `run_worker_first` list in `api/wrangler.jsonc`, so a new Worker route has to be added there; any other path with no file gets the app, which routes it in the browser.
 
 ## Tests
 

@@ -66,7 +66,7 @@ export function mediaActivity(mediaPath: string): MediaActivity {
 export function getAlbumRename(albumPath: string): RenameEntry | undefined {
     return (
         albumState.albumRenames.get(albumPath) ??
-        albumState.albumRenames.values().find((rename) => rename.newPath === albumPath)
+        [...albumState.albumRenames.values()].find((rename) => rename.newPath === albumPath)
     );
 }
 
@@ -74,6 +74,6 @@ export function getAlbumRename(albumPath: string): RenameEntry | undefined {
 export function getMediaRename(mediaPath: string): RenameEntry | undefined {
     return (
         albumState.mediaRenames.get(mediaPath) ??
-        albumState.mediaRenames.values().find((rename) => rename.newPath === mediaPath)
+        [...albumState.mediaRenames.values()].find((rename) => rename.newPath === mediaPath)
     );
 }
