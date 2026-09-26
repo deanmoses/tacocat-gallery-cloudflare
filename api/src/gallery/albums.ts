@@ -30,8 +30,10 @@ export async function readAlbum(database: Orm, path: string, admin: boolean): Pr
     const { item } = schema;
     const key = albumKey(path);
     const started = performance.now();
-    // One request to D1 for both, since a reader far from the primary pays a round trip per request; the root is not
-    // a row, so its read is its children alone.
+    // Both go to D1 in one batch, which runs them in one transaction on one instance: consecutive requests from a colo
+    // can be answered by different instances, so two statements could read the album from one and its children from
+    // another, or straddle a write. It is no faster than two statements sent at once, since a request costs one round
+    // trip whatever it holds. The root is not a row, so its read is its children alone.
     const children = selection(eq(item.parentPath, path));
     const [childRows, selfRows] =
         key === null

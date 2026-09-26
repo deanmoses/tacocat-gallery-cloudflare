@@ -15,7 +15,11 @@ export async function backupDatabase(env: Env): Promise<{ key: string; rows: num
 
 const BACKUP_PAGE = 5000;
 
-/** Every item after `cursor` in path order, a page at a time: keyset pagination, each page starting where the last ended. */
+/**
+ * Every item after `cursor` in path order, a page at a time: keyset pagination, each page starting where the last
+ * ended. Each page is its own request, so a write during the run can move a boundary and a row with it; the gallery
+ * is a page or two.
+ */
 async function itemsAfter(database: Orm, cursor: { parentPath: string; itemName: string }): Promise<schema.Item[]> {
     const { item } = schema;
     const page = await database
