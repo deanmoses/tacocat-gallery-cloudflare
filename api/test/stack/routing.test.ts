@@ -60,15 +60,21 @@ describe('preloading the album JSON', () => {
         },
     );
 
-    it.each(['/', '/2001', '/2001/', '/search', '/search/tacos', '/robots.txt'])(
-        'preloads nothing for %s',
-        async (path) => {
-            const response = await navigate(path);
-            await response.body?.cancel();
+    it.each([
+        '/',
+        '/2001',
+        '/2001/',
+        '/search',
+        '/search/tacos',
+        '/robots.txt',
+        '/images/favicons/favicon-32x32.png',
+        '/_app/version.json',
+    ])('preloads nothing for %s', async (path) => {
+        const response = await navigate(path);
+        await response.body?.cancel();
 
-            expect(response.headers.has('link')).toBe(false);
-        },
-    );
+        expect(response.headers.has('link')).toBe(false);
+    });
 });
 
 describe('browser caching of the web app', () => {

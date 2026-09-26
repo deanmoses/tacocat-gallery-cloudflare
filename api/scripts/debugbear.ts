@@ -4,6 +4,8 @@
 //
 // Usage: node api/scripts/debugbear.ts run                         a cold run of every page, then a warm one
 //        node api/scripts/debugbear.ts report [--from YYYY-MM-DD]  every run since that day, and their medians
+//        node api/scripts/debugbear.ts requests <analysis id>      when one run's page, first script and album
+//                                                                  requests started and ended; `report` prints the id
 //
 // Reads DEBUGBEAR_API_KEY from the environment, or else from api/.dev.vars.
 import { readFile } from 'node:fs/promises';
@@ -29,10 +31,22 @@ const TRIGGERED = valibot.object({
 });
 const ANALYSIS = valibot.object({ hasFinished: valibot.boolean() });
 const METRICS = valibot.array(valibot.record(valibot.string(), valibot.unknown()));
+const REQUESTS = valibot.array(
+    valibot.object({
+        url: valibot.string(),
+        resourceType: valibot.string(),
+        /** Missing for a request the run ended before it answered. */
+        status: valibot.optional(valibot.number()),
+        startTime: valibot.number(),
+        endTime: valibot.number(),
+        earlyHint: valibot.optional(valibot.boolean()),
+    }),
+);
 
 type Page = valibot.InferOutput<typeof PROJECT>['pages'][number];
 
 interface Run {
+    id: string;
     date: Date;
     location: string;
     site: string;
@@ -45,13 +59,25 @@ interface Run {
 const apiKey = await readApiKey();
 
 const [command, ...options] = process.argv.slice(2);
-if (command === 'run') {
-    await runAll();
-} else if (command === 'report') {
-    const from = options[options.indexOf('--from') + 1];
-    await report(new Date(options.includes('--from') && from !== undefined ? from : Date.now() - DAY_MS));
-} else {
-    throw new Error('Usage: node api/scripts/debugbear.ts run | report [--from YYYY-MM-DD]');
+switch (command ?? '') {
+    case 'run': {
+        await runAll();
+        break;
+    }
+    case 'report': {
+        const from = options[options.indexOf('--from') + 1];
+        await report(new Date(options.includes('--from') && from !== undefined ? from : Date.now() - DAY_MS));
+        break;
+    }
+    case 'requests': {
+        await albumRequests(options[0] ?? '');
+        break;
+    }
+    default: {
+        throw new Error(
+            'Usage: node api/scripts/debugbear.ts run | report [--from YYYY-MM-DD] | requests <analysis id>',
+        );
+    }
 }
 
 async function runAll(): Promise<void> {
@@ -67,7 +93,7 @@ async function report(from: Date): Promise<void> {
     const pages = await projectPages();
     const runs = (await Promise.all(pages.map(async (page) => pageRuns(page, from)))).flat();
     runs.sort((one, other) => one.date.getTime() - other.date.getTime());
-    console.info('UTC               location  site        kind  TTFB   LCP  photo 1  later photos (median)');
+    console.info('UTC               location  site        kind  TTFB   LCP  photo 1  later photos (median)  analysis');
     for (const run of runs) {
         console.info(
             [
@@ -79,6 +105,7 @@ async function report(from: Date): Promise<void> {
                 ms(run.lcp, 5),
                 ms(run.photos[0], 8),
                 ms(median(run.photos.slice(1)), 8),
+                ' '.repeat(13) + run.id,
             ].join(' '),
         );
     }
@@ -96,6 +123,32 @@ async function report(from: Date): Promise<void> {
                 ms(median(group.flatMap((run) => run.ttfb ?? [])), 5),
                 ms(median(group.flatMap((run) => run.lcp ?? [])), 5),
                 ms(median(group.flatMap((run) => run.photos[0] ?? [])), 8),
+            ].join(' '),
+        );
+    }
+}
+
+/**
+ * The page, its first script and every album request of one run, with when each started and ended in ms from the
+ * page's start, so a waterfall can be read without the dashboard: whether the album JSON started with the page's
+ * headers or after the app ran, and whether it was asked for once or twice.
+ */
+async function albumRequests(analysisId: string): Promise<void> {
+    const requests = valibot.parse(REQUESTS, await debugbear(`/analysis/${analysisId}/requests`));
+    const document = requests.find((request) => request.resourceType === 'document');
+    const [firstScript] = requests
+        .filter((request) => request.resourceType === 'script')
+        .toSorted((one, other) => one.startTime - other.startTime);
+    const albums = requests.filter((request) => request.url.includes('/api/album/'));
+    console.info('  start     end  status  early hint  URL');
+    for (const request of [document, firstScript, ...albums].flatMap((found) => found ?? [])) {
+        console.info(
+            [
+                ms(request.startTime, 7),
+                ms(request.endTime, 7),
+                String(request.status ?? '-').padStart(6),
+                String(request.earlyHint ?? '').padStart(11),
+                ` ${request.url}`,
             ].join(' '),
         );
     }
@@ -131,6 +184,7 @@ async function pageRuns(page: Page, from: Date): Promise<Run[]> {
     return dated.map(({ row, date }, index) => {
         const previous = dated[index - 1]?.date;
         return {
+            id: String(row['analysis.id']),
             date,
             location: page.region,
             site: new URL(page.url).hostname === 'pix.tacocat.com' ? 'AWS' : 'Cloudflare',

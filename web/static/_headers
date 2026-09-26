@@ -28,6 +28,13 @@
 /:year/:day/:media
   Link: </api/album/:year/:day/>; rel=preload; as=fetch; crossorigin
 
-# A search page's URL has a day album's shape, and there is no album to preload for it.
+# A search page's URL has a day album's shape, and a file under images/ or _app/ a photo's; none has an album to
+# preload, and a browser acts on a preload in a file's headers as it does on one in a page's.
 /search/*
+  ! Link
+
+/images/*
+  ! Link
+
+/_app/*
   ! Link
