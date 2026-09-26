@@ -1,7 +1,15 @@
 import type { Rectangle } from '$lib/models/impl/server';
 import { isValidAlbumPath, isValidMediaPath } from './galleryPathUtils';
 import type { SearchQuery } from '$lib/models/search';
-import { type Size, THUMBNAIL_SIZE, detailSize, imageUrl, originalUrl, videoUrl } from 'tacocat-gallery-shared';
+import {
+    type Size,
+    THUMBNAIL_SIZE,
+    THUMBNAIL_SIZE_2X,
+    detailSize,
+    imageUrl,
+    originalUrl,
+    videoUrl,
+} from 'tacocat-gallery-shared';
 
 /**
  * The API, the media and the login are all served by the Worker on the site's own origin, so every URL is a path.
@@ -18,6 +26,18 @@ function baseApiUrl(): string {
  */
 export function thumbnailUrl(mediaPath: string, versionId: string, crop?: Rectangle): string {
     return imageUrl({ path: mediaPath, versionId, size: THUMBNAIL_SIZE, crop: crop ?? null });
+}
+
+/**
+ * The thumbnail's `srcset`: the same frame at one and two device pixels per CSS pixel, so a Retina screen draws it
+ * pixel for pixel instead of upscaling the smaller one
+ * @param mediaPath Path to the source media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
+ * @param versionId Version of the source media
+ * @param crop Optional crop rectangle
+ */
+export function thumbnailSrcset(mediaPath: string, versionId: string, crop?: Rectangle): string {
+    const larger = imageUrl({ path: mediaPath, versionId, size: THUMBNAIL_SIZE_2X, crop: crop ?? null });
+    return `${thumbnailUrl(mediaPath, versionId, crop)} 1x, ${larger} 2x`;
 }
 
 /**

@@ -34,6 +34,9 @@ const DETAIL_LONG_SIDE = 1024;
 /** The size of a day album's thumbnails, which are square. */
 export const THUMBNAIL_SIZE: ImageSize = { width: 200, height: 200 };
 
+/** The same thumbnail for a screen with two device pixels per CSS pixel, which would otherwise upscale the 200. */
+export const THUMBNAIL_SIZE_2X: ImageSize = { width: 400, height: 400 };
+
 /**
  * The size the media page asks for: the long side at most 1024 and the image never enlarged, so a small image is asked
  * for at its own size. Both the app's request and the pipeline's pre-generation come from here, since a stored

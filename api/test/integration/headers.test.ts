@@ -29,7 +29,7 @@ describe("the site's headers", () => {
             size: { width: 200, height: 200 },
             crop: null,
         });
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-jpeg`, 'jpeg bytes');
+        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
 
         const response = await call(path);
         await response.body?.cancel();

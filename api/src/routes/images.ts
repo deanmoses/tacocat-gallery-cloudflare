@@ -48,33 +48,42 @@ function file(body: BodyInit, contentType: string, name: string): Response {
 
 /**
  * Worker in front, per-colo Cache API: a hit never reaches R2, but every colo fills from R2 on its own. Each response
- * says how long its steps took, in Server-Timing and a log line, since a colo's first request is the slow one.
+ * says how long its steps took, in Server-Timing and a log line, since a colo's first request is the slow one. The
+ * cache is keyed by the URL with the format the client gets spelled into it, so two clients that accept different
+ * formats never get each other's derivative from one URL.
  */
 export async function derivedViaCacheApi(
     request: Request,
     env: Env,
     ctx: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<Response> {
+    const wanted = derivation(request, '/i');
+    if (wanted === null) {
+        return badImageUrl();
+    }
     const cache = caches.default;
+    const cacheKey = keyedByFormat(request, wanted.format);
     const steps: Steps = {};
-    const hit = await timed(steps, 'cache', async () => cache.match(request));
+    const hit = await timed(steps, 'cache', async () => cache.match(cacheKey));
     if (hit) {
         const response = new Response(hit.body, hit);
         return reported(request, response, 'cache-api-hit', steps);
-    }
-    const wanted = derivation(new URL(request.url), '/i');
-    if (wanted === null) {
-        return badImageUrl();
     }
     const derivative = await derivedImage(env, wanted, steps);
     if ('missing' in derivative) {
         return sourceNotFound(derivative.missing);
     }
     const response = new Response(derivative.body, {
-        headers: { 'cache-control': IMMUTABLE, 'content-type': derivative.format },
+        headers: { 'cache-control': IMMUTABLE, 'content-type': derivative.format, vary: 'Accept' },
     });
-    ctx.waitUntil(cache.put(request, response.clone()));
+    ctx.waitUntil(cache.put(cacheKey, response.clone()));
     return reported(request, response, derivative.how, steps);
+}
+
+function keyedByFormat(request: Request, format: string): Request {
+    const url = new URL(request.url);
+    url.searchParams.set('format', format);
+    return new Request(url, { method: 'GET' });
 }
 
 function reported(request: Request, response: Response, how: string, steps: Steps): Response {
@@ -97,8 +106,7 @@ function reported(request: Request, response: Response, how: string, steps: Step
  * Tiered Cache like any origin fetch. Generates on a 404.
  */
 export async function derivedViaCdn(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const wanted = derivation(url, '/i2');
+    const wanted = derivation(request, '/i2');
     if (wanted === null) {
         return badImageUrl();
     }
@@ -110,6 +118,7 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
         const response = new Response(upstream.body, upstream);
         const cacheStatus = upstream.headers.get('cf-cache-status')?.toLowerCase() ?? 'unknown';
         response.headers.set('x-derived', `cdn-${cacheStatus}`);
+        response.headers.set('vary', 'Accept');
         return response;
     }
     const derivative = await derivedImage(env, wanted, {});
@@ -117,14 +126,22 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
 }
 
 /** What the URL asks for and where its derivative and sources are, or null for a URL imageUrl would not write. */
-function derivation(url: URL, prefix: string): Derivation | null {
-    const request = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);
-    return request === null ? null : derivationFor(request, url.searchParams.get('format'));
+function derivation(request: Request, prefix: string): Derivation | null {
+    const url = new URL(request.url);
+    const wanted = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);
+    return wanted === null
+        ? null
+        : derivationFor(wanted, url.searchParams.get('format'), request.headers.get('accept'));
 }
 
 function generated(derivative: Derivative): Response {
     return new Response(derivative.body, {
-        headers: { 'cache-control': IMMUTABLE, 'content-type': derivative.format, 'x-derived': derivative.how },
+        headers: {
+            'cache-control': IMMUTABLE,
+            'content-type': derivative.format,
+            vary: 'Accept',
+            'x-derived': derivative.how,
+        },
     });
 }
 

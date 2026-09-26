@@ -10,7 +10,7 @@
     import PlayButtonIcon from './icons/PlayButtonIcon.svelte';
     import RenameIcon from './icons/RenameIcon.svelte';
     import UnpublishedIcon from './icons/UnpublishedIcon.svelte';
-    import { thumbnailUrl } from '$lib/utils/config';
+    import { thumbnailSrcset, thumbnailUrl } from '$lib/utils/config';
     import type { ThumbnailUrlInfo } from '$lib/models/GalleryItemInterfaces';
     import type { Snippet } from 'svelte';
 
@@ -53,6 +53,11 @@
             ? thumbnailUrl(thumbnailUrlInfo.imagePath, thumbnailUrlInfo.versionId, thumbnailUrlInfo.crop)
             : src,
     );
+    let imgSrcset: string | undefined = $derived(
+        thumbnailUrlInfo
+            ? thumbnailSrcset(thumbnailUrlInfo.imagePath, thumbnailUrlInfo.versionId, thumbnailUrlInfo.crop)
+            : undefined,
+    );
     let unpublished: boolean = $derived(!published);
 
     // The source whose image has loaded, so that a replaced source counts as unloaded until its own load fires
@@ -73,6 +78,7 @@
                 draggable="false"
                 onload={onImageLoad}
                 src={imgSrc}
+                srcset={imgSrcset}
             />{:else}<div class="no-image"></div>{/if}{#if creating}<div class="icon-overlay">
                 <CreateIcon height="10em" width="10em" />
             </div>{:else if deleting}<div class="icon-overlay">
