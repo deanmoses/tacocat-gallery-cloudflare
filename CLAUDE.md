@@ -10,6 +10,8 @@ This project is a production-quality prototype of the <https://pix.tacocat.com> 
 
 The prototype's original goals are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. Those two docs are all about performance, but since they were written we've found we like the developer ergonomics and 1-repo simplicity of Cloudflare enough that we might switch even if performance is merely slightly better rather than dramatically better. We're making the decision to move by closing down all the risks in `docs/Risks.md`.
 
+No albums or media have been migrated from AWS. There is one admin, moses, only logged in to staging. The staging and production databases hold nothing that matters and can be deleted.
+
 ## This repo
 
 Three npm workspaces:
