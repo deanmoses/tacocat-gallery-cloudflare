@@ -414,30 +414,6 @@ describe('the other rows', () => {
                 database().insert(schema.spentChallenge).values({ challenge: 'c', expiresAt: '2999' }).run(),
             constraint: 'spent_challenge_expires_at_format',
         },
-        {
-            name: 'a probe result with an impossible status',
-            insert: async () =>
-                database()
-                    .insert(schema.probeResult)
-                    .values({ runAt: 'r', location: 'l', seq: 0, path: '/', status: 42 })
-                    .run(),
-            constraint: 'probe_result_status_check',
-        },
-        {
-            name: 'a probe result with a negative timing',
-            insert: async () =>
-                database()
-                    .insert(schema.probeResult)
-                    .values({ runAt: 'r', location: 'l', seq: 0, path: '/', tlsMs: -1 })
-                    .run(),
-            constraint: 'probe_result_timings_check',
-        },
-        {
-            name: 'a probe result out of sequence',
-            insert: async () =>
-                database().insert(schema.probeResult).values({ runAt: 'r', location: 'l', seq: -1, path: '/' }).run(),
-            constraint: 'probe_result_seq_check',
-        },
     ])('refuse $name', async ({ insert, constraint }) => {
         await expect(insert()).rejects.toMatchObject(refusedBy(constraint));
     });

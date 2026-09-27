@@ -95,11 +95,9 @@ The app has to load and run on iOS 15.6, the oldest browser a reader visits from
 
 The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix` prints the item's row from the deployed database and every object stored for its version in each bucket, `--env production` for production. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
 
-## Idle latency probes
+## D1 rounds
 
-The probes ran from a cron on Cloudflare until 2026-09-25, when they had answered their question, and their history is in `docs/Perf.md`; putting their trigger back in `api/wrangler.jsonc` resumes them. To read the results, run `npm run probes --workspace api`. To try the probe code without waiting for the schedule, run `npx wrangler dev --test-scheduled --enable-containers=false` in `api/` and request `/__scheduled?cron=23+0,1,3,7,15+*+*+*`. That runs the handler locally against the deployed Worker and writes to the local D1.
-
-Requests to Globalping carry the `GLOBALPING_TOKEN` Worker secret (in `api/.dev.vars` locally), which raises Globalping's rate limit from a per-IP one shared with every Worker on the same egress IP. For one round by hand, `node api/scripts/d1-round.ts pix.deanmoses.com /api/album/2025/09-29/` reads the album from one Paris probe, first once and then three times a second apart, then twice from San Jose, and prints what each response's headers said about the Worker and D1; `--from` and `--repeats` change the locations and the repeats.
+`node api/scripts/d1-round.ts pix.deanmoses.com /api/album/2025/09-29/` reads the album through Globalping from one Paris probe, first once and then three times a second apart, then twice from San Jose, and prints what each response's headers said about the Worker and D1; `--from` and `--repeats` change the locations and the repeats. It sends `GLOBALPING_TOKEN` from `api/.dev.vars`, which raises Globalping's rate limit from a per-IP one.
 
 ## Browser runs
 
