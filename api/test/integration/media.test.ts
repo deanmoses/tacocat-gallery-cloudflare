@@ -30,6 +30,9 @@ const heic = bytes(heicDataUrl);
 // 220 by 212, so it is not the size of the JPEG, which is 300 by 225.
 const png = bytes(pngDataUrl);
 
+// A QuickTime movie's first box, which is all the sniffer reads and all the stand-in transcoder needs.
+const mov = Uint8Array.from([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 0, 0]);
+
 const DAY = '/2024/06-15/';
 const IMAGE = { itemType: 'media', mediaType: 'image', width: 300, height: 225 } as const;
 
@@ -198,6 +201,20 @@ describe('upload pipeline', () => {
         expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
         expect(original?.customMetadata).toStrictEqual({ path: `${DAY}full_metadata.jpg` });
         expect(row?.completedAt).not.toBeNull();
+    });
+
+    it('takes what kind of file it is from its bytes, whatever its name and the type the browser sent', async () => {
+        standInTranscoder(async () => {
+            throw new Error('a photo has no business here');
+        });
+        const versionId = await upload(`${DAY}clip.mov`, jpg, { contentType: 'application/octet-stream' });
+        const [item, original] = await Promise.all([
+            storedItem(DAY, 'clip.mov'),
+            env.MEDIA.head(originalKey(versionId)),
+        ]);
+
+        expect(item).toMatchObject({ mediaType: 'image', width: 300, height: 225, versionId });
+        expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
     });
 
     it('makes both thumbnails and the detail image before anyone asks, so the first reader is served what is stored', async () => {
@@ -442,10 +459,7 @@ describe('replacing a media item', () => {
     });
 
     it('turns a photo into a video, with the transcoder', async () => {
-        const versionId = await stage(`${DAY}felix.mov`, new Uint8Array(10), {
-            replaces: `${DAY}felix.jpg`,
-            contentType: 'video/quicktime',
-        });
+        const versionId = await stage(`${DAY}felix.mov`, mov, { replaces: `${DAY}felix.jpg` });
         standInTranscoder(transcoding);
         await deliver(versionId);
         const clip = await storedItem(DAY, 'felix.mov');
@@ -465,8 +479,21 @@ describe('replacing a media item', () => {
 describe('image uploads', () => {
     beforeEach(seedDay);
 
-    it('records a file that is no image instead of an item, and drops it', async () => {
-        const versionId = await upload(`${DAY}broken.jpg`, new Uint8Array(10));
+    it('records a file in no format the gallery takes instead of an item, and drops it', async () => {
+        const versionId = await upload(`${DAY}notes.jpg`, new TextEncoder().encode('just some notes'));
+        const [item, inbox, errors] = await Promise.all([
+            storedItem(DAY, 'notes.jpg'),
+            env.MEDIA.head(inboxKey(versionId)),
+            uploadErrors([`${DAY}notes.jpg`]),
+        ]);
+
+        expect(item).toBeUndefined();
+        expect(inbox).toBeNull();
+        expect(errors[`${DAY}notes.jpg`]).toBe('not a photo or video in a format the gallery takes');
+    });
+
+    it('records a JPEG whose header says no size instead of an item, and drops it', async () => {
+        const versionId = await upload(`${DAY}broken.jpg`, Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0]));
         const [item, originals, inbox, errors] = await Promise.all([
             storedItem(DAY, 'broken.jpg'),
             env.MEDIA.list({ prefix: 'originals/' }),
@@ -477,7 +504,7 @@ describe('image uploads', () => {
         expect(item).toBeUndefined();
         expect(originals.objects).toHaveLength(0);
         expect(inbox).toBeNull();
-        expect(errors[`${DAY}broken.jpg`]).toContain('not a readable image');
+        expect(errors[`${DAY}broken.jpg`]).toBe('the image does not say its size');
     });
 });
 
@@ -515,7 +542,7 @@ describe('video uploads', () => {
 
     it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
         standInTranscoder(rejecting);
-        const versionId = await upload(`${DAY}broken.mov`, new Uint8Array(10), { contentType: 'video/quicktime' });
+        const versionId = await upload(`${DAY}broken.mov`, mov);
         const [item, originals, inbox, errors] = await Promise.all([
             storedItem(DAY, 'broken.mov'),
             env.MEDIA.list({ prefix: 'originals/' }),
@@ -532,9 +559,9 @@ describe('video uploads', () => {
 
     it('clears the error once a later upload of the same path succeeds', async () => {
         standInTranscoder(rejecting);
-        await upload(`${DAY}again.mov`, new Uint8Array(10));
+        await upload(`${DAY}again.mov`, mov);
         standInTranscoder(transcoding);
-        await upload(`${DAY}again.mov`, new Uint8Array(10));
+        await upload(`${DAY}again.mov`, mov);
         const { uploadError } = schema;
         const remaining = await orm(env.DB)
             .select()
@@ -553,7 +580,7 @@ describe('video upload retries', () => {
         standInTranscoder(async () => {
             throw new Error('container unreachable');
         });
-        const versionId = await stage(`${DAY}later.mov`, new Uint8Array(10));
+        const versionId = await stage(`${DAY}later.mov`, mov);
         const acks = await deliver(versionId, {
             until: 'errored',
             modify: async (modifier) => modifier.disableRetryDelays(),
@@ -566,7 +593,7 @@ describe('video upload retries', () => {
 
     it('writes nothing twice when the event is delivered again after success, as Queues may do', async () => {
         standInTranscoder(transcoding);
-        const versionId = await stage(`${DAY}clip.mov`, new Uint8Array(10), { contentType: 'video/quicktime' });
+        const versionId = await stage(`${DAY}clip.mov`, mov);
         await deliver(versionId);
         await deliver(versionId);
         const [item, originals, inbox] = await Promise.all([
@@ -587,7 +614,7 @@ describe('video upload retries', () => {
     });
 
     it('has the container write the MP4 and poster for the version into the derived bucket', async () => {
-        const versionId = await stage(`${DAY}clip.mov`, new Uint8Array(10));
+        const versionId = await stage(`${DAY}clip.mov`, mov);
         const jobs: Record<string, string>[] = [];
         standInTranscoder(async (init) => {
             jobs.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, string>);
@@ -710,6 +737,16 @@ describe('serving an original', () => {
         expect(response.headers.get('content-type')).toBe('image/jpeg');
         expect(response.headers.get('content-disposition')).toContain('filename="IMG_0001.jpg"');
         expect([...body.slice(0, 3)]).toStrictEqual([0xff, 0xd8, 0xff]);
+    });
+
+    it('serves a JPEG under a HEIC name as the JPEG it is, since the stored type is what the file is', async () => {
+        await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        const response = await call(originalUrl(HEIC, 'v1'));
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toBe('image/jpeg');
+        expect(response.headers.get('content-disposition')).toContain('filename="IMG_0001.HEIC"');
     });
 
     it('gives the HEIC itself when asked, and when the binding cannot decode it', async () => {

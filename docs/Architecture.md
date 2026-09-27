@@ -58,7 +58,7 @@ The gallery is a tree, and a path is a URL:
 `shared/src/paths.ts` is the grammar.
 
 - **An album** has a description, a one-line summary, a published flag, and the media item it shows as its thumbnail, from anywhere in its subtree. A day album can be published only while its year is.
-- **A media item** is an image or a video, decided by its extension. It has the version id of its current file, its size, a video's duration, a title, a description, tags, and the rectangle its thumbnail is cut from. It shows whenever its album does.
+- **A media item** is an image or a video, decided by the file's first bytes when it is uploaded. It has the version id of its current file, its size, a video's duration, a title, a description, tags, and the rectangle its thumbnail is cut from. It shows whenever its album does.
 
 ## Database
 

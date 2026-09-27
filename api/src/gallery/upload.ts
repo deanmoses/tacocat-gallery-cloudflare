@@ -3,9 +3,10 @@ import type { RunnableQuery } from 'drizzle-orm/runnable-query';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { WorkflowStep } from 'cloudflare:workers';
 import * as valibot from 'valibot';
-import { type MediaType, type Size, extensionOf, isVideoName, mediaPath } from 'tacocat-gallery-shared';
+import { type MediaType, type Size, extensionOf, mediaPath } from 'tacocat-gallery-shared';
 import { NOW, type Orm, orm, schema } from '../db';
 import { readImage } from '../media/exif';
+import { SNIFF_LENGTH, type SniffedMedia, sniffMedia } from '../media/sniff';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../media/transcoder';
 import { inboxKey, originalKey, posterKey, videoKey } from '../storage/keys';
 import { type S3Credentials, presign } from '../storage/s3';
@@ -51,12 +52,12 @@ export function uploadVersionOf(event: R2EventMessage): string | null {
  * Turns an inbox object into a media item, or into an upload error the admin can read, as one Workflow instance's
  * steps. The object's key is a version id, and its upload row says what the id was minted for; an object nobody
  * presigned is left alone, and one whose upload is already complete is a redelivery, so it is dropped. A step ends
- * where the state changes in a way a retry must respect, and nowhere else: one step makes everything the item needs
- * from the file, the original under a key that never changes and its first derivatives, so a file the Images binding
- * refuses never reaches an album; one writes the item and the upload's completion in one batch; one drops the inbox
- * object last. A video's transcode is a step of its own ahead of those, since it is the slow one and its retries
- * belong to the container. A step's result is what the next needs and never the file, which stays inside the step
- * that reads it.
+ * where the state changes in a way a retry must respect, and nowhere else: one step reads the file's first bytes for
+ * what kind of file it is, which decides the branch; one makes everything the item needs from the file, the original
+ * under a key that never changes and its first derivatives, so a file the Images binding refuses never reaches an
+ * album; one writes the item and the upload's completion in one batch; one drops the inbox object last. A video's
+ * transcode is a step of its own ahead of those, since it is the slow one and its retries belong to the container. A
+ * step's result is what the next needs and never the file, which stays inside the step that reads it.
  */
 export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, step: WorkflowStep): Promise<void> {
     const versionId = uploadVersionOf(event);
@@ -99,10 +100,16 @@ type Prepared =
     | { outcome: 'rejected'; error: string }
     | { outcome: 'ready'; facts: MediaFacts };
 
+type Sniffed =
+    | { outcome: 'redelivered' | 'gone' }
+    | { outcome: 'rejected'; error: string }
+    | ({ outcome: 'sniffed' } & SniffedMedia);
+
 /**
  * Everything the item needs from the file: its facts, the original under its permanent key, and the thumbnail and
- * detail image. An image is read once, in one step, since its bytes cannot cross a step. A video is transcoded in a
- * step of its own, then copied, its stills coming from the poster the container wrote.
+ * detail image. What kind of file it is comes from its first bytes, whatever it was named and whatever type the
+ * browser sent. An image is then read once, in one step, since its bytes cannot cross a step. A video is transcoded
+ * in a step of its own, then copied, its stills coming from the poster the container wrote.
  */
 async function prepare(
     env: UploadEnv,
@@ -112,11 +119,13 @@ async function prepare(
     path: string,
 ): Promise<Prepared> {
     const { versionId } = upload;
-    if (!isVideoName(upload.itemName)) {
+    const kind = await step.do('read what kind of file it is', async () => sniff(env, key, upload));
+    if (kind.outcome !== 'sniffed') {
+        return kind;
+    }
+    const { contentType } = kind;
+    if (kind.mediaType === 'image') {
         return step.do('read the image, store the original and make its derivatives', async () => {
-            if (await redelivered(env, key, upload)) {
-                return { outcome: 'redelivered' };
-            }
             const object = await env.MEDIA.get(key);
             if (!object) {
                 return { outcome: 'gone' };
@@ -126,17 +135,11 @@ async function prepare(
             if (!read.ok) {
                 return { outcome: 'rejected', error: read.error };
             }
-            await storeOriginal(env, versionId, bytes, object, path);
+            await storeOriginal(env, versionId, bytes, contentType, path);
             return deriving(env, path, versionId, { mediaType: 'image', ...read.facts, durationSeconds: null });
         });
     }
     const transcoded = await step.do('transcode the video', async () => {
-        if (await redelivered(env, key, upload)) {
-            return { outcome: 'redelivered' as const };
-        }
-        if ((await env.MEDIA.head(key)) === null) {
-            return { outcome: 'gone' as const };
-        }
         const result = await transcodeVideo(env, await transcodeJob(env, key, versionId));
         return result.ok ? { outcome: 'transcoded' as const, ...result } : { outcome: 'rejected' as const, ...result };
     });
@@ -150,7 +153,7 @@ async function prepare(
         if (!fresh) {
             return { outcome: 'rejected', error: 'the upload vanished during the transcode' };
         }
-        await storeOriginal(env, versionId, fresh.body, fresh, path);
+        await storeOriginal(env, versionId, fresh.body, contentType, path);
         const { width, height, durationSeconds } = transcoded;
         return deriving(env, path, versionId, {
             mediaType: 'video',
@@ -162,6 +165,21 @@ async function prepare(
             durationSeconds,
         });
     });
+}
+
+/** What the inbox object is, from its first bytes, once the upload is known to be still wanted and the object there. */
+async function sniff(env: UploadEnv, key: string, upload: Upload): Promise<Sniffed> {
+    if (await redelivered(env, key, upload)) {
+        return { outcome: 'redelivered' };
+    }
+    const head = await env.MEDIA.get(key, { range: { offset: 0, length: SNIFF_LENGTH } });
+    if (head === null) {
+        return { outcome: 'gone' };
+    }
+    const sniffed = sniffMedia(new Uint8Array(await head.arrayBuffer()));
+    return sniffed === null
+        ? { outcome: 'rejected', error: 'not a photo or video in a format the gallery takes' }
+        : { outcome: 'sniffed', ...sniffed };
 }
 
 /** Whether the upload was already complete when this instance came to it, in which case its object is dropped. */
@@ -179,18 +197,15 @@ async function deriving(env: UploadEnv, path: string, versionId: string, facts: 
     return warmed.ok ? { outcome: 'ready', facts } : { outcome: 'rejected', error: warmed.error };
 }
 
-/** The file under the key it keeps for good, labelled with the path it was uploaded to. */
+/** The file under the key it keeps for good, typed by what its bytes are, and labelled with the path it was uploaded to. */
 async function storeOriginal(
     env: UploadEnv,
     versionId: string,
     body: ArrayBuffer | ReadableStream,
-    object: R2Object,
+    contentType: string,
     path: string,
 ): Promise<void> {
-    await env.MEDIA.put(originalKey(versionId), body, {
-        httpMetadata: object.httpMetadata ?? {},
-        customMetadata: { path },
-    });
+    await env.MEDIA.put(originalKey(versionId), body, { httpMetadata: { contentType }, customMetadata: { path } });
 }
 
 /**

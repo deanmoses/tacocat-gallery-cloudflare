@@ -1,15 +1,17 @@
-import { isHeicName, parseImageRequest, parseMediaVersion } from 'tacocat-gallery-shared';
+import { parseImageRequest, parseMediaVersion } from 'tacocat-gallery-shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
 import { derivationFor } from '../gallery/derivatives';
 import { type Derivation, type Derivative, IMMUTABLE, type Steps, asJpeg, derivedImage, timed } from '../media/images';
+import { isHeicType } from '../media/sniff';
 import { originalKey } from '../storage/keys';
 
 /**
- * `GET /raw/<media path>/<versionId>`: that version's original, as uploaded. Only Safari can show a HEIC, so one comes
- * back as a full-size JPEG made on the way out, unless `?format=original` asks for the file itself or the Images
- * binding cannot decode it, when the file itself is the best answer there is. The version is the key, so a file that
- * was renamed is still found by an old URL; the path in the URL is for whoever reads it, and names the download.
+ * `GET /raw/<media path>/<versionId>`: that version's original, as uploaded. Only Safari can show a HEIC, which the
+ * original's stored content type says it is, so one comes back as a full-size JPEG made on the way out, unless
+ * `?format=original` asks for the file itself or the Images binding cannot decode it, when the file itself is the
+ * best answer there is. The version is the key, so a file that was renamed is still found by an old URL; the path in
+ * the URL is for whoever reads it, and names the download.
  */
 export async function raw(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -23,7 +25,7 @@ export async function raw(request: Request, env: Env): Promise<Response> {
     }
     const { name } = wanted;
     const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream';
-    if (!isHeicName(name) || url.searchParams.get('format') === 'original') {
+    if (!isHeicType(contentType) || url.searchParams.get('format') === 'original') {
         return file(object.body, contentType, name);
     }
     const bytes = await object.arrayBuffer();
