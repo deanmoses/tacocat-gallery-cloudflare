@@ -56,3 +56,20 @@ describe("the site's headers", () => {
         expect(response.headers.has('cross-origin-resource-policy')).toBe(false);
     });
 });
+
+describe('caching of what the Worker answers', () => {
+    it.each([
+        { name: 'whether an admin is logged in', path: '/api/auth/status', method: 'GET' },
+        { name: 'a search, which an admin sees more of', path: '/api/search/cat', method: 'GET' },
+        { name: 'the health check', path: '/api/health', method: 'GET' },
+        { name: 'a route that is not there', path: '/api/nothing', method: 'GET' },
+        { name: 'an album that is not there', path: '/api/album/1999/', method: 'GET' },
+        { name: 'a photo whose original is not there', path: '/raw/2001/01-01/a/v1', method: 'GET' },
+        { name: 'a write from someone not logged in', path: '/api/album/2001/', method: 'PUT' },
+    ])('has a browser ask again before reusing $name, and no shared cache keep it', async ({ path, method }) => {
+        const response = await call(path, { method });
+        await response.body?.cancel();
+
+        expect(response.headers.get('cache-control')).toBe('private, no-cache');
+    });
+});

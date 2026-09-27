@@ -57,6 +57,11 @@ export function createApp(): Hono<App> {
         for (const [name, value] of Object.entries(SITE_HEADERS)) {
             context.res.headers.set(name, value);
         }
+        // Some answers differ for an admin, and a 404 or 401 changes once the album exists or the admin logs in.
+        // no-cache rather than no-store, so a browser can still use a response the page preloaded.
+        if (!context.res.headers.has('cache-control')) {
+            context.res.headers.set('cache-control', 'private, no-cache');
+        }
         context.res.headers.set('x-worker-colo', colo(context.req.raw));
         context.res.headers.append('server-timing', `worker;dur=${(performance.now() - started).toFixed(1)}`);
     });
