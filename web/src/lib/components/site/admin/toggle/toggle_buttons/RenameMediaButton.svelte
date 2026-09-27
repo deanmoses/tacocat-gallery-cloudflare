@@ -6,15 +6,13 @@
 <script lang="ts">
     import { page } from '$app/state';
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
-    import { isValidMediaNameWithoutExtensionStrict } from '$lib/utils/galleryPathUtils';
     import {
-        baseNameOf,
-        extensionOf,
+        isMediaName,
         isMediaPath,
         mediaKey,
         mediaPath as mediaPathOf,
         parentPathOf,
-        sanitizeMediaBaseName,
+        sanitizeMediaNameAsTyped,
     } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
@@ -26,26 +24,17 @@
     let mediaName: string = $derived(mediaKey(mediaPath)?.itemName ?? '');
     let dialog: { show: () => void } | undefined = $state();
 
-    function originalMediaName(): string {
-        return baseNameOf(mediaName);
-    }
-
-    function fileExtension(): string {
-        return `.${extensionOf(mediaName)}`;
-    }
-
     function onButtonClick(): void {
         dialog?.show();
     }
 
     function onNewMediaName(newMediaName: string): void {
-        const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
-        mediaRenameMachine.renameMediaItem(mediaPath, newMediaPath);
+        mediaRenameMachine.renameMediaItem(mediaPath, mediaPathOf(parentPathOf(mediaPath), newMediaName));
     }
 
     async function validateMediaName(newMediaName: string): Promise<string | undefined> {
-        if (!isValidMediaNameWithoutExtensionStrict(newMediaName)) return 'invalid filename';
-        const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
+        if (!isMediaName(newMediaName)) return 'invalid name';
+        const newMediaPath = mediaPathOf(parentPathOf(mediaPath), newMediaName);
         const albumPath = parentPathOf(newMediaPath);
         const album = albumState.albums.get(albumPath);
         if (!album?.album) return undefined; // album not loaded, cannot check for collision
@@ -53,21 +42,16 @@
         if (media) return 'file already exists';
         return undefined; // name is valid
     }
-
-    function mediaNameWithoutExtensionToPath(mediaNameWithoutExtension: string): string {
-        return mediaPathOf(parentPathOf(mediaPath), mediaNameWithoutExtension + fileExtension());
-    }
 </script>
 
 {#if show}
     <ControlStripButton onclick={onButtonClick} title="Change name on disk"><RenameIcon />Rename</ControlStripButton>
     <TextDialog
         bind:this={dialog}
-        extension={fileExtension()}
-        initialValue={originalMediaName()}
+        initialValue={mediaName}
         label="New Filename"
         onNewValue={onNewMediaName}
-        sanitizor={sanitizeMediaBaseName}
+        sanitizor={sanitizeMediaNameAsTyped}
         validator={validateMediaName}
     />
 {/if}

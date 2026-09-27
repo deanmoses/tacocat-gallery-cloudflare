@@ -24,8 +24,8 @@ describe('HEAD, which the app asks before creating or renaming', () => {
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '01-01', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '02-02', itemType: 'album', published: false }),
-            putItem({ parentPath: '/1982/01-01/', itemName: 'shown.jpg', ...IMAGE, versionId: 'v1' }),
-            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden.jpg', ...IMAGE, versionId: 'v1' }),
+            putItem({ parentPath: '/1982/01-01/', itemName: 'shown', ...IMAGE, versionId: 'v1' }),
+            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE, versionId: 'v1' }),
         ]);
     });
 
@@ -40,7 +40,7 @@ describe('HEAD, which the app asks before creating or renaming', () => {
         { what: 'a published year', path: '/api/album/1982/' },
         { what: 'a published day', path: '/api/album/1982/01-01/' },
         { what: 'a day without its slash', path: '/api/album/1982/01-01' },
-        { what: 'media in a published day', path: '/api/media/1982/01-01/shown.jpg' },
+        { what: 'media in a published day', path: '/api/media/1982/01-01/shown' },
     ])('says $what is there for a guest, with no body', async ({ path }) => {
         const response = await head(path);
 
@@ -50,7 +50,7 @@ describe('HEAD, which the app asks before creating or renaming', () => {
 
     it.each([
         { what: 'an unpublished day', path: '/api/album/1982/02-02/' },
-        { what: 'media in an unpublished day', path: '/api/media/1982/02-02/hidden.jpg' },
+        { what: 'media in an unpublished day', path: '/api/media/1982/02-02/hidden' },
     ])('hides $what from a guest and shows it to an admin', async ({ path }) => {
         const [guest, admin] = await Promise.all([head(path), head(path, true)]);
 
@@ -61,8 +61,8 @@ describe('HEAD, which the app asks before creating or renaming', () => {
     it.each([
         { what: 'a year that does not exist', path: '/api/album/1983/' },
         { what: 'a day that does not exist', path: '/api/album/1982/03-03/' },
-        { what: 'media that does not exist', path: '/api/media/1982/01-01/nope.jpg' },
-        { what: 'media asked for as an album', path: '/api/album/1982/01-01/shown.jpg' },
+        { what: 'media that does not exist', path: '/api/media/1982/01-01/nope' },
+        { what: 'media asked for as an album', path: '/api/album/1982/01-01/shown' },
         { what: 'an album asked for as media', path: '/api/media/1982/01-01/' },
         { what: 'something that is no path at all', path: '/api/album/tacos/' },
     ])('says $what is not there', async ({ path }) => {
@@ -72,7 +72,7 @@ describe('HEAD, which the app asks before creating or renaming', () => {
     });
 
     it('has nothing to GET for media', async () => {
-        const response = await call('/api/media/1982/01-01/shown.jpg');
+        const response = await call('/api/media/1982/01-01/shown');
 
         expect(response.status).toBe(405);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Method Not Allowed' });
@@ -88,7 +88,7 @@ describe('an album', () => {
             putItem({ parentPath: YEAR, itemName: '03-03', itemType: 'album', published: true }),
             putItem({
                 parentPath: DAY,
-                itemName: 'a.jpg',
+                itemName: 'a',
                 itemType: 'media',
                 mediaType: 'image',
                 title: 'Beach',
@@ -100,7 +100,7 @@ describe('an album', () => {
             }),
             putItem({
                 parentPath: DAY,
-                itemName: 'b.mov',
+                itemName: 'b',
                 itemType: 'media',
                 mediaType: 'video',
                 versionId: 'v2',
@@ -109,7 +109,7 @@ describe('an album', () => {
                 durationSeconds: 9.5,
             }),
         ]);
-        await setThumbnail(DAY, '/1981/01-01/a.jpg');
+        await setThumbnail(DAY, '/1981/01-01/a');
     });
 
     // The records the AWS API sent, which the web app parses unchanged: what a record has none of is left out.
@@ -123,15 +123,15 @@ describe('an album', () => {
             itemName: '01-01',
             updatedOn: expect.any(String),
             published: true,
-            thumbnail: { path: '/1981/01-01/a.jpg', versionId: 'v1', crop: CROP },
+            thumbnail: { path: '/1981/01-01/a', versionId: 'v1', crop: CROP },
             summary: 'New year',
             children: [
                 {
                     itemType: 'media',
                     mediaType: 'image',
-                    path: '/1981/01-01/a.jpg',
+                    path: '/1981/01-01/a',
                     parentPath: DAY,
-                    itemName: 'a.jpg',
+                    itemName: 'a',
                     updatedOn: expect.any(String),
                     versionId: 'v1',
                     dimensions: { width: 4000, height: 3000 },
@@ -142,9 +142,9 @@ describe('an album', () => {
                 {
                     itemType: 'media',
                     mediaType: 'video',
-                    path: '/1981/01-01/b.mov',
+                    path: '/1981/01-01/b',
                     parentPath: DAY,
-                    itemName: 'b.mov',
+                    itemName: 'b',
                     updatedOn: expect.any(String),
                     versionId: 'v2',
                     dimensions: { width: 16, height: 9 },
@@ -205,7 +205,7 @@ describe('an album', () => {
         expect(year.path).toBe(YEAR);
     });
 
-    it.each(['/api/album/nope/', '/api/album/1981/12-25/', '/api/album/1981/01-01/a.jpg'])(
+    it.each(['/api/album/nope/', '/api/album/1981/12-25/', '/api/album/1981/01-01/a'])(
         'is not found at %s',
         async (path) => {
             const response = await call(path);
@@ -264,15 +264,15 @@ describe('an album thumbnail', () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '05-05', itemType: 'album', published: true }),
-            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a.jpg', versionId: 'v1' }),
-            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b.jpg', versionId: 'v2' }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a', versionId: 'v1' }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b', versionId: 'v2' }),
         ]);
     });
 
     it('shows on the album and on its entry in the parent', async () => {
-        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b.jpg');
+        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b');
         const [day, year] = await Promise.all([album('/1982/05-05/'), album('/1982/')]);
-        const thumbnail = { path: '/1982/05-05/b.jpg', versionId: 'v2' };
+        const thumbnail = { path: '/1982/05-05/b', versionId: 'v2' };
 
         expect(set.status).toBe(204);
         expect(day.thumbnail).toStrictEqual(thumbnail);
@@ -280,14 +280,14 @@ describe('an album thumbnail', () => {
     });
 
     it('can be a photo from another album, such as a day shown on its year', async () => {
-        const set = await setThumbnail('/1982/', '/1982/05-05/a.jpg');
+        const set = await setThumbnail('/1982/', '/1982/05-05/a');
 
         expect(set.status).toBe(204);
-        expect((await album('/1982/')).thumbnail?.path).toBe('/1982/05-05/a.jpg');
+        expect((await album('/1982/')).thumbnail?.path).toBe('/1982/05-05/a');
     });
 
     it('hands back its bookmark as a header and as a cookie for the browser to read with', async () => {
-        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b.jpg');
+        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b');
         const bookmark = set.headers.get('x-d1-bookmark') ?? '';
 
         expect(bookmark).toMatch(/^\S+$/v);
@@ -297,23 +297,23 @@ describe('an album thumbnail', () => {
     });
 
     it('is read back with the bookmark cookie, in an answer no cache keeps', async () => {
-        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b.jpg');
+        const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b');
         const [cookie = ''] = (set.headers.get('set-cookie') ?? '').split(';', 1);
         const response = await call('/api/album/1982/05-05/', { headers: { cookie } });
 
         expect(response.headers.get('cache-control')).toBe('private, no-store');
-        expect((await parseExactly(response, parseAlbum)).thumbnail?.path).toBe('/1982/05-05/b.jpg');
+        expect((await parseExactly(response, parseAlbum)).thumbnail?.path).toBe('/1982/05-05/b');
     });
 
     it('needs an admin', async () => {
-        const response = await setThumbnail('/1982/05-05/', '/1982/05-05/a.jpg', false);
+        const response = await setThumbnail('/1982/05-05/', '/1982/05-05/a', false);
         await response.body?.cancel();
 
         expect(response.status).toBe(401);
     });
 
     it('is not found for an album that does not exist, and changes nothing', async () => {
-        const response = await setThumbnail('/1982/06-06/', '/1982/06-06/a.jpg');
+        const response = await setThumbnail('/1982/06-06/', '/1982/06-06/a');
 
         expect(response.status).toBe(404);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Album not found: [/1982/06-06/]' });
@@ -324,19 +324,19 @@ describe('an album thumbnail', () => {
         {
             what: 'a media item that does not exist',
             albumPath: '/1982/05-05/',
-            mediaPath: '/1982/05-05/nope.jpg',
-            message: 'Media not found: [/1982/05-05/nope.jpg]',
+            mediaPath: '/1982/05-05/nope',
+            message: 'Media not found: [/1982/05-05/nope]',
         },
         {
             what: 'a media item in another album',
             albumPath: '/1982/05-05/',
-            mediaPath: '/1982/06-06/a.jpg',
-            message: 'Media [/1982/06-06/a.jpg] is not in album [/1982/05-05/]',
+            mediaPath: '/1982/06-06/a',
+            message: 'Media [/1982/06-06/a] is not in album [/1982/05-05/]',
         },
         {
             what: 'the root album',
             albumPath: '/',
-            mediaPath: '/1982/05-05/a.jpg',
+            mediaPath: '/1982/05-05/a',
             message: 'Cannot set a thumbnail on the root album',
         },
         {

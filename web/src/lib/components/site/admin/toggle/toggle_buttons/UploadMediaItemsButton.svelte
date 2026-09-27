@@ -9,7 +9,7 @@
     import type { MediaItemToUpload } from '$lib/models/album';
     import { albumState } from '$lib/stores/AlbumState.svelte';
     import { getSanitizedFiles, uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
-    import { validMediaExtensionsString } from '$lib/utils/galleryPathUtils';
+    import { acceptedExtensions } from '$lib/utils/fileFormats';
     import { isDayAlbumPath, pathOfUrl } from 'tacocat-gallery-shared';
     import { markReplacements } from '$lib/utils/uploadUtils';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
@@ -51,7 +51,7 @@
     <input
         bind:this={fileInput}
         style:display="none"
-        accept={validMediaExtensionsString()}
+        accept={acceptedExtensions()}
         multiple
         onchange={onFilesSelected}
         type="file"

@@ -22,7 +22,7 @@ describe('search', () => {
         await putItem({ parentPath: '/2024/', itemName: '07-01', itemType: 'album', published: true });
         await putItem({
             parentPath: '/2024/07-01/',
-            itemName: 'quesadilla.jpg',
+            itemName: 'quesadilla',
             ...MEDIA,
             title: 'Quesadilla night',
             description: 'Quesadillas at home',
@@ -37,9 +37,9 @@ describe('search', () => {
                 {
                     itemType: 'media',
                     mediaType: 'image',
-                    path: '/2024/07-01/quesadilla.jpg',
+                    path: '/2024/07-01/quesadilla',
                     parentPath: '/2024/07-01/',
-                    itemName: 'quesadilla.jpg',
+                    itemName: 'quesadilla',
                     updatedOn: expect.any(String),
                     versionId: 'v1',
                     dimensions: { width: 4, height: 3 },
@@ -60,10 +60,10 @@ describe('search', () => {
             summary: 'Tostada',
             published: true,
         });
-        await putItem({ parentPath: '/2024/07-03/', itemName: 'a.jpg', ...MEDIA });
+        await putItem({ parentPath: '/2024/07-03/', itemName: 'a', ...MEDIA });
         await callAsAdmin('/api/album-thumb/2024/07-03/', {
             method: 'PATCH',
-            body: JSON.stringify({ mediaPath: '/2024/07-03/a.jpg' }),
+            body: JSON.stringify({ mediaPath: '/2024/07-03/a' }),
         });
         const found = await search('tostada');
 
@@ -76,13 +76,13 @@ describe('search', () => {
                 updatedOn: expect.any(String),
                 published: true,
                 summary: 'Tostada',
-                thumbnail: { path: '/2024/07-03/a.jpg', versionId: 'v1' },
+                thumbnail: { path: '/2024/07-03/a', versionId: 'v1' },
             },
         ]);
     });
 
     it('follows an update to the title', async () => {
-        const item: ItemWrite = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal.jpg' };
+        const item: ItemWrite = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal' };
         await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
@@ -94,12 +94,12 @@ describe('search', () => {
 
     it('needs every word to match', async () => {
         await putItem({ parentPath: '/2024/', itemName: '07-04', itemType: 'album', published: true });
-        await putItem({ parentPath: '/2024/07-04/', itemName: 'a.jpg', ...MEDIA, title: 'Felix on the beach' });
-        await putItem({ parentPath: '/2024/07-04/', itemName: 'b.jpg', ...MEDIA, title: 'Felix at home' });
+        await putItem({ parentPath: '/2024/07-04/', itemName: 'a', ...MEDIA, title: 'Felix on the beach' });
+        await putItem({ parentPath: '/2024/07-04/', itemName: 'b', ...MEDIA, title: 'Felix at home' });
         const [both, one] = await Promise.all([search('felix'), search('felix beach')]);
 
-        expect(paths(both)).toStrictEqual(['/2024/07-04/a.jpg', '/2024/07-04/b.jpg']);
-        expect(paths(one)).toStrictEqual(['/2024/07-04/a.jpg']);
+        expect(paths(both)).toStrictEqual(['/2024/07-04/a', '/2024/07-04/b']);
+        expect(paths(one)).toStrictEqual(['/2024/07-04/a']);
     });
 
     it.each(['(felix', 'NOT felix', 'felix OR', 'title:felix', '"felix', 'felix)', '@title:felix'])(
@@ -145,15 +145,15 @@ describe('search', () => {
         beforeEach(async () => {
             await putItem({ parentPath: '/2024/', itemName: '07-05', itemType: 'album', published: true });
             await Promise.all([
-                putItem({ ...ITEM, itemName: 'a.jpg', title: 'Felix on the beach', tags: ['sand'] }),
-                putItem({ ...ITEM, itemName: 'b.jpg', title: 'Beach Felix' }),
-                putItem({ ...ITEM, itemName: 'c.jpg', title: 'Milo at home', description: 'With Felix' }),
-                putItem({ ...ITEM, itemName: 'd.mp4', mediaType: 'video', durationSeconds: 9, title: 'Felix swims' }),
-                putItem({ ...ITEM, itemName: 'e.jpg', title: 'Beach alone' }),
-                putItem({ ...ITEM, itemName: 'pat1.jpg' }),
-                putItem({ ...ITEM, itemName: 'IMG_0715.jpg' }),
-                putItem({ ...ITEM, itemName: 'school.jpg', title: 'École' }),
-                putItem({ ...ITEM, itemName: 'trip.jpg', title: 'Vacation', description: 'A celebration' }),
+                putItem({ ...ITEM, itemName: 'a', title: 'Felix on the beach', tags: ['sand'] }),
+                putItem({ ...ITEM, itemName: 'b', title: 'Beach Felix' }),
+                putItem({ ...ITEM, itemName: 'c', title: 'Milo at home', description: 'With Felix' }),
+                putItem({ ...ITEM, itemName: 'd', mediaType: 'video', durationSeconds: 9, title: 'Felix swims' }),
+                putItem({ ...ITEM, itemName: 'e', title: 'Beach alone' }),
+                putItem({ ...ITEM, itemName: 'pat1' }),
+                putItem({ ...ITEM, itemName: 'img_0715' }),
+                putItem({ ...ITEM, itemName: 'school', title: 'École' }),
+                putItem({ ...ITEM, itemName: 'trip', title: 'Vacation', description: 'A celebration' }),
             ]);
         });
 
@@ -162,53 +162,53 @@ describe('search', () => {
         }
 
         it.each([
-            { terms: 'beach felix', names: ['a.jpg', 'b.jpg'], what: 'words anywhere, in any order' },
-            { terms: '"beach felix"', names: ['b.jpg'], what: 'a phrase in order' },
-            { terms: 'fel*', names: ['a.jpg', 'b.jpg', 'c.jpg', 'd.mp4'], what: 'a prefix' },
-            { terms: 'beach -felix', names: ['e.jpg'], what: 'a word to leave out' },
-            { terms: 'home | swims', names: ['c.jpg', 'd.mp4'], what: 'either of two words' },
-            { terms: '@title:felix', names: ['a.jpg', 'b.jpg', 'd.mp4'], what: 'a word in one field' },
-            { terms: '@description:felix', names: ['c.jpg'], what: 'a word in another field' },
-            { terms: '@title|tags:sand', names: ['a.jpg'], what: 'a word in either of two fields' },
-            { terms: '(home | swims) -milo', names: ['d.mp4'], what: 'a group' },
-            { terms: 'felix (-milo)', names: ['a.jpg', 'b.jpg', 'd.mp4'], what: 'a word left out inside a group' },
-            { terms: 'beach @title:-felix', names: ['e.jpg'], what: 'a word left out of one field' },
+            { terms: 'beach felix', names: ['a', 'b'], what: 'words anywhere, in any order' },
+            { terms: '"beach felix"', names: ['b'], what: 'a phrase in order' },
+            { terms: 'fel*', names: ['a', 'b', 'c', 'd'], what: 'a prefix' },
+            { terms: 'beach -felix', names: ['e'], what: 'a word to leave out' },
+            { terms: 'home | swims', names: ['c', 'd'], what: 'either of two words' },
+            { terms: '@title:felix', names: ['a', 'b', 'd'], what: 'a word in one field' },
+            { terms: '@description:felix', names: ['c'], what: 'a word in another field' },
+            { terms: '@title|tags:sand', names: ['a'], what: 'a word in either of two fields' },
+            { terms: '(home | swims) -milo', names: ['d'], what: 'a group' },
+            { terms: 'felix (-milo)', names: ['a', 'b', 'd'], what: 'a word left out inside a group' },
+            { terms: 'beach @title:-felix', names: ['e'], what: 'a word left out of one field' },
         ])('finds $what: $terms', async ({ terms, names: expected }) => {
             expect(names(await search(terms))).toStrictEqual(expected);
         });
 
         it.each([
-            { terms: 'felix at the beach', names: ['a.jpg', 'b.jpg'], what: 'stop words among the words are dropped' },
-            { terms: '"felix on the beach"', names: ['a.jpg'], what: 'stop words in a phrase count' },
-            { terms: 'beaches', names: ['a.jpg', 'b.jpg', 'e.jpg'], what: 'a word matches its other forms' },
-            { terms: 'vacati*', names: ['trip.jpg'], what: 'a prefix matches the word as typed, past its stem' },
-            { terms: 'celebrati*', names: ['trip.jpg'], what: 'in any field' },
-            { terms: 'vacat*', names: ['trip.jpg'], what: 'and short of it' },
-            { terms: 'ecole', names: ['school.jpg'], what: 'an accent need not be typed' },
-            { terms: 'ÉCOLE', names: ['school.jpg'], what: 'nor case' },
-            { terms: 'felix video', names: ['d.mp4'], what: 'a video is a video, a movie and a clip' },
+            { terms: 'felix at the beach', names: ['a', 'b'], what: 'stop words among the words are dropped' },
+            { terms: '"felix on the beach"', names: ['a'], what: 'stop words in a phrase count' },
+            { terms: 'beaches', names: ['a', 'b', 'e'], what: 'a word matches its other forms' },
+            { terms: 'vacati*', names: ['trip'], what: 'a prefix matches the word as typed, past its stem' },
+            { terms: 'celebrati*', names: ['trip'], what: 'in any field' },
+            { terms: 'vacat*', names: ['trip'], what: 'and short of it' },
+            { terms: 'ecole', names: ['school'], what: 'an accent need not be typed' },
+            { terms: 'ÉCOLE', names: ['school'], what: 'nor case' },
+            { terms: 'felix video', names: ['d'], what: 'a video is a video, a movie and a clip' },
             {
                 terms: 'felix photo',
-                names: ['a.jpg', 'b.jpg', 'c.jpg'],
+                names: ['a', 'b', 'c'],
                 what: 'a photo is a photo, an image and a picture',
             },
-            { terms: 'pat', names: ['pat1.jpg'], what: 'the letters of a file name are a word' },
-            { terms: 'pat1', names: ['pat1.jpg'], what: 'so is the name as typed' },
-            { terms: '0715', names: ['IMG_0715.jpg'], what: 'and so are the digits' },
-            { terms: 'img', names: ['IMG_0715.jpg'], what: 'an underscore parts words' },
+            { terms: 'pat', names: ['pat1'], what: 'the letters of a file name are a word' },
+            { terms: 'pat1', names: ['pat1'], what: 'so is the name as typed' },
+            { terms: '0715', names: ['img_0715'], what: 'and so are the digits' },
+            { terms: 'img', names: ['img_0715'], what: 'an underscore parts words' },
         ])('$what: $terms', async ({ terms, names: expected }) => {
             expect(names(await search(terms))).toStrictEqual(expected);
         });
 
         it('indexes a renamed file under its new name', async () => {
-            await callAsAdmin(`/api/media-rename${DAY}pat1.jpg`, {
+            await callAsAdmin(`/api/media-rename${DAY}pat1`, {
                 method: 'POST',
-                body: JSON.stringify({ newName: 'nachos2.jpg' }),
+                body: JSON.stringify({ newName: 'nachos2' }),
             });
             const [before, after] = await Promise.all([search('pat'), search('nachos')]);
 
             expect(names(before)).toStrictEqual([]);
-            expect(names(after)).toStrictEqual(['nachos2.jpg']);
+            expect(names(after)).toStrictEqual(['nachos2']);
         });
     });
 
@@ -229,8 +229,8 @@ describe('search', () => {
                         summary: 'Picnic',
                         published: true,
                     }),
-                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'a.jpg', ...MEDIA, title: 'Picnic' }),
-                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'b.jpg', ...MEDIA, title: 'Picnic' }),
+                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'a', ...MEDIA, title: 'Picnic' }),
+                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'b', ...MEDIA, title: 'Picnic' }),
                 ]),
             );
         });
@@ -241,21 +241,21 @@ describe('search', () => {
             expect(found.total).toBe(9);
             expect(paths(found)).toStrictEqual([
                 '/2003/06-15/',
-                '/2003/06-15/a.jpg',
-                '/2003/06-15/b.jpg',
+                '/2003/06-15/a',
+                '/2003/06-15/b',
                 '/2002/06-15/',
-                '/2002/06-15/a.jpg',
-                '/2002/06-15/b.jpg',
+                '/2002/06-15/a',
+                '/2002/06-15/b',
                 '/2001/06-15/',
-                '/2001/06-15/a.jpg',
-                '/2001/06-15/b.jpg',
+                '/2001/06-15/a',
+                '/2001/06-15/b',
             ]);
         });
 
         it('lists them oldest first when asked', async () => {
             const found = await search('picnic', 'oldestFirst=true');
 
-            expect(paths(found).slice(0, 3)).toStrictEqual(['/2001/06-15/', '/2001/06-15/a.jpg', '/2001/06-15/b.jpg']);
+            expect(paths(found).slice(0, 3)).toStrictEqual(['/2001/06-15/', '/2001/06-15/a', '/2001/06-15/b']);
         });
 
         it('keeps to the years asked for, and counts only those', async () => {
@@ -269,7 +269,7 @@ describe('search', () => {
             expect(paths(from).every((path) => !path.startsWith('/2001/'))).toBe(true);
             expect(to.total).toBe(3);
             expect(paths(to).every((path) => path.startsWith('/2001/'))).toBe(true);
-            expect(paths(between)).toStrictEqual(['/2002/06-15/', '/2002/06-15/a.jpg', '/2002/06-15/b.jpg']);
+            expect(paths(between)).toStrictEqual(['/2002/06-15/', '/2002/06-15/a', '/2002/06-15/b']);
         });
 
         it('lists a year album after its days newest first, and before them oldest first', async () => {
@@ -278,8 +278,8 @@ describe('search', () => {
 
             expect(paths(newest).slice(3, 7)).toStrictEqual([
                 '/2002/06-15/',
-                '/2002/06-15/a.jpg',
-                '/2002/06-15/b.jpg',
+                '/2002/06-15/a',
+                '/2002/06-15/b',
                 '/2002/',
             ]);
             expect(paths(oldest).slice(3, 5)).toStrictEqual(['/2002/', '/2002/06-15/']);
@@ -293,19 +293,9 @@ describe('search', () => {
             ]);
 
             expect([first.total, second.total, last.total]).toStrictEqual([9, 9, 9]);
-            expect(paths(first)).toStrictEqual([
-                '/2003/06-15/',
-                '/2003/06-15/a.jpg',
-                '/2003/06-15/b.jpg',
-                '/2002/06-15/',
-            ]);
-            expect(paths(second)).toStrictEqual([
-                '/2002/06-15/a.jpg',
-                '/2002/06-15/b.jpg',
-                '/2001/06-15/',
-                '/2001/06-15/a.jpg',
-            ]);
-            expect(paths(last)).toStrictEqual(['/2001/06-15/b.jpg']);
+            expect(paths(first)).toStrictEqual(['/2003/06-15/', '/2003/06-15/a', '/2003/06-15/b', '/2002/06-15/']);
+            expect(paths(second)).toStrictEqual(['/2002/06-15/a', '/2002/06-15/b', '/2001/06-15/', '/2001/06-15/a']);
+            expect(paths(last)).toStrictEqual(['/2001/06-15/b']);
         });
 
         it.each(['oldest=99', 'newest=abcd', 'startAt=-1', 'pageSize=0', 'pageSize=101'])(
@@ -336,9 +326,9 @@ describe('search', () => {
                     summary: 'Fajita',
                     published: false,
                 }),
-                putItem({ parentPath: '/2024/07-10/', itemName: 'shown.jpg', ...MEDIA, title: 'Fajita' }),
-                putItem({ parentPath: '/2024/07-11/', itemName: 'hidden.jpg', ...MEDIA, title: 'Fajita' }),
-                putItem({ parentPath: '/2024/07-12/', itemName: 'no-album.jpg', ...MEDIA, title: 'Fajita' }),
+                putItem({ parentPath: '/2024/07-10/', itemName: 'shown', ...MEDIA, title: 'Fajita' }),
+                putItem({ parentPath: '/2024/07-11/', itemName: 'hidden', ...MEDIA, title: 'Fajita' }),
+                putItem({ parentPath: '/2024/07-12/', itemName: 'no_album', ...MEDIA, title: 'Fajita' }),
             ]);
         });
 
@@ -346,7 +336,7 @@ describe('search', () => {
             const found = await search('fajita');
 
             expect(found.total).toBe(2);
-            expect(paths(found)).toStrictEqual(['/2024/07-10/', '/2024/07-10/shown.jpg']);
+            expect(paths(found)).toStrictEqual(['/2024/07-10/', '/2024/07-10/shown']);
         });
 
         it('shows an admin everything', async () => {
@@ -354,11 +344,11 @@ describe('search', () => {
 
             expect(found.total).toBe(5);
             expect(paths(found)).toStrictEqual([
-                '/2024/07-12/no-album.jpg',
+                '/2024/07-12/no_album',
                 '/2024/07-11/',
-                '/2024/07-11/hidden.jpg',
+                '/2024/07-11/hidden',
                 '/2024/07-10/',
-                '/2024/07-10/shown.jpg',
+                '/2024/07-10/shown',
             ]);
         });
     });

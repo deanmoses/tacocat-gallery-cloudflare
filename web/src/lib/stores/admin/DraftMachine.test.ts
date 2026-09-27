@@ -15,7 +15,7 @@ import { DraftStatus } from '$lib/models/draft';
  * rather than by constructing one.
  */
 const ALBUM_PATH = '/2001/12-31/';
-const MEDIA_PATH = '/2001/12-31/image.jpg';
+const MEDIA_PATH = '/2001/12-31/image';
 
 describe('draftMachine', () => {
     beforeEach(() => {

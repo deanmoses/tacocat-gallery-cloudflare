@@ -12,7 +12,7 @@ describe('derived images through the CDN', () => {
                 new Response('webp bytes', { headers: { 'content-type': 'image/webp', 'cf-cache-status': 'HIT' } }),
             );
         const path = imageUrl({
-            path: '/2001/01-01/a.jpg',
+            path: '/2001/01-01/a',
             versionId: 'v1',
             size: { width: 200, height: 200 },
             crop: null,
@@ -28,7 +28,7 @@ describe('derived images through the CDN', () => {
 
 describe('derived images through the Cache API', () => {
     const path = imageUrl({
-        path: '/2001/01-01/a.jpg',
+        path: '/2001/01-01/a',
         versionId: 'v1',
         size: { width: 200, height: 200 },
         crop: null,
@@ -43,7 +43,7 @@ describe('derived images through the Cache API', () => {
 
     it('reads its path percent-decoded, as the raw and video routes read theirs', async () => {
         await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
-        const response = await call(path.replace('a.jpg', 'a%2Ejpg'));
+        const response = await call(path.replace('/a/', '/%61/'));
         await response.body?.cancel();
 
         expect(response.status).toBe(200);

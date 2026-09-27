@@ -2,7 +2,7 @@
 // path finds nothing in the dashboard; this is the way from a path to its objects. Reads the deployed database with
 // the account token and lists the buckets through the S3 API, both with what api/.dev.vars holds.
 //
-// Usage: node api/scripts/media.ts /2024/12-17/felix.jpg [--env production]
+// Usage: node api/scripts/media.ts /2024/12-17/felix [--env production]
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
@@ -34,7 +34,7 @@ const key = mediaKey(galleryPath);
 const envAt = process.argv.indexOf('--env');
 const environment = envAt === -1 ? 'staging' : process.argv[envAt + 1];
 if (key === null || (environment !== 'staging' && environment !== 'production')) {
-    throw new Error('Usage: node api/scripts/media.ts /2024/12-17/felix.jpg [--env staging|production]');
+    throw new Error('Usage: node api/scripts/media.ts /2024/12-17/felix [--env staging|production]');
 }
 const target = TARGETS[environment];
 

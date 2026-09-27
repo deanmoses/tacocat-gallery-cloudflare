@@ -1,7 +1,7 @@
 import type { MediaRecord } from './server';
 import type { MediaType, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 import { ThumbableBaseImpl } from './ThumbableBaseImpl';
-import { toTitleFromFilename } from '$lib/utils/titleUtils';
+import { titleFromName } from '$lib/utils/titleUtils';
 
 /**
  * Base class for media thumbables (search results context).
@@ -20,7 +20,7 @@ export abstract class MediaThumbableBaseImpl extends ThumbableBaseImpl implement
     abstract readonly mediaType: MediaType;
 
     get title(): string {
-        return this.json.title ?? toTitleFromFilename(this.json.itemName);
+        return this.json.title ?? titleFromName(this.json.itemName);
     }
 
     set title(title: string) {

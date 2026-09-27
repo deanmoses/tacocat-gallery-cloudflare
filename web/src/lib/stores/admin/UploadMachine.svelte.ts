@@ -1,13 +1,20 @@
 import { toast } from '@zerodevx/svelte-toast';
 import { type MediaItemToUpload, UploadState } from '$lib/models/album';
 import { albumState, getUploadsForAlbum } from '../AlbumState.svelte';
-import { deduplicateMediaPaths, hasValidMediaExtension } from '$lib/utils/galleryPathUtils';
+
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
 import { fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
-import { type PresignedUpload, isMediaPath, parentPathOf, sanitizeMediaFilename } from 'tacocat-gallery-shared';
-import { getProcessingTimeout } from '$lib/utils/fileFormats';
+import {
+    type PresignedUpload,
+    deduplicateNames,
+    isMediaPath,
+    mediaPath,
+    parentPathOf,
+    sanitizeMediaName,
+} from 'tacocat-gallery-shared';
+import { isMediaFile, processingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 
 /**
@@ -30,8 +37,8 @@ class UploadMachine {
     //    To read this store's state, use one of the public $derived() fields
     //
 
-    uploadMediaItem(path: string, file: File, replaces?: string): void {
-        void this.#uploadMediaItem(path, file, replaces); // invoke async service in fire-and-forget fashion
+    uploadMediaItem(path: string, file: File, replace = false): void {
+        void this.#uploadMediaItem(path, file, replace); // invoke async service in fire-and-forget fashion
     }
 
     uploadMediaItems(albumPath: string, mediaItemsToUpload: MediaItemToUpload[]): void {
@@ -98,20 +105,16 @@ class UploadMachine {
     //
 
     /**
-     * Upload one media item, replacing the item at `replaces` when there is one.
+     * Upload one media item, replacing the item at `path` when `replace` says so.
      *
      * @param path the media path the item will have
      * @param file A File object from browser's file picker
      */
-    async #uploadMediaItem(path: string, file: File, replaces?: string): Promise<void> {
+    async #uploadMediaItem(path: string, file: File, replace: boolean): Promise<void> {
         try {
             const albumPath = parentPathOf(path);
             this.#uploadEnqueued(path, file);
-            await this.#uploadSingleMediaItem(albumPath, {
-                file,
-                path,
-                ...(replaces === undefined ? {} : { replaces }),
-            });
+            await this.#uploadSingleMediaItem(albumPath, { file, path, ...(replace && { replace }) });
             await this.#pollForProcessedMediaItems(albumPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -122,7 +125,7 @@ class UploadMachine {
     /** Upload a single media item after it's been enqueued */
     async #uploadSingleMediaItem(albumPath: string, mediaItemToUpload: MediaItemToUpload): Promise<void> {
         // Validate extension and path
-        if (!hasValidMediaExtension(mediaItemToUpload.file.name)) {
+        if (!isMediaFile(mediaItemToUpload.file.name)) {
             this.#uploadSkipped(mediaItemToUpload.path, `Invalid file type: [${mediaItemToUpload.file.name}]`);
             this.#uploadComplete(mediaItemToUpload.path);
             return;
@@ -161,7 +164,7 @@ class UploadMachine {
 
             // Validate file extensions and media paths
             itemsToUpload = itemsToUpload.filter((mediaItemToUpload) => {
-                if (!hasValidMediaExtension(mediaItemToUpload.file.name)) {
+                if (!isMediaFile(mediaItemToUpload.file.name)) {
                     this.#uploadSkipped(mediaItemToUpload.path, `Invalid file type: [${mediaItemToUpload.file.name}]`);
                     return false;
                 }
@@ -236,7 +239,7 @@ class UploadMachine {
 
         // Calculate max poll attempts based on the slowest-processing file type
         const uploads = getUploadsForAlbum(albumPath);
-        const maxTimeoutMs = Math.max(...uploads.map((upload) => getProcessingTimeout(upload.path)));
+        const maxTimeoutMs = Math.max(...uploads.map((upload) => processingTimeout(upload.file.name)));
         const maxPollAttempts = Math.ceil(maxTimeoutMs / POLL_INTERVAL_MS);
 
         let processingComplete: boolean;
@@ -291,9 +294,9 @@ class UploadMachine {
 }
 export const uploadMachine = new UploadMachine();
 
-/** What the server is told about an upload: where it goes, and for a replacement, what it replaces */
-function presignEntry(item: MediaItemToUpload): { path: string; replaces?: string } {
-    return { path: item.path, ...(item.replaces === undefined ? {} : { replaces: item.replaces }) };
+/** What the server is told about an upload: where it goes, and whether it replaces the item there */
+function presignEntry(item: MediaItemToUpload): { path: string; replace?: boolean } {
+    return { path: item.path, ...(item.replace === true && { replace: true }) };
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -306,22 +309,12 @@ async function sleep(ms: number): Promise<void> {
 // Utils for working with machine
 //
 
+/**
+ * The files with the path each will have in the album: its name sanitized, and where two files of the drop come out
+ * the same, as my-photo.jpg and my_photo.heic do, the later ones suffixed `_2`, `_3` and so on.
+ */
 export function getSanitizedFiles(files: FileList | File[], albumPath: string): MediaItemToUpload[] {
-    // Create sanitized paths for all files
-    const filesWithPaths: MediaItemToUpload[] = [];
-    for (const file of files) {
-        const path = albumPath + sanitizeMediaFilename(file.name);
-        filesWithPaths.push({ file, path });
-    }
-
-    // Deduplicate paths
-    // e.g., my-photo.jpg and my_photo.jpg both become my_photo.jpg, and therefore one needs to become my_photo_1.jpg
-    const originalPaths = filesWithPaths.map((item) => item.path);
-    const deduplicatedPaths = deduplicateMediaPaths(originalPaths);
-
-    // Build result with deduplicated paths, which come back one per original path in the same order
-    return filesWithPaths.map((item, index) => ({
-        file: item.file,
-        path: deduplicatedPaths[index] ?? item.path,
-    }));
+    const fileList = [...files];
+    const names = deduplicateNames(fileList.map((file) => sanitizeMediaName(file.name)));
+    return fileList.map((file, index) => ({ file, path: mediaPath(albumPath, names[index] ?? '') }));
 }

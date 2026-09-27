@@ -60,7 +60,7 @@ describe('saving an item', () => {
         {
             what: 'a video',
             stale: STALE_VIDEO,
-            saved: { itemName: 'b.mov', ...MEDIA, mediaType: 'video', durationSeconds: 1 } as const,
+            saved: { itemName: 'b', ...MEDIA, mediaType: 'video', durationSeconds: 1 } as const,
         },
     ])(
         'leaves $what as a fresh insert of the same values would, clearing every field left out',
@@ -84,7 +84,7 @@ describe('saving an item', () => {
 
     it('keeps when an item was made and moves when it was changed', async () => {
         const database = orm(env.DB);
-        const saved = { parentPath: '/2001/06-15/', itemName: 'kept.jpg', ...MEDIA };
+        const saved = { parentPath: '/2001/06-15/', itemName: 'kept', ...MEDIA };
         await upsertItem(database, saved).run();
         const before = await storedItem(saved.parentPath, saved.itemName);
         // SQLite's clock has millisecond resolution, so the second save lands in a later millisecond.
@@ -104,7 +104,7 @@ describe('saving an item', () => {
 
 describe('saving an item through the API', () => {
     const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
-    const ITEM = { ...IMAGE, parentPath: '/2024/09-01/', itemName: 'a.jpg' } as const;
+    const ITEM = { ...IMAGE, parentPath: '/2024/09-01/', itemName: 'a' } as const;
 
     it('answers with a bookmark to read the write back with, and no body', async () => {
         const response = await putItem({ ...ITEM, title: 'Saved', thumbnailCrop: { x: 1, y: 1, width: 2, height: 2 } });
@@ -130,8 +130,9 @@ describe('saving an item through the API', () => {
         { name: 'a media item with no media type', body: { ...ITEM, mediaType: undefined } },
         { name: 'an album with a media type', body: { ...ITEM, itemType: 'album' } },
         { name: 'media marked published', body: { ...ITEM, published: true } },
-        { name: 'a name spelled jpeg', body: { ...ITEM, itemName: 'a.jpeg' } },
-        { name: 'an extension the gallery does not take', body: { ...ITEM, itemName: 'a.txt' } },
+        { name: 'a name with an extension', body: { ...ITEM, itemName: 'a.jpg' } },
+        { name: 'a name with a capital', body: { ...ITEM, itemName: 'A' } },
+        { name: 'a name with a hyphen', body: { ...ITEM, itemName: 'a-1' } },
         { name: 'a blank title', body: { ...ITEM, title: '  ' } },
         { name: 'no tags in the list', body: { ...ITEM, tags: [] } },
         { name: 'a blank tag', body: { ...ITEM, tags: ['sand', ''] } },
@@ -154,7 +155,7 @@ describe('saving an item through the API', () => {
         { name: 'an image with a duration', body: { ...ITEM, durationSeconds: 3 }, constraint: 'item_duration_check' },
         {
             name: 'a video without one',
-            body: { ...ITEM, itemName: 'a.mov', mediaType: 'video' },
+            body: { ...ITEM, itemName: 'a', mediaType: 'video' },
             constraint: 'item_duration_check',
         },
     ])('is refused for $name, naming the constraint', async ({ body, constraint }) => {
@@ -175,23 +176,19 @@ describe('saving an item through the API', () => {
         { name: 'an album name holding a path', body: { parentPath: '/', itemName: '2024/09-01', itemType: 'album' } },
         {
             name: 'media in a year album',
-            body: { ...IMAGE, parentPath: '/2024/', itemName: 'a.jpg' },
+            body: { ...IMAGE, parentPath: '/2024/', itemName: 'a' },
         },
         {
             name: 'a parent path with no slash',
-            body: { ...IMAGE, parentPath: '/2024/09-01', itemName: 'a.jpg' },
+            body: { ...IMAGE, parentPath: '/2024/09-01', itemName: 'a' },
         },
         {
             name: 'a media name holding a path',
-            body: { ...IMAGE, parentPath: '/2024/', itemName: '09-01/a.jpg' },
+            body: { ...IMAGE, parentPath: '/2024/', itemName: '09-01/a' },
         },
         {
-            name: 'an image named as a video',
-            body: { ...IMAGE, parentPath: '/2024/09-01/', itemName: 'a.mov' },
-        },
-        {
-            name: 'a video named as an image',
-            body: { ...IMAGE, parentPath: '/2024/09-01/', itemName: 'a.jpg', mediaType: 'video' },
+            name: 'a day the calendar does not have',
+            body: { ...IMAGE, parentPath: '/2024/02-30/', itemName: 'a' },
         },
     ])('is refused for $name, which no album page could show', async ({ body }) => {
         const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
@@ -204,14 +201,14 @@ describe('saving an item through the API', () => {
 
 describe('backup', () => {
     it('writes every item to R2 as JSON', async () => {
-        await putItem({ ...MEDIA, parentPath: '/2024/08-01/', itemName: 'c.jpg' });
-        await putItem({ ...MEDIA, parentPath: '/2024/08-01/', itemName: 'd.jpg' });
+        await putItem({ ...MEDIA, parentPath: '/2024/08-01/', itemName: 'c' });
+        await putItem({ ...MEDIA, parentPath: '/2024/08-01/', itemName: 'd' });
         const response = await callAsAdmin('/api/backup', { method: 'POST' });
         const { key, rows } = await response.json<{ key: string; rows: number }>();
         const object = await env.MEDIA.get(key);
         const dump = await object?.json<{ rows: { itemName: string }[] }>();
 
         expect(rows).toBe(2);
-        expect(dump?.rows.map((row) => row.itemName)).toStrictEqual(['c.jpg', 'd.jpg']);
+        expect(dump?.rows.map((row) => row.itemName)).toStrictEqual(['c', 'd']);
     });
 });

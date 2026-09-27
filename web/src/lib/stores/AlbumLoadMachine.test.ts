@@ -20,14 +20,14 @@ import type { AlbumGalleryItem } from '$lib/models/impl/server';
 const PATH = '/2001/12-31/';
 const PARENT_PATH = '/2001/';
 const ROUTE = '/api/album/2001/12-31/';
-const IMAGE_PATH = mediaPath('image.jpg');
+const IMAGE_PATH = mediaPath('image');
 
 function record(): AlbumGalleryItem {
     return albumRecord({
         path: PATH,
         parentPath: PARENT_PATH,
         itemName: '12-31',
-        children: [imageRecord({ path: IMAGE_PATH, itemName: 'image.jpg' })],
+        children: [imageRecord({ path: IMAGE_PATH, itemName: 'image' })],
     });
 }
 

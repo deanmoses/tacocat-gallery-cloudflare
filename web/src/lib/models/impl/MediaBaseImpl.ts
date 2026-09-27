@@ -3,7 +3,7 @@ import type { Album, Media, MediaType, Thumbable, ThumbnailUrlInfo } from '../Ga
 import { ThumbableBaseImpl } from './ThumbableBaseImpl';
 import { detailImageUrl } from '$lib/utils/config';
 import { detailDimensions } from '$lib/utils/dimensionUtils';
-import { toTitleFromFilename } from '$lib/utils/titleUtils';
+import { titleFromName } from '$lib/utils/titleUtils';
 
 /**
  * Base class for media items (images and videos).
@@ -24,7 +24,7 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
     // Thumbable implementations
 
     get title(): string {
-        return this.json.title ?? toTitleFromFilename(this.json.itemName);
+        return this.json.title ?? titleFromName(this.json.itemName);
     }
 
     set title(title: string) {

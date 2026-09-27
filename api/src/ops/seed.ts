@@ -39,7 +39,7 @@ function seedYear(database: Orm, yearIndex: number): ItemUpsert[] {
             statements.push(
                 upsertItem(database, {
                     parentPath: `/${year}/${day}/`,
-                    itemName: `img_${imageIndex}.jpg`,
+                    itemName: `img_${imageIndex}`,
                     itemType: 'media',
                     mediaType: 'image',
                     title: `${word} ${imageIndex}`,

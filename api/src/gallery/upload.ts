@@ -1,9 +1,9 @@
-import { type SQLWrapper, and, eq, exists, isNull, ne, notExists, sql } from 'drizzle-orm';
+import { type SQLWrapper, and, eq, exists, isNull, notExists, sql } from 'drizzle-orm';
 import type { RunnableQuery } from 'drizzle-orm/runnable-query';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { WorkflowStep } from 'cloudflare:workers';
 import * as valibot from 'valibot';
-import { type MediaType, type Size, extensionOf, mediaPath } from 'tacocat-gallery-shared';
+import { type MediaType, type Size, mediaPath } from 'tacocat-gallery-shared';
 import { NOW, type Orm, orm, schema } from '../db';
 import { readImage } from '../media/exif';
 import { SNIFF_LENGTH, type SniffedMedia, sniffMedia } from '../media/sniff';
@@ -237,17 +237,16 @@ type Recorded = { ok: true } | { ok: false; error: string };
 
 /**
  * The item write and the upload's completion in one batch. A new item goes under its album's path as it is now, read
- * from the album's row inside the insert; a replacement changes its target's file, type and extension, keeping the
- * captions and the crop where they still fit. Each is conditional on what it needs being there and its name being
- * free, and the completion on the item having been written, so a batch in which the item cannot be written marks
- * nothing complete and the read afterwards says why.
+ * from the album's row inside the insert; a replacement changes its target's file, type and size, keeping the name,
+ * the captions and the crop where it still fits. Each is conditional on what it needs being there and, for a new
+ * item, its name being free, and the completion on the item having been written, so a batch in which the item cannot
+ * be written marks nothing complete and the read afterwards says why.
  */
 async function recordUpload(database: Orm, upload: Upload, facts: MediaFacts): Promise<Recorded> {
     const { item } = schema;
     const path = mediaPath(upload.parentPath, upload.itemName);
-    const isReplacement = upload.targetPath !== null;
-    if (isReplacement && upload.targetId === null) {
-        return { ok: false, error: `Media [${upload.targetPath ?? ''}] was deleted before the upload finished` };
+    if (upload.replacement && upload.targetId === null) {
+        return { ok: false, error: `Media [${path}] was deleted before the upload finished` };
     }
     if (upload.albumId === null) {
         return { ok: false, error: `Album [${upload.parentPath}] was deleted before the upload finished` };
@@ -256,7 +255,7 @@ async function recordUpload(database: Orm, upload: Upload, facts: MediaFacts): P
         database.select({ id: OTHER.id }).from(OTHER).where(eq(OTHER.versionId, upload.versionId)),
     );
     const [written] = await database.batch([
-        isReplacement && upload.targetId !== null
+        upload.replacement && upload.targetId !== null
             ? replaceItem(database, upload.targetId, upload, facts)
             : insertItem(database, upload.albumId, upload, facts),
         // The first upload into a day becomes its thumbnail; an admin can pick another later.
@@ -321,21 +320,15 @@ export function insertItem(database: Orm, albumId: number, upload: Upload, facts
 }
 
 /**
- * The target row pointed at the new file. Its name is its own base name, as it is now, with the file's extension,
- * and it changes only if no other item has that name. The captions stay, and the file's fill in where the row has
- * none. The crop is pixels of the old image, so it survives only a file of exactly the old size.
+ * The target row pointed at the new file, under the name it has now, whatever the upload was issued for. The captions
+ * stay, and the file's fill in where the row has none. The crop is pixels of the old image, so it survives only a
+ * file of exactly the old size.
  */
 export function replaceItem(database: Orm, targetId: number, upload: Upload, facts: MediaFacts): ItemWrite {
     const { item } = schema;
-    const newName = sql<string>`substr(${item.itemName}, 1, instr(${item.itemName}, '.') - 1) || ${`.${extensionOf(upload.itemName)}`}`;
-    const taken = database
-        .select({ id: OTHER.id })
-        .from(OTHER)
-        .where(and(eq(OTHER.parentPath, item.parentPath), eq(OTHER.itemName, newName), ne(OTHER.id, item.id)));
     return database
         .update(item)
         .set({
-            itemName: newName,
             mediaType: facts.mediaType,
             versionId: upload.versionId,
             width: facts.width,
@@ -346,7 +339,7 @@ export function replaceItem(database: Orm, targetId: number, upload: Upload, fac
             tags: sql`coalesce(${item.tags}, ${tagsJson(facts)})`,
             thumbnailCrop: sql`CASE WHEN ${item.width} = ${facts.width} AND ${item.height} = ${facts.height} THEN ${item.thumbnailCrop} ELSE NULL END`,
         })
-        .where(and(eq(item.id, targetId), eq(item.itemType, 'media'), notExists(taken)))
+        .where(and(eq(item.id, targetId), eq(item.itemType, 'media')))
         .returning({ id: item.id });
 }
 
@@ -355,33 +348,29 @@ function tagsJson(facts: MediaFacts): string | null {
     return facts.tags === null ? null : JSON.stringify(facts.tags);
 }
 
-const EXPLANATION = valibot.array(
-    valibot.object({ album: valibot.nullable(valibot.number()), target: valibot.nullable(valibot.string()) }),
-);
+const EXPLANATION = valibot.array(valibot.object({ album: valibot.nullable(valibot.number()) }));
 
-/** Why the item was not written: one read of what the batch's conditions looked at. */
+/**
+ * Why the item was not written: one read of what the batch's conditions looked at. A replacement's only condition is
+ * its target's row, which the database clears from the upload when the row goes.
+ */
 async function explain(database: Orm, upload: Upload): Promise<string> {
     const { item } = schema;
+    const path = mediaPath(upload.parentPath, upload.itemName);
+    if (upload.replacement) {
+        return `Media [${path}] was deleted before the upload finished`;
+    }
     const result = await database.run(
         sql`SELECT
             (${database
                 .select({ id: item.id })
                 .from(item)
-                .where(and(eq(item.id, upload.albumId ?? -1), eq(item.itemType, 'album')))}) AS album,
-            (${database
-                .select({ name: item.itemName })
-                .from(item)
-                .where(eq(item.id, upload.targetId ?? -1))}) AS target`,
+                .where(and(eq(item.id, upload.albumId ?? -1), eq(item.itemType, 'album')))}) AS album`,
     );
     const [facts] = valibot.parse(EXPLANATION, result.results);
-    if (upload.targetPath !== null) {
-        return facts?.target === null || facts?.target === undefined
-            ? `Media [${upload.targetPath}] was deleted before the upload finished`
-            : `A media item already exists at [${mediaPath(upload.parentPath, `${facts.target.slice(0, facts.target.lastIndexOf('.'))}.${extensionOf(upload.itemName)}`)}]`;
-    }
     return facts?.album === null || facts?.album === undefined
         ? `Album [${upload.parentPath}] was deleted before the upload finished`
-        : `A media item already exists at [${mediaPath(upload.parentPath, upload.itemName)}]`;
+        : `A media item already exists at [${path}]`;
 }
 
 /** Records why the file could not become an item, for the admin to see, and drops it. */

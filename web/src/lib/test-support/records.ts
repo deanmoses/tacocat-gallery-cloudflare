@@ -27,9 +27,9 @@ export function mediaPath(fileName: string): string {
 
 const BASE_MEDIA = {
     itemType: 'media' as const,
-    path: mediaPath('item.jpg'),
+    path: mediaPath('item'),
     parentPath: DAY_ALBUM_PATH,
-    itemName: 'item.jpg',
+    itemName: 'item',
     updatedOn: '2001-12-31T00:00:00.000Z',
     versionId: 'version-1',
     dimensions: { width: 4032, height: 3024 },

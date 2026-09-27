@@ -10,103 +10,84 @@ export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp
 
 const YEAR_NAME = /^\d{4}$/u;
 const DAY_NAME = /^\d{2}-\d{2}$/u;
-const MEDIA_NAME = /^[^./]+\.[^./]+$/u;
-const HEIC_NAME = /\.(?:heic|heif)$/iu;
-const STRICT_MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*\.[0-9a-z]+$/u;
+const MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*$/u;
+const HEIC_FILE = /\.(?:heic|heif)$/iu;
 
 export function isYearName(name: string): boolean {
     return YEAR_NAME.test(name);
 }
 
+/** The shape of a day album's name, `06-15`; whether the calendar has the day is the path's business, since it takes the year. */
 export function isDayName(name: string): boolean {
     return DAY_NAME.test(name);
 }
 
-/** A file name with one extension: `felix.jpg`. */
+/**
+ * A media item's name: lowercase letters and digits with single underscores between them, which is what the sanitizer
+ * makes of an upload's file name. There is no extension: what kind of file the item is, the database says.
+ */
 export function isMediaName(name: string): boolean {
     return MEDIA_NAME.test(name);
 }
 
-/** Videos are told apart from images by extension alone. */
-export function isVideoName(name: string): boolean {
-    return (VIDEO_EXTENSIONS as readonly string[]).includes(extensionOf(name));
-}
-
 /**
- * A media name as the gallery stores one: a listed extension, and `jpg` rather than `jpeg`. The lists say what file
- * an upload may be; a JPEG file is stored under `.jpg` whatever it was called, so `.jpeg` never names an item.
+ * The name an uploaded file gets as a media item: the file's name without its extension, lowercased, every run of
+ * anything else an underscore, and none at either end. `IMG_0001.HEIC` becomes `img_0001`.
  */
-export function isStoredMediaName(name: string): boolean {
-    const extension = extensionOf(name);
-    return (
-        isMediaName(name) &&
-        extension !== 'jpeg' &&
-        ((IMAGE_EXTENSIONS as readonly string[]).includes(extension) ||
-            (VIDEO_EXTENSIONS as readonly string[]).includes(extension))
-    );
-}
-
-/** `felix.jpg` without its extension: `felix`. */
-export function baseNameOf(name: string): string {
-    return name.slice(0, name.lastIndexOf('.'));
-}
-
-/**
- * A media name as the sanitizer makes one and as an upload or a rename may give one: lowercase letters and digits,
- * single underscores between them, and a stored extension. The gallery copied from AWS holds older names that only
- * `isStoredMediaName` admits.
- */
-export function isStrictMediaName(name: string): boolean {
-    return STRICT_MEDIA_NAME.test(name) && hasStrictExtension(name);
-}
-
-/**
- * The extension as the sanitizer spells it: lowercase, one the gallery stores, `jpg` not `jpeg`. A replacement keeps
- * its target's base name, which may be an older one the sanitizer never saw, so its extension is all that is judged.
- */
-export function hasStrictExtension(name: string): boolean {
-    const extension = name.slice(name.lastIndexOf('.') + 1);
-    return isStoredMediaName(name) && extension === extension.toLowerCase();
-}
-
-/**
- * A strict media name made from a file's name: lowercased, every run of anything else an underscore, none at either
- * end of the name, and `jpeg` spelled `jpg`. The extension is otherwise left as it is, so a file the gallery does not
- * take stays refusable by its name.
- */
-export function sanitizeMediaFilename(fileName: string): string {
+export function sanitizeMediaName(fileName: string): string {
     const dot = fileName.lastIndexOf('.');
-    if (dot === -1) {
-        return sanitizeMediaBaseName(fileName);
-    }
-    const baseName = sanitizeMediaBaseName(fileName.slice(0, dot)).replace(/_$/u, '');
-    const extension = fileName
-        .slice(dot + 1)
-        .toLowerCase()
-        .replace(/^jpeg$/u, 'jpg');
-    return `${baseName}.${extension}`;
+    return sanitizeMediaNameAsTyped(dot === -1 ? fileName : fileName.slice(0, dot)).replace(/_$/u, '');
 }
 
 /**
- * The name half of `sanitizeMediaFilename`, for a name being typed: a trailing underscore stays, since the next
- * character may be coming, and the strict rule refuses it if it is still there when the name is submitted.
+ * `sanitizeMediaName` for a name being typed: a trailing underscore stays, since the next character may be coming,
+ * and the name rule refuses it if it is still there when the name is submitted.
  */
-export function sanitizeMediaBaseName(baseName: string): string {
-    return baseName
+export function sanitizeMediaNameAsTyped(text: string): string {
+    return text
         .toLowerCase()
         .replaceAll(/[^0-9_a-z]+/gu, '_')
         .replaceAll(/_+/gu, '_')
         .replace(/^_/u, '');
 }
 
-/** The extension of a media name, lowercased and without the dot: `felix.JPG` is `jpg`. */
-export function extensionOf(name: string): string {
-    return name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+/**
+ * `names` with every repeat given the lowest `_n` that is free, `_2` first, so that two files of one drop or two AWS
+ * items that sanitize to one name become two items. The order is kept, and a name a suffix would land on is counted
+ * as taken wherever it stands in the list.
+ */
+export function deduplicateNames(names: readonly string[]): string[] {
+    const used = new Set(names);
+    const seen = new Map<string, number>();
+    return names.map((name) => {
+        const count = seen.get(name) ?? 0;
+        seen.set(name, count + 1);
+        if (count === 0) {
+            return name;
+        }
+        let suffix = count + 1;
+        while (used.has(`${name}_${suffix}`)) {
+            suffix += 1;
+        }
+        const renamed = `${name}_${suffix}`;
+        used.add(renamed);
+        return renamed;
+    });
 }
 
-/** A HEIC, which only Safari can show, so the raw route offers it as a JPEG. */
-export function isHeicName(name: string): boolean {
-    return HEIC_NAME.test(name);
+/** The extension of an upload's file name, lowercased and without the dot: `felix.JPG` is `jpg`. */
+export function extensionOf(fileName: string): string {
+    return fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
+}
+
+/** Whether an upload's file name says it is a video; the pipeline decides by the bytes, the app by this until then. */
+export function isVideoFile(fileName: string): boolean {
+    return (VIDEO_EXTENSIONS as readonly string[]).includes(extensionOf(fileName));
+}
+
+/** Whether an upload's file name says it is a HEIC, which only Safari can show. */
+export function isHeicFile(fileName: string): boolean {
+    return HEIC_FILE.test(fileName);
 }
 
 /** A path read: which of the four kinds it is and what the database keys it by. An album stands at a date. */
@@ -272,21 +253,30 @@ export function yearAlbumPathSql(column: string): string {
     return `${column} GLOB '/${YEAR_GLOB}/'`;
 }
 
-/** `isDayAlbumPath` as SQL. */
-export function dayAlbumPathSql(column: string): string {
-    return `${column} GLOB '${DAY_ALBUM_PATH_GLOB}'`;
-}
-
 /**
- * `column` is a media file name: one dot with something on each side, no slash, and not `.jpeg`, since the gallery
- * stores a JPEG as `.jpg` and the sanitizer spells it so before the name reaches a table. That is `isMediaName` with
- * the one extension `isStoredMediaName` also refuses; the extension list itself is not in the constraint.
+ * `isDayAlbumPath` as SQL: the shape, and the day on the year's calendar, checked as the timestamps are, by round trip:
+ * SQLite's date() gives back the text it was given only for a date that exists.
  */
-export function mediaNameSql(column: string): string {
-    return `${column} GLOB '?*.?*' AND ${column} NOT GLOB '*.*.*' AND ${column} NOT GLOB '*/*' AND lower(${column}) NOT GLOB '*.jpeg'`;
+export function dayAlbumPathSql(column: string): string {
+    return `${column} GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${calendarSql(`substr(${column}, 2, 4) || '-' || substr(${column}, 7, 5)`)}`;
 }
 
-/** `column` is the path of a media item in a day album: `/2001/06-15/felix.jpg`, its name as `mediaNameSql` has it. */
+/** A day album by its key: `parentColumn` is its year's path and `nameColumn` a day on that year's calendar. */
+export function dayAlbumKeySql(parentColumn: string, nameColumn: string): string {
+    return `${yearAlbumPathSql(parentColumn)} AND ${dayNameSql(nameColumn)} AND ${calendarSql(`substr(${parentColumn}, 2, 4) || '-' || ${nameColumn}`)}`;
+}
+
+/** `text`, an SQL expression giving `2001-06-15`, is a day the calendar has. */
+function calendarSql(text: string): string {
+    return `date(${text}) IS ${text}`;
+}
+
+/** `isMediaName` as SQL: lowercase letters and digits, with single underscores between them. */
+export function mediaNameSql(column: string): string {
+    return `${column} GLOB '[0-9a-z]*' AND ${column} NOT GLOB '*[^0-9a-z_]*' AND ${column} NOT GLOB '*__*' AND ${column} NOT GLOB '*_'`;
+}
+
+/** `isMediaPath` as SQL: `column` is the path of a media item in a day album: `/2001/06-15/felix`. */
 export function mediaPathSql(column: string): string {
-    return `${column} IS NOT NULL AND substr(${column}, 1, ${DAY_ALBUM_PATH_LENGTH}) GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${mediaNameSql(`substr(${column}, ${DAY_ALBUM_PATH_LENGTH + 1})`)}`;
+    return `${column} IS NOT NULL AND ${dayAlbumPathSql(`substr(${column}, 1, ${DAY_ALBUM_PATH_LENGTH})`)} AND ${mediaNameSql(`substr(${column}, ${DAY_ALBUM_PATH_LENGTH + 1})`)}`;
 }

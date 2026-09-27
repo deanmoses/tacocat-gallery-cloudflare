@@ -17,7 +17,7 @@ describe(albumTitle, () => {
         expect(short).toBe(new Date(2001, 5, 15).toLocaleString(undefined, { month: 'short', day: 'numeric' }));
     });
 
-    it.each(['/', '/2001/06-15/felix.jpg', '/2001/13-01/', 'nonsense'])('throws for %s', (path) => {
+    it.each(['/', '/2001/06-15/felix', '/2001/13-01/', 'nonsense'])('throws for %s', (path) => {
         expect(() => albumTitle(path)).toThrow(`Not a year or day album: [${path}]`);
     });
 });

@@ -12,14 +12,14 @@ function refusedBy(constraint: string): { cause: { message: string } } {
 
 const IMAGE: schema.NewItem = {
     parentPath: '/2001/06-15/',
-    itemName: 'felix.jpg',
+    itemName: 'felix',
     itemType: 'media',
     mediaType: 'image',
     versionId: 'v1',
     width: 4032,
     height: 3024,
 };
-const VIDEO: schema.NewItem = { ...IMAGE, itemName: 'clip.mov', mediaType: 'video', durationSeconds: 9.5 };
+const VIDEO: schema.NewItem = { ...IMAGE, itemName: 'clip', mediaType: 'video', durationSeconds: 9.5 };
 const DAY: schema.NewItem = { parentPath: '/2001/', itemName: '06-15', itemType: 'album' };
 const YEAR: schema.NewItem = { parentPath: '/', itemName: '2001', itemType: 'album' };
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/v;
@@ -43,20 +43,35 @@ describe('an item row', () => {
         { name: 'an album in a day', row: { ...DAY, parentPath: '/2001/06-15/' }, constraint: 'item_path_check' },
         { name: 'media in a year album', row: { ...IMAGE, parentPath: '/2001/' }, constraint: 'item_path_check' },
         { name: 'media in the root', row: { ...IMAGE, parentPath: '/' }, constraint: 'item_path_check' },
-        { name: 'a media name with two dots', row: { ...IMAGE, itemName: 'a.b.jpg' }, constraint: 'item_path_check' },
-        { name: 'a media name with no dot', row: { ...IMAGE, itemName: 'felix' }, constraint: 'item_path_check' },
         {
-            name: 'a media name with a slash',
-            row: { ...IMAGE, itemName: 'x/felix.jpg' },
+            name: 'a media name with an extension',
+            row: { ...IMAGE, itemName: 'felix.jpg' },
+            constraint: 'item_path_check',
+        },
+        { name: 'a media name with a capital', row: { ...IMAGE, itemName: 'Felix' }, constraint: 'item_path_check' },
+        { name: 'a media name with a hyphen', row: { ...IMAGE, itemName: 'felix-1' }, constraint: 'item_path_check' },
+        {
+            name: 'a media name with two underscores in a row',
+            row: { ...IMAGE, itemName: 'felix__1' },
             constraint: 'item_path_check',
         },
         {
-            name: 'a media name that is an extension',
-            row: { ...IMAGE, itemName: '.jpg' },
+            name: 'a media name ending in an underscore',
+            row: { ...IMAGE, itemName: 'felix_' },
             constraint: 'item_path_check',
         },
-        { name: 'a media name spelled jpeg', row: { ...IMAGE, itemName: 'felix.jpeg' }, constraint: 'item_path_check' },
-        { name: 'a media name spelled JPEG', row: { ...IMAGE, itemName: 'FELIX.JPEG' }, constraint: 'item_path_check' },
+        { name: 'a media name with a slash', row: { ...IMAGE, itemName: 'x/felix' }, constraint: 'item_path_check' },
+        { name: 'a day the calendar does not have', row: { ...DAY, itemName: '02-30' }, constraint: 'item_path_check' },
+        {
+            name: 'a leap day outside a leap year',
+            row: { ...DAY, parentPath: '/2001/', itemName: '02-29' },
+            constraint: 'item_path_check',
+        },
+        {
+            name: 'media in a day the calendar does not have',
+            row: { ...IMAGE, parentPath: '/2001/02-30/' },
+            constraint: 'item_path_check',
+        },
         { name: 'an album with a version', row: { ...DAY, versionId: 'v1' }, constraint: 'item_file_check' },
         { name: 'an album with a size', row: { ...DAY, width: 1, height: 1 }, constraint: 'item_file_check' },
         { name: 'media without a version', row: { ...IMAGE, versionId: null }, constraint: 'item_file_check' },
@@ -161,7 +176,7 @@ describe('an item row', () => {
             row: { ...IMAGE, thumbnailCrop: { x: 0.5, y: 0.5, width: 1.5, height: 1.5 } },
         },
         { name: 'a version as AWS assigned them', row: { ...IMAGE, versionId: 'AbC.123_xyz-9' } },
-        { name: 'a media name with spaces and accents', row: { ...IMAGE, itemName: 'félix at the beach.JPG' } },
+        { name: 'a media name with digits and underscores', row: { ...IMAGE, itemName: 'img_0001_2' } },
         { name: 'a video', row: VIDEO },
         { name: 'a published album with a summary', row: { ...DAY, summary: 'Felix turns one', published: true } },
     ])('accepts $name', async ({ row }) => {
@@ -201,14 +216,14 @@ describe('an item row', () => {
 
     it('is created and given a thumbnail in one batch', async () => {
         const db = database();
-        const media = { parentPath: `${DAY.parentPath}${DAY.itemName}/`, itemName: 'first.jpg' };
+        const media = { parentPath: `${DAY.parentPath}${DAY.itemName}/`, itemName: 'first' };
         await db.batch([
             upsertItem(db, { ...IMAGE, ...media }),
             upsertItem(db, DAY),
             db
                 .update(schema.item)
                 .set({
-                    thumbnailId: sql`(${db.select({ id: schema.item.id }).from(schema.item).where(eq(schema.item.itemName, 'first.jpg'))})`,
+                    thumbnailId: sql`(${db.select({ id: schema.item.id }).from(schema.item).where(eq(schema.item.itemName, 'first'))})`,
                 })
                 .where(eq(schema.item.itemName, DAY.itemName)),
         ]);
@@ -246,7 +261,7 @@ describe('an upload row', () => {
     const UPLOAD: typeof schema.upload.$inferInsert = {
         versionId: 'v1',
         parentPath: '/2001/06-15/',
-        itemName: 'felix.jpg',
+        itemName: 'felix',
         username: 'moses',
     };
 
@@ -263,15 +278,19 @@ describe('an upload row', () => {
             constraint: 'upload_path_check',
         },
         {
-            name: 'an upload named with two dots',
-            row: { ...UPLOAD, itemName: 'a.b.jpg' },
+            name: 'an upload named with an extension',
+            row: { ...UPLOAD, itemName: 'felix.jpg' },
             constraint: 'upload_path_check',
         },
-        { name: 'an upload named jpeg', row: { ...UPLOAD, itemName: 'felix.jpeg' }, constraint: 'upload_path_check' },
         {
-            name: 'a target path that is an album',
-            row: { ...UPLOAD, targetPath: '/2001/06-15/' },
-            constraint: 'upload_target_check',
+            name: 'an upload named with a capital',
+            row: { ...UPLOAD, itemName: 'Felix' },
+            constraint: 'upload_path_check',
+        },
+        {
+            name: 'an upload into a day the calendar does not have',
+            row: { ...UPLOAD, parentPath: '/2001/02-30/' },
+            constraint: 'upload_path_check',
         },
         {
             name: 'a completion in another format',
@@ -288,7 +307,7 @@ describe('an upload row', () => {
         await expect(insert).rejects.toMatchObject(refusedBy(constraint));
     });
 
-    it('refuses a target id without a path', async () => {
+    it('refuses a target id on an upload that is no replacement', async () => {
         const db = database();
         const [media] = await db.insert(schema.item).values(IMAGE).returning();
         const insert = db
@@ -315,15 +334,14 @@ describe('an upload row', () => {
     it('keeps saying it was a replacement after its target is deleted', async () => {
         const db = database();
         const [media] = await db.insert(schema.item).values(IMAGE).returning();
-        const targetPath = IMAGE.parentPath + IMAGE.itemName;
-        await db.insert(schema.upload).values({ ...UPLOAD, versionId: 'v2', targetId: media?.id, targetPath });
+        await db.insert(schema.upload).values({ ...UPLOAD, versionId: 'v2', replacement: true, targetId: media?.id });
         await db
             .delete(schema.item)
             .where(eq(schema.item.id, media?.id ?? 0))
             .run();
         const upload = await db.select().from(schema.upload).where(eq(schema.upload.versionId, 'v2')).get();
 
-        expect(upload).toMatchObject({ targetId: null, targetPath });
+        expect(upload).toMatchObject({ targetId: null, replacement: true });
     });
 });
 
@@ -336,15 +354,15 @@ describe('the other rows', () => {
             constraint: 'upload_error_path_check',
         },
         {
-            name: 'an upload error for a name spelled jpeg',
+            name: 'an upload error for a name with a capital',
             insert: async () =>
-                database().insert(schema.uploadError).values({ path: '/2001/06-15/a.jpeg', message: 'x' }).run(),
+                database().insert(schema.uploadError).values({ path: '/2001/06-15/A', message: 'x' }).run(),
             constraint: 'upload_error_path_check',
         },
         {
             name: 'an upload error with no message',
             insert: async () =>
-                database().insert(schema.uploadError).values({ path: '/2001/06-15/a.jpg', message: ' ' }).run(),
+                database().insert(schema.uploadError).values({ path: '/2001/06-15/a', message: ' ' }).run(),
             constraint: 'upload_error_message_check',
         },
         {

@@ -93,7 +93,7 @@ async function deliver(versionId: string, { until = 'complete', modify }: Delive
 }
 
 interface Staged {
-    replaces?: string;
+    replace?: boolean;
     contentType?: string;
 }
 
@@ -101,10 +101,10 @@ interface Staged {
  * Asks for an upload URL as the app does and puts the file in the inbox as the browser would, returning the version
  * id the upload was minted, ready for its event to be delivered.
  */
-async function stage(path: string, file: Uint8Array, { replaces, contentType }: Staged = {}): Promise<string> {
+async function stage(path: string, file: Uint8Array, { replace, contentType }: Staged = {}): Promise<string> {
     const response = await callAsAdmin(`/api/presigned${DAY}`, {
         method: 'POST',
-        body: JSON.stringify([{ path, ...(replaces === undefined ? {} : { replaces }) }]),
+        body: JSON.stringify([{ path, ...(replace === undefined ? {} : { replace }) }]),
     });
     if (!response.ok) {
         throw new Error(`presign refused: ${await response.text()}`);
@@ -174,11 +174,11 @@ describe('upload pipeline', () => {
     beforeEach(seedDay);
 
     it('moves an inbox upload to its version key, labelled with its path, and records its IPTC caption and keywords', async () => {
-        const versionId = await stage(`${DAY}full_metadata.jpg`, jpg);
+        const versionId = await stage(`${DAY}full_metadata`, jpg);
         const acks = await deliver(versionId);
         const [inbox, item, originals, original, row] = await Promise.all([
             env.MEDIA.head(inboxKey(versionId)),
-            storedItem(DAY, 'full_metadata.jpg'),
+            storedItem(DAY, 'full_metadata'),
             env.MEDIA.list({ prefix: 'originals/' }),
             env.MEDIA.head(originalKey(versionId)),
             uploadRow(versionId),
@@ -199,7 +199,7 @@ describe('upload pipeline', () => {
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([originalKey(versionId)]);
         expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
-        expect(original?.customMetadata).toStrictEqual({ path: `${DAY}full_metadata.jpg` });
+        expect(original?.customMetadata).toStrictEqual({ path: `${DAY}full_metadata` });
         expect(row?.completedAt).not.toBeNull();
     });
 
@@ -207,27 +207,24 @@ describe('upload pipeline', () => {
         standInTranscoder(async () => {
             throw new Error('a photo has no business here');
         });
-        const versionId = await upload(`${DAY}clip.mov`, jpg, { contentType: 'application/octet-stream' });
-        const [item, original] = await Promise.all([
-            storedItem(DAY, 'clip.mov'),
-            env.MEDIA.head(originalKey(versionId)),
-        ]);
+        const versionId = await upload(`${DAY}clip`, jpg, { contentType: 'application/octet-stream' });
+        const [item, original] = await Promise.all([storedItem(DAY, 'clip'), env.MEDIA.head(originalKey(versionId))]);
 
         expect(item).toMatchObject({ mediaType: 'image', width: 300, height: 225, versionId });
         expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
     });
 
     it('makes both thumbnails and the detail image before anyone asks, so the first reader is served what is stored', async () => {
-        const versionId = await upload(`${DAY}full_metadata.jpg`, jpg);
+        const versionId = await upload(`${DAY}full_metadata`, jpg);
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
         const thumbnail = await call(
-            imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 200, height: 200 }, crop: null }),
+            imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 200, height: 200 }, crop: null }),
         );
         const thumbnail2x = await call(
-            imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 400, height: 400 }, crop: null }),
+            imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 400, height: 400 }, crop: null }),
         );
         const detail = await call(
-            imageUrl({ path: `${DAY}full_metadata.jpg`, versionId, size: { width: 300, height: null }, crop: null }),
+            imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 300, height: null }, crop: null }),
         );
         await Promise.all([thumbnail.body?.cancel(), thumbnail2x.body?.cancel(), detail.body?.cancel()]);
 
@@ -246,17 +243,17 @@ describe('upload pipeline', () => {
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
             throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
         });
-        const versionId = await upload(`${DAY}tenbit.heic`, heic, { contentType: 'image/heic' });
+        const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
         const [item, inbox, errors, row] = await Promise.all([
-            storedItem(DAY, 'tenbit.heic'),
+            storedItem(DAY, 'tenbit'),
             env.MEDIA.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}tenbit.heic`]),
+            uploadErrors([`${DAY}tenbit`]),
             uploadRow(versionId),
         ]);
 
         expect(item).toBeUndefined();
         expect(inbox).toBeNull();
-        expect(errors[`${DAY}tenbit.heic`]).toBe(
+        expect(errors[`${DAY}tenbit`]).toBe(
             'the image cannot be decoded: IMAGES_TRANSFORM_ERROR 9412: Unsupported image type',
         );
         expect(row?.completedAt).toBeNull();
@@ -264,12 +261,12 @@ describe('upload pipeline', () => {
 
     it('records the XMP caption of a HEIC, which has no IPTC, and the album lists its tags', async () => {
         decodingAnyImage();
-        await upload(`${DAY}photo.heic`, heic, { contentType: 'image/heic' });
+        await upload(`${DAY}photo`, heic, { contentType: 'image/heic' });
         const album = await parseExactly(await callAsAdmin(`/api/album${DAY}`), parseAlbum);
 
         expect(album.children).toStrictEqual([
             expect.objectContaining({
-                itemName: 'photo.heic',
+                itemName: 'photo',
                 title: 'Test Image Title',
                 description: 'Test description',
                 tags: ['test1', 'test2', 'test3'],
@@ -279,40 +276,40 @@ describe('upload pipeline', () => {
     });
 
     it('lands under the album as it is named when the upload finishes, not when the URL was issued', async () => {
-        const versionId = await stage(`${DAY}late.jpg`, jpg);
+        const versionId = await stage(`${DAY}late`, jpg);
         await callAsAdmin('/api/album-rename/2024/06-15/', {
             method: 'POST',
             body: JSON.stringify({ newName: '06-16' }),
         });
         await deliver(versionId);
-        const [moved, stale] = await Promise.all([storedItem('/2024/06-16/', 'late.jpg'), storedItem(DAY, 'late.jpg')]);
+        const [moved, stale] = await Promise.all([storedItem('/2024/06-16/', 'late'), storedItem(DAY, 'late')]);
 
         expect(moved?.versionId).toBe(versionId);
         expect(stale).toBeUndefined();
     });
 
     it('becomes an upload error when its album was deleted in the meantime, and waits in the inbox for the purge', async () => {
-        const versionId = await stage(`${DAY}orphan.jpg`, jpg);
+        const versionId = await stage(`${DAY}orphan`, jpg);
         await callAsAdmin(`/api/album${DAY}`, { method: 'DELETE' });
         await deliver(versionId);
         const [errors, inbox, row] = await Promise.all([
-            uploadErrors([`${DAY}orphan.jpg`]),
+            uploadErrors([`${DAY}orphan`]),
             env.MEDIA.head(inboxKey(versionId)),
             uploadRow(versionId),
         ]);
 
-        expect(errors[`${DAY}orphan.jpg`]).toBe(`Album [${DAY}] was deleted before the upload finished`);
+        expect(errors[`${DAY}orphan`]).toBe(`Album [${DAY}] was deleted before the upload finished`);
         expect(inbox).not.toBeNull();
         expect(row).toMatchObject({ albumId: null, completedAt: null });
     });
 
     it('becomes an upload error when another item took its name in the meantime', async () => {
-        const versionId = await stage(`${DAY}taken.jpg`, jpg);
-        await putItem({ parentPath: DAY, itemName: 'taken.jpg', ...IMAGE, versionId: 'other' });
+        const versionId = await stage(`${DAY}taken`, jpg);
+        await putItem({ parentPath: DAY, itemName: 'taken', ...IMAGE, versionId: 'other' });
         await deliver(versionId);
-        const [errors, item] = await Promise.all([uploadErrors([`${DAY}taken.jpg`]), storedItem(DAY, 'taken.jpg')]);
+        const [errors, item] = await Promise.all([uploadErrors([`${DAY}taken`]), storedItem(DAY, 'taken')]);
 
-        expect(errors[`${DAY}taken.jpg`]).toBe(`A media item already exists at [${DAY}taken.jpg]`);
+        expect(errors[`${DAY}taken`]).toBe(`A media item already exists at [${DAY}taken]`);
         expect(item?.versionId).toBe('other');
     });
 
@@ -330,16 +327,16 @@ describe('upload pipeline', () => {
     });
 
     it('becomes the thumbnail of a day that has none, and leaves one that has', async () => {
-        await upload(`${DAY}first.jpg`, jpg);
-        await upload(`${DAY}second.jpg`, jpg);
-        const [day, first] = await Promise.all([storedItem('/2024/', '06-15'), storedItem(DAY, 'first.jpg')]);
+        await upload(`${DAY}first`, jpg);
+        await upload(`${DAY}second`, jpg);
+        const [day, first] = await Promise.all([storedItem('/2024/', '06-15'), storedItem(DAY, 'first')]);
 
         expect(first?.id).toBeDefined();
         expect(day?.thumbnailId).toBe(first?.id);
     });
 
     it('finishes after a step that failed once, as in an R2 outage, since the step is retried', async () => {
-        const versionId = await stage(`${DAY}retried.jpg`, jpg);
+        const versionId = await stage(`${DAY}retried`, jpg);
         await deliver(versionId, {
             modify: async (modifier) => {
                 await modifier.disableRetryDelays();
@@ -350,7 +347,7 @@ describe('upload pipeline', () => {
                 );
             },
         });
-        const [item, inbox] = await Promise.all([storedItem(DAY, 'retried.jpg'), env.MEDIA.head(inboxKey(versionId))]);
+        const [item, inbox] = await Promise.all([storedItem(DAY, 'retried'), env.MEDIA.head(inboxKey(versionId))]);
 
         expect(item?.versionId).toBe(versionId);
         expect(inbox).toBeNull();
@@ -364,7 +361,7 @@ describe('replacing a media item', () => {
         await seedDay();
         await putItem({
             parentPath: DAY,
-            itemName: 'felix.jpg',
+            itemName: 'felix',
             ...IMAGE,
             versionId: 'old',
             title: 'Felix',
@@ -372,13 +369,13 @@ describe('replacing a media item', () => {
         });
         await callAsAdmin(`/api/album-thumb${DAY}`, {
             method: 'PATCH',
-            body: JSON.stringify({ mediaPath: `${DAY}felix.jpg` }),
+            body: JSON.stringify({ mediaPath: `${DAY}felix` }),
         });
     });
 
     it('points the row at the new file, keeping its caption, its crop when the size is unchanged, and its place as the thumbnail', async () => {
-        const versionId = await upload(`${DAY}felix.jpg`, jpg, { replaces: `${DAY}felix.jpg` });
-        const [felix, day] = await Promise.all([storedItem(DAY, 'felix.jpg'), storedItem('/2024/', '06-15')]);
+        const versionId = await upload(`${DAY}felix`, jpg, { replace: true });
+        const [felix, day] = await Promise.all([storedItem(DAY, 'felix'), storedItem('/2024/', '06-15')]);
 
         expect(felix).toMatchObject({
             versionId,
@@ -391,18 +388,15 @@ describe('replacing a media item', () => {
         expect(day?.thumbnailId).toBe(felix?.id);
     });
 
-    it('takes a file in another format, renaming the item to match and dropping a crop cut from another size', async () => {
-        const versionId = await upload(`${DAY}felix.png`, png, {
-            replaces: `${DAY}felix.jpg`,
-            contentType: 'image/png',
-        });
-        const [renamed, old, album] = await Promise.all([
-            storedItem(DAY, 'felix.png'),
-            storedItem(DAY, 'felix.jpg'),
+    it('takes a file in another format under the same name, dropping a crop cut from another size', async () => {
+        const versionId = await upload(`${DAY}felix`, png, { replace: true, contentType: 'image/png' });
+        const [felix, original, album] = await Promise.all([
+            storedItem(DAY, 'felix'),
+            env.MEDIA.head(originalKey(versionId)),
             parseExactly(await callAsAdmin(`/api/album${DAY}`), parseAlbum),
         ]);
 
-        expect(renamed).toMatchObject({
+        expect(felix).toMatchObject({
             versionId,
             mediaType: 'image',
             width: 220,
@@ -410,59 +404,43 @@ describe('replacing a media item', () => {
             thumbnailCrop: null,
             title: 'Felix',
         });
-        expect(old).toBeUndefined();
-        expect(album.thumbnail?.path).toBe(`${DAY}felix.png`);
+        expect(original?.httpMetadata?.contentType).toBe('image/png');
+        expect(album.thumbnail?.path).toBe(`${DAY}felix`);
     });
 
     it('keeps a name the item was given while the upload was in flight', async () => {
-        const versionId = await stage(`${DAY}felix.png`, png, {
-            replaces: `${DAY}felix.jpg`,
-            contentType: 'image/png',
-        });
-        await callAsAdmin(`/api/media-rename${DAY}felix.jpg`, {
+        const versionId = await stage(`${DAY}felix`, png, { replace: true, contentType: 'image/png' });
+        await callAsAdmin(`/api/media-rename${DAY}felix`, {
             method: 'POST',
-            body: JSON.stringify({ newName: 'cat.jpg' }),
+            body: JSON.stringify({ newName: 'cat' }),
         });
         await deliver(versionId);
-        const [cat, felix] = await Promise.all([storedItem(DAY, 'cat.png'), storedItem(DAY, 'felix.png')]);
+        const [cat, felix] = await Promise.all([storedItem(DAY, 'cat'), storedItem(DAY, 'felix')]);
 
         expect(cat?.versionId).toBe(versionId);
         expect(felix).toBeUndefined();
     });
 
     it('becomes an upload error when the item was deleted in the meantime', async () => {
-        const versionId = await stage(`${DAY}felix.jpg`, jpg, { replaces: `${DAY}felix.jpg` });
-        await callAsAdmin(`/api/media${DAY}felix.jpg`, { method: 'DELETE' });
+        const versionId = await stage(`${DAY}felix`, jpg, { replace: true });
+        await callAsAdmin(`/api/media${DAY}felix`, { method: 'DELETE' });
         await deliver(versionId);
         const [errors, item, row] = await Promise.all([
-            uploadErrors([`${DAY}felix.jpg`]),
-            storedItem(DAY, 'felix.jpg'),
+            uploadErrors([`${DAY}felix`]),
+            storedItem(DAY, 'felix'),
             uploadRow(versionId),
         ]);
 
-        expect(errors[`${DAY}felix.jpg`]).toBe(`Media [${DAY}felix.jpg] was deleted before the upload finished`);
+        expect(errors[`${DAY}felix`]).toBe(`Media [${DAY}felix] was deleted before the upload finished`);
         expect(item).toBeUndefined();
-        expect(row).toMatchObject({ targetId: null, targetPath: `${DAY}felix.jpg`, completedAt: null });
-    });
-
-    it('becomes an upload error when another item holds the name the new format gives it', async () => {
-        const versionId = await stage(`${DAY}felix.png`, png, {
-            replaces: `${DAY}felix.jpg`,
-            contentType: 'image/png',
-        });
-        await putItem({ parentPath: DAY, itemName: 'felix.png', ...IMAGE, versionId: 'other' });
-        await deliver(versionId);
-        const [errors, felix] = await Promise.all([uploadErrors([`${DAY}felix.png`]), storedItem(DAY, 'felix.jpg')]);
-
-        expect(errors[`${DAY}felix.png`]).toBe(`A media item already exists at [${DAY}felix.png]`);
-        expect(felix?.versionId).toBe('old');
+        expect(row).toMatchObject({ targetId: null, replacement: true, completedAt: null });
     });
 
     it('turns a photo into a video, with the transcoder', async () => {
-        const versionId = await stage(`${DAY}felix.mov`, mov, { replaces: `${DAY}felix.jpg` });
+        const versionId = await stage(`${DAY}felix`, mov, { replace: true });
         standInTranscoder(transcoding);
         await deliver(versionId);
-        const clip = await storedItem(DAY, 'felix.mov');
+        const clip = await storedItem(DAY, 'felix');
 
         expect(clip).toMatchObject({
             versionId,
@@ -480,31 +458,31 @@ describe('image uploads', () => {
     beforeEach(seedDay);
 
     it('records a file in no format the gallery takes instead of an item, and drops it', async () => {
-        const versionId = await upload(`${DAY}notes.jpg`, new TextEncoder().encode('just some notes'));
+        const versionId = await upload(`${DAY}notes`, new TextEncoder().encode('just some notes'));
         const [item, inbox, errors] = await Promise.all([
-            storedItem(DAY, 'notes.jpg'),
+            storedItem(DAY, 'notes'),
             env.MEDIA.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}notes.jpg`]),
+            uploadErrors([`${DAY}notes`]),
         ]);
 
         expect(item).toBeUndefined();
         expect(inbox).toBeNull();
-        expect(errors[`${DAY}notes.jpg`]).toBe('not a photo or video in a format the gallery takes');
+        expect(errors[`${DAY}notes`]).toBe('not a photo or video in a format the gallery takes');
     });
 
     it('records a JPEG whose header says no size instead of an item, and drops it', async () => {
-        const versionId = await upload(`${DAY}broken.jpg`, Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0]));
+        const versionId = await upload(`${DAY}broken`, Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0]));
         const [item, originals, inbox, errors] = await Promise.all([
-            storedItem(DAY, 'broken.jpg'),
+            storedItem(DAY, 'broken'),
             env.MEDIA.list({ prefix: 'originals/' }),
             env.MEDIA.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}broken.jpg`]),
+            uploadErrors([`${DAY}broken`]),
         ]);
 
         expect(item).toBeUndefined();
         expect(originals.objects).toHaveLength(0);
         expect(inbox).toBeNull();
-        expect(errors[`${DAY}broken.jpg`]).toBe('the image does not say its size');
+        expect(errors[`${DAY}broken`]).toBe('the image does not say its size');
     });
 });
 
@@ -513,7 +491,7 @@ describe('a batch of uploads', () => {
 
     it('starts a pipeline instance per event and acks each, so the uploads run side by side', async () => {
         const versionIds = await Promise.all(
-            ['first', 'second', 'third'].map(async (name) => stage(`${DAY}${name}.jpg`, jpg)),
+            ['first', 'second', 'third'].map(async (name) => stage(`${DAY}${name}`, jpg)),
         );
         const instances = await Promise.all(
             versionIds.map(async (versionId) => introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId)),
@@ -542,31 +520,31 @@ describe('video uploads', () => {
 
     it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
         standInTranscoder(rejecting);
-        const versionId = await upload(`${DAY}broken.mov`, mov);
+        const versionId = await upload(`${DAY}broken`, mov);
         const [item, originals, inbox, errors] = await Promise.all([
-            storedItem(DAY, 'broken.mov'),
+            storedItem(DAY, 'broken'),
             env.MEDIA.list({ prefix: 'originals/' }),
             env.MEDIA.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}broken.mov`, `${DAY}fine.mov`]),
+            uploadErrors([`${DAY}broken`, `${DAY}fine`]),
         ]);
 
         expect(item).toBeUndefined();
         expect(originals.objects).toHaveLength(0);
         expect(inbox).toBeNull();
-        expect(Object.keys(errors)).toStrictEqual([`${DAY}broken.mov`]);
-        expect(errors[`${DAY}broken.mov`]).toBe('ffmpeg exited 1: moov atom not found');
+        expect(Object.keys(errors)).toStrictEqual([`${DAY}broken`]);
+        expect(errors[`${DAY}broken`]).toBe('ffmpeg exited 1: moov atom not found');
     });
 
     it('clears the error once a later upload of the same path succeeds', async () => {
         standInTranscoder(rejecting);
-        await upload(`${DAY}again.mov`, mov);
+        await upload(`${DAY}again`, mov);
         standInTranscoder(transcoding);
-        await upload(`${DAY}again.mov`, mov);
+        await upload(`${DAY}again`, mov);
         const { uploadError } = schema;
         const remaining = await orm(env.DB)
             .select()
             .from(uploadError)
-            .where(eq(uploadError.path, `${DAY}again.mov`))
+            .where(eq(uploadError.path, `${DAY}again`))
             .all();
 
         expect(remaining).toStrictEqual([]);
@@ -580,7 +558,7 @@ describe('video upload retries', () => {
         standInTranscoder(async () => {
             throw new Error('container unreachable');
         });
-        const versionId = await stage(`${DAY}later.mov`, mov);
+        const versionId = await stage(`${DAY}later`, mov);
         const acks = await deliver(versionId, {
             until: 'errored',
             modify: async (modifier) => modifier.disableRetryDelays(),
@@ -593,11 +571,11 @@ describe('video upload retries', () => {
 
     it('writes nothing twice when the event is delivered again after success, as Queues may do', async () => {
         standInTranscoder(transcoding);
-        const versionId = await stage(`${DAY}clip.mov`, mov);
+        const versionId = await stage(`${DAY}clip`, mov);
         await deliver(versionId);
         await deliver(versionId);
         const [item, originals, inbox] = await Promise.all([
-            storedItem(DAY, 'clip.mov'),
+            storedItem(DAY, 'clip'),
             env.MEDIA.list({ prefix: 'originals/' }),
             env.MEDIA.head(inboxKey(versionId)),
         ]);
@@ -614,7 +592,7 @@ describe('video upload retries', () => {
     });
 
     it('has the container write the MP4 and poster for the version into the derived bucket', async () => {
-        const versionId = await stage(`${DAY}clip.mov`, mov);
+        const versionId = await stage(`${DAY}clip`, mov);
         const jobs: Record<string, string>[] = [];
         standInTranscoder(async (init) => {
             jobs.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, string>);
@@ -655,11 +633,11 @@ describe('upload errors', () => {
     it('answers for more paths than D1 binds to one statement, as a large drop asks', async () => {
         await orm(env.DB)
             .insert(schema.uploadError)
-            .values({ path: `${DAY}img_149.jpg`, message: 'the image cannot be decoded' });
-        const paths = Array.from({ length: 150 }, (_, index) => `${DAY}img_${index}.jpg`);
+            .values({ path: `${DAY}img_149`, message: 'the image cannot be decoded' });
+        const paths = Array.from({ length: 150 }, (_, index) => `${DAY}img_${index}`);
 
         await expect(uploadErrors(paths)).resolves.toStrictEqual({
-            [`${DAY}img_149.jpg`]: 'the image cannot be decoded',
+            [`${DAY}img_149`]: 'the image cannot be decoded',
         });
     });
 });
@@ -667,7 +645,7 @@ describe('upload errors', () => {
 describe('serving a video', () => {
     it('serves a byte range of the MP4 the transcoder wrote for the version, from the derived bucket', async () => {
         await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call(videoUrl('/2024/06-15/clip.mov', 'v1'), { headers: { range: 'bytes=10-19' } });
+        const response = await call(videoUrl('/2024/06-15/clip', 'v1'), { headers: { range: 'bytes=10-19' } });
         const body = await response.arrayBuffer();
 
         expect(response.status).toBe(206);
@@ -679,7 +657,7 @@ describe('serving a video', () => {
 
     it('serves the last bytes for a suffix range, which a player asks for to find the index', async () => {
         await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call(videoUrl('/2024/06-15/clip.mov', 'v1'), { headers: { range: 'bytes=-10' } });
+        const response = await call(videoUrl('/2024/06-15/clip', 'v1'), { headers: { range: 'bytes=-10' } });
         const body = await response.arrayBuffer();
 
         expect(response.status).toBe(206);
@@ -689,7 +667,7 @@ describe('serving a video', () => {
 
     it('refuses a range past the end of the MP4, saying how long it is', async () => {
         await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call(videoUrl('/2024/06-15/clip.mov', 'v1'), { headers: { range: 'bytes=100-199' } });
+        const response = await call(videoUrl('/2024/06-15/clip', 'v1'), { headers: { range: 'bytes=100-199' } });
         await response.body?.cancel();
 
         expect(response.status).toBe(416);
@@ -698,7 +676,7 @@ describe('serving a video', () => {
 
     it('is not found for a version with no MP4, and refuses a URL that names no version', async () => {
         const [missing, malformed] = await Promise.all([
-            call(videoUrl('/2024/06-15/clip.mov', 'v2')),
+            call(videoUrl('/2024/06-15/clip', 'v2')),
             call('/v/derived/2024/06-15/clip.mov/v1/video.mp4'),
         ]);
         await Promise.all([missing.body?.cancel(), malformed.body?.cancel()]);
@@ -709,10 +687,10 @@ describe('serving a video', () => {
 });
 
 describe('serving an original', () => {
-    const PHOTO = '/2024/06-15/félix beach.jpg';
-    const HEIC = '/2024/06-15/IMG_0001.HEIC';
+    const PHOTO = '/2024/06-15/felix_beach';
+    const HEIC = '/2024/06-15/img_0001';
 
-    it('serves the file as uploaded, named for a download and kept for a year', async () => {
+    it('serves the file as uploaded, named for a download by its name and stored type, and kept for a year', async () => {
         await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const response = await call(originalUrl(PHOTO, 'v1'));
         const body = await response.arrayBuffer();
@@ -720,7 +698,7 @@ describe('serving an original', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toBe('image/jpeg');
         expect(response.headers.get('content-disposition')).toBe(
-            `inline; filename="f_lix beach.jpg"; filename*=UTF-8''${encodeURIComponent('félix beach.jpg')}`,
+            `inline; filename="felix_beach.jpg"; filename*=UTF-8''felix_beach.jpg`,
         );
         expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
         expect(body.byteLength).toBe(jpg.byteLength);
@@ -735,7 +713,7 @@ describe('serving an original', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toBe('image/jpeg');
-        expect(response.headers.get('content-disposition')).toContain('filename="IMG_0001.jpg"');
+        expect(response.headers.get('content-disposition')).toContain('filename="img_0001.jpg"');
         expect([...body.slice(0, 3)]).toStrictEqual([0xff, 0xd8, 0xff]);
     });
 
@@ -746,7 +724,7 @@ describe('serving an original', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toBe('image/jpeg');
-        expect(response.headers.get('content-disposition')).toContain('filename="IMG_0001.HEIC"');
+        expect(response.headers.get('content-disposition')).toContain('filename="img_0001.jpg"');
     });
 
     it('gives the HEIC itself when asked, and when the binding cannot decode it', async () => {
@@ -765,12 +743,12 @@ describe('serving an original', () => {
     });
 
     it('reaches nothing but originals: a version with no original is not found, whatever else the bucket holds', async () => {
-        await env.MEDIA.put('inbox/2024/06-15/pending.jpg', jpg);
+        await env.MEDIA.put('inbox/2024/06-15/pending', jpg);
         await env.MEDIA.put('backups/d1/2024-06-15.json', new Uint8Array(10));
         const [pending, backup, malformed] = await Promise.all([
-            call(originalUrl('/2024/06-15/pending.jpg', 'v1')),
+            call(originalUrl('/2024/06-15/pending', 'v1')),
             call('/raw/backups/d1/2024-06-15.json/v1'),
-            call('/raw/originals/2024/06-15/pending.jpg/v1'),
+            call('/raw/originals/2024/06-15/pending/v1'),
         ]);
         await Promise.all([pending, backup, malformed].map(async (response) => response.body?.cancel()));
 
@@ -781,7 +759,7 @@ describe('serving an original', () => {
 
     it('finds the version by its id alone, whatever path the URL gives it', async () => {
         await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
-        const response = await call(originalUrl('/1999/01-01/renamed.jpg', 'v1'));
+        const response = await call(originalUrl('/1999/01-01/renamed', 'v1'));
         await response.body?.cancel();
 
         expect(response.status).toBe(200);
@@ -792,7 +770,7 @@ describe('serving an original', () => {
 describe('serving media', () => {
     // The poster is in the derived bucket and only a video has one, so it is what tells a video from a photo: the
     // URL's file name says nothing, as it says nothing for a photo.
-    it.each(['/2024/06-15/clip.mov', '/2024/06-15/renamed.jpg'])(
+    it.each(['/2024/06-15/clip', '/2024/06-15/renamed'])(
         'makes a video thumbnail from its poster, with the URL calling the file %s',
         async (path) => {
             await env.DERIVED.put(posterKey('v1'), jpg);
@@ -807,9 +785,9 @@ describe('serving media', () => {
 
     it('generates a derivative once, then serves it from the cache', async () => {
         await env.MEDIA.put(originalKey('v1'), jpg);
-        const first = await call('/i/2024/06-15/d.jpg/v1?size=200x200');
+        const first = await call('/i/2024/06-15/d/v1?size=200x200');
         const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-webp`);
-        const second = await call('/i/2024/06-15/d.jpg/v1?size=200x200');
+        const second = await call('/i/2024/06-15/d/v1?size=200x200');
 
         expect(first.headers.get('x-derived')).toBe('generated');
         expect(first.headers.get('content-type')).toBe('image/webp');
@@ -819,7 +797,7 @@ describe('serving media', () => {
 
     it('serves the media page its image as JPEG, whatever the browser accepts, since readers drag it into other apps', async () => {
         await env.MEDIA.put(originalKey('v1'), jpg);
-        const response = await call('/i/2024/06-15/d.jpg/v1?size=300', {
+        const response = await call('/i/2024/06-15/d/v1?size=300', {
             headers: { accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
         });
         await response.body?.cancel();
@@ -832,7 +810,7 @@ describe('serving media', () => {
     it('stores a cropped thumbnail under the size and crop the web app asks for', async () => {
         await env.MEDIA.put(originalKey('v1'), jpg);
         const url = imageUrl({
-            path: '/2024/06-15/d.jpg',
+            path: '/2024/06-15/d',
             versionId: 'v1',
             size: { width: 20, height: 20 },
             crop: { x: 1, y: 2, width: 30, height: 30 },
@@ -845,8 +823,8 @@ describe('serving media', () => {
     });
 
     it.each([
-        { name: 'a size the web app would not write', url: '/i/2024/06-15/d.jpg/v1?size=0200x200' },
-        { name: 'a crop of three numbers', url: '/i/2024/06-15/d.jpg/v1?crop=1,2,3' },
+        { name: 'a size the web app would not write', url: '/i/2024/06-15/d/v1?size=0200x200' },
+        { name: 'a crop of three numbers', url: '/i/2024/06-15/d/v1?crop=1,2,3' },
     ])('refuses $name, and stores nothing', async ({ url }) => {
         await env.MEDIA.put(originalKey('v1'), jpg);
         const response = await call(url);

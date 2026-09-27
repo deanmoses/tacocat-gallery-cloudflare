@@ -20,7 +20,7 @@ const year = (name: string): AlbumGalleryItem => albumRecord({ path: `/${name}/`
 const IN_MEMORY = new Map<string, Album>([
     ['/', toAlbum(albumRecord({ path: '/', parentPath: '', itemName: '', children: ['2000', '2001'].map(year) }))],
     ['/2001/', toAlbum(albumRecord({ children: ['01-01', '12-31'].map(day) }))],
-    ['/2001/12-31/', dayAlbum(['a.jpg', 'b.jpg', 'c.jpg'].map(image))],
+    ['/2001/12-31/', dayAlbum(['a', 'b', 'c'].map(image))],
 ]);
 const getAlbum = (path: string): Album | undefined => IN_MEMORY.get(path);
 
@@ -41,12 +41,12 @@ const CASES: Case[] = [
     { key: 'ArrowRight', from: '/', goesTo: null },
     // A day whose year is not in memory has no known neighbours
     { key: 'ArrowRight', from: '/2002/01-01', goesTo: null },
-    { key: 'ArrowRight', from: '/2001/12-31/b.jpg', goesTo: '/2001/12-31/c.jpg' },
-    { key: 'ArrowLeft', from: '/2001/12-31/b.jpg', goesTo: '/2001/12-31/a.jpg' },
-    { key: 'ArrowRight', from: '/2001/12-31/c.jpg', goesTo: null },
-    { key: 'ArrowUp', from: '/2001/12-31/b.jpg', goesTo: '/2001/12-31/' },
+    { key: 'ArrowRight', from: '/2001/12-31/b', goesTo: '/2001/12-31/c' },
+    { key: 'ArrowLeft', from: '/2001/12-31/b', goesTo: '/2001/12-31/a' },
+    { key: 'ArrowRight', from: '/2001/12-31/c', goesTo: null },
+    { key: 'ArrowUp', from: '/2001/12-31/b', goesTo: '/2001/12-31/' },
     { key: 'ArrowUp', from: '/2001/12-31', goesTo: '/2001/' },
-    { key: 'ArrowDown', from: '/2001/12-31', goesTo: '/2001/12-31/a.jpg' },
+    { key: 'ArrowDown', from: '/2001/12-31', goesTo: '/2001/12-31/a' },
     { key: 'ArrowDown', from: '/2001', goesTo: '/2001/01-01/' },
     { key: 'Enter', from: '/2001/12-31', goesTo: null },
 ];

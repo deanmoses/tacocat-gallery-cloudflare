@@ -11,10 +11,10 @@ const NEXT_DAY_PATH = '/2001/07-04/';
 export const ADMIN_YEAR_PATH = '/2003/';
 /** The day album the admin journeys upload into, holding the one photo they caption, crop and replace. */
 export const ADMIN_DAY_PATH = '/2003/08-01/';
-export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo.jpg`;
+export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo`;
 /** A second photo in that day, so one of the two is always not the day's thumbnail and can be made it. */
-export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second.jpg`;
-/** The day the upload journey drops files into, and the photo it replaces, which changes name with each replacement. */
+export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second`;
+/** The day the upload journey drops files into, and the photo it replaces. */
 export const ADMIN_UPLOAD_DAY_PATH = '/2003/09-01/';
 export const ADMIN_REPLACED_BASE_NAME = 'replace_me';
 const ADMIN_PHOTO_VERSION = 'e2e-photo';
@@ -33,7 +33,7 @@ const GALLERY = {
     nextDay: { parentPath: YEAR_PATH, itemName: '07-04', itemType: 'album', published: true },
     cake: {
         parentPath: DAY_PATH,
-        itemName: 'cake.jpg',
+        itemName: 'cake',
         itemType: 'media',
         mediaType: 'image',
         title: 'Cake',
@@ -44,7 +44,7 @@ const GALLERY = {
     // Portrait, so its detail image is sized by its height.
     felix: {
         parentPath: DAY_PATH,
-        itemName: 'felix.jpg',
+        itemName: 'felix',
         itemType: 'media',
         mediaType: 'image',
         title: 'Felix',
@@ -56,7 +56,7 @@ const GALLERY = {
     adminDay: { parentPath: ADMIN_YEAR_PATH, itemName: '08-01', itemType: 'album', published: true },
     adminPhoto: {
         parentPath: ADMIN_DAY_PATH,
-        itemName: 'photo.jpg',
+        itemName: 'photo',
         itemType: 'media',
         mediaType: 'image',
         title: 'Photo',
@@ -66,7 +66,7 @@ const GALLERY = {
     },
     adminSecondPhoto: {
         parentPath: ADMIN_DAY_PATH,
-        itemName: 'second.jpg',
+        itemName: 'second',
         itemType: 'media',
         mediaType: 'image',
         title: 'Second',
@@ -77,7 +77,7 @@ const GALLERY = {
     adminUploadDay: { parentPath: ADMIN_YEAR_PATH, itemName: '09-01', itemType: 'album', published: true },
     adminReplaced: {
         parentPath: ADMIN_UPLOAD_DAY_PATH,
-        itemName: `${ADMIN_REPLACED_BASE_NAME}.jpg`,
+        itemName: ADMIN_REPLACED_BASE_NAME,
         itemType: 'media',
         mediaType: 'image',
         title: 'Replace me',

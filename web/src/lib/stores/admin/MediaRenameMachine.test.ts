@@ -8,9 +8,9 @@ import { albumRecord, imageRecord, mediaPath } from '$lib/test-support/records';
 
 const ALBUM_PATH = '/2001/12-31/';
 const ALBUM_ROUTE = '/api/album/2001/12-31/';
-const OLD_PATH = mediaPath('image.jpg');
-const NEW_PATH = mediaPath('renamed.jpg');
-const RENAME_ROUTE = '/api/media-rename/2001/12-31/image.jpg';
+const OLD_PATH = mediaPath('image');
+const NEW_PATH = mediaPath('renamed');
+const RENAME_ROUTE = '/api/media-rename/2001/12-31/image';
 
 function album(itemName: string): ReturnType<typeof albumRecord> {
     return albumRecord({
@@ -24,7 +24,7 @@ function album(itemName: string): ReturnType<typeof albumRecord> {
 describe('mediaRenameMachine', () => {
     beforeEach(() => {
         resetAlbumState();
-        seedLoadedAlbum(album('image.jpg'));
+        seedLoadedAlbum(album('image'));
     });
 
     // The page at the old path moves to the new one on seeing the rename landed, so that has to be visible while the
@@ -35,7 +35,7 @@ describe('mediaRenameMachine', () => {
         server.post(RENAME_ROUTE, new Response(null, { status: 204 }));
         server.get(ALBUM_ROUTE, () => {
             statusWhileReReading = albumState.mediaRenames.get(OLD_PATH)?.status;
-            return jsonResponse(album('renamed.jpg'));
+            return jsonResponse(album('renamed'));
         });
 
         mediaRenameMachine.renameMediaItem(OLD_PATH, NEW_PATH);

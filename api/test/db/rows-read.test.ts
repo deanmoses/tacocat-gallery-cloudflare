@@ -58,7 +58,7 @@ async function seedGallery(database: Orm): Promise<void> {
                 .map((index) =>
                     upsertItem(database, {
                         parentPath: day.path,
-                        itemName: `img_${index}.jpg`,
+                        itemName: `img_${index}`,
                         ...IMAGE,
                         versionId: `${day.name}-${index}`,
                         title: `Taco ${index}`,
@@ -68,7 +68,7 @@ async function seedGallery(database: Orm): Promise<void> {
             setThumbnail(
                 database,
                 { parentPath: '/2001/', itemName: day.name },
-                { parentPath: day.path, itemName: 'img_0.jpg' },
+                { parentPath: day.path, itemName: 'img_0' },
             ),
         ]),
     );
@@ -77,28 +77,31 @@ async function seedGallery(database: Orm): Promise<void> {
     // The upload that made each image, pointing at it and at its day, since a delete's cost through a foreign key
     // shows only when the referencing table has rows.
     await database.run(sql`
-        INSERT INTO upload (version_id, parent_path, item_name, album_id, target_id, target_path, username, completed_at)
+        INSERT INTO upload (version_id, parent_path, item_name, album_id, replacement, target_id, username, completed_at)
         SELECT version_id, parent_path, item_name,
             (SELECT day.id FROM item day WHERE day.parent_path || day.item_name || '/' = item.parent_path),
-            id, parent_path || item_name, 'moses', created_at
+            1, id, 'moses', created_at
         FROM item WHERE item_type = 'media'`);
     const emptyDay = await database
         .select({ id: schema.item.id })
         .from(schema.item)
         .where(and(eq(schema.item.parentPath, '/2001/'), eq(schema.item.itemName, EMPTY_DAY)))
         .get();
-    await database
-        .insert(schema.upload)
-        .values(
-            Array.from({ length: IMAGES_PER_DAY }, (_, index) => ({
-                versionId: `pending-${index}`,
-                parentPath: dayPath(DAYS),
-                itemName: `pending_${index}.jpg`,
-                albumId: emptyDay?.id ?? null,
-                username: 'moses',
-            })),
-        )
-        .run();
+    // In two statements: D1 binds at most 100 parameters to one, and a row takes six.
+    for (const half of [0, IMAGES_PER_DAY / 2]) {
+        await database
+            .insert(schema.upload)
+            .values(
+                Array.from({ length: IMAGES_PER_DAY / 2 }, (_, index) => ({
+                    versionId: `pending-${half + index}`,
+                    parentPath: dayPath(DAYS),
+                    itemName: `pending_${half + index}`,
+                    albumId: emptyDay?.id ?? null,
+                    username: 'moses',
+                })),
+            )
+            .run();
+    }
 }
 
 const EMPTY_DAY = dayName(DAYS);
@@ -135,8 +138,8 @@ async function uploadRow(
             parentPath: dayPath(day),
             itemName,
             albumId: album?.id ?? null,
+            replacement: targetId !== null,
             targetId,
-            targetPath: targetId === null ? null : `${dayPath(day)}img_3.jpg`,
             username: 'moses',
         })
         .returning();
@@ -156,8 +159,8 @@ describe('rows read on a gallery-sized table', () => {
     });
 
     it.each([
-        { what: 'inserting an item', values: { parentPath: '/2001/01-01/', itemName: 'new.jpg', title: 'Quesadilla' } },
-        { what: 'updating an item', values: { parentPath: '/2001/01-01/', itemName: 'img_3.jpg', title: 'Burrito' } },
+        { what: 'inserting an item', values: { parentPath: '/2001/01-01/', itemName: 'new', title: 'Quesadilla' } },
+        { what: 'updating an item', values: { parentPath: '/2001/01-01/', itemName: 'img_3', title: 'Burrito' } },
     ])('$what reads a few rows', async ({ values }) => {
         const result = await upsertItem(database, { ...values, ...IMAGE }).run();
 
@@ -167,7 +170,7 @@ describe('rows read on a gallery-sized table', () => {
     it('deleting an item reads a few rows', async () => {
         const result = await database
             .delete(item)
-            .where(and(eq(item.parentPath, '/2001/01-01/'), eq(item.itemName, 'img_3.jpg')))
+            .where(and(eq(item.parentPath, '/2001/01-01/'), eq(item.itemName, 'img_3')))
             .run();
 
         // More than one, since changes include what the FTS trigger writes.
@@ -191,7 +194,7 @@ describe('rows read on a gallery-sized table', () => {
     it('deleting the media an album shows clears the album, reading a few rows', async () => {
         const result = await database
             .delete(item)
-            .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_0.jpg')))
+            .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_0')))
             .run();
         const day = await database
             .select({ thumbnailId: item.thumbnailId })
@@ -224,7 +227,7 @@ describe('rows read on a gallery-sized table', () => {
             PRESIGN_ENV,
             database,
             dayPath(4),
-            [{ path: `${dayPath(4)}new.jpg` }, { path: `${dayPath(4)}img_3.png`, replaces: `${dayPath(4)}img_3.jpg` }],
+            [{ path: `${dayPath(4)}new` }, { path: `${dayPath(4)}img_3`, replace: true }],
             'moses',
         );
 
@@ -233,7 +236,7 @@ describe('rows read on a gallery-sized table', () => {
     });
 
     it('placing a new upload under its album reads a few rows', async () => {
-        const upload = await uploadRow(database, 4, 'new.jpg');
+        const upload = await uploadRow(database, 4, 'new');
         const result = await database.run(insertItem(database, upload.albumId ?? 0, upload, FACTS));
 
         expect(result.meta.changes).toBeGreaterThan(0);
@@ -244,18 +247,18 @@ describe('rows read on a gallery-sized table', () => {
         const target = await database
             .select({ id: item.id })
             .from(item)
-            .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_3.jpg')))
+            .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_3')))
             .get();
-        const upload = await uploadRow(database, 4, 'img_3.png', target?.id ?? null);
+        const upload = await uploadRow(database, 4, 'img_3', target?.id ?? null);
         const result = await database.run(replaceItem(database, target?.id ?? 0, upload, FACTS));
-        const renamed = await database
-            .select({ itemName: item.itemName })
+        const replaced = await database
+            .select({ itemName: item.itemName, versionId: item.versionId })
             .from(item)
             .where(eq(item.id, target?.id ?? 0))
             .get();
 
         expect(result.meta.changes).toBeGreaterThan(0);
-        expect(renamed).toStrictEqual({ itemName: 'img_3.png' });
+        expect(replaced).toStrictEqual({ itemName: 'img_3', versionId: upload.versionId });
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
 
@@ -266,7 +269,7 @@ describe('rows read on a gallery-sized table', () => {
             .where(eq(item.versionId, `${dayName(7)}-3`))
             .run();
 
-        expect(result.results).toStrictEqual([{ parent_path: dayPath(7), item_name: 'img_3.jpg' }]);
+        expect(result.results).toStrictEqual([{ parent_path: dayPath(7), item_name: 'img_3' }]);
         // The index entry and the row.
         expect(result.meta.rows_read).toBeLessThanOrEqual(2);
     });
@@ -286,7 +289,7 @@ describe('rows read on a gallery-sized table', () => {
                 database
                     .update(item)
                     .set({ versionId: 'v2' })
-                    .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_1.jpg'))),
+                    .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_1'))),
         },
         {
             what: "moving an album's children on a rename",
@@ -336,23 +339,23 @@ describe('rows read on a gallery-sized table', () => {
         {
             what: 'captioning a photo',
             write: async () =>
-                updateMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }, { title: 'Nachos' }),
+                updateMedia(database, { parentPath: dayPath(4), itemName: 'img_1' }, { title: 'Nachos' }),
         },
         {
             what: 'deleting a photo',
-            write: async () => deleteMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }),
+            write: async () => deleteMedia(database, { parentPath: dayPath(4), itemName: 'img_1' }),
             extra: VIEW_READ,
         },
         {
             what: 'renaming a photo',
-            write: async () => renameMedia(database, { parentPath: dayPath(4), itemName: 'img_1.jpg' }, 'nachos.jpg'),
+            write: async () => renameMedia(database, { parentPath: dayPath(4), itemName: 'img_1' }, 'nachos'),
         },
         {
             what: "recutting a photo's thumbnail",
             write: async () =>
                 recutThumbnail(
                     database,
-                    { parentPath: dayPath(4), itemName: 'img_1.jpg' },
+                    { parentPath: dayPath(4), itemName: 'img_1' },
                     { x: 10, y: 10, width: 50, height: 50 },
                 ),
         },
@@ -364,8 +367,8 @@ describe('rows read on a gallery-sized table', () => {
     });
 
     it('explaining a refused media write reads a few rows', async () => {
-        const key = { parentPath: dayPath(4), itemName: 'img_1.jpg' };
-        const facts = await describeMedia(database, key, { newName: 'img_2.jpg' });
+        const key = { parentPath: dayPath(4), itemName: 'img_1' };
+        const facts = await describeMedia(database, key, { newName: 'img_2' });
         const cost = await database
             .select({ id: item.id })
             .from(item)
@@ -399,7 +402,7 @@ describe('rows read on a gallery-sized table', () => {
         const facts = await describeAlbum(
             database,
             { parentPath: '/2001/', itemName: dayName(4) },
-            { newName: dayName(5), mediaPath: `${dayPath(4)}img_1.jpg` },
+            { newName: dayName(5), mediaPath: `${dayPath(4)}img_1` },
         );
         const cost = await database
             .select({ id: item.id })
@@ -419,7 +422,7 @@ describe('rows read on a gallery-sized table', () => {
 
     it('setting an album thumbnail reads a few rows', async () => {
         const album = { parentPath: '/2001/', itemName: dayName(4) };
-        const result = await setThumbnail(database, album, { parentPath: dayPath(4), itemName: 'img_7.jpg' }).run();
+        const result = await setThumbnail(database, album, { parentPath: dayPath(4), itemName: 'img_7' }).run();
 
         expect(result.meta.changes).toBeGreaterThan(0);
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
@@ -429,7 +432,7 @@ describe('rows read on a gallery-sized table', () => {
         { what: 'an album', check: async () => albumExists(database, dayPath(4), false) },
         {
             what: 'a media item',
-            check: async () => mediaExists(database, { parentPath: dayPath(4), itemName: 'img_7.jpg' }, false),
+            check: async () => mediaExists(database, { parentPath: dayPath(4), itemName: 'img_7' }, false),
         },
     ])('asking whether $what is there for a guest reads a row or two', async ({ check }) => {
         const found = await check();
@@ -444,7 +447,7 @@ describe('rows read on a gallery-sized table', () => {
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
     ])('searching for a rare word as $who reads only its matches', async ({ admin }) => {
-        await upsertItem(database, { parentPath: dayPath(9), itemName: 'q.jpg', ...IMAGE, title: 'Quesadilla' }).run();
+        await upsertItem(database, { parentPath: dayPath(9), itemName: 'q', ...IMAGE, title: 'Quesadilla' }).run();
         const found = await searchItems(database, { ...SEARCH, query: compiled('quesadilla') }, admin);
 
         expect(found.items).toHaveLength(1);
@@ -502,7 +505,7 @@ describe('rows read on a gallery-sized table', () => {
         async (terms) => {
             await upsertItem(database, {
                 parentPath: dayPath(9),
-                itemName: 'q.jpg',
+                itemName: 'q',
                 ...IMAGE,
                 title: 'Quesadilla',
             }).run();

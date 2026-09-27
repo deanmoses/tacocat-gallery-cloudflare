@@ -52,7 +52,7 @@ The gallery is a tree, and a path is a URL:
 /                        the root album: the list of years, not a row
 /2001/                   a year album
 /2001/06-15/             a day album
-/2001/06-15/felix.jpg    a media item, always in a day album
+/2001/06-15/felix        a media item, always in a day album
 ```
 
 `shared/src/paths.ts` is the grammar.
@@ -75,7 +75,7 @@ Cloudflare D1 (SQLite) holds everything but the media files. Tables:
 
 The schema defined in Drizzle in `api/src/db/schema.ts`.
 
-An `item` row is identified by `(parent_path, item_name)`, so `felix.jpg` in `/2001/06-15/`, and referenced by its integer `id`.
+An `item` row is identified by `(parent_path, item_name)`, so `felix` in `/2001/06-15/`, and referenced by its integer `id`. A media name is lowercase letters and digits with single underscores between them, and carries no extension: what kind of file the item is, `media_type` and the original's content type say.
 
 - **Search** is SQLite's FTS5, in the same database. Words and phrases are matched in `item_fts`, the porter stemmer over the unicode61 tokenizer, which folds case and accents; a prefix is matched in `item_fts_exact`, unicode61 alone, since the stemmer would stem the prefix too and `vacati` is no prefix of `vacat`. Triggers keep both in step with `item` by reading the changed row through the view, firing only when a column the view reads changes.
 - **Migrations** are written by drizzle-kit from `schema.ts` into `api/migrations/`. The search index, its view and its triggers are raw SQL in a migration, since Drizzle models none of them.
@@ -91,7 +91,7 @@ An `item` row is identified by `(parent_path, item_name)`, so `felix.jpg` in `/2
 
 Media is stored in Cloudflare R2.
 
-Take the photo `/2001/06-15/felix.heic`, whose current version id is `0muhjn6yo3f9a1c07b2e4d58a`. Everything stored for it is keyed by that id:
+Take the photo `/2001/06-15/felix`, whose current version id is `0muhjn6yo3f9a1c07b2e4d58a`. Everything stored for it is keyed by that id:
 
 ```text
 media bucket
@@ -148,12 +148,12 @@ If it changed a row, the Worker answers 204 with the bookmark. If it changed not
 
 ## Uploading
 
-An admin drops `felix.heic` on `/2001/06-15/`:
+An admin drops `Felix.HEIC` on `/2001/06-15/`, which the app names `felix`:
 
 ```text
 app                        Worker                          R2 / Queue / Workflow
  | POST /api/presigned/2001/06-15/                               |
- |   [{ path: "/2001/06-15/felix.heic" }]                        |
+ |   [{ path: "/2001/06-15/felix" }]                             |
  |----------------------------->  check the album and the name,  |
  |                                mint a version id, insert an   |
  |  { url, versionId }            upload row                     |
@@ -176,7 +176,7 @@ app                        Worker                          R2 / Queue / Workflow
 4. **One batch** inserts the item into the album and marks the upload complete; the first photo in a day becomes its thumbnail. Then the inbox object is dropped.
 5. **The app** sees the new version in the album and shows it.
 
-**Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, and a name of the row's own base name with the new file's extension, so the edited `felix.jpg` replaces `felix.heic`. Captions, tags and every album showing it are kept. The thumbnail crop is kept only if the new image has exactly the old size.
+**Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions, tags and every album showing it are kept. The thumbnail crop is kept only if the new image has exactly the old size.
 
 **When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried.
 
@@ -190,7 +190,7 @@ app                        Worker                          R2 / Queue / Workflow
 
 ## Serving images and video
 
-The album page asks for `/i/2001/06-15/felix.heic/0muhjn6yo3f9a1c07b2e4d58a?size=200x200`, or `size=400x400` from a screen with two device pixels per CSS pixel, since each thumbnail offers both in its `srcset`:
+The album page asks for `/i/2001/06-15/felix/0muhjn6yo3f9a1c07b2e4d58a?size=200x200`, or `size=400x400` from a screen with two device pixels per CSS pixel, since each thumbnail offers both in its `srcset`:
 
 1. **The colo's cache.** A hit is answered there.
 2. **The derived bucket**, under `derived/0muhjn6yo3f9a1c07b2e4d58a/200x200-webp`, the name spelled from the URL and the format the browser gets.

@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest';
 import {
     albumDate,
     albumKey,
+    deduplicateNames,
     extensionOf,
-    hasStrictExtension,
     hrefOf,
     isAlbumPath,
     isDayAlbumPath,
+    isHeicFile,
     isMediaName,
     isMediaPath,
-    isStoredMediaName,
-    isStrictMediaName,
+    isVideoFile,
     isYearAlbumPath,
     mediaKey,
     parentPathOf,
     parsePath,
     pathOfUrl,
-    sanitizeMediaBaseName,
-    sanitizeMediaFilename,
+    sanitizeMediaName,
+    sanitizeMediaNameAsTyped,
 } from './paths.ts';
 
 /** Local midnight on a date, which is what an album stands at. */
@@ -36,13 +36,10 @@ describe(parsePath, () => {
             path: '/2001/06-15/',
             parsed: { kind: 'day', parentPath: '/2001/', name: '06-15', date: day(2001, 6, 15) },
         },
+        { path: '/2001/06-15/felix', parsed: { kind: 'media', parentPath: '/2001/06-15/', name: 'felix' } },
         {
-            path: '/2001/06-15/felix.jpg',
-            parsed: { kind: 'media', parentPath: '/2001/06-15/', name: 'felix.jpg' },
-        },
-        {
-            path: '/2001/06-15/Félix at the beach.JPG',
-            parsed: { kind: 'media', parentPath: '/2001/06-15/', name: 'Félix at the beach.JPG' },
+            path: '/2001/06-15/img_0001_2',
+            parsed: { kind: 'media', parentPath: '/2001/06-15/', name: 'img_0001_2' },
         },
         // A leap day exists only in a leap year.
         {
@@ -65,11 +62,16 @@ describe(parsePath, () => {
         '/abcd/',
         '/2001/06-15',
         '/2001/6-15/',
-        '/2001/06-15/felix.jpg/',
-        '/2001/06-15/x/felix.jpg',
-        '/2001/felix.jpg',
-        '/felix.jpg',
-        '/2001/06-15/felix',
+        '/2001/06-15/felix/',
+        '/2001/06-15/x/felix',
+        '/2001/felix',
+        '/felix',
+        // Names the rule refuses: an extension, a capital, a hyphen, a space, an accent.
+        '/2001/06-15/felix.jpg',
+        '/2001/06-15/Felix',
+        '/2001/06-15/felix-1',
+        '/2001/06-15/felix beach',
+        '/2001/06-15/félix',
         // Days the calendar does not have.
         '/2001/02-29/',
         '/2001/02-30/',
@@ -88,7 +90,7 @@ describe(isAlbumPath, () => {
         expect(isAlbumPath(path)).toBe(true);
     });
 
-    it.each(['', '2001/', '/2001', '/2001/06-15', '/2001/06-15/felix.jpg', '/20011/', '/2001/6-15/', '/2001/06-15/x/'])(
+    it.each(['', '2001/', '/2001', '/2001/06-15', '/2001/06-15/felix', '/20011/', '/2001/6-15/', '/2001/06-15/x/'])(
         'rejects %s',
         (path) => {
             expect(isAlbumPath(path)).toBe(false);
@@ -117,58 +119,28 @@ describe(isDayAlbumPath, () => {
 });
 
 describe(isMediaName, () => {
-    it.each(['felix.jpg', 'IMG_0001.HEIC', 'clip.mov'])('accepts %s', (name) => {
+    it.each(['felix', 'img_0001', 'a1_b2_c3', '2024', 'x'])('accepts %s', (name) => {
         expect(isMediaName(name)).toBe(true);
     });
 
-    it.each(['', 'felix', '.jpg', 'felix.', 'a.b.jpg', 'dir/felix.jpg', '06-15'])('rejects %s', (name) => {
+    it.each([
+        '',
+        'felix.jpg',
+        'Felix',
+        'felix-1',
+        'felix__1',
+        '_felix',
+        'felix_',
+        'félix',
+        'felix beach',
+        'dir/felix',
+        '06-15',
+    ])('rejects %s', (name) => {
         expect(isMediaName(name)).toBe(false);
     });
 });
 
-describe(isStoredMediaName, () => {
-    it.each(['felix.jpg', 'Félix at the beach.JPG', 'IMG_0001.HEIC', 'clip.mov'])('accepts %s', (name) => {
-        expect(isStoredMediaName(name)).toBe(true);
-    });
-
-    it.each(['felix.jpeg', 'felix.JPEG', 'notes.txt', 'felix', 'a.b.jpg'])('rejects %s', (name) => {
-        expect(isStoredMediaName(name)).toBe(false);
-    });
-});
-
-describe(hasStrictExtension, () => {
-    it.each(['felix.jpg', 'Old-Photo.png', 'IMG_0001.heic'])('accepts %s', (name) => {
-        expect(hasStrictExtension(name)).toBe(true);
-    });
-
-    it.each(['felix.JPG', 'felix.jpeg', 'notes.txt', 'felix'])('rejects %s', (name) => {
-        expect(hasStrictExtension(name)).toBe(false);
-    });
-});
-
-describe(isStrictMediaName, () => {
-    it.each(['felix.jpg', 'img_0001.heic', 'a1_b2_c3.mov'])('accepts %s', (name) => {
-        expect(isStrictMediaName(name)).toBe(true);
-    });
-
-    it.each([
-        'Felix.jpg',
-        'felix.JPG',
-        'felix-1.jpg',
-        'felix__1.jpg',
-        '_felix.jpg',
-        'felix_.jpg',
-        'felix',
-        'a.b.jpg',
-        'félix.jpg',
-        'felix.jpeg',
-        'notes.txt',
-    ])('rejects %s', (name) => {
-        expect(isStrictMediaName(name)).toBe(false);
-    });
-});
-
-describe(sanitizeMediaBaseName, () => {
+describe(sanitizeMediaNameAsTyped, () => {
     it.each([
         { in: 'photo', out: 'photo' },
         { in: 'my_photo_1', out: 'my_photo_1' },
@@ -182,68 +154,105 @@ describe(sanitizeMediaBaseName, () => {
         { in: 'my - photo', out: 'my_photo' },
         { in: "photo's", out: 'photo_s' },
         { in: 'photo@home', out: 'photo_home' },
+        { in: 'félix', out: 'f_lix' },
         { in: '_photo', out: 'photo' },
         { in: '__photo', out: 'photo' },
         { in: '-photo', out: 'photo' },
-        // A trailing underscore stays while a name is being typed; the strict rule refuses it on submit
+        // A trailing underscore stays while a name is being typed; the name rule refuses it on submit
         { in: 'photo_', out: 'photo_' },
         { in: 'photo-', out: 'photo_' },
         { in: '', out: '' },
     ])('[$in] sanitizes to [$out]', ({ in: name, out }) => {
-        expect(sanitizeMediaBaseName(name)).toBe(out);
+        expect(sanitizeMediaNameAsTyped(name)).toBe(out);
     });
 });
 
-describe(sanitizeMediaFilename, () => {
+describe(sanitizeMediaName, () => {
     it.each([
-        { in: 'photo.jpg', out: 'photo.jpg' },
-        { in: 'my_photo_1.jpg', out: 'my_photo_1.jpg' },
-        // The name and the extension are both lowercased
-        { in: 'IMAGE.JPG', out: 'image.jpg' },
-        { in: 'Photo.PNG', out: 'photo.png' },
-        { in: 'photo.GIF', out: 'photo.gif' },
-        // jpeg is spelled jpg
-        { in: 'photo.jpeg', out: 'photo.jpg' },
-        { in: 'PHOTO.JPEG', out: 'photo.jpg' },
-        { in: 'DSC_0001.jpeg', out: 'dsc_0001.jpg' },
+        { in: 'photo.jpg', out: 'photo' },
+        { in: 'my_photo_1.jpg', out: 'my_photo_1' },
+        { in: 'IMAGE.JPG', out: 'image' },
+        { in: 'IMG_0001.HEIC', out: 'img_0001' },
+        { in: 'DSC_0001.jpeg', out: 'dsc_0001' },
+        { in: 'clip.MOV', out: 'clip' },
         // Invalid characters become underscores, and runs collapse
-        { in: 'my photo.jpg', out: 'my_photo.jpg' },
-        { in: 'my--photo.jpg', out: 'my_photo.jpg' },
-        { in: 'my - photo.jpg', out: 'my_photo.jpg' },
-        { in: 'photo#1.jpg', out: 'photo_1.jpg' },
-        { in: 'photo (1).jpg', out: 'photo_1.jpg' },
-        { in: "photo's.jpg", out: 'photo_s.jpg' },
+        { in: 'my photo.jpg', out: 'my_photo' },
+        { in: 'my--photo.jpg', out: 'my_photo' },
+        { in: 'my - photo.jpg', out: 'my_photo' },
+        { in: 'photo#1.jpg', out: 'photo_1' },
+        { in: 'photo (1).jpg', out: 'photo_1' },
+        { in: "photo's.jpg", out: 'photo_s' },
         // Underscores at either end of the name go, the trailing one included, unlike in a name being typed
-        { in: '_photo.jpg', out: 'photo.jpg' },
-        { in: '-photo.jpg', out: 'photo.jpg' },
-        { in: 'photo_.jpg', out: 'photo.jpg' },
-        { in: 'photo__.jpg', out: 'photo.jpg' },
-        { in: 'photo-.jpg', out: 'photo.jpg' },
-        { in: '123photo.jpg', out: '123photo.jpg' },
+        { in: '_photo.jpg', out: 'photo' },
+        { in: '-photo.jpg', out: 'photo' },
+        { in: 'photo_.jpg', out: 'photo' },
+        { in: 'photo__.jpg', out: 'photo' },
+        { in: 'photo-.jpg', out: 'photo' },
+        { in: '123photo.jpg', out: '123photo' },
         // Only the last dot separates the extension, so earlier ones are sanitized as part of the name
-        { in: 'Screenshot 2024-01-15 at 10.30.45 AM.png', out: 'screenshot_2024_01_15_at_10_30_45_am.png' },
-        { in: 'Photo 2024-01-15.jpg', out: 'photo_2024_01_15.jpg' },
-        // The extension is lowercased and jpeg respelled, and nothing else about it is touched, so a file the
-        // gallery does not take is still refused by its name
-        { in: 'photo.jpeg2000', out: 'photo.jpeg2000' },
-        { in: 'photo.j pg', out: 'photo.j pg' },
-        { in: 'notes.TXT', out: 'notes.txt' },
-        // With no dot there is no extension to split off, so the whole string is a name
+        { in: 'Screenshot 2024-01-15 at 10.30.45 AM.png', out: 'screenshot_2024_01_15_at_10_30_45_am' },
+        { in: 'Photo 2024-01-15.jpg', out: 'photo_2024_01_15' },
+        // With no dot there is no extension to drop, so the whole string is the name
         { in: 'My Photo', out: 'my_photo' },
-        { in: 'my photo_', out: 'my_photo_' },
-        { in: '.jpg', out: '.jpg' },
-        { in: 'photo.', out: 'photo.' },
+        { in: 'my photo_', out: 'my_photo' },
+        // Nothing before the dot is nothing, which the name rule then refuses
+        { in: '.jpg', out: '' },
         { in: '', out: '' },
     ])('[$in] sanitizes to [$out]', ({ in: fileName, out }) => {
-        expect(sanitizeMediaFilename(fileName)).toBe(out);
+        expect(sanitizeMediaName(fileName)).toBe(out);
     });
 
     it.each(['IMG_0001.HEIC', 'Félix at the beach.JPEG', 'my - clip (2).MOV', '__x__.png'])(
-        'makes a strict name of %s, which presign and the tables then take',
+        'makes a media name of %s, which presign and the tables then take',
         (fileName) => {
-            expect(isStrictMediaName(sanitizeMediaFilename(fileName))).toBe(true);
+            expect(isMediaName(sanitizeMediaName(fileName))).toBe(true);
         },
     );
+});
+
+describe(deduplicateNames, () => {
+    it.each([
+        { description: 'nothing to do', in: [], out: [] },
+        { description: 'no repeats', in: ['a', 'b'], out: ['a', 'b'] },
+        { description: 'one repeat', in: ['a', 'a'], out: ['a', 'a_2'] },
+        { description: 'three of one name', in: ['a', 'a', 'a'], out: ['a', 'a_2', 'a_3'] },
+        // A name a suffix would land on is taken wherever it stands, so the suffix skips it
+        { description: 'a suffix already in the list', in: ['a', 'a', 'a_2'], out: ['a', 'a_3', 'a_2'] },
+        { description: 'a suffix later in the list', in: ['a_2', 'a', 'a'], out: ['a_2', 'a', 'a_3'] },
+        // The order is kept
+        { description: 'repeats apart', in: ['a', 'b', 'a', 'b'], out: ['a', 'b', 'a_2', 'b_2'] },
+    ])('$description: $in becomes $out', ({ in: names, out }) => {
+        expect(deduplicateNames(names)).toStrictEqual(out);
+    });
+
+    it('produces no repeats, whatever it is given', () => {
+        const names = ['x', 'x', 'x_2', 'x', 'x_3', 'x_2', 'y'];
+
+        expect(new Set(deduplicateNames(names)).size).toBe(names.length);
+    });
+});
+
+describe(isVideoFile, () => {
+    it('reads the extension of a file name, in either case', () => {
+        expect(['clip.mov', 'clip.MP4', 'photo.jpg', 'photo.HEIC', 'notes'].map(isVideoFile)).toStrictEqual([
+            true,
+            true,
+            false,
+            false,
+            false,
+        ]);
+    });
+});
+
+describe(isHeicFile, () => {
+    it('reads the extension of a file name, in either case', () => {
+        expect(['photo.heic', 'photo.HEIF', 'photo.jpg', 'clip.mov'].map(isHeicFile)).toStrictEqual([
+            true,
+            true,
+            false,
+            false,
+        ]);
+    });
 });
 
 describe(extensionOf, () => {
@@ -253,16 +262,13 @@ describe(extensionOf, () => {
 });
 
 describe(isMediaPath, () => {
-    it('accepts a file in a day album', () => {
-        expect(isMediaPath('/2001/06-15/felix.jpg')).toBe(true);
+    it('accepts a media name in a day album', () => {
+        expect(isMediaPath('/2001/06-15/felix')).toBe(true);
     });
 
-    it.each(['/2001/06-15/', '/2001/felix.jpg', '/felix.jpg', '/2001/06-15/felix', 'felix.jpg'])(
-        'rejects %s',
-        (path) => {
-            expect(isMediaPath(path)).toBe(false);
-        },
-    );
+    it.each(['/2001/06-15/', '/2001/felix', '/felix', '/2001/06-15/felix.jpg', 'felix'])('rejects %s', (path) => {
+        expect(isMediaPath(path)).toBe(false);
+    });
 });
 
 describe(albumKey, () => {
@@ -281,17 +287,17 @@ describe(albumKey, () => {
 
 describe(mediaKey, () => {
     it('splits a media path into its album and its name', () => {
-        expect(mediaKey('/2001/06-15/felix.jpg')).toStrictEqual({ parentPath: '/2001/06-15/', itemName: 'felix.jpg' });
+        expect(mediaKey('/2001/06-15/felix')).toStrictEqual({ parentPath: '/2001/06-15/', itemName: 'felix' });
     });
 
-    it.each(['/2001/06-15/', 'felix.jpg', '/2001/felix.jpg', '/2001/06-15/notes'])('gives %s no key', (path) => {
+    it.each(['/2001/06-15/', 'felix', '/2001/felix', '/2001/06-15/Felix'])('gives %s no key', (path) => {
         expect(mediaKey(path)).toBeNull();
     });
 });
 
 describe(parentPathOf, () => {
     it.each([
-        { path: '/2001/06-15/felix.jpg', parent: '/2001/06-15/' },
+        { path: '/2001/06-15/felix', parent: '/2001/06-15/' },
         { path: '/2001/06-15/', parent: '/2001/' },
         { path: '/2001/', parent: '/' },
     ])('$path is in $parent', ({ path, parent }) => {
@@ -309,7 +315,7 @@ describe(albumDate, () => {
         expect(albumDate('/2001/12-31/')).toStrictEqual(day(2001, 12, 31));
     });
 
-    it.each(['/', '/2001/12-31/felix.jpg', '/2001/13-01/', '/2001', ''])('throws for %s', (path) => {
+    it.each(['/', '/2001/12-31/felix', '/2001/13-01/', '/2001', ''])('throws for %s', (path) => {
         expect(() => albumDate(path)).toThrow(`Not a year or day album: [${path}]`);
     });
 });
@@ -319,14 +325,14 @@ describe(pathOfUrl, () => {
         { pathname: '/', path: '/' },
         { pathname: '/2001', path: '/2001/' },
         { pathname: '/2001/06-15', path: '/2001/06-15/' },
-        { pathname: '/2001/06-15/felix.jpg', path: '/2001/06-15/felix.jpg' },
+        { pathname: '/2001/06-15/felix', path: '/2001/06-15/felix' },
         // Deeper than any gallery path, so it comes back as it is and reads as no path.
-        { pathname: '/2001/06-15/felix.jpg/crop', path: '/2001/06-15/felix.jpg/crop' },
+        { pathname: '/2001/06-15/felix/crop', path: '/2001/06-15/felix/crop' },
     ])('$pathname names $path', ({ pathname, path }) => {
         expect(pathOfUrl(pathname)).toBe(path);
     });
 
-    it.each(['/', '/2001/', '/2001/06-15/', '/2001/06-15/felix.jpg'])('is the inverse of hrefOf on %s', (path) => {
+    it.each(['/', '/2001/', '/2001/06-15/', '/2001/06-15/felix'])('is the inverse of hrefOf on %s', (path) => {
         expect(pathOfUrl(hrefOf(path))).toBe(path);
     });
 });
@@ -336,7 +342,7 @@ describe(hrefOf, () => {
         { path: '/', href: '/' },
         { path: '/2001/', href: '/2001' },
         { path: '/2001/06-15/', href: '/2001/06-15' },
-        { path: '/2001/06-15/felix.jpg', href: '/2001/06-15/felix.jpg' },
+        { path: '/2001/06-15/felix', href: '/2001/06-15/felix' },
     ])('$path is at $href', ({ path, href }) => {
         expect(hrefOf(path)).toBe(href);
     });

@@ -29,7 +29,7 @@ import { dayAlbum, imageRecord, mediaPath, renameEntry, uploadEntry } from '$lib
  * shows in that state, and that a neighbour in that state leaves this page alone.
  */
 const ALBUM_PATH = '/2001/12-31/';
-const MEDIA_PATH = mediaPath('image.jpg');
+const MEDIA_PATH = mediaPath('image');
 const MEDIA_CONTENT = 'the media itself';
 /** The media loading page sets an empty title rather than announcing itself */
 const NO_TITLE = '';
@@ -41,9 +41,9 @@ interface Target {
 }
 const THIS: Target = { albumPath: ALBUM_PATH, mediaPath: MEDIA_PATH };
 /** A second album, and a second item in this one, to say which one a page is reading */
-const OTHER: Target = { albumPath: '/2001/12-30/', mediaPath: mediaPath('other.jpg') };
+const OTHER: Target = { albumPath: '/2001/12-30/', mediaPath: mediaPath('other') };
 
-const media = dayAlbum([imageRecord({ path: MEDIA_PATH, itemName: 'image.jpg' })]).media[0];
+const media = dayAlbum([imageRecord({ path: MEDIA_PATH, itemName: 'image' })]).media[0];
 const item = createRawSnippet(() => ({ render: () => `<p>${MEDIA_CONTENT}</p>` }));
 
 function show(overrides: { media?: Media | undefined } = {}): void {
@@ -92,7 +92,7 @@ const PROCESSING: Case[] = [
     {
         state: 'renaming an item',
         seed: ({ mediaPath: itemPath }) => {
-            albumState.mediaRenames.set(itemPath, renameEntry(itemPath, 'renamed.jpg', RenameStatus.IN_PROGRESS));
+            albumState.mediaRenames.set(itemPath, renameEntry(itemPath, 'renamed', RenameStatus.IN_PROGRESS));
         },
         title: 'Rename In Progress',
     },
@@ -293,7 +293,7 @@ describe(MediaRouting, () => {
      * path that no longer exists. The page at the new path sees the same rename until the album has been re-read.
      */
     describe('a rename', () => {
-        const NEW_NAME = 'renamed.jpg';
+        const NEW_NAME = 'renamed';
         const NEW_PATH = mediaPath(NEW_NAME);
 
         beforeEach(() => {
@@ -301,10 +301,7 @@ describe(MediaRouting, () => {
         });
 
         it('is shown in progress at its new path as well', async () => {
-            albumState.mediaRenames.set(
-                OTHER.mediaPath,
-                renameEntry(OTHER.mediaPath, 'image.jpg', RenameStatus.RENAMED),
-            );
+            albumState.mediaRenames.set(OTHER.mediaPath, renameEntry(OTHER.mediaPath, 'image', RenameStatus.RENAMED));
             albumState.albums.set(ALBUM_PATH, { loadStatus: AlbumLoadStatus.LOADED });
 
             show({ media: undefined });

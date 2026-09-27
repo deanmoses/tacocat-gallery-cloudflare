@@ -1,8 +1,7 @@
 import {
     type ItemKey,
     cropPercentSchema,
-    extensionOf,
-    isStrictMediaName,
+    isMediaName,
     mediaKey,
     mediaPath,
     mediaWriteSchema,
@@ -74,7 +73,7 @@ export async function deleteMediaRoute(request: Request, env: Env): Promise<Resp
     return write.changes > 0 ? wrote(session, write, started) : notFoundMedia(key);
 }
 
-/** `POST /api/media-rename/<path>` with `{ newName }`: a strict name with the extension the item has. */
+/** `POST /api/media-rename/<path>` with `{ newName }`: a media name, which the item takes unless another has it. */
 export async function renameMediaRoute(request: Request, env: Env): Promise<Response> {
     const key = writableMedia(request, '/api/media-rename/');
     if (key instanceof Response) {
@@ -86,14 +85,11 @@ export async function renameMediaRoute(request: Request, env: Env): Promise<Resp
         return body.response;
     }
     const { newName } = body.output;
-    if (!isStrictMediaName(newName)) {
+    if (!isMediaName(newName)) {
         return failure(400, `New media name is invalid: [${newName}]`);
     }
     if (newName === key.itemName) {
         return failure(400, `New media name [${newName}] cannot be same as old one [${path}]`);
-    }
-    if (extensionOf(newName) !== extensionOf(key.itemName)) {
-        return failure(400, `New media name [${newName}] must keep the extension [.${extensionOf(key.itemName)}]`);
     }
     const session = env.DB.withSession('first-primary');
     const started = performance.now();

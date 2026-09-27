@@ -4,9 +4,6 @@ import {
     type PresignRequest,
     type PresignResponse,
     albumKey,
-    baseNameOf,
-    hasStrictExtension,
-    isStrictMediaName,
     mediaKey,
     mediaPath,
 } from 'tacocat-gallery-shared';
@@ -24,7 +21,7 @@ export type Presigned = { uploads: PresignResponse; rowsRead: number } | { refus
 interface Planned {
     path: string;
     key: ItemKey;
-    replaces: string | null;
+    replace: boolean;
 }
 
 /**
@@ -64,28 +61,23 @@ export async function presignUploads(
     }
     const existing = new Map(children.map((child) => [child.itemName, child.id]));
     for (const upload of planned) {
-        const target = upload.replaces === null ? null : mediaKey(upload.replaces);
-        const targetId = target === null ? undefined : existing.get(target.itemName);
-        if (target !== null && targetId === undefined) {
-            return { refused: `Media not found: [${upload.replaces ?? ''}]` };
-        }
         const holder = existing.get(upload.key.itemName);
-        if (holder !== undefined && holder !== targetId) {
+        if (upload.replace && holder === undefined) {
+            return { refused: `Media not found: [${upload.path}]` };
+        }
+        if (!upload.replace && holder !== undefined) {
             return { refused: `A media item already exists at [${upload.path}]` };
         }
     }
-    const rows = planned.map((upload) => {
-        const target = upload.replaces === null ? null : mediaKey(upload.replaces);
-        return {
-            versionId: mintVersionId(),
-            parentPath: upload.key.parentPath,
-            itemName: upload.key.itemName,
-            albumId: albumRow.id,
-            targetId: target === null ? null : (existing.get(target.itemName) ?? null),
-            targetPath: upload.replaces,
-            username,
-        };
-    });
+    const rows = planned.map((upload) => ({
+        versionId: mintVersionId(),
+        parentPath: upload.key.parentPath,
+        itemName: upload.key.itemName,
+        albumId: albumRow.id,
+        replacement: upload.replace,
+        targetId: upload.replace ? (existing.get(upload.key.itemName) ?? null) : null,
+        username,
+    }));
     // One statement per row, in one atomic batch: D1 binds at most 100 parameters to a statement, and a day's drop
     // of photos is far more rows than that allows in one insert.
     const [first, ...rest] = rows.map((row) => database.insert(schema.upload).values(row));
@@ -108,19 +100,11 @@ export async function presignUploads(
 function plan(albumPath: string, entries: PresignRequest): Planned[] | { refused: string } {
     const planned: Planned[] = [];
     const seen = new Set<string>();
-    for (const { path, replaces } of entries) {
+    for (const { path, replace = false } of entries) {
         const key = mediaKey(path);
         if (key === null) {
-            return { refused: `Invalid media path [${path}]` };
-        }
-        if (replaces === undefined && !isStrictMediaName(key.itemName)) {
             return {
-                refused: `Invalid media name [${key.itemName}]: lowercase letters, digits and single underscores, with an extension the gallery takes, jpg not jpeg`,
-            };
-        }
-        if (replaces !== undefined && !hasStrictExtension(key.itemName)) {
-            return {
-                refused: `Invalid extension on [${key.itemName}]: lowercase, one the gallery takes, jpg not jpeg`,
+                refused: `Invalid media path [${path}]: a name of lowercase letters, digits and single underscores in a day album`,
             };
         }
         if (key.parentPath !== albumPath) {
@@ -130,16 +114,7 @@ function plan(albumPath: string, entries: PresignRequest): Planned[] | { refused
             return { refused: `Duplicate media path [${path}]` };
         }
         seen.add(path);
-        if (replaces !== undefined) {
-            const target = mediaKey(replaces);
-            if (target?.parentPath !== albumPath) {
-                return { refused: `Media [${replaces}] not in album [${albumPath}]` };
-            }
-            if (baseNameOf(key.itemName) !== baseNameOf(target.itemName)) {
-                return { refused: `Replacement [${path}] must keep the name of [${replaces}]` };
-            }
-        }
-        planned.push({ path, key, replaces: replaces ?? null });
+        planned.push({ path, key, replace });
     }
     return planned;
 }

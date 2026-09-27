@@ -4,13 +4,10 @@
   Full screen drag/drop zone for dropping a replacement file onto the media page.
 -->
 <script lang="ts">
-    import { goto } from '$app/navigation';
     import FullScreenDropZone from '$lib/components/site/admin/FullScreenDropZone.svelte';
     import { getDroppedFiles } from '$lib/stores/admin/DragDropUtils';
     import { uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
     import { sessionStore } from '$lib/stores/SessionStore.svelte';
-    import { parentPathOf } from 'tacocat-gallery-shared';
-    import { replacementPath } from '$lib/utils/uploadUtils';
     import { toast } from '@zerodevx/svelte-toast';
 
     interface Props {
@@ -32,10 +29,7 @@
             toast.push('Please drop a single file');
             return;
         }
-        const path = replacementPath(mediaPath, file.name);
-        uploadMachine.uploadMediaItem(path, file, mediaPath);
-        // A file in another format renames the item, so this page's URL is about to go stale; the album shows the upload
-        if (path !== mediaPath) void goto(parentPathOf(mediaPath));
+        uploadMachine.uploadMediaItem(mediaPath, file, true);
     }
 </script>
 

@@ -18,7 +18,7 @@ describe('API URLs', () => {
 
 describe(itemUrl, () => {
     it('names a media item under media and an album under album', () => {
-        expect(itemUrl('/2001/12-31/felix.jpg')).toBe('/api/media/2001/12-31/felix.jpg');
+        expect(itemUrl('/2001/12-31/felix')).toBe('/api/media/2001/12-31/felix');
         expect(itemUrl('/2001/12-31/')).toBe('/api/album/2001/12-31/');
     });
 });

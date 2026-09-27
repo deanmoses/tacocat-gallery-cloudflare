@@ -28,7 +28,7 @@ describe(Thumbnail, () => {
     it('offers the same frame at 200 and 400 pixels, so a 2x screen draws it pixel for pixel', async () => {
         render(Thumbnail, {
             thumbnailUrlInfo: {
-                imagePath: '/2001/06-15/felix.jpg',
+                imagePath: '/2001/06-15/felix',
                 versionId: 'v1',
                 crop: { x: 0, y: 20, width: 300, height: 300 },
             },
@@ -36,12 +36,12 @@ describe(Thumbnail, () => {
 
         const image = page.getByTestId('thumbnail-image');
 
-        await expect.element(image).toHaveAttribute('src', '/i/2001/06-15/felix.jpg/v1?size=200x200&crop=0,20,300,300');
+        await expect.element(image).toHaveAttribute('src', '/i/2001/06-15/felix/v1?size=200x200&crop=0,20,300,300');
         await expect
             .element(image)
             .toHaveAttribute(
                 'srcset',
-                '/i/2001/06-15/felix.jpg/v1?size=200x200&crop=0,20,300,300 1x, /i/2001/06-15/felix.jpg/v1?size=400x400&crop=0,20,300,300 2x',
+                '/i/2001/06-15/felix/v1?size=200x200&crop=0,20,300,300 1x, /i/2001/06-15/felix/v1?size=400x400&crop=0,20,300,300 2x',
             );
     });
 

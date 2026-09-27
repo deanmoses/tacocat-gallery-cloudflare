@@ -205,7 +205,7 @@ async function upload(photo: AwsMedia): Promise<string> {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify([
-            existing.has(photo.itemName) ? { path: galleryPath, replaces: galleryPath } : { path: galleryPath },
+            existing.has(photo.itemName) ? { path: galleryPath, replace: true } : { path: galleryPath },
         ]),
     });
     if (!presigned.ok) {
