@@ -5,7 +5,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler dev --local-upstream localhost:8787",
+        "dev": "CI=true wrangler d1 migrations apply DB --local && env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler dev --local-upstream localhost:8787",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest",
