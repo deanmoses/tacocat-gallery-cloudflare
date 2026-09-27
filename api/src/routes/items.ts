@@ -3,7 +3,7 @@ import { orm, upsertItem } from '../db';
 import { d1Header } from '../db/timing';
 import { written } from '../http/bookmark';
 import { failure } from '../http/responses';
-import { parsedBody } from './requests';
+import { parsedBody } from '../http/body';
 
 /**
  * `PUT /api/item` with an `ItemWrite` saves every field of that item, clearing any left out. A row the database's

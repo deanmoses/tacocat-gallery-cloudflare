@@ -8,10 +8,6 @@ export function json(body: unknown, status = 200, headers: Record<string, string
     });
 }
 
-export function html(page: string): Response {
-    return new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } });
-}
-
 /** A failed request, with the one body shape the web app reads a message from. */
 export function failure(status: number, errorMessage: string, headers: Record<string, string> = {}): Response {
     return json({ errorMessage } satisfies ErrorResponse, status, headers);

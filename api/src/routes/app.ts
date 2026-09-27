@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { INVITE_PAGE, LOGIN_PAGE } from '../auth/pages';
 import {
     currentAdmin,
+    inviteStatus,
     loginOptions,
     loginVerify,
     logout,
@@ -11,7 +11,7 @@ import {
     requestSite,
 } from '../auth/passkeys';
 import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
-import { failure, html, json, notFound } from '../http/responses';
+import { failure, json, notFound } from '../http/responses';
 import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
 import { seed } from '../ops/seed';
@@ -84,10 +84,8 @@ export function createApp(): Hono<App> {
         return failure(500, 'Server Error');
     });
 
-    // Login and invites, open to anyone. The JSON endpoints behind them take a passkey bound to the site's own origin, so
-    // each needs the request to come from it.
-    app.get('/login', async () => html(LOGIN_PAGE));
-    app.get('/invite/*', async () => html(INVITE_PAGE));
+    // Login and invites, open to anyone. The endpoints take a passkey bound to the site's own origin, so each needs the
+    // request to come from it.
     app.get('/api/auth/status', async (context) => json({ admin: await currentAdmin(context.req.raw, context.env) }));
     app.post('/api/auth/*', async (context, next) => {
         const site = requestSite(context.req.raw, context.env);
@@ -97,6 +95,7 @@ export function createApp(): Hono<App> {
         context.set('site', site);
         return next();
     });
+    app.post('/api/auth/invite', async (context) => inviteStatus(context.req.raw, context.env));
     app.post('/api/auth/register/options', async (context) =>
         registerOptions(context.req.raw, context.env, context.get('site')),
     );

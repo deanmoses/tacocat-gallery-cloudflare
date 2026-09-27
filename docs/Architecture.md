@@ -10,7 +10,7 @@ The whole site is one Worker per environment, serving the web app and everything
                  +----------------+----------------+
                  |                                 |
            static assets                      Worker code
-          (the web app)               (/api, /login, /i, /raw, /v)
+          (the web app)               (/api, /i, /raw, /v)
                                                    |
        +------------+------------+-----------+-----+------+
        |            |            |           |            |
@@ -234,9 +234,9 @@ shared/src/        record and request schemas, the path grammar, naming rules, U
 api/src/index.ts   the three handlers, wired to the layers
 api/src/routes/    HTTP: parse the request, check the admin, call gallery/, shape the response
 api/src/gallery/   the operations: reads, writes, search, presign, the upload pipeline
-api/src/auth/      passkeys, sessions, the login and invite pages
+api/src/auth/      passkeys and sessions
 api/src/ops/       health, backup, and the performance measurements
-api/src/http/      responses, cookies, the bookmark, the site's headers
+api/src/http/      request bodies, responses, cookies, the bookmark, the site's headers
 api/src/db/        the schema, and Drizzle over D1 sessions
 api/src/storage/   object keys and S3 presigning
 api/src/media/     the metadata reader, the Images binding, the transcoder

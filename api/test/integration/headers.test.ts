@@ -14,7 +14,6 @@ describe("the site's headers", () => {
     it.each([
         ['an API response', '/api/health'],
         ['a failure', '/api/nothing'],
-        ['the login page', '/login'],
     ])('are on %s', async (_what, path) => {
         const response = await call(path);
         await response.body?.cancel();

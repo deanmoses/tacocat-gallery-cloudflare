@@ -73,6 +73,7 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - The gallery's photos have no file behind them, but for the one the admin journeys crop, which `e2e/server.ts` puts into local R2 before the Worker starts, and the ffmpeg container does not run; so a thumbnail is a broken image, apart from that one and the ones the upload journey makes. Assert on text and links.
 - Uploads complete: the stack runs with `UPLOADS=local`, as `wrangler dev` does, so the Worker takes the browser's PUT into its local bucket and raises the event itself, and the upload journey ends with the item in the album.
 - An admin journey signs in with `signInAsAdmin` in `e2e/support.ts`, the test cookie added to the browser context, and reveals the control strip with `revealAdminControls`, since the strip shows only under the pointer. Admin journeys write into the year `e2e/gallery.ts` reserves for them, so the reader journeys' albums never change.
+- The passkey journey in `e2e/passkeys.e2e.ts` signs in the real way, with Chromium's virtual authenticator standing in for Face ID or a password manager, and an invite `mintInvite` in `e2e/support.ts` writes into the running site's database for each attempt, since an attempt uses its invite up. The e2e Worker keeps the browser's origin, as `--local-upstream` does under `npm run dev`, since a passkey is bound to it.
 - A failure keeps a trace and a screenshot under `e2e/test-results/`. `npx playwright show-report e2e/playwright-report` opens the HTML report, trace included.
 
 ## Coverage

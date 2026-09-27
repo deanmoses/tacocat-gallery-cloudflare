@@ -9,6 +9,7 @@ import {
 import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
 import { type Orm, orm, schema } from '../db';
+import { parsedBody } from '../http/body';
 import { cookie } from '../http/cookies';
 import { failure, json } from '../http/responses';
 import { type SignedCookie, readSigned, sign } from './session';
@@ -26,17 +27,29 @@ const CHALLENGE = {
     payload: valibot.object({ challenge: valibot.string() }),
 } satisfies SignedCookie<valibot.GenericSchema>;
 const SESSION_DAYS = 30;
+const INVALID_INVITE = 'This invite link is invalid, used or expired.';
 const CHALLENGE_MS = 5 * 60_000;
 const NOW = sql`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
 const ENCODER = new TextEncoder();
+// SimpleWebAuthn checks the rest of a passkey's answer, and throws on one that is malformed.
+const PASSKEY_ANSWER = (value: unknown): boolean =>
+    typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string';
+const INVITE = valibot.object({ token: valibot.string() });
+const REGISTRATION = valibot.object({
+    token: valibot.string(),
+    response: valibot.custom<RegistrationResponseJSON>(PASSKEY_ANSWER, 'Expected a passkey answer'),
+});
+const AUTHENTICATION = valibot.custom<AuthenticationResponseJSON>(PASSKEY_ANSWER, 'Expected a passkey answer');
 const TO_BASE64URL = { alphabet: 'base64url', omitPadding: true } as const;
 const FROM_BASE64URL = { alphabet: 'base64url' } as const;
 
 // A passkey is bound to the site it was created on. The browser's Origin header names that site, and only the
-// environment's own site and local development are accepted; wrangler dev rewrites request.url to the custom domain,
-// so the URL can't be used for this.
+// environment's own site and local development are accepted: the Worker's own port, and vite dev's, which serves the
+// app in front of it. wrangler dev rewrites request.url to the custom domain, so the URL can't be used for this.
+const LOCAL_ORIGINS = new Set(['http://localhost:8787', 'http://localhost:5173']);
+
 function isAllowedOrigin(origin: string, env: AuthEnv): boolean {
-    return origin === env.SITE_ORIGIN || origin === 'http://localhost:8787';
+    return origin === env.SITE_ORIGIN || LOCAL_ORIGINS.has(origin);
 }
 
 /** The site a passkey request comes from, as a URL, or null when it is not one a passkey may be bound to. */
@@ -77,11 +90,24 @@ export async function currentAdmin(request: Request, env: AuthEnv): Promise<stri
     return session?.name ?? null;
 }
 
+/** Whose passkey an invite would create, or a 404 once it is used, expired or never existed. */
+export async function inviteStatus(request: Request, env: AuthEnv): Promise<Response> {
+    const body = await parsedBody(request, INVITE);
+    if ('response' in body) {
+        return body.response;
+    }
+    const invite = await findInvite(env, body.output.token);
+    return invite === null ? failure(404, INVALID_INVITE) : json({ username: invite.username });
+}
+
 export async function registerOptions(request: Request, env: AuthEnv, site: URL): Promise<Response> {
-    const { token } = await request.json<{ token: string }>();
-    const invite = await findInvite(env, token);
+    const body = await parsedBody(request, INVITE);
+    if ('response' in body) {
+        return body.response;
+    }
+    const invite = await findInvite(env, body.output.token);
     if (!invite) {
-        return failure(400, 'This invite link is invalid, used or expired.');
+        return failure(400, INVALID_INVITE);
     }
     const existing = await orm(env.DB)
         .select({ id: schema.passkey.credentialId, transports: schema.passkey.transports })
@@ -106,14 +132,18 @@ export async function registerOptions(request: Request, env: AuthEnv, site: URL)
 }
 
 export async function registerVerify(request: Request, env: AuthEnv, site: URL): Promise<Response> {
-    const { token, response } = await request.json<{ token: string; response: RegistrationResponseJSON }>();
+    const body = await parsedBody(request, REGISTRATION);
+    if ('response' in body) {
+        return body.response;
+    }
+    const { token, response } = body.output;
     const expectedChallenge = await readChallenge(request, env);
     if (expectedChallenge === null) {
         return failure(400, 'Login attempt expired; try again.');
     }
     const invite = await findInvite(env, token);
     if (!invite) {
-        return failure(400, 'This invite link is invalid, used or expired.');
+        return failure(400, INVALID_INVITE);
     }
 
     const result = await unlessThrown(
@@ -159,7 +189,11 @@ export async function loginOptions(env: AuthEnv, site: URL): Promise<Response> {
 }
 
 export async function loginVerify(request: Request, env: AuthEnv, site: URL): Promise<Response> {
-    const response = await request.json<AuthenticationResponseJSON>();
+    const body = await parsedBody(request, AUTHENTICATION);
+    if ('response' in body) {
+        return body.response;
+    }
+    const response = body.output;
     const expectedChallenge = await readChallenge(request, env);
     if (expectedChallenge === null) {
         return failure(400, 'Login attempt expired; try again.');

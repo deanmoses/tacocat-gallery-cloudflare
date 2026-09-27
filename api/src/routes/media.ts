@@ -15,7 +15,8 @@ import { deleteMedia, describeMedia, recutThumbnail, renameMedia, updateMedia } 
 import { requestBookmark } from '../http/bookmark';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
-import { parsedBody, wrote } from './requests';
+import { parsedBody } from '../http/body';
+import { wrote } from './requests';
 
 /** `HEAD /api/media/<path>`: whether the media item is there for this caller. There is nothing to GET. */
 export async function headMedia(request: Request, env: Env): Promise<Response> {

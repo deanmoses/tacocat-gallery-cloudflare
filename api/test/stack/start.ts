@@ -18,6 +18,11 @@ interface StackOptions {
     persistTo?: string;
     /** Plain-text bindings, over the vars in wrangler.jsonc, as .dev.vars would set them for `wrangler dev`. */
     vars?: Record<string, string>;
+    /**
+     * Whether requests keep the local origin, as `--local-upstream` has them under `npm run dev`. Otherwise wrangler
+     * rewrites a same-origin request's Origin header to the custom domain's, which a passkey check refuses.
+     */
+    localUpstream?: boolean;
 }
 
 /**
@@ -25,7 +30,7 @@ interface StackOptions {
  * secrets in place of .dev.vars. The build is a fresh one unless WEB_BUILD_READY is set, which scripts/test.sh does
  * after building once for every suite it runs.
  */
-export async function startStack({ port, persistTo, vars = {} }: StackOptions): Promise<Stack> {
+export async function startStack({ port, persistTo, vars = {}, localUpstream = false }: StackOptions): Promise<Stack> {
     if (process.env['WEB_BUILD_READY'] === undefined) {
         await buildWebApp();
     }
@@ -43,6 +48,7 @@ export async function startStack({ port, persistTo, vars = {} }: StackOptions): 
         },
         dev: {
             server: { port },
+            ...(localUpstream && { origin: { hostname: `localhost:${port}`, secure: false } }),
             inspector: false,
             watch: false,
             remote: false,
@@ -72,6 +78,15 @@ export async function putLocalObject(
         API_DIR,
         `putting ${objectPath} into local R2 failed`,
     );
+}
+
+/**
+ * Runs SQL on the local D1 database under `persistTo`, as `wrangler d1 execute --local` does, for rows no route writes.
+ * A Worker already running on that storage sees them.
+ */
+export async function executeLocalSql(persistTo: string, sql: string): Promise<void> {
+    const execute = ['d1', 'execute', 'DB', '--local', '--persist-to', persistTo, '--command', sql];
+    await npm(['exec', '--no', '--', 'wrangler', ...execute], API_DIR, 'running SQL on the local database failed');
 }
 
 async function migrate(persistTo: string): Promise<void> {

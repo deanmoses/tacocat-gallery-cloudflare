@@ -2,7 +2,7 @@ import * as valibot from 'valibot';
 import { orm } from '../db';
 import { recentUploadErrors } from '../gallery/errors';
 import { json } from '../http/responses';
-import { parsedBody } from './requests';
+import { parsedBody } from '../http/body';
 
 const PATHS = valibot.object({ paths: valibot.array(valibot.string()) });
 
