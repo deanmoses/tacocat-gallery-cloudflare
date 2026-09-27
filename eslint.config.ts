@@ -365,15 +365,6 @@ export default defineConfig(
         files: ['web/src/**/*'],
         languageOptions: { globals: globals.browser },
     },
-    {
-        // Outside the app's project, which `svelte-kit sync` writes without it, so it is typed through its own.
-        name: 'web service worker',
-        files: ['web/src/service-worker.ts'],
-        languageOptions: {
-            globals: globals.serviceworker,
-            parserOptions: { projectService: false, project: './web/tsconfig.service-worker.json' },
-        },
-    },
     // The web app sees the Worker only through its HTTP responses, whose shapes live in shared/. A table's row type
     // reaching it would tie the pages to column names the Worker is free to change.
     webLayer('web imports no worker code', ['web/src/**/*'], []),
