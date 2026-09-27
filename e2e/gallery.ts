@@ -1,7 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import type { ItemWrite } from 'tacocat-gallery-shared';
 import { adminCookie } from '../api/test/secrets.ts';
 
 export const E2E_PORT = 8790;
+export const E2E_ORIGIN = `http://localhost:${E2E_PORT}`;
+
+/** Where the e2e site keeps D1 and R2, emptied each time its server starts. */
+export const E2E_STATE = fileURLToPath(new URL('../.wrangler/e2e', import.meta.url));
 
 const YEAR_PATH = '/2001/';
 const DAY_PATH = '/2001/06-15/';
