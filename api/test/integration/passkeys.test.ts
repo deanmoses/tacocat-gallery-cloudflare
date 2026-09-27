@@ -6,6 +6,8 @@ import { SoftwareAuthenticator } from '../authenticator';
 import { ORIGIN, call } from '../helpers';
 
 const TOKEN = 'invite-token';
+/** Where `vite dev` serves the app, in front of the Worker. */
+const VITE_ORIGIN = 'http://localhost:5173';
 const DAY_MS = 86_400_000;
 
 /** Stores an invite for `username`, one of the seeded users, as api/scripts/invite.sh does: only the hash of its token. */
@@ -16,14 +18,19 @@ async function invite(username: string, expiresAt = new Date(Date.now() + DAY_MS
         .values({ tokenHash: new Uint8Array(digest).toHex(), username, expiresAt: expiresAt.toISOString() });
 }
 
-/** A browser on the local dev origin: it sends the Origin header and keeps the cookies the Worker sets. */
+/** A browser on a local dev origin: it sends the Origin header and keeps the cookies the Worker sets. */
 class Browser {
+    readonly origin: string;
     private readonly cookies = new Map<string, string>();
+
+    constructor(origin = ORIGIN) {
+        this.origin = origin;
+    }
 
     async post(path: string, body?: unknown): Promise<Response> {
         const response = await call(path, {
             method: 'POST',
-            headers: { origin: ORIGIN, 'content-type': 'application/json', cookie: this.cookieHeader() },
+            headers: { origin: this.origin, 'content-type': 'application/json', cookie: this.cookieHeader() },
             ...(body !== undefined && { body: JSON.stringify(body) }),
         });
         for (const header of response.headers.getSetCookie()) {
@@ -47,7 +54,7 @@ class Browser {
 
     /** Another browser holding the same cookies, as someone who copied them would. */
     copy(): Browser {
-        const other = new Browser();
+        const other = new Browser(this.origin);
         for (const [name, value] of this.cookies) {
             other.cookies.set(name, value);
         }
@@ -66,18 +73,48 @@ async function challenge(options: Response): Promise<string> {
 
 async function register(browser: Browser, authenticator: SoftwareAuthenticator, token = TOKEN): Promise<Response> {
     const options = await browser.post('/api/auth/register/options', { token });
-    const response = await authenticator.register(ORIGIN, await challenge(options));
+    const response = await authenticator.register(browser.origin, await challenge(options));
     return browser.post('/api/auth/register/verify', { token, response });
 }
 
 async function logIn(browser: Browser, authenticator: SoftwareAuthenticator): Promise<Response> {
     const options = await browser.post('/api/auth/login/options');
-    return browser.post('/api/auth/login/verify', await authenticator.assert(ORIGIN, await challenge(options)));
+    return browser.post('/api/auth/login/verify', await authenticator.assert(browser.origin, await challenge(options)));
 }
 
 async function storedPasskeys(): Promise<(typeof schema.passkey.$inferSelect)[]> {
     return orm(env.DB).select().from(schema.passkey).all();
 }
+
+describe('checking an invite before using it', () => {
+    it('names the admin a live invite is for', async () => {
+        await invite('moses');
+        const response = await new Browser().post('/api/auth/invite', { token: TOKEN });
+
+        await expect(response.json()).resolves.toStrictEqual({ username: 'moses' });
+    });
+
+    it('refuses an invite already used', async () => {
+        await invite('moses');
+        await register(new Browser(), await SoftwareAuthenticator.create());
+        const response = await new Browser().post('/api/auth/invite', { token: TOKEN });
+
+        expect(response.status).toBe(404);
+        await expect(response.json()).resolves.toStrictEqual({
+            errorMessage: 'This invite link is invalid, used or expired.',
+        });
+    });
+
+    it.each([
+        { name: 'an expired invite', expiresAt: new Date(Date.now() - 1000), token: TOKEN },
+        { name: 'an unknown token', expiresAt: new Date(Date.now() + DAY_MS), token: 'not-a-real-invite' },
+    ])('refuses $name', async ({ expiresAt, token }) => {
+        await invite('moses', expiresAt);
+        const response = await new Browser().post('/api/auth/invite', { token });
+
+        expect(response.status).toBe(404);
+    });
+});
 
 describe('registering a passkey through an invite', () => {
     it('stores the passkey for the invited admin and logs them in', async () => {
@@ -239,5 +276,32 @@ describe('logging in with a passkey', () => {
         expect(first.status).toBe(200);
         expect(replayed.status).toBe(401);
         await expect(thief.admin()).resolves.toBeNull();
+    });
+});
+
+describe('passkeys in local development', () => {
+    it('creates and uses a passkey from the app as vite dev serves it', async () => {
+        await invite('moses');
+        const authenticator = await SoftwareAuthenticator.create();
+        await register(new Browser(VITE_ORIGIN), authenticator);
+        const browser = new Browser(VITE_ORIGIN);
+        const response = await logIn(browser, authenticator);
+
+        await expect(response.json()).resolves.toStrictEqual({ admin: 'moses' });
+    });
+});
+
+describe('a malformed invite check', () => {
+    it.each([
+        { name: 'a body that is not JSON', body: 'not json' },
+        { name: 'a body without a token', body: '{}' },
+    ])('refuses $name with a 400', async ({ body }) => {
+        const response = await call('/api/auth/invite', {
+            method: 'POST',
+            headers: { origin: ORIGIN, 'content-type': 'application/json' },
+            body,
+        });
+
+        expect(response.status).toBe(400);
     });
 });

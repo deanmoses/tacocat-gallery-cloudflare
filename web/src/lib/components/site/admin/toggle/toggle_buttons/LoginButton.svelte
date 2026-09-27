@@ -4,12 +4,13 @@
   Button to send the user to the login page
 -->
 <script lang="ts">
+    import { goto } from '$app/navigation';
+    import { page } from '$app/state';
     import LoginIcon from '$lib/components/site/icons/LoginIcon.svelte';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
-    // The login page is the Worker's, outside the app, so this is a whole-document navigation.
     function onclick(): void {
-        location.assign('/login');
+        void goto(`/login?returnPath=${encodeURIComponent(page.url.pathname + page.url.search)}`);
     }
 </script>
 

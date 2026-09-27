@@ -152,6 +152,15 @@ export function checkAuthenticationUrl(): string {
 }
 
 /**
+ * URL to send HTTP POST to for one step of logging in, creating a passkey or logging out
+ */
+export function authUrl(
+    step: 'invite' | 'register/options' | 'register/verify' | 'login/options' | 'login/verify' | 'logout',
+): string {
+    return `${baseApiUrl()}auth/${step}`;
+}
+
+/**
  * The title of the site, such as shown in the header of the site.
  */
 export function siteTitle(): string {

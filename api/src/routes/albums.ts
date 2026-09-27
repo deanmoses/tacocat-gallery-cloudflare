@@ -23,7 +23,8 @@ import {
     setThumbnail,
     updateAlbum,
 } from '../gallery/albums';
-import { parsedBody, wrote } from './requests';
+import { parsedBody } from '../http/body';
+import { wrote } from './requests';
 import { BOOKMARK_HEADER, requestBookmark } from '../http/bookmark';
 import { pathAfter } from '../http/paths';
 import { failure, json, notFound } from '../http/responses';

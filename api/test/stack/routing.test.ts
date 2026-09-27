@@ -13,8 +13,6 @@ async function navigate(path: string, method = 'GET'): Promise<Response> {
 describe('the asset router', () => {
     it.each([
         ['GET', '/api/auth/status'],
-        ['GET', '/login'],
-        ['GET', '/invite/abc'],
         ['GET', '/raw/2001/01-01/a/v1'],
         ['GET', '/v/2001/01-01/a/v1'],
         ['GET', '/i/2001/01-01/a/v1'],
@@ -28,7 +26,7 @@ describe('the asset router', () => {
         expect(response.headers.has('x-worker-colo')).toBe(true);
     });
 
-    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix', '/search/tacos'])(
+    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix', '/search/tacos', '/login', '/invite/abc'])(
         'serves the web app for %s',
         async (path) => {
             const response = await navigate(path);
@@ -66,6 +64,8 @@ describe('preloading the album JSON', () => {
         '/2001/',
         '/search',
         '/search/tacos',
+        '/invite/abc',
+        '/login',
         '/robots.txt',
         '/images/favicons/favicon_32x32',
         '/_app/version.json',

@@ -13,9 +13,7 @@
 
     let { children }: LayoutProps = $props();
 
-    // The app's one authentication check. The root layout mounts once per
-    // document load, and that includes the load returning from the login
-    // page, which is how a login gets noticed.
+    // Who is logged in, asked once per document load.
     onMount(() => {
         sessionStore.fetchUserStatus();
     });

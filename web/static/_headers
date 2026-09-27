@@ -28,9 +28,13 @@
 /:year/:day/:media
   Link: </api/album/:year/:day/>; rel=preload; as=fetch; crossorigin
 
-# A search page's URL has a day album's shape, and a file under images/ or _app/ a photo's; none has an album to
-# preload, and a browser acts on a preload in a file's headers as it does on one in a page's.
+# A search or invite page's URL has a day album's shape, and a file under images/ or _app/ a photo's; none has an album
+# to preload, and a browser acts on a preload in a file's headers as it does on one in a page's. An invite's preload
+# would also put its token in a GET's URL, where the Worker's logs keep it.
 /search/*
+  ! Link
+
+/invite/*
   ! Link
 
 /images/*

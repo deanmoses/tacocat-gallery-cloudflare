@@ -82,14 +82,6 @@ describe('passkey endpoints', () => {
 
         expect(response.status).toBe(400);
     });
-
-    it('serves the login and invite screens', async () => {
-        const login = await call('/login');
-        const invite = await call('/invite/abc');
-
-        await expect(login.text()).resolves.toContain('Log in with passkey');
-        await expect(invite.text()).resolves.toContain('Create passkey');
-    });
 });
 
 describe('admin-only writes', () => {

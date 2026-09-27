@@ -4,7 +4,7 @@ import { orm } from '../db';
 import { presignUploads } from '../gallery/presign';
 import { pathAfter } from '../http/paths';
 import { failure, json } from '../http/responses';
-import { parsedBody } from './requests';
+import { parsedBody } from '../http/body';
 
 /**
  * `POST /api/presigned/<albumPath>` with what each upload will be: a presigned PUT and a version id per path, keyed by

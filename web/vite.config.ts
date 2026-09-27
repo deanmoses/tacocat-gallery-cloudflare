@@ -9,10 +9,17 @@ import { defaultExclude, defineConfig } from 'vitest/config';
 import { BROWSER_FLOOR_RULES_UNTYPED } from '../browser-floor.ts';
 
 // The Worker, which `npm run dev --workspace api` serves with the app's build. `vite dev` serves the app itself, with
-// hot reloading, and passes the Worker's own routes through to it.
+// hot reloading, and passes the Worker's own routes through to it: the list is `run_worker_first` in
+// api/wrangler.jsonc. Each key is a path prefix, so the trailing slash keeps `/i/` from also taking the app's
+// `/invite/` and `/images/`.
 const WORKER = 'http://localhost:8787';
 const workerProxy: Record<string, ProxyOptions> = Object.fromEntries(
-    ['/api', '/i', '/v', '/raw', '/login', '/invite'].map((route) => [route, { target: WORKER }]),
+    ['/api/', '/raw/', '/v/', '/i/', '/i2/', '/debug/', '/upload/'].map((route) => [
+        route,
+        // wrangler dev rewrites an Origin that matches the request's Host to its own, which would hide the browser's
+        // origin from the passkey check, so the request arrives with the Worker's Host instead.
+        { target: WORKER, changeOrigin: true },
+    ]),
 );
 
 /**
@@ -149,6 +156,9 @@ export default defineConfig({
             reporter: [['text', { skipFull: true }], 'text-summary', 'html'],
         },
     },
+    // `vite dev` finds a dependency that is only imported dynamically when the page first imports it, then bundles it
+    // under a new version hash, and the import the page already asked for fails. Bundled at startup instead.
+    optimizeDeps: { include: ['@simplewebauthn/browser'] },
     server: { proxy: workerProxy },
     preview: { proxy: workerProxy },
 });
