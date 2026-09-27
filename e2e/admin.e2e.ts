@@ -48,6 +48,20 @@ function photoNotTheThumbnail(albumJson: unknown): string {
     return path === ADMIN_PHOTO_PATH ? ADMIN_SECOND_PHOTO_PATH : ADMIN_PHOTO_PATH;
 }
 
+/** The version id of the album's child at `path` in the API's answer for the album, if it has that child. */
+function childVersionId(albumJson: unknown, path: string): string | undefined {
+    const children =
+        typeof albumJson === 'object' && albumJson !== null && 'children' in albumJson ? albumJson.children : undefined;
+    if (!Array.isArray(children)) return undefined;
+    const child: unknown = children.find(
+        (candidate: unknown) =>
+            typeof candidate === 'object' && candidate !== null && 'path' in candidate && candidate.path === path,
+    );
+    return typeof child === 'object' && child !== null && 'versionId' in child && typeof child.versionId === 'string'
+        ? child.versionId
+        : undefined;
+}
+
 /** The album as the API answers for it, read to check what a journey wrote. */
 async function album(page: Page, path: string): Promise<unknown> {
     const response = await page.request.get(`/api/album${path}`);
@@ -198,9 +212,9 @@ test.describe('an admin', () => {
 
     test('uploads a photo into a day and sees it arrive, then replaces a photo with one in another format', async ({
         page,
-    }, testInfo) => {
-        // A retry runs against the same site, where the earlier attempt's upload is already an item
-        const uploadName = `upload_${testInfo.retry}`;
+    }) => {
+        // A retry, or a rerun against a reused server, finds an earlier attempt's upload already an item
+        const uploadName = `upload_${Date.now().toString(36)}`;
 
         await test.step('a dropped photo is presigned, put, and made into an item with the caption the file carries', async () => {
             await page.goto(ADMIN_UPLOAD_DAY_PATH);
@@ -229,6 +243,8 @@ test.describe('an admin', () => {
 
         await test.step('a file in another format replaces the photo under its own name, and the page stays on it', async () => {
             const { target, fixture, mimeType } = REPLACEMENT;
+            // An earlier attempt may have replaced it already, so the new version is what says this one landed
+            const replacedVersion = childVersionId(await album(page, ADMIN_UPLOAD_DAY_PATH), target);
             await page.goto(target);
             await revealAdminControls(page);
             const chooser = page.waitForEvent('filechooser');
@@ -240,18 +256,21 @@ test.describe('an admin', () => {
             expect(response.status()).toBe(200);
             expect(response.request().postDataJSON()).toStrictEqual([{ path: target, replace: true }]);
             await expect(page).toHaveURL(target);
-            // The PNG fixture's size, which the seeded row did not have, says the file behind the item changed
             await expect
-                .poll(async () => album(page, ADMIN_UPLOAD_DAY_PATH), { timeout: PIPELINE_TIMEOUT })
-                .toMatchObject({
-                    children: expect.arrayContaining([
-                        expect.objectContaining({
-                            path: target,
-                            title: 'Replace me',
-                            dimensions: { width: 220, height: 212 },
-                        }),
-                    ]),
-                });
+                .poll(async () => childVersionId(await album(page, ADMIN_UPLOAD_DAY_PATH), target), {
+                    timeout: PIPELINE_TIMEOUT,
+                })
+                .not.toBe(replacedVersion);
+            // The PNG fixture's size, which the seeded row did not have, says the file behind the item changed
+            await expect(album(page, ADMIN_UPLOAD_DAY_PATH)).resolves.toMatchObject({
+                children: expect.arrayContaining([
+                    expect.objectContaining({
+                        path: target,
+                        title: 'Replace me',
+                        dimensions: { width: 220, height: 212 },
+                    }),
+                ]),
+            });
             await expect(page.getByText('1 processing')).toBeHidden();
         });
     });
