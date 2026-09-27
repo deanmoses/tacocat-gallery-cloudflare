@@ -17,6 +17,7 @@ export function resetAlbumState(): void {
     albumState.albumCreates.clear();
     albumState.albumRenames.clear();
     albumState.albumDeletes.clear();
+    albumState.albumReorders.clear();
     albumState.mediaRenames.clear();
     albumState.mediaDeletes.clear();
     albumState.crops.clear();

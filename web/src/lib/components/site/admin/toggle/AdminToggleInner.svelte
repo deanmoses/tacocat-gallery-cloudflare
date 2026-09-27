@@ -8,6 +8,7 @@
     import CropButton from './toggle_buttons/CropButton.svelte';
     import RenameDayAlbumButton from './toggle_buttons/RenameDayAlbumButton.svelte';
     import RenameMediaButton from './toggle_buttons/RenameMediaButton.svelte';
+    import ReorderButton from './toggle_buttons/ReorderButton.svelte';
     import NewYearAlbumButton from './toggle_buttons/NewYearAlbumButton.svelte';
     import NewDayAlbumButton from './toggle_buttons/NewDayAlbumButton.svelte';
     import UploadMediaItemButton from './toggle_buttons/UploadMediaItemButton.svelte';
@@ -23,6 +24,7 @@
         <CropButton />
         <RenameMediaButton />
         <RenameDayAlbumButton />
+        <ReorderButton />
         <NewYearAlbumButton />
         <NewDayAlbumButton />
         <UploadMediaItemsButton />

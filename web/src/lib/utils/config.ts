@@ -81,6 +81,14 @@ export function setThumbnailUrl(albumPath: string): string {
 }
 
 /**
+ * URL to send HTTP PUT to put an album's media in an order of the admin's, and DELETE to put it back in name order
+ * @param albumPath path to a day album like /2001/12-31/
+ */
+export function albumOrderUrl(albumPath: string): string {
+    return `${baseApiUrl()}album-order${albumPath}`;
+}
+
+/**
  * URL to send HTTP POST to generate presigned upload URLs
  * @param albumPath path to an album like /2001/12-31/
  */

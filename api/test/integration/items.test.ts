@@ -32,6 +32,7 @@ describe('saving an item', () => {
         durationSeconds: null,
         thumbnailId: null,
         thumbnailCrop: null,
+        position: null,
     };
     const STALE_VIDEO: Record<string, unknown> = {
         itemType: 'media',
@@ -47,6 +48,7 @@ describe('saving an item', () => {
         durationSeconds: 7,
         thumbnailId: null,
         thumbnailCrop: { x: 1, y: 1, width: 2, height: 2 },
+        position: 7,
     };
     const COLUMNS = Object.keys(getTableColumns(item)).filter((key) => !UNCOMPARED.has(key) && key !== 'itemName');
 

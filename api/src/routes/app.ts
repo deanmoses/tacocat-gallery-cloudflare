@@ -19,7 +19,9 @@ import {
     createAlbumRoute,
     deleteAlbumRoute,
     getAlbum,
+    orderAlbumRoute,
     renameAlbumRoute,
+    resetAlbumOrderRoute,
     setAlbumThumbnail,
     updateAlbumRoute,
 } from './albums';
@@ -142,6 +144,8 @@ export function createApp(): Hono<App> {
     app.delete('/api/album/*', async (context) => deleteAlbumRoute(context.req.raw, context.env));
     app.post('/api/album-rename/*', async (context) => renameAlbumRoute(context.req.raw, context.env));
     app.patch('/api/album-thumb/*', async (context) => setAlbumThumbnail(context.req.raw, context.env));
+    app.put('/api/album-order/*', async (context) => orderAlbumRoute(context.req.raw, context.env));
+    app.delete('/api/album-order/*', async (context) => resetAlbumOrderRoute(context.req.raw, context.env));
     app.patch('/api/media/*', async (context) => updateMediaRoute(context.req.raw, context.env));
     app.delete('/api/media/*', async (context) => deleteMediaRoute(context.req.raw, context.env));
     app.post('/api/media-rename/*', async (context) => renameMediaRoute(context.req.raw, context.env));

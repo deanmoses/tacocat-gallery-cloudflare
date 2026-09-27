@@ -12,7 +12,11 @@
 <DayAlbumRouting {albumPath}>
     {#snippet loaded()}
         {#if album}
-            {#if albumState.editMode}
+            {#if albumState.albumReorders.has(albumPath)}
+                {#await import('$lib/components/pages/album/day/DayAlbumReorderPage.svelte') then { default: DayAlbumReorderPage }}
+                    <DayAlbumReorderPage {album} />
+                {/await}
+            {:else if albumState.editMode}
                 {#await import('$lib/components/pages/album/day/DayAlbumEditPage.svelte') then { default: DayAlbumEditPage }}
                     <DayAlbumEditPage {album} />
                 {/await}

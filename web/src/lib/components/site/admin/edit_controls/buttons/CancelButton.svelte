@@ -8,10 +8,11 @@
     import ControlStripButton from './ControlStripButton.svelte';
 
     interface Props {
+        disabled?: boolean | undefined;
         onclick?: ((event: MouseEvent) => void) | undefined;
     }
 
-    let { onclick }: Props = $props();
+    let { disabled = false, onclick }: Props = $props();
 </script>
 
-<ControlStripButton {onclick}><CancelIcon /> Cancel</ControlStripButton>
+<ControlStripButton {disabled} {onclick}><CancelIcon /> Cancel</ControlStripButton>

@@ -46,7 +46,7 @@ export async function searchItems(database: Orm, query: SearchQuery, admin: bool
         .where(where);
     const paged = recordsQuery(database, {
         where,
-        orderBy: [order(DAY), asc(GALLERY_PATH)],
+        orderBy: [order(DAY), asc(item.itemType), sql`${item.position} ASC NULLS LAST`, asc(item.itemName)],
         limit: query.pageSize,
         offset: query.startAt,
     });
@@ -87,8 +87,8 @@ function matches(query: Query): SQL {
 const GALLERY_PATH = sql`${schema.item.parentPath} || ${schema.item.itemName}`;
 
 // The day an item belongs to, as the gallery path of its day album, or its own for a year album: the first eleven
-// characters of '/2001/06-15/felix' and of '/2001/06-15'. Ordering on it and then on the whole path lists the
-// days in either direction with each day's album first and its media in album order.
+// characters of '/2001/06-15/felix' and of '/2001/06-15'. Ordering on it, then on the item type and then in album
+// order lists the days in either direction with each day's album first and its media as the album shows them.
 const DAY = sql`substr(${GALLERY_PATH}, 1, ${'/2001/06-15'.length})`;
 
 // The year an item belongs to, which is its parent path's first segment, or its own name for a year album.

@@ -7,7 +7,7 @@ import {
     DeleteStatus,
     type MediaActivity,
 } from '$lib/models/album';
-import type { CropEntry, DeleteEntry, ReloadStatus, RenameEntry, UploadEntry } from '$lib/models/album';
+import type { CropEntry, DeleteEntry, ReloadStatus, RenameEntry, ReorderEntry, UploadEntry } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { parentPathOf } from 'tacocat-gallery-shared';
 import { SvelteMap } from 'svelte/reactivity';
@@ -22,6 +22,7 @@ class AlbumState {
     albumCreates = new SvelteMap<string, CreateEntry>();
     albumRenames = new SvelteMap<string, RenameEntry>();
     albumDeletes = new SvelteMap<string, DeleteEntry>();
+    albumReorders = new SvelteMap<string, ReorderEntry>();
     mediaRenames = new SvelteMap<string, RenameEntry>();
     mediaDeletes = new SvelteMap<string, DeleteEntry>();
     crops = new SvelteMap<string, CropEntry>();

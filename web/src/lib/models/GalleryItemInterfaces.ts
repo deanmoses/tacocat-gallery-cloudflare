@@ -23,6 +23,8 @@ export interface Album extends Thumbable {
     published: boolean;
     summary: string;
     thumbnailPath: string | undefined;
+    /** Whether an admin has put the media in an order of their own, rather than by name */
+    readonly reordered: boolean;
     readonly json: AlbumGalleryItem; // so that I can save the JSON to disk
     readonly parentHref: string;
     readonly parentTitle: string;

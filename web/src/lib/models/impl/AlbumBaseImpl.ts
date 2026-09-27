@@ -31,6 +31,10 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
         this.json.summary = summary;
     }
 
+    get reordered(): boolean {
+        return this.json.order ?? false;
+    }
+
     get href(): string {
         return hrefOf(this.path);
     }

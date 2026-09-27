@@ -291,9 +291,44 @@ export function setThumbnail(
         );
 }
 
-/** The items matching `where`, in name order, each with its thumbnail's row beside it. */
+/**
+ * The items matching `where`, in name order, each with its thumbnail's row beside it. The index on the path gives that
+ * order for nothing; sorting on where an admin placed each item in SQL would pass every row through a sort, which D1
+ * counts as reading it again, so the rows are placed after the read.
+ */
 function selection(where: SQL | undefined): Selection {
     return { where, orderBy: [asc(schema.item.itemName)] };
+}
+
+/**
+ * Puts the album's media in the order of `itemNames`, or back in name order when that is null. Media not named, such
+ * as an upload that finished after the admin loaded the album, is left without a place and follows the rest. Changes
+ * no row unless the album has media.
+ */
+export async function orderAlbum(database: Orm, key: ItemKey, itemNames: string[] | null): Promise<Written> {
+    const { item } = schema;
+    const position = itemNames === null ? null : placeOf(itemNames);
+    const result = await database
+        .update(item)
+        .set({ position })
+        .where(and(eq(item.parentPath, albumPath(key.parentPath, key.itemName)), eq(item.itemType, 'media')))
+        .run();
+    return written(result);
+}
+
+/** Where an admin placed each item, then the rest; the sort is stable, so each part keeps the name order it came in. */
+function inAlbumOrder(first: Row, second: Row): number {
+    return (first.position ?? Number.MAX_SAFE_INTEGER) - (second.position ?? Number.MAX_SAFE_INTEGER);
+}
+
+/**
+ * The row's place in `itemNames`, or null if it is not there. A json_each lookup would count every name it scans as a
+ * row read, for every row; json_extract reads none. The path is built from the row's own name, which the path rule
+ * keeps to letters, digits and underscores.
+ */
+function placeOf(itemNames: string[]): SQL {
+    const places = JSON.stringify(Object.fromEntries(itemNames.map((name, index) => [name, index])));
+    return sql`json_extract(${places}, '$."' || ${schema.item.itemName} || '"')`;
 }
 
 /**
@@ -302,10 +337,11 @@ function selection(where: SQL | undefined): Selection {
  */
 function assemble(children: Row[], self: Row[] | null, admin: boolean): AlbumGalleryItem | null {
     const visible = (row: Row): boolean => admin || row.item_type !== 'album' || row.published === 1;
-    const shown = children.filter(visible).map(toRecord);
+    const shown = children.filter(visible).toSorted(inAlbumOrder).map(toRecord);
     if (self === null) {
         return { itemType: 'album', path: '/', parentPath: '', itemName: '', children: shown };
     }
     const row = self.find(visible);
-    return row?.item_type === 'album' ? { ...toAlbumRecord(row), children: shown } : null;
+    const order = children.some((child) => child.position !== null);
+    return row?.item_type === 'album' ? { ...toAlbumRecord(row), ...(order && { order }), children: shown } : null;
 }

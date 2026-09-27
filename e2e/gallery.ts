@@ -23,6 +23,8 @@ export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second`;
 export const ADMIN_UPLOAD_DAY_PATH = '/2003/09-01/';
 export const ADMIN_REPLACED_BASE_NAME = 'replace_me';
 const ADMIN_PHOTO_VERSION = 'e2e-photo';
+/** The day the reorder journey drags into an order of its own, and back. */
+export const ADMIN_REORDER_DAY_PATH = '/2003/10-01/';
 
 /**
  * The gallery every e2e test starts from, written once when the server starts. Tests read it and never change it, since
@@ -87,6 +89,37 @@ const GALLERY = {
         mediaType: 'image',
         title: 'Replace me',
         versionId: 'e2e-replaced',
+        width: 4032,
+        height: 3024,
+    },
+    adminReorderDay: { parentPath: ADMIN_YEAR_PATH, itemName: '10-01', itemType: 'album', published: true },
+    apple: {
+        parentPath: ADMIN_REORDER_DAY_PATH,
+        itemName: 'apple',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Apple',
+        versionId: 'e2e-apple',
+        width: 4032,
+        height: 3024,
+    },
+    banana: {
+        parentPath: ADMIN_REORDER_DAY_PATH,
+        itemName: 'banana',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Banana',
+        versionId: 'e2e-banana',
+        width: 4032,
+        height: 3024,
+    },
+    cherry: {
+        parentPath: ADMIN_REORDER_DAY_PATH,
+        itemName: 'cherry',
+        itemType: 'media',
+        mediaType: 'image',
+        title: 'Cherry',
+        versionId: 'e2e-cherry',
         width: 4032,
         height: 3024,
     },
