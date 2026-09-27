@@ -112,11 +112,11 @@ describe(markReplacements, () => {
         expect(files[0]?.replace).toBeUndefined();
     });
 
-    // The name is what the admin is shown in the confirmation dialog, so it is the file's own name rather than its path
-    it('names a colliding file and marks it as a replacement', () => {
+    // The dialog lists what is already in the album, so a line is the item's name, not the dropped file's
+    it('names the colliding item and marks the file as its replacement', () => {
         const files = [mediaToUpload('photo.jpg')];
 
-        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg']);
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo']);
         expect(files[0]?.replace).toBe(true);
     });
 
@@ -124,7 +124,7 @@ describe(markReplacements, () => {
     it('matches a file against the item of its name whatever format either is in', () => {
         const files = [mediaToUpload('photo.heic')];
 
-        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo.heic']);
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo']);
         expect(files[0]?.replace).toBe(true);
     });
 
@@ -133,15 +133,15 @@ describe(markReplacements, () => {
         const files = [mediaToUpload('photo.mov'), mediaToUpload('clip.jpg')];
 
         expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual([
-            'photo.mov (a video, replacing the photo photo)',
-            'clip.jpg (a photo, replacing the video clip)',
+            'photo (a photo; photo.mov is a video)',
+            'clip (a video; clip.jpg is a photo)',
         ]);
     });
 
     it('checks every file in the batch, and leaves the ones that collide with nothing alone', () => {
         const files = [mediaToUpload('new.jpg'), mediaToUpload('photo.jpg'), mediaToUpload('clip.mp4')];
 
-        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg', 'clip.mp4']);
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo', 'clip']);
         expect(files.map((file) => file.replace)).toStrictEqual([undefined, true, true]);
     });
 

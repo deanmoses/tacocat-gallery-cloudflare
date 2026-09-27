@@ -34,10 +34,10 @@ export function findProcessedUploads(
 
 /**
  * Marks each file whose name an item in the album already holds as replacing that item, which the server refuses an
- * upload under a taken name without, and returns a line per collision for the admin to confirm. A Live Photo's still
- * and clip come out under one name, so a line says the kinds when they differ, and an admin who took the question
- * to be about an edited copy of the photo is not handed a three-second clip in its place. An album not loaded yet has
- * nothing to collide with.
+ * upload under a taken name without, and returns a line per collision for the admin to confirm: the item's name, as
+ * the album shows it. A Live Photo's still and clip come out under one name, so a line says the kinds and the file
+ * when they differ, and an admin who took the question to be about an edited copy of the photo is not handed a
+ * three-second clip in its place. An album not loaded yet has nothing to collide with.
  */
 export function markReplacements(files: MediaItemToUpload[], album: Album | undefined): string[] {
     const collisions: string[] = [];
@@ -45,12 +45,11 @@ export function markReplacements(files: MediaItemToUpload[], album: Album | unde
         const media = album?.getMedia(file.path);
         if (media) {
             file.replace = true;
+            const name = media.path.split('/').pop() ?? '';
             const incoming = isVideoFile(file.file.name) ? 'video' : 'photo';
             const existing = media.mediaType === 'video' ? 'video' : 'photo';
             collisions.push(
-                incoming === existing
-                    ? file.file.name
-                    : `${file.file.name} (a ${incoming}, replacing the ${existing} ${media.path.split('/').pop() ?? ''})`,
+                incoming === existing ? name : `${name} (a ${existing}; ${file.file.name} is a ${incoming})`,
             );
         }
     }
