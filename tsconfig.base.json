@@ -5,6 +5,9 @@
         "module": "esnext",
         "moduleResolution": "bundler",
         "noEmit": true,
+        // Node resolves a relative import only with its extension, and the bundlers resolve it either way, so every
+        // package spells its own imports with one and every project that reads the package accepts them.
+        "allowImportingTsExtensions": true,
         "allowJs": true,
         "checkJs": true,
         "resolveJsonModule": true,

@@ -10,11 +10,11 @@
     import type { AlbumEntry } from '$lib/models/album';
     import { albumDeleteMachine } from '$lib/stores/admin/AlbumDeleteMachine.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
-    import { getParentFromPath, isValidDayAlbumPath, isValidYearAlbumPath } from '$lib/utils/galleryPathUtils';
+    import { isDayAlbumPath, isYearAlbumPath, parentPathOf, pathOfUrl } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
-    let albumPath = $derived(`${page.url.pathname}/`);
-    let isValidPath = $derived(isValidDayAlbumPath(albumPath) || isValidYearAlbumPath(albumPath));
+    let albumPath = $derived(pathOfUrl(page.url.pathname));
+    let isValidPath = $derived(isDayAlbumPath(albumPath) || isYearAlbumPath(albumPath));
     let albumEntry = $derived(albumState.albums.get(albumPath));
     // Show this button on year and day albums but not root albums, and only if they don't have children
     let show: boolean = $derived(isValidPath && !hasChildren(albumEntry));
@@ -25,7 +25,7 @@
 
     function onDeleteButtonClick(): void {
         albumDeleteMachine.deleteAlbum(albumPath);
-        void goto(getParentFromPath(albumPath));
+        void goto(parentPathOf(albumPath));
     }
 </script>
 

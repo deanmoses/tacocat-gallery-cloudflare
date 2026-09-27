@@ -93,7 +93,7 @@ The app has to load and run on iOS 15.6, the oldest browser a reader visits from
 
 ## Finding an item's objects
 
-The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix.jpg` prints the item's row from the deployed database and every object stored for its version in each bucket, `--env production` for production. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
+The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix` prints the item's row from the deployed database and every object stored for its version in each bucket, `--env production` for production. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
 
 ## Idle latency probes
 

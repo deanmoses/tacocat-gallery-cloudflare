@@ -2,10 +2,11 @@
 // path finds nothing in the dashboard; this is the way from a path to its objects. Reads the deployed database with
 // the account token and lists the buckets through the S3 API, both with what api/.dev.vars holds.
 //
-// Usage: node api/scripts/media.ts /2024/12-17/felix.jpg [--env production]
+// Usage: node api/scripts/media.ts /2024/12-17/felix [--env production]
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
+import { mediaKey } from 'tacocat-gallery-shared';
 import { derivedPrefix, originalKey } from '../src/storage/keys.ts';
 import { type ListedObject, listObjects } from '../src/storage/s3.ts';
 import { devVars } from './dev-vars.ts';
@@ -29,13 +30,11 @@ const EXECUTED = valibot.tuple([
 ]);
 
 const galleryPath = process.argv[2] ?? '';
-// A media path: a file with one extension in a day album. The parser in shared/ is out of a script's reach, since Node
-// resolves that package's imports differently from the Worker's bundler, so the shape is spelled out here.
-const key = /^(?<parentPath>\/\d{4}\/\d{2}-\d{2}\/)(?<itemName>[^.\/]+\.[^.\/]+)$/v.exec(galleryPath)?.groups;
+const key = mediaKey(galleryPath);
 const envAt = process.argv.indexOf('--env');
 const environment = envAt === -1 ? 'staging' : process.argv[envAt + 1];
-if (key === undefined || (environment !== 'staging' && environment !== 'production')) {
-    throw new Error('Usage: node api/scripts/media.ts /2024/12-17/felix.jpg [--env staging|production]');
+if (key === null || (environment !== 'staging' && environment !== 'production')) {
+    throw new Error('Usage: node api/scripts/media.ts /2024/12-17/felix [--env staging|production]');
 }
 const target = TARGETS[environment];
 
@@ -51,7 +50,7 @@ const [statement] = valibot.parse(
             ...target.wranglerEnv,
             '--json',
             '--command',
-            `SELECT * FROM item WHERE parent_path = ${quoted(key['parentPath'] ?? '')} AND item_name = ${quoted(key['itemName'] ?? '')}`,
+            `SELECT * FROM item WHERE parent_path = ${quoted(key.parentPath)} AND item_name = ${quoted(key.itemName)}`,
         ]),
     ),
 );

@@ -1,16 +1,17 @@
--- non-additive: item_fts is dropped and made again under the same name in this one migration, which is how an FTS5
--- table gets a different tokenizer or different columns, so the Worker version still running during the deploy
--- keeps matching against it and the rows it writes reach it through the new triggers.
+-- resets: the migrations start over from one baseline for the second time, since media names lost their extensions
+-- and the day album's date joined the constraints, which SQLite can only change by rebuilding item; with both
+-- databases emptied by hand for the copy from AWS, nothing was there to carry across, so a baseline was cheaper than
+-- the three-migration rebuild. The search index migration of 2026-09-26 is folded in below.
 --
 -- The search indexes are built over a view of item rather than over item itself, so that what is indexed can be
 -- computed in SQL and the triggers, the rebuild and a restore all agree on it:
 --
--- - Every column gets a space wherever a letter meets a digit, so 'pat' and '1' are both words of 'pat1.jpg'; the
---   tokenizer already splits on '_', '-' and '.', so nothing else is needed for 'pat_1.jpg' or 'IMG_0715.jpg'. A search
---   splits its own words the same way, so 'pat1' finds it too. SQLite has no regular expressions, so the split is
---   done with replace(): each digit is padded with spaces, and the double space that leaves between two digits is
---   taken out again so a run of digits stays one word. Spaces are first turned into underscores, which the tokenizer
---   also splits on, so that two words a space apart cannot be joined by that.
+-- - Every column gets a space wherever a letter meets a digit, so 'pat' and '1' are both words of 'pat1'; the
+--   tokenizer already splits on '_' and '-', so nothing else is needed for 'pat_1' or 'img_0715'. A search splits its
+--   own words the same way, so 'pat1' finds it too. SQLite has no regular expressions, so the split is done with
+--   replace(): each digit is padded with spaces, and the double space that leaves between two digits is taken out
+--   again so a run of digits stays one word. Spaces are first turned into underscores, which the tokenizer also
+--   splits on, so that two words a space apart cannot be joined by that.
 -- - `tags` carries the media-type words 'photo image picture' or 'movie video clip' beside the item's own tags, so a
 --   search for 'felix video' finds the videos of Felix and no photos.
 --
@@ -26,11 +27,6 @@
 -- triggers fire only for the columns the view reads, so a write that touches none of them, such as setting a
 -- thumbnail, publishing, pointing a row at a new version or moving an album's children when it is renamed, leaves the
 -- indexes alone.
-DROP TRIGGER item_ai;
-DROP TRIGGER item_ad;
-DROP TRIGGER item_au;
-DROP TABLE item_fts;
-
 CREATE VIEW item_indexed AS
 SELECT id,
     replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(item_name, ' ', '_'), '0', ' 0 '), '1', ' 1 '), '2', ' 2 '), '3', ' 3 '), '4', ' 4 '), '5', ' 5 '), '6', ' 6 '), '7', ' 7 '), '8', ' 8 '), '9', ' 9 '), '  ', '') AS name,
@@ -70,6 +66,3 @@ CREATE TRIGGER item_au AFTER UPDATE OF item_name, media_type, title, description
     INSERT INTO item_fts_exact (rowid, name, title, description, tags, summary)
     SELECT id, name, title, description, tags, summary FROM item_indexed WHERE id = new.id;
 END;
-
-INSERT INTO item_fts(item_fts) VALUES('rebuild');
-INSERT INTO item_fts_exact(item_fts_exact) VALUES('rebuild');

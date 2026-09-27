@@ -4,7 +4,8 @@ import { ReloadStatus } from '$lib/models/album';
 import { setThumbnailUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
-import { getParentFromPath, isValidYearAlbumPath } from '$lib/utils/galleryPathUtils';
+import { isYearAlbumPath, parentPathOf } from 'tacocat-gallery-shared';
+import { albumTitle } from '$lib/utils/date-utils';
 
 /**
  * Album thumbnail set machine
@@ -75,9 +76,8 @@ class AlbumThumbnailSetMachine {
         this.#state.delete(albumPath);
         albumLoadMachine.setUpdateStatus(albumPath, ReloadStatus.NOT_RELOADING);
 
-        if (!isValidYearAlbumPath(albumPath)) return;
-        const year = albumPath.replaceAll('/', '');
-        toast.push(`Thumbnail set for ${year}`);
+        if (!isYearAlbumPath(albumPath)) return;
+        toast.push(`Thumbnail set for ${albumTitle(albumPath)}`);
     }
 
     #error(albumPath: string, errorMessage: string): void {
@@ -110,8 +110,8 @@ class AlbumThumbnailSetMachine {
             console.log(`Set thumbnail of album [${albumPath}] to [${newThumbnailMediaPath}]`);
             console.log(`Reloading album [${albumPath}] from server`);
             await albumLoadMachine.fetchFromServer(albumPath);
-            console.log(`Reloading parent album [${getParentFromPath(albumPath)}] from server`);
-            await albumLoadMachine.fetchFromServer(getParentFromPath(albumPath));
+            console.log(`Reloading parent album [${parentPathOf(albumPath)}] from server`);
+            await albumLoadMachine.fetchFromServer(parentPathOf(albumPath));
             this.#success(albumPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

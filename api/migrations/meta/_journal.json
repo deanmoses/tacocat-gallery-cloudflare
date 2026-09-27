@@ -5,29 +5,22 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1790325865064,
-      "tag": "20260925084425_baseline",
+      "when": 1790468902240,
+      "tag": "20260927002822_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1790325865527,
-      "tag": "20260925084425_fts_index",
+      "when": 1790468902596,
+      "tag": "20260927002822_fts_index",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "6",
-      "when": 1790325865963,
-      "tag": "20260925084425_seed_users",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1790451974393,
-      "tag": "20260926194614_search_index_rebuilt",
+      "when": 1790468902952,
+      "tag": "20260927002822_seed_users",
       "breakpoints": true
     }
   ]

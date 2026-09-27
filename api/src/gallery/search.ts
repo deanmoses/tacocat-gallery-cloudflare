@@ -87,7 +87,7 @@ function matches(query: Query): SQL {
 const GALLERY_PATH = sql`${schema.item.parentPath} || ${schema.item.itemName}`;
 
 // The day an item belongs to, as the gallery path of its day album, or its own for a year album: the first eleven
-// characters of '/2001/06-15/felix.jpg' and of '/2001/06-15'. Ordering on it and then on the whole path lists the
+// characters of '/2001/06-15/felix' and of '/2001/06-15'. Ordering on it and then on the whole path lists the
 // days in either direction with each day's album first and its media in album order.
 const DAY = sql`substr(${GALLERY_PATH}, 1, ${'/2001/06-15'.length})`;
 

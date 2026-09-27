@@ -3,8 +3,8 @@ import { mediaImage, preloadedImages } from './support.ts';
 
 const DAY_TITLE = 'June 15, 2001';
 // The Worker's URL for each photo at the size the media page shows it: the landscape one by width, the portrait by height.
-const CAKE_DETAIL = '/i/2001/06-15/cake.jpg/v1?size=1024';
-const FELIX_DETAIL = '/i/2001/06-15/felix.jpg/v1?size=x1024';
+const CAKE_DETAIL = '/i/2001/06-15/cake/v1?size=1024';
+const FELIX_DETAIL = '/i/2001/06-15/felix/v1?size=x1024';
 
 test.describe('the site', () => {
     test('asks search engines to stay out', async ({ page }) => {
@@ -50,7 +50,7 @@ test.describe('a reader arriving at a day album', () => {
 
             await page.getByRole('link', { name: 'Cake', exact: true }).click();
 
-            await expect(page).toHaveURL('/2001/06-15/cake.jpg');
+            await expect(page).toHaveURL('/2001/06-15/cake');
         });
 
         await test.step('the photo is asked for at its display size, and the next one is being fetched ahead', async () => {
@@ -61,7 +61,7 @@ test.describe('a reader arriving at a day album', () => {
         await test.step('next shows the following photo, the last of the day', async () => {
             await page.getByRole('link', { name: 'Next', exact: true }).click();
 
-            await expect(page).toHaveURL('/2001/06-15/felix.jpg');
+            await expect(page).toHaveURL('/2001/06-15/felix');
             await expect(page).toHaveTitle('Felix');
             await expect(mediaImage(page)).toHaveAttribute('src', FELIX_DETAIL);
             await expect(page.getByRole('link', { name: 'Next', exact: true })).toHaveAttribute(

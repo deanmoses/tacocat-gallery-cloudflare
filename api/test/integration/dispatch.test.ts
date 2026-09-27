@@ -22,7 +22,7 @@ describe('a request the Worker has no route for', () => {
 });
 
 describe('a path that is not valid percent-encoding', () => {
-    it.each(['/api/album/%', '/raw/%zz', '/v/2001/06-15/a.mov/%'])(
+    it.each(['/api/album/%', '/raw/%zz', '/v/2001/06-15/a/%'])(
         '%s is not found or refused, never an exception',
         async (path) => {
             const response = await call(path);
@@ -44,7 +44,7 @@ describe('HEAD', () => {
 
 describe('the image debug route', () => {
     it('needs an admin, since it reports on any object', async () => {
-        const response = await call('/debug/image/2001/01-01/a.jpg');
+        const response = await call('/debug/image/2001/01-01/a');
 
         expect(response.status).toBe(401);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Unauthorized' });

@@ -1,6 +1,6 @@
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { albumNav } from './albumNavigation';
-import { getParentFromPath, isValidAlbumPath, isValidMediaPath } from './galleryPathUtils';
+import { isAlbumPath, isMediaPath, parentPathOf, pathOfUrl } from 'tacocat-gallery-shared';
 
 /**
  * Shape of function to retrieve an Album from its path.
@@ -19,7 +19,7 @@ export function handleKeyboardNavigation(
     path: string,
     getAlbum: GetAlbumFunction,
 ): string | null {
-    const currentPath = isValidAlbumPath(`${path}/`) ? `${path}/` : path;
+    const currentPath = pathOfUrl(path);
 
     // get URL to navigate to
     let newPath = getUrlToNavigateTo(key, currentPath, getAlbum);
@@ -74,16 +74,16 @@ type Direction = (typeof Direction)[keyof typeof Direction];
 function navigateToPeer(path: string, getAlbum: GetAlbumFunction, direction: Direction): string | null {
     // If on an album, go to prev/next album. Albums are listed oldest first and
     // the site pages through them newest first, so "next" is the older one.
-    if (isValidAlbumPath(path)) {
-        const nav = albumNav(path, getAlbum(getParentFromPath(path)));
+    if (isAlbumPath(path)) {
+        const nav = albumNav(path, path === '/' ? undefined : getAlbum(parentPathOf(path)));
         const newPath = direction === Direction.NEXT ? nav.prevHref : nav.nextHref;
         if (newPath !== undefined && newPath !== '') {
             return newPath;
         }
     }
     // If on a media item, go to prev/next media
-    else if (isValidMediaPath(path)) {
-        const albumPath: string = getParentFromPath(path);
+    else if (isMediaPath(path)) {
+        const albumPath = parentPathOf(path);
         const album = getAlbum(albumPath);
         if (album) {
             const media = album.getMedia(path);
@@ -112,15 +112,12 @@ function navigateToPeer(path: string, getAlbum: GetAlbumFunction, direction: Dir
  * @returns path of parent album, or null if do not navigate
  */
 function navigateToParent(path: string): string | null {
-    // If on a media item, navigate to the album containing the media
-    if (isValidMediaPath(path)) {
-        const albumPath: string = getParentFromPath(path);
-        return albumPath;
+    // The root has no parent; every other album and every media item is in one
+    if (path === '/') {
+        return null;
     }
-    // If on an album, navigate to parent album
-    else if (isValidAlbumPath(path)) {
-        const parentAlbumPath: string = getParentFromPath(path);
-        return parentAlbumPath;
+    if (isMediaPath(path) || isAlbumPath(path)) {
+        return parentPathOf(path);
     }
     console.warn(`Path is neither a media item nor an album: ${path}`);
 
@@ -134,7 +131,7 @@ function navigateToParent(path: string): string | null {
  * @returns path of album or media item to navigate to, or null if do not navigate
  */
 function navigateToFirstChild(path: string, getAlbum: GetAlbumFunction): string | null {
-    if (isValidAlbumPath(path)) {
+    if (isAlbumPath(path)) {
         const album = getAlbum(path);
         if (album) {
             // If we're on an album with media items, go to first media item

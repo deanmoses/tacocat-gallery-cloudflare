@@ -1,6 +1,6 @@
 import { toast } from '@zerodevx/svelte-toast';
-import { getParentFromPath, isValidAlbumPath } from '$lib/utils/galleryPathUtils';
-import { createAlbumUrl } from '$lib/utils/config';
+import { isAlbumPath, parentPathOf } from 'tacocat-gallery-shared';
+import { albumUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { albumState } from '../AlbumState.svelte';
 import { CreateStatus } from '$lib/models/album';
@@ -61,15 +61,15 @@ class AlbumCreateMachine {
 
     async #createAlbum(albumPath: string): Promise<void> {
         try {
-            if (!isValidAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
+            if (!isAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
             this.#createStarted(albumPath);
-            const response = await adminApi.put(createAlbumUrl(albumPath));
+            const response = await adminApi.put(albumUrl(albumPath));
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
             await albumLoadMachine.fetchFromServer(albumPath); // load newly created album
             this.#success(albumPath);
-            await albumLoadMachine.fetchFromServer(getParentFromPath(albumPath)); // reload parent album
+            await albumLoadMachine.fetchFromServer(parentPathOf(albumPath)); // reload parent album
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             this.#error(albumPath, msg);

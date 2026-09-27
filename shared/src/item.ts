@@ -1,7 +1,7 @@
 import * as valibot from 'valibot';
-import { galleryRecordSchema, rectangleSchema } from './album';
-import { mediaTypeSchema } from './item-type';
-import { albumKey, albumPath, isAlbumPath, isStoredMediaName, isVideoName, mediaKey, mediaPath } from './paths';
+import { galleryRecordSchema, rectangleSchema } from './album.ts';
+import { mediaTypeSchema } from './item-type.ts';
+import { albumKey, albumPath, isAlbumPath, mediaKey, mediaPath } from './paths.ts';
 
 function clearable<T extends valibot.GenericSchema>(
     schema: T,
@@ -57,7 +57,7 @@ export const itemWriteSchema = valibot.pipe(
     valibot.forward(
         valibot.check(
             isGalleryKey,
-            'an album is a year in / or a day in a year, and media a file in a day album with an extension the gallery stores, jpg not jpeg, a video by its extension',
+            'an album is a year in / or a day on its calendar, and media a name of lowercase letters, digits and single underscores in a day album',
         ),
         ['itemName'],
     ),
@@ -78,12 +78,7 @@ function isGalleryKey(item: ItemWrite): boolean {
         return isAlbumPath(path) && key?.parentPath === parentPath && key.itemName === itemName;
     }
     const key = mediaKey(mediaPath(parentPath, itemName));
-    return (
-        key?.parentPath === parentPath &&
-        key.itemName === itemName &&
-        isStoredMediaName(itemName) &&
-        isVideoName(itemName) === (item.mediaType === 'video')
-    );
+    return key?.parentPath === parentPath && key.itemName === itemName;
 }
 
 /** Whether a media item's crop, when it has one, is a rectangle of its own pixels. */
@@ -134,11 +129,11 @@ export const renameSchema = valibot.strictObject({ newName: valibot.string() });
 export const albumThumbnailSchema = valibot.strictObject({ mediaPath: valibot.string() });
 
 /**
- * The body of `POST /api/presigned/<albumPath>`: the media path each upload will have, and for a replacement, the path
- * of the item it replaces, whose base name `path` keeps with the new file's extension.
+ * The body of `POST /api/presigned/<albumPath>`: the media path each upload will have, and whether the item there is
+ * being replaced, which presign refuses an upload under a taken name without.
  */
 export const presignRequestSchema = valibot.pipe(
-    valibot.array(valibot.strictObject({ path: valibot.string(), replaces: valibot.optional(valibot.string()) })),
+    valibot.array(valibot.strictObject({ path: valibot.string(), replace: valibot.optional(valibot.boolean()) })),
     valibot.minLength(1, 'No media to upload'),
 );
 

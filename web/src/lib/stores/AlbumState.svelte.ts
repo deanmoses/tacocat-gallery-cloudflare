@@ -9,7 +9,7 @@ import {
 } from '$lib/models/album';
 import type { CropEntry, DeleteEntry, ReloadStatus, RenameEntry, UploadEntry } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { getParentFromPath } from '$lib/utils/galleryPathUtils';
+import { parentPathOf } from 'tacocat-gallery-shared';
 import { SvelteMap } from 'svelte/reactivity';
 
 /**
@@ -43,7 +43,7 @@ export function getUpload(mediaPath: string): UploadEntry | undefined {
 
 /** The album's parent, if it has loaded. The root has none. */
 export function getParentAlbum(albumPath: string): Album | undefined {
-    return albumState.albums.get(getParentFromPath(albumPath))?.album;
+    return albumPath === '/' ? undefined : albumState.albums.get(parentPathOf(albumPath))?.album;
 }
 
 export function albumActivity(albumPath: string): AlbumActivity {

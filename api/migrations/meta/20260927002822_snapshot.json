@@ -1,6 +1,6 @@
 {
-  "id": "d764c873-ccdf-4d2c-bb20-ef4e69a68df2",
-  "prevId": "a5fc59bf-5857-4066-9124-fde024f0fcce",
+  "id": "408c4db3-485d-40eb-839d-b5d0eec279bf",
+  "prevId": "1e5c44c6-8a64-4b9a-b258-430cc00009ad",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -282,7 +282,7 @@
         },
         "item_path_check": {
           "name": "item_path_check",
-          "value": "CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '[0-9][0-9][0-9][0-9]') OR (parent_path GLOB '/[0-9][0-9][0-9][0-9]/' AND item_name GLOB '[0-9][0-9]-[0-9][0-9]') ELSE parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*' AND lower(item_name) NOT GLOB '*.jpeg' END"
+          "value": "CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '[0-9][0-9][0-9][0-9]') OR (parent_path GLOB '/[0-9][0-9][0-9][0-9]/' AND item_name GLOB '[0-9][0-9]-[0-9][0-9]' AND date(substr(parent_path, 2, 4) || '-' || item_name) IS substr(parent_path, 2, 4) || '-' || item_name) ELSE parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND date(substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5)) IS substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5) AND item_name GLOB '[0-9a-z]*' AND item_name NOT GLOB '*[^0-9a-z_]*' AND item_name NOT GLOB '*__*' AND item_name NOT GLOB '*_' END"
         },
         "item_file_check": {
           "name": "item_file_check",
@@ -743,16 +743,17 @@
           "notNull": false,
           "autoincrement": false
         },
+        "replacement": {
+          "name": "replacement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "target_id": {
           "name": "target_id",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "target_path": {
-          "name": "target_path",
-          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -854,11 +855,11 @@
         },
         "upload_path_check": {
           "name": "upload_path_check",
-          "value": "parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND item_name GLOB '?*.?*' AND item_name NOT GLOB '*.*.*' AND item_name NOT GLOB '*/*' AND lower(item_name) NOT GLOB '*.jpeg'"
+          "value": "parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND date(substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5)) IS substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5) AND item_name GLOB '[0-9a-z]*' AND item_name NOT GLOB '*[^0-9a-z_]*' AND item_name NOT GLOB '*__*' AND item_name NOT GLOB '*_'"
         },
         "upload_target_check": {
           "name": "upload_target_check",
-          "value": "(target_path IS NULL AND target_id IS NULL) OR target_path IS NOT NULL AND substr(target_path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(target_path, 13) GLOB '?*.?*' AND substr(target_path, 13) NOT GLOB '*.*.*' AND substr(target_path, 13) NOT GLOB '*/*' AND lower(substr(target_path, 13)) NOT GLOB '*.jpeg'"
+          "value": "replacement IN (0, 1) AND (replacement = 1 OR target_id IS NULL)"
         },
         "upload_completed_at_format": {
           "name": "upload_completed_at_format",
@@ -919,7 +920,7 @@
       "checkConstraints": {
         "upload_error_path_check": {
           "name": "upload_error_path_check",
-          "value": "path IS NOT NULL AND substr(path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND substr(path, 13) GLOB '?*.?*' AND substr(path, 13) NOT GLOB '*.*.*' AND substr(path, 13) NOT GLOB '*/*' AND lower(substr(path, 13)) NOT GLOB '*.jpeg'"
+          "value": "path IS NOT NULL AND substr(path, 1, 12) GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND date(substr(substr(path, 1, 12), 2, 4) || '-' || substr(substr(path, 1, 12), 7, 5)) IS substr(substr(path, 1, 12), 2, 4) || '-' || substr(substr(path, 1, 12), 7, 5) AND substr(path, 13) GLOB '[0-9a-z]*' AND substr(path, 13) NOT GLOB '*[^0-9a-z_]*' AND substr(path, 13) NOT GLOB '*__*' AND substr(path, 13) NOT GLOB '*_'"
         },
         "upload_error_message_check": {
           "name": "upload_error_message_check",

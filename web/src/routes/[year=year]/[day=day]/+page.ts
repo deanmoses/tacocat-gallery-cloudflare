@@ -1,10 +1,14 @@
+import { error } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
+import { albumPath, isDayAlbumPath } from 'tacocat-gallery-shared';
 import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
-import { getParentFromPath } from '$lib/utils/galleryPathUtils';
 
 export const load: PageLoad = ({ params }) => {
-    const albumPath = `/${params.year}/${params.day}/`;
-    albumLoadMachine.fetch(albumPath);
-    albumLoadMachine.fetch(getParentFromPath(albumPath)); // the page's prev/next come from its child list
-    return { albumPath };
+    const yearPath = albumPath('/', params.year);
+    const dayPath = albumPath(yearPath, params.day);
+    // The route matches the shape of a day; whether the calendar has it is judged here.
+    if (!isDayAlbumPath(dayPath)) error(404, `No such day: [${dayPath}]`);
+    albumLoadMachine.fetch(dayPath);
+    albumLoadMachine.fetch(yearPath); // the page's prev/next come from its child list
+    return { albumPath: dayPath };
 };

@@ -30,30 +30,12 @@ function cropperImageLoaded(): boolean {
 /** How long the local pipeline may take to make an upload into an item: two derivatives through the Images binding. */
 const PIPELINE_TIMEOUT = 30_000;
 
-/**
- * The replacement to make next: the photo is a JPEG or a PNG depending on what the last run left, and the file dropped
- * on it is the other format, so each run changes its extension and a rerun has something to replace.
- */
-function replacementFor(albumJson: unknown): { target: string; fixture: string; mimeType: string; result: string } {
-    const children =
-        typeof albumJson === 'object' &&
-        albumJson !== null &&
-        'children' in albumJson &&
-        Array.isArray(albumJson.children)
-            ? albumJson.children
-            : [];
-    const isPng = children.some(
-        (child: unknown) =>
-            typeof child === 'object' &&
-            child !== null &&
-            'path' in child &&
-            child.path === `${ADMIN_UPLOAD_DAY_PATH}${ADMIN_REPLACED_BASE_NAME}.png`,
-    );
-    const base = `${ADMIN_UPLOAD_DAY_PATH}${ADMIN_REPLACED_BASE_NAME}`;
-    return isPng
-        ? { target: `${base}.png`, fixture: JPEG_FIXTURE, mimeType: 'image/jpeg', result: `${base}.jpg` }
-        : { target: `${base}.jpg`, fixture: PNG_FIXTURE, mimeType: 'image/png', result: `${base}.png` };
-}
+/** The replacement the journey makes: a PNG dropped on the JPEG row the gallery seeds, which keeps its name. */
+const REPLACEMENT = {
+    target: `${ADMIN_UPLOAD_DAY_PATH}${ADMIN_REPLACED_BASE_NAME}`,
+    fixture: PNG_FIXTURE,
+    mimeType: 'image/png',
+};
 
 /** Of the admin day's two photos, the one that is not its thumbnail in the API's answer for the album. */
 function photoNotTheThumbnail(albumJson: unknown): string {
@@ -218,7 +200,7 @@ test.describe('an admin', () => {
         page,
     }, testInfo) => {
         // A retry runs against the same site, where the earlier attempt's upload is already an item
-        const uploadName = `upload_${testInfo.retry}.jpg`;
+        const uploadName = `upload_${testInfo.retry}`;
 
         await test.step('a dropped photo is presigned, put, and made into an item with the caption the file carries', async () => {
             await page.goto(ADMIN_UPLOAD_DAY_PATH);
@@ -228,7 +210,7 @@ test.describe('an admin', () => {
             await page.getByRole('button', { name: 'Upload' }).click();
             await (
                 await chooser
-            ).setFiles({ name: uploadName, mimeType: 'image/jpeg', buffer: await readFile(JPEG_FIXTURE) });
+            ).setFiles({ name: `${uploadName}.jpg`, mimeType: 'image/jpeg', buffer: await readFile(JPEG_FIXTURE) });
 
             expect((await presigned).status()).toBe(200);
             // The local pipeline can finish before the app's first poll, so the "processing" status may never show
@@ -245,25 +227,30 @@ test.describe('an admin', () => {
             await expect(page.getByText('1 processing')).toBeHidden();
         });
 
-        await test.step('a file in another format replaces the photo under its own name, and the album shows it', async () => {
-            const { target, fixture, mimeType, result } = replacementFor(await album(page, ADMIN_UPLOAD_DAY_PATH));
+        await test.step('a file in another format replaces the photo under its own name, and the page stays on it', async () => {
+            const { target, fixture, mimeType } = REPLACEMENT;
             await page.goto(target);
             await revealAdminControls(page);
             const chooser = page.waitForEvent('filechooser');
             const presigned = page.waitForResponse(`/api/presigned${ADMIN_UPLOAD_DAY_PATH}`);
             await page.getByRole('button', { name: 'Replace' }).click();
-            await (
-                await chooser
-            ).setFiles({ name: `new.${fixture.split('.').pop() ?? ''}`, mimeType, buffer: await readFile(fixture) });
+            await (await chooser).setFiles({ name: 'new.png', mimeType, buffer: await readFile(fixture) });
 
             const response = await presigned;
             expect(response.status()).toBe(200);
-            expect(response.request().postDataJSON()).toStrictEqual([{ path: result, replaces: target }]);
-            await expect(page).toHaveURL(ADMIN_UPLOAD_DAY_PATH.slice(0, -1));
+            expect(response.request().postDataJSON()).toStrictEqual([{ path: target, replace: true }]);
+            await expect(page).toHaveURL(target);
+            // The PNG fixture's size, which the seeded row did not have, says the file behind the item changed
             await expect
                 .poll(async () => album(page, ADMIN_UPLOAD_DAY_PATH), { timeout: PIPELINE_TIMEOUT })
                 .toMatchObject({
-                    children: expect.arrayContaining([expect.objectContaining({ path: result, title: 'Replace me' })]),
+                    children: expect.arrayContaining([
+                        expect.objectContaining({
+                            path: target,
+                            title: 'Replace me',
+                            dimensions: { width: 220, height: 212 },
+                        }),
+                    ]),
                 });
             await expect(page.getByText('1 processing')).toBeHidden();
         });

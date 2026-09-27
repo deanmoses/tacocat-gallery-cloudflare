@@ -9,12 +9,13 @@
     import CreateIcon from '$lib/components/site/icons/CreateIcon.svelte';
     import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
     import { albumCreateMachine } from '$lib/stores/admin/AlbumCreateMachine.svelte';
-    import { isValidDayAlbumPath, isValidYearAlbumPath, sanitizeDayAlbumName } from '$lib/utils/galleryPathUtils';
+    import { sanitizeAlbumName } from '$lib/utils/albumName';
+    import { albumPath, isDayAlbumPath, isYearAlbumPath, pathOfUrl } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
 
-    let albumPath: string = $derived(`${page.url.pathname}/`);
-    let show: boolean = $derived(isValidYearAlbumPath(albumPath)); // Show this button only on year albums
+    let yearPath: string = $derived(pathOfUrl(page.url.pathname));
+    let show: boolean = $derived(isYearAlbumPath(yearPath)); // Show this button only on year albums
 
     let dialog: { show: () => void } | undefined = $state();
 
@@ -37,13 +38,13 @@
 
     async function validateDayAlbumName(albumName: string): Promise<string | undefined> {
         const newAlbumPath = albumNameToPath(albumName);
-        if (!isValidDayAlbumPath(newAlbumPath)) return 'invalid album name';
+        if (!isDayAlbumPath(newAlbumPath)) return 'invalid album name';
         if (await albumLoadMachine.albumExists(newAlbumPath)) return 'already exists';
         return undefined; // name is valid
     }
 
     function albumNameToPath(albumName: string): string {
-        return `${albumPath + albumName}/`;
+        return albumPath(yearPath, albumName);
     }
 </script>
 
@@ -54,7 +55,7 @@
         initialValue={todayAlbumName()}
         label="New Album Name"
         onNewValue={onNewAlbumName}
-        sanitizor={sanitizeDayAlbumName}
+        sanitizor={sanitizeAlbumName}
         validator={validateDayAlbumName}
     />
 {/if}

@@ -12,7 +12,7 @@ describe('derived images through the CDN', () => {
                 new Response('webp bytes', { headers: { 'content-type': 'image/webp', 'cf-cache-status': 'HIT' } }),
             );
         const path = imageUrl({
-            path: '/2001/01-01/a.jpg',
+            path: '/2001/01-01/a',
             versionId: 'v1',
             size: { width: 200, height: 200 },
             crop: null,
@@ -28,7 +28,7 @@ describe('derived images through the CDN', () => {
 
 describe('derived images through the Cache API', () => {
     const path = imageUrl({
-        path: '/2001/01-01/a.jpg',
+        path: '/2001/01-01/a',
         versionId: 'v1',
         size: { width: 200, height: 200 },
         crop: null,
@@ -40,6 +40,15 @@ describe('derived images through the Cache API', () => {
             .split(',')
             .map((metric) => metric.trim().split(';', 1)[0] ?? '');
     }
+
+    it('reads its path percent-decoded, as the raw and video routes read theirs', async () => {
+        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        const response = await call(path.replace('/a/', '/%61/'));
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-derived')).toBe('stored');
+    });
 
     it('says how long the cache lookup and the R2 read took when the colo misses', async () => {
         await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');

@@ -1,7 +1,10 @@
 // Copies one day album from the AWS gallery into this one, through the Worker's own routes: each original is
 // presigned and PUT to R2 as a browser upload is, so the pipeline records it and makes its derived images, and the
 // album's and photos' words, crops and thumbnail go through the admin write routes. Tags are not written: the pipeline
-// reads them from each file's XMP keywords, which is where the AWS gallery's came from.
+// reads them from each file's XMP keywords, which is where the AWS gallery's came from. Each photo lands under the
+// name this gallery gives it, its extension dropped and the rest sanitized, with `_n` where two come out the same,
+// and a link in a caption to an AWS media path is pointed at the new one: by this album's own renames, or for
+// another album's item by the sanitizer alone, which is right unless that item collided with another in its day.
 //
 // Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production|local] [--user moses] [--resume]
 //
@@ -13,7 +16,9 @@
 // put` gave the deployed Workers.
 import { setTimeout as sleep } from 'node:timers/promises';
 import * as valibot from 'valibot';
+import { mediaPath, parsePath } from 'tacocat-gallery-shared';
 import { adminCookie } from './admin-cookie.ts';
+import { renamedMedia, rewriteLinks, sanitizedPath } from './aws-names.ts';
 import { devVars } from './dev-vars.ts';
 
 const TARGETS = {
@@ -81,41 +86,80 @@ const media = (album.children ?? []).filter((child) => child.itemType === 'image
 const [photos, videos] = [media.filter((item) => !isVideo(item)), media.filter(isVideo)];
 console.log(`${albumPath}: ${photos.length} photos to copy; ${videos.length} videos left behind`);
 
+// Each item's name here, by its AWS name, decided over every media item of the day, videos included, so the names
+// the videos will take when they are copied are already spoken for.
+const names = new Map(renamedMedia(media).map((renamed) => [renamed.from, renamed.to]));
+for (const renamed of renamedMedia(media).filter((item) => item.from !== item.to)) {
+    console.log(`${renamed.collided ? 'collision: ' : ''}${renamed.from} → ${renamed.to}`);
+}
+
 // The albums first, published as the source has them, so that the uploads land in them and the wait can read the day.
 await ensureAlbum(`/${year}/`, { published: true });
 await ensureAlbum(albumPath, {
     published: album.published ?? false,
-    summary: album.summary ?? null,
-    description: album.description ?? null,
+    summary: album.summary === undefined ? null : withLinksRewritten(album.summary, albumPath),
+    description: album.description === undefined ? null : withLinksRewritten(album.description, albumPath),
 });
 
 const existing = await existingNames();
-const toUpload = process.argv.includes('--resume') ? photos.filter((photo) => !existing.has(photo.itemName)) : photos;
+const toUpload = process.argv.includes('--resume') ? photos.filter((photo) => !existing.has(nameOf(photo))) : photos;
 if (toUpload.length < photos.length) {
     console.log(`resuming: ${photos.length - toUpload.length} already there, ${toUpload.length} to upload`);
 }
 const versions = new Map<string, string>();
 await inParallel(toUpload, UPLOADS_AT_ONCE, async (photo) => {
-    versions.set(photo.itemName, await upload(photo));
-    console.log(`uploaded ${photo.path}`);
+    versions.set(nameOf(photo), await upload(photo));
+    console.log(`uploaded ${photo.path} as ${pathOf(photo)}`);
 });
 await untilProcessed(versions);
 
 // What an admin wrote about each photo, over what its file said, and which one shows the album.
 for (const photo of photos) {
-    const words = { title: photo.title ?? null, description: photo.description ?? null };
+    const words = {
+        title: photo.title ?? null,
+        description: photo.description === undefined ? null : withLinksRewritten(photo.description, pathOf(photo)),
+    };
     if (words.title !== null || words.description !== null) {
-        await write('PATCH', `/api/media${photo.path}`, words);
+        await write('PATCH', `/api/media${pathOf(photo)}`, words);
     }
     if (photo.thumbnail !== undefined && photo.dimensions !== undefined) {
-        await write('PATCH', `/api/thumb${photo.path}`, percentOf(photo.thumbnail, photo.dimensions));
+        await write('PATCH', `/api/thumb${pathOf(photo)}`, percentOf(photo.thumbnail, photo.dimensions));
     }
 }
-const thumbnail = album.thumbnail?.path;
-if (thumbnail !== undefined && photos.some((photo) => photo.path === thumbnail)) {
-    await write('PATCH', `/api/album-thumb${albumPath}`, { mediaPath: thumbnail });
+const thumbnail = photos.find((photo) => photo.path === album.thumbnail?.path);
+if (thumbnail !== undefined) {
+    await write('PATCH', `/api/album-thumb${albumPath}`, { mediaPath: pathOf(thumbnail) });
 }
 console.log(`done: ${site}${albumPath.slice(0, -1)}`);
+
+/** The name a media item of this album gets here. */
+function nameOf(item: AwsMedia): string {
+    return names.get(item.itemName) ?? '';
+}
+
+function pathOf(item: AwsMedia): string {
+    return mediaPath(albumPath, nameOf(item));
+}
+
+/**
+ * A caption with its links to AWS media paths pointed at the new ones, each link said, and one that resolves to
+ * nothing left as it is for a person.
+ */
+function withLinksRewritten(caption: string, at: string): string {
+    const { html, links } = rewriteLinks(caption, (awsPath) => {
+        const cut = awsPath.lastIndexOf('/');
+        const [linkedAlbum, linkedName] = [awsPath.slice(0, cut + 1), awsPath.slice(cut + 1)];
+        if (linkedAlbum === albumPath) {
+            const name = names.get(linkedName);
+            return name === undefined ? null : mediaPath(albumPath, name);
+        }
+        return sanitizedPath(awsPath);
+    });
+    for (const link of links) {
+        console.log(`${at}: link ${link.from} → ${link.to ?? 'unresolved, left as it was'}`);
+    }
+    return html;
+}
 
 function usage(): string {
     return 'Usage: node api/scripts/import-album.ts /2024/12-17/ [--from prod] [--to production|local] [--user moses] [--resume]';
@@ -134,13 +178,13 @@ function targetOf(name: string): keyof typeof TARGETS {
     throw new Error(usage());
 }
 
-/** The year of a day album's path, or the usage message for anything else. */
+/** The year of a day album's path, `/2001/06-15/`, or the usage message for anything else. */
 function yearOf(candidate: string): string {
-    const match = /^\/(?<year>\d{4})\/\d{2}-\d{2}\/$/v.exec(candidate);
-    if (match?.groups === undefined) {
+    const parsed = parsePath(candidate);
+    if (parsed?.kind !== 'day') {
         throw new Error(usage());
     }
-    return match.groups['year'] ?? '';
+    return String(parsed.date.getFullYear());
 }
 
 /** The secret the target Worker signs sessions with. */
@@ -188,9 +232,9 @@ async function write(method: string, path: string, body: unknown): Promise<void>
 }
 
 /**
- * Sends the original to R2's inbox as the browser does: asks the Worker for a presigned URL, as a replacement if the
- * album already lists the name, and PUTs the file to it. Returns the version id the item will carry once the
- * Worker has processed the upload.
+ * Downloads the original by its AWS path and sends it to R2's inbox as the browser does: asks the Worker for a
+ * presigned URL under the item's new path, as a replacement if the album already lists the name, and PUTs the file
+ * to it. Returns the version id the item will carry once the Worker has processed the upload.
  */
 async function upload(photo: AwsMedia): Promise<string> {
     const response = await fetch(`${source.images}${photo.path}`);
@@ -199,12 +243,12 @@ async function upload(photo: AwsMedia): Promise<string> {
     }
     const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
     const body = await response.arrayBuffer();
-    const galleryPath = `${albumPath}${photo.itemName}`;
+    const galleryPath = pathOf(photo);
     const presigned = await fetch(`${site}/api/presigned${albumPath}`, {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify([
-            existing.has(photo.itemName) ? { path: galleryPath, replaces: galleryPath } : { path: galleryPath },
+            existing.has(nameOf(photo)) ? { path: galleryPath, replace: true } : { path: galleryPath },
         ]),
     });
     if (!presigned.ok) {
@@ -277,11 +321,11 @@ async function untilProcessed(expected: Map<string, string>): Promise<void> {
 }
 
 /** The last day's upload errors for `names` in the album, by path. */
-async function uploadErrors(names: string[]): Promise<Record<string, string>> {
+async function uploadErrors(missing: string[]): Promise<Record<string, string>> {
     const response = await fetch(`${site}/api/errors`, {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ paths: names.map((name) => `${albumPath}${name}`) }),
+        body: JSON.stringify({ paths: missing.map((name) => `${albumPath}${name}`) }),
     });
     if (!response.ok) {
         await response.body?.cancel();

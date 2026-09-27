@@ -5,8 +5,8 @@ import toAlbum from '$lib/models/impl/AlbumCreator';
 import { ImageThumbableImpl } from '$lib/models/impl/ImageThumbableImpl';
 import { VideoThumbableImpl } from '$lib/models/impl/VideoThumbableImpl';
 import { searchUrl } from '$lib/utils/config';
-import { longDate } from '$lib/utils/date-utils';
-import { albumPathToDate, getParentFromPath } from '$lib/utils/galleryPathUtils';
+import { albumTitle } from '$lib/utils/date-utils';
+import { parentPathOf } from 'tacocat-gallery-shared';
 import type { GalleryRecord, ImageRecord, VideoRecord } from '$lib/models/impl/server';
 import { errorMessageOf } from 'tacocat-gallery-shared';
 import { isAlbumRecord, isImageRecord, isVideoRecord } from '$lib/models/impl/server';
@@ -221,7 +221,7 @@ class SearchStore {
     }
 
     #dateFromPath(mediaPath: string): string {
-        return longDate(albumPathToDate(getParentFromPath(mediaPath)));
+        return albumTitle(parentPathOf(mediaPath));
     }
 }
 export const searchStore: SearchStore = new SearchStore();

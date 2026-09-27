@@ -7,54 +7,40 @@
     import { page } from '$app/state';
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
     import {
-        getNameFromPath,
-        getParentFromPath,
-        isValidMediaNameWithoutExtensionStrict,
-        isValidMediaPath,
-    } from '$lib/utils/galleryPathUtils';
-    import { sanitizeMediaBaseName } from 'tacocat-gallery-shared';
+        isMediaName,
+        isMediaPath,
+        mediaKey,
+        mediaPath as mediaPathOf,
+        parentPathOf,
+        sanitizeMediaNameAsTyped,
+    } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
     import { mediaRenameMachine } from '$lib/stores/admin/MediaRenameMachine.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
 
     let mediaPath: string = $derived(page.url.pathname);
-    let show: boolean = $derived(isValidMediaPath(mediaPath)); // Show this button on media (images and videos)
+    let show: boolean = $derived(isMediaPath(mediaPath)); // Show this button on media (images and videos)
+    let mediaName: string = $derived(mediaKey(mediaPath)?.itemName ?? '');
     let dialog: { show: () => void } | undefined = $state();
-
-    function originalMediaName(): string {
-        const mediaName = getNameFromPath(mediaPath);
-        return mediaName.split('.', 1)[0] ?? '';
-    }
-
-    function fileExtension(): string {
-        const mediaName = getNameFromPath(mediaPath);
-        return `.${mediaName.split('.', 2)[1] ?? ''}`;
-    }
 
     function onButtonClick(): void {
         dialog?.show();
     }
 
     function onNewMediaName(newMediaName: string): void {
-        const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
-        mediaRenameMachine.renameMediaItem(mediaPath, newMediaPath);
+        mediaRenameMachine.renameMediaItem(mediaPath, mediaPathOf(parentPathOf(mediaPath), newMediaName));
     }
 
     async function validateMediaName(newMediaName: string): Promise<string | undefined> {
-        if (!isValidMediaNameWithoutExtensionStrict(newMediaName)) return 'invalid filename';
-        const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
-        const albumPath = getParentFromPath(newMediaPath);
+        if (!isMediaName(newMediaName)) return 'invalid name';
+        const newMediaPath = mediaPathOf(parentPathOf(mediaPath), newMediaName);
+        const albumPath = parentPathOf(newMediaPath);
         const album = albumState.albums.get(albumPath);
         if (!album?.album) return undefined; // album not loaded, cannot check for collision
         const media = album.album.getMedia(newMediaPath);
         if (media) return 'file already exists';
         return undefined; // name is valid
-    }
-
-    function mediaNameWithoutExtensionToPath(mediaNameWithoutExtension: string): string {
-        const newName = mediaNameWithoutExtension + fileExtension();
-        return getParentFromPath(mediaPath) + newName;
     }
 </script>
 
@@ -62,11 +48,10 @@
     <ControlStripButton onclick={onButtonClick} title="Change name on disk"><RenameIcon />Rename</ControlStripButton>
     <TextDialog
         bind:this={dialog}
-        extension={fileExtension()}
-        initialValue={originalMediaName()}
+        initialValue={mediaName}
         label="New Filename"
         onNewValue={onNewMediaName}
-        sanitizor={sanitizeMediaBaseName}
+        sanitizor={sanitizeMediaNameAsTyped}
         validator={validateMediaName}
     />
 {/if}

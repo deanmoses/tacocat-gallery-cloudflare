@@ -17,7 +17,6 @@
 
     let dialog: { show: () => void; close: () => void } | undefined = $state();
     let filesAlreadyInAlbum: string[] = $state([]);
-    let filez = $derived(filesAlreadyInAlbum.join(', '));
 
     export function show(files: string[]): void {
         filesAlreadyInAlbum = files;
@@ -47,7 +46,12 @@
 
 <Dialog bind:this={dialog} {onkeydown}>
     {#snippet content()}
-        Already in album: {filez}
+        Already in album:
+        <ul>
+            {#each filesAlreadyInAlbum as file, index (index)}
+                <li>{file}</li>
+            {/each}
+        </ul>
     {/snippet}
     {#snippet buttons()}
         <button onclick={onCancelButtonClick} type="button"><CancelIcon /> Cancel</button>

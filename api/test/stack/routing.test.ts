@@ -15,11 +15,11 @@ describe('the asset router', () => {
         ['GET', '/api/auth/status'],
         ['GET', '/login'],
         ['GET', '/invite/abc'],
-        ['GET', '/raw/2001/01-01/a.jpg/v1'],
-        ['GET', '/v/2001/01-01/a.mp4/v1'],
-        ['GET', '/i/2001/01-01/a.jpg/v1'],
-        ['GET', '/i2/2001/01-01/a.jpg/v1'],
-        ['GET', '/debug/image/2001/01-01/a.jpg'],
+        ['GET', '/raw/2001/01-01/a/v1'],
+        ['GET', '/v/2001/01-01/a/v1'],
+        ['GET', '/i/2001/01-01/a/v1'],
+        ['GET', '/i2/2001/01-01/a/v1'],
+        ['GET', '/debug/image/2001/01-01/a'],
         ['PUT', '/upload/v1'],
     ])('sends %s %s to the Worker', async (method, path) => {
         const response = await navigate(path, method);
@@ -28,7 +28,7 @@ describe('the asset router', () => {
         expect(response.headers.has('x-worker-colo')).toBe(true);
     });
 
-    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix.jpg', '/search/tacos'])(
+    it.each(['/', '/2001', '/2001/', '/2001/06-15', '/2001/06-15/felix', '/search/tacos'])(
         'serves the web app for %s',
         async (path) => {
             const response = await navigate(path);
@@ -49,7 +49,7 @@ describe('preloading the album JSON', () => {
     it.each([
         ['a day album', '/2001/06-15', [album, year]],
         ['a day album with a trailing slash', '/2001/06-15/', [album, year]],
-        ['a photo', '/2001/06-15/felix.jpg', [album]],
+        ['a photo', '/2001/06-15/felix', [album]],
     ])(
         'names the JSON %s needs in the page headers, so the browser asks before the app runs',
         async (_what, path, links) => {
@@ -67,7 +67,7 @@ describe('preloading the album JSON', () => {
         '/search',
         '/search/tacos',
         '/robots.txt',
-        '/images/favicons/favicon-32x32.png',
+        '/images/favicons/favicon_32x32',
         '/_app/version.json',
     ])('preloads nothing for %s', async (path) => {
         const response = await navigate(path);

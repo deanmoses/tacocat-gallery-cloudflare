@@ -135,12 +135,12 @@ describe(transcodeJob, () => {
             DERIVED_BUCKET: 'test-derived',
         };
 
-        const { sourceKey, ...urls } = await transcodeJob(env, 'inbox/2024/06-15/a.mov', 'v1');
+        const { sourceKey, ...urls } = await transcodeJob(env, 'inbox/2024/06-15/a', 'v1');
         const paths = Object.fromEntries(Object.entries(urls).map(([name, url]) => [name, new URL(url).pathname]));
 
-        expect(sourceKey).toBe('inbox/2024/06-15/a.mov');
+        expect(sourceKey).toBe('inbox/2024/06-15/a');
         expect(paths).toStrictEqual({
-            src: '/test-media/inbox/2024/06-15/a.mov',
+            src: '/test-media/inbox/2024/06-15/a',
             mp4Put: '/test-derived/derived/v1/video.mp4',
             posterPut: '/test-derived/derived/v1/poster.jpg',
         });

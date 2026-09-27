@@ -3,13 +3,6 @@ import type { Album } from './GalleryItemInterfaces';
 /**
  * Types of albums
  */
-export const AlbumType = {
-    ROOT: 'ROOT',
-    YEAR: 'YEAR',
-    DAY: 'DAY',
-} as const;
-export type AlbumType = (typeof AlbumType)[keyof typeof AlbumType];
-
 /**
  * An entry in the album store
  */
@@ -64,10 +57,10 @@ export type CreateStatus = (typeof CreateStatus)[keyof typeof CreateStatus];
 /** A file about to be uploaded, and the media path it will have */
 export interface MediaItemToUpload {
     file: File;
-    /** For a replacement, the target's base name with this file's extension; otherwise the sanitized file name in the album */
+    /** The sanitized file name in the album, or for a replacement, the path of the item it replaces */
     path: string;
-    /** For a replacement, the item it replaces: the server refuses an upload under a taken name unless told which item it replaces */
-    replaces?: string;
+    /** Whether the item at the path is being replaced: the server refuses an upload under a taken name unless told so */
+    replace?: boolean;
 }
 
 /** An upload in flight */

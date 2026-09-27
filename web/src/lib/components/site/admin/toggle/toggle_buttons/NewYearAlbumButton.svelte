@@ -9,7 +9,8 @@
     import CreateIcon from '$lib/components/site/icons/CreateIcon.svelte';
     import { albumCreateMachine } from '$lib/stores/admin/AlbumCreateMachine.svelte';
     import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
-    import { isValidYearAlbumPath, sanitizeDayAlbumName } from '$lib/utils/galleryPathUtils';
+    import { sanitizeAlbumName } from '$lib/utils/albumName';
+    import { albumPath, isYearAlbumPath } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
 
@@ -26,14 +27,14 @@
     }
 
     function onNewAlbumName(newAlbumName: string): void {
-        const newAlbumPath = `/${newAlbumName}/`;
+        const newAlbumPath = albumPath('/', newAlbumName);
         albumCreateMachine.createAlbum(newAlbumPath);
         void goto(newAlbumPath);
     }
 
     async function validateYearAlbumName(albumName: string): Promise<string | undefined> {
-        const newAlbumPath = `/${albumName}/`;
-        if (!isValidYearAlbumPath(newAlbumPath)) return 'not a year, bruh';
+        const newAlbumPath = albumPath('/', albumName);
+        if (!isYearAlbumPath(newAlbumPath)) return 'not a year, bruh';
         if (await albumLoadMachine.albumExists(newAlbumPath)) return 'already exists';
         return undefined; // name is valid
     }
@@ -46,7 +47,7 @@
         initialValue={yearAlbumName()}
         label="New Year!"
         onNewValue={onNewAlbumName}
-        sanitizor={sanitizeDayAlbumName}
+        sanitizor={sanitizeAlbumName}
         validator={validateYearAlbumName}
     />
 {/if}

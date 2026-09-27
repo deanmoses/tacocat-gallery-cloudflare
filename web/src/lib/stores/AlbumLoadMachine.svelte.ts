@@ -2,7 +2,7 @@ import { produce } from 'immer';
 import { del as delFromIdb, get as getFromIdb, set as setToIdb } from 'idb-keyval';
 import { type AlbumEntry, AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import toAlbum from '$lib/models/impl/AlbumCreator';
-import { isValidAlbumPath } from '$lib/utils/galleryPathUtils';
+import { isAlbumPath } from 'tacocat-gallery-shared';
 import type { AlbumRecord } from '$lib/models/impl/server';
 import { parseAlbum } from 'tacocat-gallery-shared';
 import { albumUrl } from '$lib/utils/config';
@@ -42,7 +42,7 @@ class AlbumLoadMachine {
      * @param refetch refetch from server even if it's already on disk
      */
     fetch(path: string, refetch = true): void {
-        if (!isValidAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
+        if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
 
         const status: AlbumLoadStatus = albumState.albums.get(path)?.loadStatus ?? AlbumLoadStatus.NOT_LOADED;
 
@@ -195,7 +195,7 @@ class AlbumLoadMachine {
      * Return true if album exists
      */
     async albumExists(path: string): Promise<boolean> {
-        if (!isValidAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
+        if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
 
         // First check in memory
         console.log(`Checking if album [${path}] exists in memory`);
@@ -322,7 +322,7 @@ class AlbumLoadMachine {
      * This assumes that the album has already been deleted from the server.
      */
     async removeFromMemoryAndDisk(albumPath: string): Promise<void> {
-        if (!isValidAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
+        if (!isAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
 
         // Delete from disk
         const idbKey = this.#idbKey(albumPath);

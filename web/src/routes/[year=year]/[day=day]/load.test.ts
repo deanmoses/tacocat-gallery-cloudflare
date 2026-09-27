@@ -13,4 +13,14 @@ describe('day album page load', () => {
         expect(data).toStrictEqual({ albumPath: '/2001/12-31/' });
         expect(fetch.mock.calls).toStrictEqual([['/2001/12-31/'], ['/2001/']]);
     });
+
+    // The route matches the shape of a day; a day the calendar does not have is not found rather than fetched
+    it('is not found for a day the calendar does not have', () => {
+        const fetch = vi.spyOn(albumLoadMachine, 'fetch').mockReturnValue(undefined);
+
+        expect(() => {
+            void load({ params: { year: '2001', day: '02-30' } } as LoadEvent);
+        }).toThrow(expect.objectContaining({ status: 404 }));
+        expect(fetch).not.toHaveBeenCalled();
+    });
 });

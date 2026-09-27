@@ -1,3 +1,4 @@
+import { hrefOf } from 'tacocat-gallery-shared';
 import type { GalleryRecord } from './server';
 import type { ItemType, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 
@@ -38,7 +39,7 @@ export abstract class ThumbableBaseImpl implements Thumbable {
     }
 
     get parentHref(): string {
-        return this.json.parentPath;
+        return hrefOf(this.json.parentPath);
     }
 
     get published(): boolean {

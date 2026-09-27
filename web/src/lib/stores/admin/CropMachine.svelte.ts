@@ -2,7 +2,7 @@ import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { recropThumbnailUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
-import { getParentFromPath } from '$lib/utils/galleryPathUtils';
+import { parentPathOf } from 'tacocat-gallery-shared';
 import { albumState } from '../AlbumState.svelte';
 import { type Crop, CropStatus } from '$lib/models/album';
 
@@ -76,14 +76,14 @@ class CropMachine {
             // Reload parent album to:
             //  1) get the media item's new thumbnail
             //  2) this media item may be the album's thumb
-            const albumPath = getParentFromPath(mediaPath);
+            const albumPath = parentPathOf(mediaPath);
             console.log(`Reloading album [${albumPath}] from server`);
             await albumLoadMachine.fetchFromServer(albumPath); // force reload from server
 
             // Reload year album because this media item may be the year's thumb
             // TODO: not doing yet because back end isn't setting year's thumb yet
-            // console.log(`Reloading parent album [${getParentFromPath(albumPath)}] from server`);
-            // await albumStore.fetchFromServer(getParentFromPath(albumPath)); // force reload from server
+            // console.log(`Reloading parent album [${parentPathOf(albumPath)}] from server`);
+            // await albumStore.fetchFromServer(parentPathOf(albumPath)); // force reload from server
 
             this.#success(mediaPath);
         } catch (error) {

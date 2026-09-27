@@ -1,5 +1,5 @@
-import type { Rectangle, Size } from './album';
-import { isMediaPath } from './paths';
+import type { Rectangle, Size } from './album.ts';
+import { mediaKey } from './paths.ts';
 
 // The URLs the web app asks the Worker for media by. Both ends build and read them here, and the Worker keys a stored
 // derivative from the same text, so a derivative is found again only if every URL for it is spelled the same way.
@@ -23,6 +23,8 @@ export interface Query {
 /** One version of one media item: what the raw and video routes serve. */
 export interface MediaVersion {
     path: string;
+    /** The item's name, which names a download of it. */
+    name: string;
     versionId: string;
 }
 
@@ -50,6 +52,17 @@ export function detailSize({ width, height }: Size): ImageSize {
         : { width: null, height: Math.round(height * scale) };
 }
 const VERSION_ID = /^[\w\-.]+$/u;
+
+/** Letters, digits, dot, underscore and hyphen, which every version id is, the ids AWS assigned included. */
+export function isVersionId(text: string): boolean {
+    return VERSION_ID.test(text);
+}
+
+/** `isVersionId` as SQL, for a check constraint: `column` is text the rule admits. */
+export function versionIdSql(column: string): string {
+    return `${column} IS NOT NULL AND ${column} <> '' AND ${column} NOT GLOB '*[^A-Za-z0-9._-]*'`;
+}
+
 const SIZE = /^(?<width>[1-9]\d*)?(?:x(?<height>[1-9]\d*))?$/u;
 const COORDINATE = /^(?:0|[1-9]\d*)(?:\.\d+)?$/u;
 
@@ -66,16 +79,14 @@ export function imageUrl({ path, versionId, size, crop }: ImageRequest): string 
  * paid for and a derivative stored, so the route answers only sizes something asks for.
  */
 export function parseImageRequest(rest: string, query: Query): ImageRequest | null {
-    const cut = rest.lastIndexOf('/');
-    const path = rest.slice(0, cut);
-    const versionId = rest.slice(cut + 1);
+    const version = parseMediaVersion(rest);
     const sizeParam = query.get('size');
     const size = sizeParam === null ? DEFAULT_SIZE : parseSize(sizeParam);
     const cropParam = query.get('crop');
     const crop = cropParam === null ? null : parseCrop(cropParam);
-    return !path.startsWith('/') || versionId === '' || size === null || (cropParam !== null && crop === null)
+    return version === null || size === null || (cropParam !== null && crop === null)
         ? null
-        : { path, versionId, size, crop };
+        : { path: version.path, versionId: version.versionId, size, crop };
 }
 
 /** `200x200`, `1024` for a width alone, `x1024` for a height alone. */
@@ -96,7 +107,8 @@ export function parseMediaVersion(rest: string): MediaVersion | null {
     const cut = rest.lastIndexOf('/');
     const path = rest.slice(0, cut);
     const versionId = rest.slice(cut + 1);
-    return isMediaPath(path) && VERSION_ID.test(versionId) ? { path, versionId } : null;
+    const key = mediaKey(path);
+    return key !== null && isVersionId(versionId) ? { path, name: key.itemName, versionId } : null;
 }
 
 /** A version of a media item as it was uploaded, whatever format that is; a HEIC comes as a JPEG unless asked for. */

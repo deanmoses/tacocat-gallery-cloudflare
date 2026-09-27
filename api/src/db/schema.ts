@@ -1,6 +1,16 @@
 import { sql } from 'drizzle-orm';
 import { type AnySQLiteColumn, check, index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
-import { type Rectangle, itemTypeSchema, mediaTypeSchema } from 'tacocat-gallery-shared';
+import {
+    type Rectangle,
+    dayAlbumKeySql,
+    dayAlbumPathSql,
+    itemTypeSchema,
+    mediaNameSql,
+    mediaPathSql,
+    mediaTypeSchema,
+    versionIdSql,
+    yearNameSql,
+} from 'tacocat-gallery-shared';
 
 // The FTS5 table `item_fts` and the triggers that keep it in sync with `item` are raw SQL in migrations/, because
 // Drizzle does not model virtual tables or triggers. drizzle-kit leaves them alone.
@@ -21,14 +31,9 @@ function sqlList(values: readonly string[]): string {
 /** SQLite's clock in the format `created_at` and `updated_at` hold: `2001-06-15T12:34:56.789Z`. */
 export const NOW = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
-// GLOB patterns, which have character classes but no repetition, so a fixed-width format is spelled out. D1 refuses
-// a pattern longer than 50 characters, so a longer format is checked in pieces.
-const YEAR_GLOB = '[0-9][0-9][0-9][0-9]';
-const DAY_GLOB = '[0-9][0-9]-[0-9][0-9]';
-const DAY_ALBUM_PATH_GLOB = `/${YEAR_GLOB}/${DAY_GLOB}/`;
-const DAY_ALBUM_PATH_LENGTH = '/2001/06-15/'.length;
-
-// A check whose expression comes out NULL passes, so every rule below says what it needs to be non-null.
+// The path and name rules are the SQL forms of the ones in shared/, written by hand beside them, and a test holds each
+// pair to the same answers. A check whose expression comes out NULL passes, so every rule below says what it needs to
+// be non-null.
 
 /**
  * `column` is a timestamp in the one format the defaults write, or, when `nullable`, null. SQLite reads the text as a
@@ -37,24 +42,6 @@ const DAY_ALBUM_PATH_LENGTH = '/2001/06-15/'.length;
  */
 function timestampSql(column: string, { nullable = false } = {}): string {
     return `${nullable ? `${column} IS NULL OR ` : ''}strftime('%Y-%m-%dT%H:%M:%fZ', ${column}) IS ${column}`;
-}
-
-/**
- * `column` is a media file name: one dot with something on each side, no slash, and not `.jpeg`, since the gallery
- * stores a JPEG as `.jpg` and the sanitizer spells it so before the name reaches a table.
- */
-function mediaNameSql(column: string): string {
-    return `${column} GLOB '?*.?*' AND ${column} NOT GLOB '*.*.*' AND ${column} NOT GLOB '*/*' AND lower(${column}) NOT GLOB '*.jpeg'`;
-}
-
-/** `column` is the path of a media item in a day album: `/2001/06-15/felix.jpg`. */
-function mediaPathSql(column: string): string {
-    return `${column} IS NOT NULL AND substr(${column}, 1, ${DAY_ALBUM_PATH_LENGTH}) GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${mediaNameSql(`substr(${column}, ${DAY_ALBUM_PATH_LENGTH + 1})`)}`;
-}
-
-/** `column` is a version id: letters, digits, dot, underscore and hyphen, which admits the ids AWS assigned too. */
-function versionIdSql(column: string): string {
-    return `${column} IS NOT NULL AND ${column} <> '' AND ${column} NOT GLOB '*[^A-Za-z0-9._-]*'`;
 }
 
 /** `column` is text with something in it once spaces, tabs and line breaks are trimmed, or null. */
@@ -136,11 +123,11 @@ export const item = sqliteTable(
                 `(item_type = 'media') = (media_type IS NOT NULL) AND (media_type IS NULL OR media_type IN (${MEDIA_TYPES_SQL}))`,
             ),
         ),
-        // The URL scheme: a year album in the root, a day album in a year, a media file in a day.
+        // The URL scheme: a year album in the root, a day album in a year, on its calendar, a media item in a day.
         check(
             'item_path_check',
             sql.raw(
-                `CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '${YEAR_GLOB}') OR (parent_path GLOB '/${YEAR_GLOB}/' AND item_name GLOB '${DAY_GLOB}') ELSE parent_path GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${mediaNameSql('item_name')} END`,
+                `CASE item_type WHEN 'album' THEN (parent_path = '/' AND ${yearNameSql('item_name')}) OR (${dayAlbumKeySql('parent_path', 'item_name')}) ELSE ${dayAlbumPathSql('parent_path')} AND ${mediaNameSql('item_name')} END`,
             ),
         ),
         // A media item comes with its file and its size, and an album with neither.
@@ -207,19 +194,19 @@ export const upload = sqliteTable(
         versionId: text('version_id').primaryKey(),
         /**
          * The day album and name asked for when the URL was issued. The pipeline places the item by `album_id`, under
-         * the album's path as it is then, so these are the record of the request; a replacement takes only the
-         * extension of `item_name`, keeping the target's own base name.
+         * the album's path as it is then, so these are the record of the request; a replacement keeps its target's
+         * name, whatever it is by then.
          */
         parentPath: text('parent_path').notNull(),
         itemName: text('item_name').notNull(),
         /** The day album the item goes in, by row id, cleared by the database if the album is deleted first. */
         albumId: integer('album_id').references(() => item.id, { onDelete: 'set null' }),
         /**
-         * The item a replacement replaces, by row id and by path. The id is cleared by the database if that item is
-         * deleted before the upload finishes, and the path then still says the upload was a replacement.
+         * Whether the upload replaces the item at its path, and that item by row id, which the database clears if it
+         * is deleted before the upload finishes; the flag then still says the upload was a replacement.
          */
+        replacement: integer('replacement', { mode: 'boolean' }).notNull().default(false),
         targetId: integer('target_id').references(() => item.id, { onDelete: 'set null' }),
-        targetPath: text('target_path'),
         username: text('username')
             .notNull()
             .references(() => user.username),
@@ -231,14 +218,8 @@ export const upload = sqliteTable(
         index('upload_album_id').on(table.albumId),
         index('upload_target_id').on(table.targetId),
         check('upload_version_id_format', sql.raw(versionIdSql('version_id'))),
-        check(
-            'upload_path_check',
-            sql.raw(`parent_path GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${mediaNameSql('item_name')}`),
-        ),
-        check(
-            'upload_target_check',
-            sql.raw(`(target_path IS NULL AND target_id IS NULL) OR ${mediaPathSql('target_path')}`),
-        ),
+        check('upload_path_check', sql.raw(`${dayAlbumPathSql('parent_path')} AND ${mediaNameSql('item_name')}`)),
+        check('upload_target_check', sql.raw(`replacement IN (0, 1) AND (replacement = 1 OR target_id IS NULL)`)),
         check('upload_completed_at_format', sql.raw(timestampSql('completed_at', { nullable: true }))),
         ...timestampChecks('upload'),
     ],

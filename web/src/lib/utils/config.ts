@@ -1,5 +1,4 @@
 import type { Rectangle } from '$lib/models/impl/server';
-import { isValidAlbumPath, isValidMediaPath } from './galleryPathUtils';
 import type { SearchQuery } from '$lib/models/search';
 import {
     type Size,
@@ -7,8 +6,8 @@ import {
     THUMBNAIL_SIZE_2X,
     detailSize,
     imageUrl,
-    originalUrl,
-    videoUrl,
+    isAlbumPath,
+    isMediaPath,
 } from 'tacocat-gallery-shared';
 
 /**
@@ -51,25 +50,6 @@ export function detailImageUrl(mediaPath: string, versionId: string, dimensions:
 }
 
 /**
- * URL to view the full sized original raw media.
- * For some formats (like video), this may not be displayable in a browser.
- * @param mediaPath path to media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
- * @param versionId Version of the media
- */
-export function originalMediaUrl(mediaPath: string, versionId: string): string {
-    return originalUrl(mediaPath, versionId);
-}
-
-/**
- * URL to stream a video
- * @param path Path to video like /2001/12-31/video.mp4
- * @param versionId Version of the video
- */
-export function videoPlaybackUrl(path: string, versionId: string): string {
-    return videoUrl(path, versionId);
-}
-
-/**
  * URL to check for media processing errors
  */
 export function mediaErrorsUrl(): string {
@@ -77,35 +57,19 @@ export function mediaErrorsUrl(): string {
 }
 
 /**
- * URL to retrieve an album
+ * URL of an album: GET reads it, HEAD asks whether it is there, PUT makes it
  */
 export function albumUrl(path: string): string {
-    if (!isValidAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
+    if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
     return `${baseApiUrl()}album${path}`;
 }
 
 /**
- * URL to send HTTP PUT to create an album
- * @param path path of album to create
- */
-export function createAlbumUrl(path: string): string {
-    return `${baseApiUrl()}album${path}`;
-}
-
-/**
- * URL to send HTTP PATCH to update an album or media item
+ * URL of an album or media item as a write names it: PATCH changes it, DELETE removes it
  * @param path path of album or media item
  */
-export function updateUrl(path: string): string {
-    return baseApiUrl() + (isValidMediaPath(path) ? 'media' : 'album') + path;
-}
-
-/**
- * URL to send HTTP DELETE to delete an album or media item
- * @param path path of album or media item
- */
-export function deleteUrl(path: string): string {
-    return baseApiUrl() + (isValidMediaPath(path) ? 'media' : 'album') + path;
+export function itemUrl(path: string): string {
+    return baseApiUrl() + (isMediaPath(path) ? 'media' : 'album') + path;
 }
 
 /**
@@ -166,7 +130,7 @@ export function searchUrl(query: SearchQuery, startAt: number, pageSize: number)
  */
 export function localSearchUrl(query: SearchQuery, returnPath: string): string {
     const params: string[] = [];
-    params.push(`returnPath=${returnPath}`);
+    params.push(`returnPath=${encodeURIComponent(returnPath)}`);
     if (query.oldestYear !== undefined) params.push(`oldest=${query.oldestYear}`);
     if (query.newestYear !== undefined) params.push(`newest=${query.newestYear}`);
     if (query.oldestFirst === true) params.push('oldestFirst=true');

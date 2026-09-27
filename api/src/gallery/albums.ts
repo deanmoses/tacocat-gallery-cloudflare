@@ -1,7 +1,14 @@
 import { type SQL, and, asc, eq, exists, isNull, notExists, sql } from 'drizzle-orm';
 import { type SQLiteUpdate, alias } from 'drizzle-orm/sqlite-core';
 import * as valibot from 'valibot';
-import { type AlbumGalleryItem, type AlbumWrite, type ItemKey, albumKey, albumPath } from 'tacocat-gallery-shared';
+import {
+    type AlbumGalleryItem,
+    type AlbumWrite,
+    type ItemKey,
+    albumKey,
+    albumPath,
+    mediaKey,
+} from 'tacocat-gallery-shared';
 import { type Orm, schema } from '../db';
 import { type Row, type Selection, selectRecords, selectRecordsBatch, toAlbumRecord, toRecord } from './records';
 import { type Written, caption, isKey, written } from './writes';
@@ -222,8 +229,7 @@ export async function describeAlbum(
     const { item } = schema;
     const year = albumKey(key.parentPath);
     const path = albumPath(key.parentPath, key.itemName);
-    const cut = mediaPath.lastIndexOf('/');
-    const media = { parentPath: mediaPath.slice(0, cut + 1), itemName: mediaPath.slice(cut + 1) };
+    const media = mediaKey(mediaPath) ?? { parentPath: '', itemName: '' };
     // A builder is changed by what is called on it, so each subquery starts from its own.
     const found = (where: SQL): SQL => sql`(${database.select({ id: item.id }).from(item).where(where)})`;
     const result = await database.run(

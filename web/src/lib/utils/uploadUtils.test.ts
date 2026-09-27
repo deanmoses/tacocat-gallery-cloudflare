@@ -1,32 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { findProcessedUploads, markReplacements, replacementPath } from './uploadUtils';
+import { findProcessedUploads, markReplacements } from './uploadUtils';
 import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import { dayAlbum, imageRecord, mediaPath, videoRecord } from '$lib/test-support/records';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-
-describe(replacementPath, () => {
-    it.each([
-        // The same format keeps the path
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.jpg', path: '/2024/01-01/photo.jpg' },
-        { targetPath: '/2024/01-01/video.mp4', fileName: 'new.mp4', path: '/2024/01-01/video.mp4' },
-        // Another format keeps the name and takes the extension: any file may replace any item
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.png', path: '/2024/01-01/photo.png' },
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.heic', path: '/2024/01-01/photo.heic' },
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'clip.mov', path: '/2024/01-01/photo.mov' },
-        { targetPath: '/2024/01-01/image.png', fileName: 'new.jpg', path: '/2024/01-01/image.jpg' },
-        // The extension is spelled as the sanitizer spells it, so a JPEG is always .jpg
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.JPG', path: '/2024/01-01/photo.jpg' },
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.jpeg', path: '/2024/01-01/photo.jpg' },
-        { targetPath: '/2024/01-01/photo.png', fileName: 'new.JPEG', path: '/2024/01-01/photo.jpg' },
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.HEIC', path: '/2024/01-01/photo.heic' },
-        // The target's name is kept as it is, older unsanitized names included, since the server keys the item by it
-        { targetPath: '/2024/01-01/Old-Photo.JPG', fileName: 'new.png', path: '/2024/01-01/Old-Photo.png' },
-        // Only the last dot of the file's name separates its extension; the target has one dot by the gallery's rule
-        { targetPath: '/2024/01-01/photo.jpg', fileName: 'new.2024.heic', path: '/2024/01-01/photo.heic' },
-    ])('$fileName onto $targetPath goes to $path', ({ targetPath, fileName, path }) => {
-        expect(replacementPath(targetPath, fileName)).toBe(path);
-    });
-});
 
 function upload(fields: { path: string; status: UploadState; versionId?: string }): UploadEntry {
     return { file: new File([], 'test.jpg'), ...fields };
@@ -118,14 +94,14 @@ describe(findProcessedUploads, () => {
 });
 
 function mediaToUpload(fileName: string): MediaItemToUpload {
-    return { file: new File([], fileName), path: mediaPath(fileName) };
+    return { file: new File([], fileName), path: mediaPath(fileName.slice(0, fileName.lastIndexOf('.'))) };
 }
 
 /** The media already in the album, under the names an upload might collide with */
 const albumWithPhotoAndClip = (): Album =>
     dayAlbum([
-        imageRecord({ mediaType: 'image', path: mediaPath('photo.jpg'), itemName: 'photo.jpg', versionId: 'photo-v1' }),
-        videoRecord({ path: mediaPath('clip.mp4'), itemName: 'clip.mp4', versionId: 'clip-v1' }),
+        imageRecord({ mediaType: 'image', path: mediaPath('photo'), itemName: 'photo', versionId: 'photo-v1' }),
+        videoRecord({ path: mediaPath('clip'), itemName: 'clip', versionId: 'clip-v1' }),
     ]);
 
 describe(markReplacements, () => {
@@ -133,34 +109,40 @@ describe(markReplacements, () => {
         const files = [mediaToUpload('new.jpg')];
 
         expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual([]);
-        expect(files[0]?.replaces).toBeUndefined();
+        expect(files[0]?.replace).toBeUndefined();
     });
 
-    // The name is what the admin is shown in the confirmation dialog, so it is the file's own name rather than its path
-    it('names a colliding file and marks what it replaces', () => {
+    // The dialog lists what is already in the album, so a line is the item's name, not the dropped file's
+    it('names the colliding item and marks the file as its replacement', () => {
         const files = [mediaToUpload('photo.jpg')];
 
-        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg']);
-        expect(files[0]?.replaces).toBe(mediaPath('photo.jpg'));
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo']);
+        expect(files[0]?.replace).toBe(true);
     });
 
-    // A HEIC is stored as a HEIC, so it collides with nothing but another HEIC of the same name
-    it('does not match a file against an item of the same name in another format', () => {
+    // Any file may replace any item, so a file in another format collides with the item of its name
+    it('matches a file against the item of its name whatever format either is in', () => {
         const files = [mediaToUpload('photo.heic')];
 
-        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual([]);
-        expect(files[0]?.replaces).toBeUndefined();
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo']);
+        expect(files[0]?.replace).toBe(true);
+    });
+
+    // A Live Photo's clip lands on its still: the line says so, since the admin may have taken the question to be about an edited photo
+    it('says the kinds when a video would replace a photo, or a photo a video', () => {
+        const files = [mediaToUpload('photo.mov'), mediaToUpload('clip.jpg')];
+
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual([
+            'photo (a photo; photo.mov is a video)',
+            'clip (a video; clip.jpg is a photo)',
+        ]);
     });
 
     it('checks every file in the batch, and leaves the ones that collide with nothing alone', () => {
         const files = [mediaToUpload('new.jpg'), mediaToUpload('photo.jpg'), mediaToUpload('clip.mp4')];
 
-        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo.jpg', 'clip.mp4']);
-        expect(files.map((file) => file.replaces)).toStrictEqual([
-            undefined,
-            mediaPath('photo.jpg'),
-            mediaPath('clip.mp4'),
-        ]);
+        expect(markReplacements(files, albumWithPhotoAndClip())).toStrictEqual(['photo', 'clip']);
+        expect(files.map((file) => file.replace)).toStrictEqual([undefined, true, true]);
     });
 
     // The check can run before the album has loaded, so an absent or empty album means no collisions rather than an error
@@ -171,6 +153,6 @@ describe(markReplacements, () => {
         const files = [mediaToUpload('photo.jpg')];
 
         expect(markReplacements(files, album)).toStrictEqual([]);
-        expect(files[0]?.replaces).toBeUndefined();
+        expect(files[0]?.replace).toBeUndefined();
     });
 });

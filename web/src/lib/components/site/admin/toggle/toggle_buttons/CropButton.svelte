@@ -8,11 +8,11 @@
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import CropIcon from '$lib/components/site/icons/CropIcon.svelte';
-    import { isValidMediaPath } from '$lib/utils/galleryPathUtils';
+    import { isMediaPath } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let path: string = $derived(page.url.pathname);
-    let show: boolean = $derived(isValidMediaPath(path)); // Show this button only on media pages
+    let show: boolean = $derived(isMediaPath(path)); // Show this button only on media pages
     function onCropButtonClick(): void {
         void goto(`${path}/crop`);
     }

@@ -31,7 +31,7 @@ describe(readAlbum, () => {
             upsertItem(database, { parentPath: '/2001/', itemName: '06-15', itemType: 'album', published: true }),
             upsertItem(database, {
                 parentPath: '/2001/06-15/',
-                itemName: 'felix.jpg',
+                itemName: 'felix',
                 itemType: 'media',
                 mediaType: 'image',
                 versionId: 'v1',
@@ -56,7 +56,7 @@ describe(searchItems, () => {
             upsertItem(database, { parentPath: '/2001/', itemName: '06-15', itemType: 'album', published: true }),
             upsertItem(database, {
                 parentPath: '/2001/06-15/',
-                itemName: 'felix.jpg',
+                itemName: 'felix',
                 itemType: 'media',
                 mediaType: 'image',
                 title: 'Felix',
@@ -92,7 +92,7 @@ describe(presignUploads, () => {
             { ...TEST_SECRETS, MEDIA_BUCKET: 'test-media', UPLOADS: 'signed' },
             database,
             '/2001/06-15/',
-            [{ path: '/2001/06-15/new.jpg' }],
+            [{ path: '/2001/06-15/new' }],
             'moses',
         );
 

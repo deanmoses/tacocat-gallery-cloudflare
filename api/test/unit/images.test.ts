@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { outputFormat, resize } from '../../src/media/images';
 
-const PHOTO = { path: '/2001/06-15/felix.jpg', versionId: 'v1' };
+const PHOTO = { path: '/2001/06-15/felix', versionId: 'v1' };
 
 describe(resize, () => {
     it('covers an uncropped thumbnail from a third of the way down, where a face is likelier than the middle', () => {

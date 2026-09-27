@@ -2,8 +2,8 @@ import type { MediaRecord, Rectangle } from './server';
 import type { Album, Media, MediaType, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 import { ThumbableBaseImpl } from './ThumbableBaseImpl';
 import { detailImageUrl } from '$lib/utils/config';
-import { getDetailHeight, getDetailWidth } from '$lib/utils/dimensionUtils';
-import { toTitleFromFilename } from '$lib/utils/titleUtils';
+import { detailDimensions } from '$lib/utils/dimensionUtils';
+import { titleFromName } from '$lib/utils/titleUtils';
 
 /**
  * Base class for media items (images and videos).
@@ -24,7 +24,7 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
     // Thumbable implementations
 
     get title(): string {
-        return this.json.title ?? toTitleFromFilename(this.json.itemName);
+        return this.json.title ?? titleFromName(this.json.itemName);
     }
 
     set title(title: string) {
@@ -66,11 +66,11 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
     }
 
     get detailWidth(): number {
-        return getDetailWidth(this.json.dimensions.width, this.json.dimensions.height);
+        return detailDimensions(this.json.dimensions).width;
     }
 
     get detailHeight(): number {
-        return getDetailHeight(this.json.dimensions.width, this.json.dimensions.height);
+        return detailDimensions(this.json.dimensions).height;
     }
 
     // Navigation within album

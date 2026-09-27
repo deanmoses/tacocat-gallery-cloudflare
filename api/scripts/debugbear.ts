@@ -21,6 +21,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
+import { isDayAlbumPath } from 'tacocat-gallery-shared';
 
 const API = 'https://www.debugbear.com/api/v1';
 const PROJECT_ID = '107830';
@@ -205,10 +206,10 @@ async function listPages(): Promise<void> {
 
 /** Points every page at `albumPath` on the site it already tests, and says what DebugBear answered for each. */
 async function repoint(albumPath: string): Promise<void> {
-    if (!/^\/\d{4}\/\d{2}-\d{2}\/?$/v.test(albumPath)) {
+    const albumRoute = albumPath.endsWith('/') ? albumPath.slice(0, -1) : albumPath;
+    if (!isDayAlbumPath(`${albumRoute}/`)) {
         throw new Error('repoint takes a day album path, as in /2026/09-13/');
     }
-    const albumRoute = albumPath.replace(/\/$/v, '');
     for (const page of await projectPages()) {
         const url = `${new URL(page.url).origin}${albumRoute}`;
         await debugbear(`/pages/${page.id}`, { url }, 'PATCH');

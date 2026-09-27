@@ -24,7 +24,7 @@ describe("the site's headers", () => {
 
     it('are on an image, with the one that keeps other sites from embedding it', async () => {
         const path = imageUrl({
-            path: '/2001/01-01/a.jpg',
+            path: '/2001/01-01/a',
             versionId: 'v1',
             size: { width: 200, height: 200 },
             crop: null,
@@ -40,7 +40,7 @@ describe("the site's headers", () => {
         });
     });
 
-    it.each(['/raw/2001/01-01/a.jpg', '/v/2001/01-01/a.mp4', '/i2/2001/01-01/a.jpg/v1'])(
+    it.each(['/raw/2001/01-01/a', '/v/2001/01-01/a', '/i2/2001/01-01/a/v1'])(
         'keep other sites from embedding what %s serves, even when it is missing',
         async (path) => {
             const response = await call(path);

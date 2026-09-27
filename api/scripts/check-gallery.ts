@@ -1,16 +1,23 @@
-// Runs every row of the AWS gallery through this Worker's write rules, and reports what they refuse. The rows come
-// from a DynamoDB scan of the items table, saved as the CLI writes it:
+// Runs every row of the AWS gallery through this Worker's write rules, as the copy will write them, and reports what
+// they refuse and what the copy changes. The rows come from a DynamoDB scan of the items table, saved as the CLI
+// writes it:
 //
 //   aws dynamodb scan --table-name tacocat-gallery-sam-prod-items --output json > prod-items.json
 //
-// Each becomes a `PUT /api/item` to a Worker, `wrangler dev` by default, which answers 400 with the shared schema's
-// message or the constraint's name for a row it refuses. The report groups the refusals by message, with the paths.
-// Nothing is repaired here: the report says which rows the copy has to repair, and which rule, if any, to loosen.
+// Each media item is renamed as the copy renames it, its extension dropped and the name sanitized, with `_n` where two
+// in one day come out the same, and every link in a description or summary to an AWS media path is pointed at the
+// new one. Each row then becomes a `PUT /api/item` to a Worker, `wrangler dev` by default, which answers 400 with the
+// shared schema's message or the constraint's name for a row it refuses. The report groups the refusals by message,
+// with the paths, then lists every name the sanitizer changed, every collision and the `_n` it got, and every link
+// with what it now points at or that it could not be resolved. Nothing is repaired here: the report says which rows
+// the copy has to repair, and which rule, if any, to loosen.
 //
 // Usage: node api/scripts/check-gallery.ts prod-items.json [--site http://localhost:8787] [--paths]
 import { readFile } from 'node:fs/promises';
 import * as valibot from 'valibot';
+import { albumPath, mediaPath } from 'tacocat-gallery-shared';
 import { adminCookie } from './admin-cookie.ts';
+import { type Renamed, type RewrittenLink, renamedMedia, rewriteLinks } from './aws-names.ts';
 import { devVars } from './dev-vars.ts';
 
 const file = process.argv[2];
@@ -94,6 +101,20 @@ const rows = valibot.parse(SCAN, JSON.parse(await readFile(file, 'utf8'))).map((
 const cookie = await adminCookie((await devVars())['SESSION_SECRET'] ?? '', 'check-gallery');
 console.log(`${rows.length} rows in ${file}; writing each to ${site}`);
 
+// Every media item's new name, by its AWS path, decided per day album as the copy decides it.
+const renames = new Map<string, Renamed>();
+for (const [parentPath, media] of Map.groupBy(
+    rows.filter((row) => row.itemType === 'image' && row.parentPath !== undefined && row.itemName !== undefined),
+    (row) => row.parentPath ?? '',
+)) {
+    for (const renamed of renamedMedia(
+        media.map((row) => ({ itemName: row.itemName ?? '', mediaType: row.mediaType })),
+    )) {
+        renames.set(mediaPath(parentPath, renamed.from), renamed);
+    }
+}
+const links: { path: string; link: RewrittenLink }[] = [];
+
 const unknownTypes = rows.filter((row) => row.itemType !== 'album' && row.itemType !== 'image');
 const refusals: Refusal[] = [];
 let written = 0;
@@ -102,7 +123,7 @@ await inParallel(
     rows.filter((row) => !unknownTypes.includes(row)),
     AT_ONCE,
     async (row) => {
-        const itemPath = `${row.parentPath ?? '?'}${row.itemName ?? '?'}${row.itemType === 'album' ? '/' : ''}`;
+        const itemPath = (row.itemType === 'album' ? albumPath : mediaPath)(row.parentPath ?? '?', row.itemName ?? '?');
         const found = await put(toWrite(row), itemPath);
         if (found.length === 0) {
             written += 1;
@@ -121,19 +142,25 @@ console.log();
 console.log(`${written} written, ${refused} refused, ${unknownTypes.length} of a type this gallery has no row for`);
 report(refusals);
 report(danglingThumbnails(rows));
+reportRenames();
+reportLinks();
 
-/** The write this Worker takes, with AWS's fields under their names here and nothing invented for a missing one. */
+/**
+ * The write this Worker takes, with AWS's fields under their names here and nothing invented for a missing one: a
+ * media item under its new name, and every caption with its links rewritten.
+ */
 function toWrite(row: AwsItem): unknown {
+    const itemPath = (row.itemType === 'album' ? albumPath : mediaPath)(row.parentPath ?? '', row.itemName ?? '');
     const shared = {
         parentPath: row.parentPath,
-        itemName: row.itemName,
-        ...(row.description !== undefined && { description: row.description }),
+        itemName: row.itemType === 'album' ? row.itemName : (renames.get(itemPath)?.to ?? row.itemName),
+        ...(row.description !== undefined && { description: rewritten(itemPath, row.description) }),
     };
     if (row.itemType === 'album') {
         return {
             ...shared,
             itemType: 'album',
-            ...(row.summary !== undefined && { summary: row.summary }),
+            ...(row.summary !== undefined && { summary: rewritten(itemPath, row.summary) }),
             ...(row.published !== undefined && { published: row.published }),
         };
     }
@@ -149,6 +176,56 @@ function toWrite(row: AwsItem): unknown {
         ...(row.duration !== undefined && { durationSeconds: row.duration }),
         ...(row.thumbnail !== undefined && { thumbnailCrop: row.thumbnail }),
     };
+}
+
+/** A caption with its links to AWS media paths pointed at the new paths, each link noted for the report. */
+function rewritten(itemPath: string, caption: unknown): unknown {
+    if (typeof caption !== 'string') {
+        return caption;
+    }
+    const result = rewriteLinks(caption, (awsPath) => {
+        const renamed = renames.get(awsPath);
+        return renamed === undefined ? null : mediaPath(awsPath.slice(0, awsPath.lastIndexOf('/') + 1), renamed.to);
+    });
+    links.push(...result.links.map((link) => ({ path: itemPath, link })));
+    return result.html;
+}
+
+/** Every name the copy changes, the sanitized ones in brief and every collision in full, since those are the surprises. */
+function reportRenames(): void {
+    const changed = [...renames].filter(([, renamed]) => renamed.from !== renamed.to);
+    const collided = changed.filter(([, renamed]) => renamed.collided);
+    console.log();
+    console.log(
+        `${changed.length} of ${renames.size} media names change, ${collided.length} of them to a _n the copy gave them`,
+    );
+    const shown = showEveryPath ? changed : changed.slice(0, PATHS_SHOWN);
+    for (const [awsPath, renamed] of shown) {
+        console.log(`    ${awsPath} → ${renamed.to}`);
+    }
+    if (shown.length < changed.length) {
+        console.log(`    … and ${changed.length - shown.length} more (--paths lists them)`);
+    }
+    for (const [awsPath, renamed] of collided) {
+        console.log(`    collision: ${awsPath} → ${renamed.to}`);
+    }
+}
+
+/** Every link to an AWS media path, rewritten or not, since an unresolved one stays as it was and needs a person. */
+function reportLinks(): void {
+    const unresolved = links.filter(({ link }) => link.to === null);
+    console.log();
+    console.log(
+        `${links.length} links to media rewritten in captions, ${unresolved.length} of them unresolved and left as they were`,
+    );
+    for (const { path, link } of unresolved) {
+        console.log(`    ${path}: ${link.from}`);
+    }
+    if (showEveryPath) {
+        for (const { path, link } of links.filter((entry) => entry.link.to !== null)) {
+            console.log(`    ${path}: ${link.from} → ${link.to ?? ''}`);
+        }
+    }
 }
 
 /**
@@ -181,20 +258,22 @@ async function put(body: unknown, itemPath: string): Promise<Refusal[]> {
 /** Album thumbnails that name a media row the export does not hold, which the copy could not point at. */
 function danglingThumbnails(items: AwsItem[]): Refusal[] {
     const mediaPaths = new Set(
-        items.filter((row) => row.itemType === 'image').map((row) => `${row.parentPath ?? ''}${row.itemName ?? ''}`),
+        items
+            .filter((row) => row.itemType === 'image')
+            .map((row) => mediaPath(row.parentPath ?? '', row.itemName ?? '')),
     );
     const named = valibot.object({ path: valibot.string() });
     return items
         .filter((row) => row.itemType === 'album' && row.thumbnail !== undefined)
         .flatMap((row) => {
             const thumbnail = valibot.safeParse(named, row.thumbnail);
-            const albumPath = `${row.parentPath ?? ''}${row.itemName ?? ''}/`;
+            const path = albumPath(row.parentPath ?? '', row.itemName ?? '');
             if (!thumbnail.success) {
-                return [{ path: albumPath, message: 'album thumbnail is not { path }' }];
+                return [{ path, message: 'album thumbnail is not { path }' }];
             }
             return mediaPaths.has(thumbnail.output.path)
                 ? []
-                : [{ path: albumPath, message: 'album thumbnail names a media item that has no row' }];
+                : [{ path, message: 'album thumbnail names a media item that has no row' }];
         });
 }
 

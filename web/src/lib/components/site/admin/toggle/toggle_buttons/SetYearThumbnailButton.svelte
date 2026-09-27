@@ -5,14 +5,14 @@
 -->
 <script lang="ts">
     import { page } from '$app/state';
-    import { getParentFromPath, isValidMediaPath } from '$lib/utils/galleryPathUtils';
+    import { isMediaPath, parentPathOf } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import SetYearThumbnailConfirmDialog from './SetYearThumbnailConfirmDialog.svelte';
     import StarIcon from '$lib/components/site/icons/StarIcon.svelte';
     import { albumThumbnailSetMachine } from '$lib/stores/admin/AlbumThumbnailSetMachine.svelte';
 
     let path: string = $derived(page.url.pathname);
-    let show: boolean = $derived(isValidMediaPath(path)); // Show this button only on media pages
+    let show: boolean = $derived(isMediaPath(path)); // Show this button only on media pages
     let dialog: { show: () => void } | undefined = $state();
 
     function onclick(): void {
@@ -20,8 +20,7 @@
     }
 
     function onConfirm(): void {
-        const dayAlbumPath = getParentFromPath(path);
-        const yearAlbumPath = getParentFromPath(dayAlbumPath);
+        const yearAlbumPath = parentPathOf(parentPathOf(path));
         albumThumbnailSetMachine.setAlbumThumbnail(yearAlbumPath, path);
     }
 </script>

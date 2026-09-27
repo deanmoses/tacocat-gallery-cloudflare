@@ -1,6 +1,5 @@
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { shortDate } from './date-utils';
-import { albumPathToDate, isValidDayAlbumPath } from './galleryPathUtils';
+import { albumTitle } from './date-utils';
 
 /** Where an album page's prev and next buttons lead */
 export interface AlbumNav {
@@ -25,13 +24,7 @@ export function albumNav(albumPath: string, parent: Album | undefined): AlbumNav
     return {
         prevHref: prev?.href,
         nextHref: next?.href,
-        prevTitle: prev ? navTitle(prev.path) : undefined,
-        nextTitle: next ? navTitle(next.path) : undefined,
+        prevTitle: prev ? albumTitle(prev.path, 'short') : undefined,
+        nextTitle: next ? albumTitle(next.path, 'short') : undefined,
     };
-}
-
-/** A day album is titled by its month and day, a year album by its year */
-function navTitle(albumPath: string): string {
-    const date = albumPathToDate(albumPath);
-    return isValidDayAlbumPath(albumPath) ? shortDate(date) : date.getFullYear().toString();
 }

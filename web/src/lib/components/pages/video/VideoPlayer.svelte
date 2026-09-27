@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import type { Video } from '$lib/models/GalleryItemInterfaces';
-    import { videoPlaybackUrl } from '$lib/utils/config';
+    import { videoUrl as videoPlaybackUrl } from 'tacocat-gallery-shared';
     import PlayButtonIcon from '$lib/components/site/icons/PlayButtonIcon.svelte';
 
     interface Props {

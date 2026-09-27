@@ -14,7 +14,7 @@ import { inboxKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
 
 const DAY = '/2024/06-15/';
-const PATH = `${DAY}felix.jpg`;
+const PATH = `${DAY}felix`;
 const LOCAL = { UPLOADS: 'local' } as const;
 
 const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1));
@@ -89,6 +89,6 @@ describe('local uploads', () => {
         await waitOnExecutionContext(ctx);
         await instance.waitForStatus('complete');
 
-        await expect(storedItem(DAY, 'felix.jpg')).resolves.toMatchObject({ versionId, title: 'My Image Title' });
+        await expect(storedItem(DAY, 'felix')).resolves.toMatchObject({ versionId, title: 'My Image Title' });
     });
 });

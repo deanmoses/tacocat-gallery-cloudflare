@@ -9,13 +9,14 @@
     import type { MediaItemToUpload } from '$lib/models/album';
     import { albumState } from '$lib/stores/AlbumState.svelte';
     import { getSanitizedFiles, uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
-    import { isValidDayAlbumPath, validMediaExtensionsString } from '$lib/utils/galleryPathUtils';
+    import { acceptedExtensions } from '$lib/utils/fileFormats';
+    import { isDayAlbumPath, pathOfUrl } from 'tacocat-gallery-shared';
     import { markReplacements } from '$lib/utils/uploadUtils';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import UploadReplaceConfirmDialog from './UploadReplaceConfirmDialog.svelte';
 
-    let albumPath = $derived(`${page.url.pathname}/`);
-    let show = $derived(isValidDayAlbumPath(albumPath)); // Show this button only on day ablums
+    let albumPath = $derived(pathOfUrl(page.url.pathname));
+    let show = $derived(isDayAlbumPath(albumPath)); // Show this button only on day ablums
 
     let fileInput: HTMLInputElement | undefined = $state();
     let dialog: { show: (files: string[]) => void } | undefined = $state();
@@ -28,7 +29,7 @@
     function onFilesSelected(): void {
         const files = fileInput?.files;
         if (!files) return;
-        if (!isValidDayAlbumPath(albumPath)) throw new Error(`Invalid day album path: [${albumPath}]`);
+        if (!isDayAlbumPath(albumPath)) throw new Error(`Invalid day album path: [${albumPath}]`);
         console.log(`I'll upload [${files.length}] images to album [${albumPath}]`);
         imagesToUpload = getSanitizedFiles(files, albumPath);
         const album = albumState.albums.get(albumPath)?.album;
@@ -50,7 +51,7 @@
     <input
         bind:this={fileInput}
         style:display="none"
-        accept={validMediaExtensionsString()}
+        accept={acceptedExtensions()}
         multiple
         onchange={onFilesSelected}
         type="file"

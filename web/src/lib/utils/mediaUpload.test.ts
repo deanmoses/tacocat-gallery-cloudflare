@@ -9,36 +9,33 @@ describe(fetchPresignedUrls, () => {
     it('tells the server what each upload is and reads back where to put it and the version it will have', async () => {
         const server = fakeServer();
         const presigned = { url: 'https://bucket.test/inbox/v9?signed', versionId: 'v9' };
-        server.post(ROUTE, jsonResponse({ [`${ALBUM}photo.png`]: presigned }));
+        server.post(ROUTE, jsonResponse({ [`${ALBUM}photo`]: presigned }));
 
-        const result = await fetchPresignedUrls(ALBUM, [{ path: `${ALBUM}photo.png`, replaces: `${ALBUM}photo.jpg` }]);
+        const result = await fetchPresignedUrls(ALBUM, [{ path: `${ALBUM}photo`, replace: true }]);
 
-        expect(result).toStrictEqual({ success: true, uploads: { [`${ALBUM}photo.png`]: presigned } });
+        expect(result).toStrictEqual({ success: true, uploads: { [`${ALBUM}photo`]: presigned } });
         expect(server.calls).toStrictEqual([
-            { method: 'POST', pathname: ROUTE, body: [{ path: `${ALBUM}photo.png`, replaces: `${ALBUM}photo.jpg` }] },
+            { method: 'POST', pathname: ROUTE, body: [{ path: `${ALBUM}photo`, replace: true }] },
         ]);
     });
 
     it("passes on the server's reason for refusing", async () => {
         const server = fakeServer();
-        server.post(
-            ROUTE,
-            jsonResponse({ errorMessage: 'A media item already exists at [/2024/06-15/photo.png]' }, 400),
-        );
+        server.post(ROUTE, jsonResponse({ errorMessage: 'A media item already exists at [/2024/06-15/photo]' }, 400));
 
-        const result = await fetchPresignedUrls(ALBUM, [{ path: `${ALBUM}photo.png` }]);
+        const result = await fetchPresignedUrls(ALBUM, [{ path: `${ALBUM}photo` }]);
 
         expect(result).toStrictEqual({
             success: false,
-            error: 'A media item already exists at [/2024/06-15/photo.png]',
+            error: 'A media item already exists at [/2024/06-15/photo]',
         });
     });
 
     it('fails on a reply that is not a map of uploads', async () => {
         const server = fakeServer();
-        server.post(ROUTE, jsonResponse({ [`${ALBUM}photo.png`]: 'https://bucket.test/inbox/v9?signed' }));
+        server.post(ROUTE, jsonResponse({ [`${ALBUM}photo`]: 'https://bucket.test/inbox/v9?signed' }));
 
-        const result = await fetchPresignedUrls(ALBUM, [{ path: `${ALBUM}photo.png` }]);
+        const result = await fetchPresignedUrls(ALBUM, [{ path: `${ALBUM}photo` }]);
 
         expect(result).toMatchObject({ success: false });
     });
