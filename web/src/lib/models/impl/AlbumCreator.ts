@@ -1,5 +1,4 @@
-import { AlbumType } from '$lib/models/album';
-import { getAlbumType } from '$lib/utils/path-utils';
+import { parsePath } from 'tacocat-gallery-shared';
 import { AlbumDayImpl } from './AlbumDayImpl';
 import type { Album } from '../GalleryItemInterfaces';
 import { AlbumRootImpl } from './AlbumRootImpl';
@@ -13,15 +12,9 @@ import type { AlbumRecord } from './server';
 export default function toAlbum(json: AlbumRecord): Album {
     const { path } = json;
     if (!path) throw new Error(`JSON has no path`);
-    const type = getAlbumType(path);
-    switch (type) {
-        case AlbumType.ROOT:
-            return new AlbumRootImpl(json);
-        case AlbumType.YEAR:
-            return new AlbumYearImpl(json);
-        case AlbumType.DAY:
-            return new AlbumDayImpl(json);
-        default:
-            throw new Error(`Unexpected album type for [${path}]`);
-    }
+    const kind = parsePath(path)?.kind;
+    if (kind === 'root') return new AlbumRootImpl(json);
+    if (kind === 'year') return new AlbumYearImpl(json);
+    if (kind === 'day') return new AlbumDayImpl(json);
+    throw new Error(`Invalid album path [${path}]`);
 }

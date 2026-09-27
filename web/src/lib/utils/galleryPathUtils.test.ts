@@ -2,19 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
-    albumPathToDate,
     deduplicateMediaPaths,
-    getNameFromPath,
-    getParentAndNameFromPath,
-    getParentFromPath,
     hasValidMediaExtension,
-    isValidAlbumPath,
-    isValidDayAlbumPath,
     isValidMediaNameWithoutExtensionStrict,
-    isValidMediaPath,
-    isValidPath,
-    isValidYearAlbumPath,
-    sanitizeDayAlbumName,
+    sanitizeAlbumName,
     validMediaExtensionsString,
 } from './galleryPathUtils';
 
@@ -63,111 +54,7 @@ describe(validMediaExtensionsString, () => {
     });
 });
 
-/**
- * The five path predicates carve up one space of strings, so they are asserted
- * against one table of paths rather than each against its own examples. Nothing
- * previously checked what they reject -- isValidMediaPath accepted media in a
- * year album and no test noticed -- and a shared table makes a predicate that
- * quietly widens fail somewhere.
- *
- * Validation here is syntactic. A path is well-formed or not; whether the date
- * it names exists in the calendar is not this module's question.
- */
-interface PathCase {
-    path: string;
-    isPath: boolean;
-    isAlbum: boolean;
-    isYear: boolean;
-    isDay: boolean;
-    isMedia: boolean;
-}
-
-/** Builds a row, defaulting every predicate to false so a row states only what it accepts */
-function pathCase(path: string, accepted: Partial<Omit<PathCase, 'path'>> = {}): PathCase {
-    return { path, isPath: false, isAlbum: false, isYear: false, isDay: false, isMedia: false, ...accepted };
-}
-
-const PATH_CASES: PathCase[] = [
-    // The three album levels
-    pathCase('/', { isPath: true, isAlbum: true }),
-    pathCase('/2001/', { isPath: true, isAlbum: true, isYear: true }),
-    pathCase('/2001/12-31/', { isPath: true, isAlbum: true, isDay: true }),
-
-    // Media, which lives only in day albums. Every supported extension is
-    // exercised, derived from the lists rather than spelled out, so a new one
-    // cannot be added to a format list and left out of path validation.
-    ...MEDIA_EXTENSIONS.map((ext) => pathCase(`/2001/12-31/media.${ext}`, { isPath: true, isMedia: true })),
-    ...MEDIA_EXTENSIONS.map((ext) =>
-        pathCase(`/2001/12-31/media.${ext.toUpperCase()}`, { isPath: true, isMedia: true }),
-    ),
-    pathCase('/2001/12-31/my_image_1.jpg', { isPath: true, isMedia: true }),
-    pathCase('/2001/12-31/my-image.jpg', { isPath: true, isMedia: true }),
-
-    // Media anywhere else is not a path at all
-    pathCase('/image.jpg'),
-    pathCase('/2001/image.jpg'),
-    pathCase('/2001/12-31/sub/image.jpg'),
-
-    // Album paths are only valid with a trailing slash
-    pathCase('/2001'),
-    pathCase('/2001/12-31'),
-    pathCase('2001/'),
-    pathCase('/2001/12-31/image.jpg/'),
-
-    // Month and day are range-checked, but not against a real calendar
-    pathCase('/2001/02-30/', { isPath: true, isAlbum: true, isDay: true }),
-    pathCase('/2001/00-31/'),
-    pathCase('/2001/13-31/'),
-    pathCase('/2001/12-00/'),
-    pathCase('/2001/12-32/'),
-    pathCase('/2001/1-31/'),
-    pathCase('/2001/12-1/'),
-
-    // The year is four digits, no more and no fewer
-    pathCase('/201/'),
-    pathCase('/20011/'),
-    pathCase('/abcd/'),
-
-    // Filenames carry a supported extension and no spaces
-    pathCase('/2001/12-31/image.txt'),
-    pathCase('/2001/12-31/image'),
-    pathCase('/2001/12-31/.jpg'),
-    pathCase('/2001/12-31/my image.jpg'),
-
-    pathCase(''),
-];
-
-describe(isValidPath, () => {
-    it.each(PATH_CASES)('$path: $isPath', ({ path, isPath }) => {
-        expect(isValidPath(path)).toBe(isPath);
-    });
-});
-
-describe(isValidAlbumPath, () => {
-    it.each(PATH_CASES)('$path: $isAlbum', ({ path, isAlbum }) => {
-        expect(isValidAlbumPath(path)).toBe(isAlbum);
-    });
-});
-
-describe(isValidYearAlbumPath, () => {
-    it.each(PATH_CASES)('$path: $isYear', ({ path, isYear }) => {
-        expect(isValidYearAlbumPath(path)).toBe(isYear);
-    });
-});
-
-describe(isValidDayAlbumPath, () => {
-    it.each(PATH_CASES)('$path: $isDay', ({ path, isDay }) => {
-        expect(isValidDayAlbumPath(path)).toBe(isDay);
-    });
-});
-
-describe(isValidMediaPath, () => {
-    it.each(PATH_CASES)('$path: $isMedia', ({ path, isMedia }) => {
-        expect(isValidMediaPath(path)).toBe(isMedia);
-    });
-});
-
-describe(sanitizeDayAlbumName, () => {
+describe(sanitizeAlbumName, () => {
     it.each([
         // Already valid names survive untouched
         { in: '12-31', out: '12-31' },
@@ -194,7 +81,7 @@ describe(sanitizeDayAlbumName, () => {
 
         { in: '', out: '' },
     ])('[$in] sanitizes to [$out]', ({ in: albumName, out }) => {
-        expect(sanitizeDayAlbumName(albumName)).toBe(out);
+        expect(sanitizeAlbumName(albumName)).toBe(out);
     });
 });
 
@@ -257,102 +144,6 @@ describe(isValidMediaNameWithoutExtensionStrict, () => {
         expect(isValidMediaNameWithoutExtensionStrict('monkey_river_15_howler_monkey_calling')).toBe(true);
         expect(isValidMediaNameWithoutExtensionStrict('monkey_river_15_howler_monkey_calling_')).toBe(false);
     }, 1000);
-});
-
-/**
- * getParentFromPath and getNameFromPath are the two halves of
- * getParentAndNameFromPath, so all three answer one table. Given separate
- * examples they drifted: trimming and the empty-path error were asserted only
- * against the combined function, and would have gone on passing if either half
- * had stopped delegating.
- */
-interface SplitCase {
-    path: string;
-    parent: string;
-    name: string;
-}
-
-const SPLIT_CASES: SplitCase[] = [
-    { path: '/2001/12-31/image.jpg', parent: '/2001/12-31/', name: 'image.jpg' },
-    { path: '/2001/12-31/video.mp4', parent: '/2001/12-31/', name: 'video.mp4' },
-    { path: '/2001/12-31/', parent: '/2001/', name: '12-31' },
-    { path: '/2001/', parent: '/', name: '2001' },
-    // The root album has no parent and no name. Both are empty rather than
-    // undefined, which the module's own docs flag as questionable.
-    { path: '/', parent: '', name: '' },
-    // Surrounding whitespace is trimmed before the path is judged
-    { path: '  /2001/12-31/  ', parent: '/2001/', name: '12-31' },
-];
-
-/** Paths the splitters refuse, and what they say about them */
-const INVALID_SPLIT_CASES = [
-    // Album paths are only valid with a trailing slash, so these throw rather
-    // than being read as /2001/12-31/ and /2001/
-    { path: '/2001/12-31', error: 'Invalid path: [/2001/12-31]' },
-    { path: '/2001', error: 'Invalid path: [/2001]' },
-    { path: 'nonsense', error: 'Invalid path: [nonsense]' },
-    { path: '/2001/13-01/', error: 'Invalid path: [/2001/13-01/]' },
-    { path: '/2001/image.jpg', error: 'Invalid path: [/2001/image.jpg]' },
-    // An empty path is called out separately, since there is no path to name
-    { path: '', error: 'Invalid path: cannot be empty' },
-    { path: ' '.repeat(3), error: 'Invalid path: cannot be empty' },
-];
-
-describe(getParentAndNameFromPath, () => {
-    it.each(SPLIT_CASES)('[$path] splits into [$parent] and [$name]', ({ path, parent, name }) => {
-        expect(getParentAndNameFromPath(path)).toStrictEqual({ parent, name });
-    });
-
-    it.each(INVALID_SPLIT_CASES)('refuses [$path]', ({ path, error }) => {
-        expect(() => getParentAndNameFromPath(path)).toThrow(error);
-    });
-});
-
-describe(getParentFromPath, () => {
-    it.each(SPLIT_CASES)('[$path] has parent [$parent]', ({ path, parent }) => {
-        expect(getParentFromPath(path)).toBe(parent);
-    });
-
-    it.each(INVALID_SPLIT_CASES)('refuses [$path]', ({ path, error }) => {
-        expect(() => getParentFromPath(path)).toThrow(error);
-    });
-});
-
-describe(getNameFromPath, () => {
-    it.each(SPLIT_CASES)('[$path] has name [$name]', ({ path, name }) => {
-        expect(getNameFromPath(path)).toBe(name);
-    });
-
-    it.each(INVALID_SPLIT_CASES)('refuses [$path]', ({ path, error }) => {
-        expect(() => getNameFromPath(path)).toThrow(error);
-    });
-});
-
-describe(albumPathToDate, () => {
-    // Compared as local-time components rather than against a constructed Date,
-    // so the assertion says which year, month and day is meant and does not
-    // restate the implementation's own call.
-    it.each([
-        // Albums are sorted by date, so the root needs one. It is the date of
-        // the first surviving photograph, which sorts before any real album.
-        { albumPath: '/', year: 1826, month: 0, day: 1 },
-        // A year album stands at its first day
-        { albumPath: '/2001/', year: 2001, month: 0, day: 1 },
-        { albumPath: '/2001/12-31/', year: 2001, month: 11, day: 31 },
-        { albumPath: '/2001/01-01/', year: 2001, month: 0, day: 1 },
-        { albumPath: '/2001/06-15/', year: 2001, month: 5, day: 15 },
-    ])('$albumPath is $year-$month-$day', ({ albumPath, year, month, day }) => {
-        const date = albumPathToDate(albumPath);
-
-        expect([date.getFullYear(), date.getMonth(), date.getDate()]).toStrictEqual([year, month, day]);
-    });
-
-    it.each(['/2001/12-31/image.jpg', '/2001/12-31', '/2001', '/2001/13-01/', '', 'nonsense'])(
-        'throws on %s, which is not an album path',
-        (albumPath) => {
-            expect(() => albumPathToDate(albumPath)).toThrow(`Invalid album path: [${albumPath}]`);
-        },
-    );
 });
 
 /**

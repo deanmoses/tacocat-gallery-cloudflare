@@ -1,19 +1,87 @@
 import { describe, expect, it } from 'vitest';
 import {
+    albumDate,
     albumKey,
-    albumsEnclosing,
     extensionOf,
     hasStrictExtension,
+    hrefOf,
     isAlbumPath,
     isDayAlbumPath,
     isMediaName,
     isMediaPath,
     isStoredMediaName,
     isStrictMediaName,
+    isYearAlbumPath,
     mediaKey,
+    parentPathOf,
+    parsePath,
+    pathOfUrl,
     sanitizeMediaBaseName,
     sanitizeMediaFilename,
 } from './paths.ts';
+
+/** Local midnight on a date, which is what an album stands at. */
+function day(year: number, month: number, dayOfMonth: number): Date {
+    const date = new Date(0);
+    date.setFullYear(year, month - 1, dayOfMonth);
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
+describe(parsePath, () => {
+    it.each([
+        { path: '/', parsed: { kind: 'root' } },
+        { path: '/2001/', parsed: { kind: 'year', parentPath: '/', name: '2001', date: day(2001, 1, 1) } },
+        {
+            path: '/2001/06-15/',
+            parsed: { kind: 'day', parentPath: '/2001/', name: '06-15', date: day(2001, 6, 15) },
+        },
+        {
+            path: '/2001/06-15/felix.jpg',
+            parsed: { kind: 'media', parentPath: '/2001/06-15/', name: 'felix.jpg' },
+        },
+        {
+            path: '/2001/06-15/Félix at the beach.JPG',
+            parsed: { kind: 'media', parentPath: '/2001/06-15/', name: 'Félix at the beach.JPG' },
+        },
+        // A leap day exists only in a leap year.
+        {
+            path: '/2004/02-29/',
+            parsed: { kind: 'day', parentPath: '/2004/', name: '02-29', date: day(2004, 2, 29) },
+        },
+        // A year below 100, which the Date constructor alone would read as the 1900s.
+        { path: '/0050/', parsed: { kind: 'year', parentPath: '/', name: '0050', date: day(50, 1, 1) } },
+    ])('reads $path', ({ path, parsed }) => {
+        expect(parsePath(path)).toStrictEqual(parsed);
+    });
+
+    it.each([
+        '',
+        '2001/',
+        '/2001',
+        '/2001//',
+        '/201/',
+        '/20011/',
+        '/abcd/',
+        '/2001/06-15',
+        '/2001/6-15/',
+        '/2001/06-15/felix.jpg/',
+        '/2001/06-15/x/felix.jpg',
+        '/2001/felix.jpg',
+        '/felix.jpg',
+        '/2001/06-15/felix',
+        // Days the calendar does not have.
+        '/2001/02-29/',
+        '/2001/02-30/',
+        '/2001/13-01/',
+        '/2001/00-10/',
+        '/2001/06-00/',
+        '/2001/06-31/',
+        '/2001/12-32/',
+    ])('reads %s as no path', (path) => {
+        expect(parsePath(path)).toBeNull();
+    });
+});
 
 describe(isAlbumPath, () => {
     it.each(['/', '/2001/', '/2001/06-15/'])('accepts %s', (path) => {
@@ -28,11 +96,23 @@ describe(isAlbumPath, () => {
     );
 });
 
+describe(isYearAlbumPath, () => {
+    it('accepts a year album and nothing else', () => {
+        expect(isYearAlbumPath('/2001/')).toBe(true);
+        expect(isYearAlbumPath('/2001/06-15/')).toBe(false);
+        expect(isYearAlbumPath('/')).toBe(false);
+    });
+});
+
 describe(isDayAlbumPath, () => {
     it('accepts a day album and nothing above it', () => {
         expect(isDayAlbumPath('/2001/06-15/')).toBe(true);
         expect(isDayAlbumPath('/2001/')).toBe(false);
         expect(isDayAlbumPath('/')).toBe(false);
+    });
+
+    it('refuses a day the calendar does not have', () => {
+        expect(isDayAlbumPath('/2001/02-30/')).toBe(false);
     });
 });
 
@@ -209,16 +289,55 @@ describe(mediaKey, () => {
     });
 });
 
-describe(albumsEnclosing, () => {
-    it('lists the year then the day for a day album', () => {
-        expect(albumsEnclosing('/2001/06-15/')).toStrictEqual([
-            { parentPath: '/', itemName: '2001' },
-            { parentPath: '/2001/', itemName: '06-15' },
-        ]);
+describe(parentPathOf, () => {
+    it.each([
+        { path: '/2001/06-15/felix.jpg', parent: '/2001/06-15/' },
+        { path: '/2001/06-15/', parent: '/2001/' },
+        { path: '/2001/', parent: '/' },
+    ])('$path is in $parent', ({ path, parent }) => {
+        expect(parentPathOf(path)).toBe(parent);
     });
 
-    it('lists nothing for the root or for something that is not an album', () => {
-        expect(albumsEnclosing('/')).toStrictEqual([]);
-        expect(albumsEnclosing('/ryw/')).toStrictEqual([]);
+    it.each(['/', '/2001', 'nonsense', ''])('throws for %s, which has no parent', (path) => {
+        expect(() => parentPathOf(path)).toThrow(`Not a path with a parent: [${path}]`);
+    });
+});
+
+describe(albumDate, () => {
+    it('stands a year album at its first day and a day album at its date', () => {
+        expect(albumDate('/2001/')).toStrictEqual(day(2001, 1, 1));
+        expect(albumDate('/2001/12-31/')).toStrictEqual(day(2001, 12, 31));
+    });
+
+    it.each(['/', '/2001/12-31/felix.jpg', '/2001/13-01/', '/2001', ''])('throws for %s', (path) => {
+        expect(() => albumDate(path)).toThrow(`Not a year or day album: [${path}]`);
+    });
+});
+
+describe(pathOfUrl, () => {
+    it.each([
+        { pathname: '/', path: '/' },
+        { pathname: '/2001', path: '/2001/' },
+        { pathname: '/2001/06-15', path: '/2001/06-15/' },
+        { pathname: '/2001/06-15/felix.jpg', path: '/2001/06-15/felix.jpg' },
+        // Deeper than any gallery path, so it comes back as it is and reads as no path.
+        { pathname: '/2001/06-15/felix.jpg/crop', path: '/2001/06-15/felix.jpg/crop' },
+    ])('$pathname names $path', ({ pathname, path }) => {
+        expect(pathOfUrl(pathname)).toBe(path);
+    });
+
+    it.each(['/', '/2001/', '/2001/06-15/', '/2001/06-15/felix.jpg'])('is the inverse of hrefOf on %s', (path) => {
+        expect(pathOfUrl(hrefOf(path))).toBe(path);
+    });
+});
+
+describe(hrefOf, () => {
+    it.each([
+        { path: '/', href: '/' },
+        { path: '/2001/', href: '/2001' },
+        { path: '/2001/06-15/', href: '/2001/06-15' },
+        { path: '/2001/06-15/felix.jpg', href: '/2001/06-15/felix.jpg' },
+    ])('$path is at $href', ({ path, href }) => {
+        expect(hrefOf(path)).toBe(href);
     });
 });

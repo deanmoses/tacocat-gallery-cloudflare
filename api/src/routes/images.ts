@@ -21,7 +21,7 @@ export async function raw(request: Request, env: Env): Promise<Response> {
     if (!object) {
         return notFound();
     }
-    const name = wanted.path.slice(wanted.path.lastIndexOf('/') + 1);
+    const { name } = wanted;
     const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream';
     if (!isHeicName(name) || url.searchParams.get('format') === 'original') {
         return file(object.body, contentType, name);
@@ -128,7 +128,7 @@ export async function derivedViaCdn(request: Request, env: Env): Promise<Respons
 /** What the URL asks for and where its derivative and sources are, or null for a URL imageUrl would not write. */
 function derivation(request: Request, prefix: string): Derivation | null {
     const url = new URL(request.url);
-    const wanted = parseImageRequest(url.pathname.slice(prefix.length), url.searchParams);
+    const wanted = parseImageRequest(pathAfter(url, prefix), url.searchParams);
     return wanted === null
         ? null
         : derivationFor(wanted, url.searchParams.get('format'), request.headers.get('accept'));

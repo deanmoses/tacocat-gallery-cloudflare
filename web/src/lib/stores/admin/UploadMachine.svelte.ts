@@ -1,17 +1,12 @@
 import { toast } from '@zerodevx/svelte-toast';
 import { type MediaItemToUpload, UploadState } from '$lib/models/album';
 import { albumState, getUploadsForAlbum } from '../AlbumState.svelte';
-import {
-    deduplicateMediaPaths,
-    getParentFromPath,
-    hasValidMediaExtension,
-    isValidMediaPath,
-} from '$lib/utils/galleryPathUtils';
+import { deduplicateMediaPaths, hasValidMediaExtension } from '$lib/utils/galleryPathUtils';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
 import { fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
-import { type PresignedUpload, sanitizeMediaFilename } from 'tacocat-gallery-shared';
+import { type PresignedUpload, isMediaPath, parentPathOf, sanitizeMediaFilename } from 'tacocat-gallery-shared';
 import { getProcessingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 
@@ -110,7 +105,7 @@ class UploadMachine {
      */
     async #uploadMediaItem(path: string, file: File, replaces?: string): Promise<void> {
         try {
-            const albumPath = getParentFromPath(path);
+            const albumPath = parentPathOf(path);
             this.#uploadEnqueued(path, file);
             await this.#uploadSingleMediaItem(albumPath, {
                 file,
@@ -132,7 +127,7 @@ class UploadMachine {
             this.#uploadComplete(mediaItemToUpload.path);
             return;
         }
-        if (!isValidMediaPath(mediaItemToUpload.path)) {
+        if (!isMediaPath(mediaItemToUpload.path)) {
             this.#uploadSkipped(mediaItemToUpload.path, `Invalid media path: [${mediaItemToUpload.path}]`);
             this.#uploadComplete(mediaItemToUpload.path);
             return;
@@ -170,7 +165,7 @@ class UploadMachine {
                     this.#uploadSkipped(mediaItemToUpload.path, `Invalid file type: [${mediaItemToUpload.file.name}]`);
                     return false;
                 }
-                if (!isValidMediaPath(mediaItemToUpload.path)) {
+                if (!isMediaPath(mediaItemToUpload.path)) {
                     this.#uploadSkipped(mediaItemToUpload.path, `Invalid media path: [${mediaItemToUpload.path}]`);
                     return false;
                 }

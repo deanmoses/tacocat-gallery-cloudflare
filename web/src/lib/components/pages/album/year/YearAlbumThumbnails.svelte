@@ -6,8 +6,8 @@
 <script lang="ts">
     import Thumbnails from '$lib/components/site/Thumbnails.svelte';
     import AlbumThumbnail from '$lib/components/site/AlbumThumbnail.svelte';
-    import { shortDate } from '$lib/utils/date-utils';
-    import { albumPathToDate } from '$lib/utils/galleryPathUtils';
+    import { albumTitle } from '$lib/utils/date-utils';
+    import { albumDate } from 'tacocat-gallery-shared';
     import type { Album, Thumbable } from '$lib/models/GalleryItemInterfaces';
 
     interface Props {
@@ -28,11 +28,11 @@
         const months: AlbumsByMonth = [];
 
         for (const childAlbum of albums) {
-            const albumDate = albumPathToDate(childAlbum.path);
-            const month: number = albumDate.getMonth();
+            const date = albumDate(childAlbum.path);
+            const month: number = date.getMonth();
             let entry = months[month];
             if (entry === undefined) {
-                let monthName = albumDate.toLocaleString('default', { month: 'long' });
+                let monthName = date.toLocaleString('default', { month: 'long' });
                 // capitalize the first letter
                 monthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
                 entry = { monthName, albums: [] };
@@ -45,10 +45,6 @@
         return months.filter(Boolean).reverse();
     }
 
-    function getTitle(albumPath: string): string {
-        const albumDate = albumPathToDate(albumPath);
-        return shortDate(albumDate);
-    }
     import { albumActivity } from '$lib/stores/AlbumState.svelte';
 </script>
 
@@ -63,7 +59,7 @@
                     published={childAlbum.published}
                     summary={childAlbum.summary}
                     thumbnailUrlInfo={childAlbum.thumbnailUrlInfo}
-                    title={getTitle(childAlbum.path)}
+                    title={albumTitle(childAlbum.path, 'short')}
                 />
             {/each}
         </Thumbnails>

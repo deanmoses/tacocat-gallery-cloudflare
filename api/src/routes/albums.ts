@@ -6,7 +6,7 @@ import {
     albumThumbnailSchema,
     albumWriteSchema,
     isAlbumPath,
-    isDayName,
+    isDayAlbumPath,
     mediaKey,
     renameSchema,
 } from 'tacocat-gallery-shared';
@@ -148,7 +148,10 @@ export async function deleteAlbumRoute(request: Request, env: Env): Promise<Resp
         : notFound(`Album not found: [${path}]`);
 }
 
-/** `POST /api/album-rename/<path>` with `{ newName }` renames a day album within its year, and everything in it with it. */
+/**
+ * `POST /api/album-rename/<path>` with `{ newName }` renames a day album within its year, and everything in it with it.
+ * The new name is a day on that year's calendar.
+ */
 export async function renameAlbumRoute(request: Request, env: Env): Promise<Response> {
     const key = writableAlbum(request, '/api/album-rename/', 'rename');
     if (key instanceof Response) {
@@ -163,7 +166,7 @@ export async function renameAlbumRoute(request: Request, env: Env): Promise<Resp
         return body.response;
     }
     const { newName } = body.output;
-    if (!isDayName(newName)) {
+    if (!isDayAlbumPath(albumPath(key.parentPath, newName))) {
         return failure(400, `New name for album is invalid: [${newName}]`);
     }
     if (newName === key.itemName) {

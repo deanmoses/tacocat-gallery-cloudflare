@@ -3,13 +3,6 @@ import type { Album } from './GalleryItemInterfaces';
 /**
  * Types of albums
  */
-export const AlbumType = {
-    ROOT: 'ROOT',
-    YEAR: 'YEAR',
-    DAY: 'DAY',
-} as const;
-export type AlbumType = (typeof AlbumType)[keyof typeof AlbumType];
-
 /**
  * An entry in the album store
  */

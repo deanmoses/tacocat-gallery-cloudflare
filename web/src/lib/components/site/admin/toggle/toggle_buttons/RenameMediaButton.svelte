@@ -6,30 +6,32 @@
 <script lang="ts">
     import { page } from '$app/state';
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
+    import { isValidMediaNameWithoutExtensionStrict } from '$lib/utils/galleryPathUtils';
     import {
-        getNameFromPath,
-        getParentFromPath,
-        isValidMediaNameWithoutExtensionStrict,
-        isValidMediaPath,
-    } from '$lib/utils/galleryPathUtils';
-    import { sanitizeMediaBaseName } from 'tacocat-gallery-shared';
+        baseNameOf,
+        extensionOf,
+        isMediaPath,
+        mediaKey,
+        mediaPath as mediaPathOf,
+        parentPathOf,
+        sanitizeMediaBaseName,
+    } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
     import { mediaRenameMachine } from '$lib/stores/admin/MediaRenameMachine.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
 
     let mediaPath: string = $derived(page.url.pathname);
-    let show: boolean = $derived(isValidMediaPath(mediaPath)); // Show this button on media (images and videos)
+    let show: boolean = $derived(isMediaPath(mediaPath)); // Show this button on media (images and videos)
+    let mediaName: string = $derived(mediaKey(mediaPath)?.itemName ?? '');
     let dialog: { show: () => void } | undefined = $state();
 
     function originalMediaName(): string {
-        const mediaName = getNameFromPath(mediaPath);
-        return mediaName.split('.', 1)[0] ?? '';
+        return baseNameOf(mediaName);
     }
 
     function fileExtension(): string {
-        const mediaName = getNameFromPath(mediaPath);
-        return `.${mediaName.split('.', 2)[1] ?? ''}`;
+        return `.${extensionOf(mediaName)}`;
     }
 
     function onButtonClick(): void {
@@ -44,7 +46,7 @@
     async function validateMediaName(newMediaName: string): Promise<string | undefined> {
         if (!isValidMediaNameWithoutExtensionStrict(newMediaName)) return 'invalid filename';
         const newMediaPath = mediaNameWithoutExtensionToPath(newMediaName);
-        const albumPath = getParentFromPath(newMediaPath);
+        const albumPath = parentPathOf(newMediaPath);
         const album = albumState.albums.get(albumPath);
         if (!album?.album) return undefined; // album not loaded, cannot check for collision
         const media = album.album.getMedia(newMediaPath);
@@ -53,8 +55,7 @@
     }
 
     function mediaNameWithoutExtensionToPath(mediaNameWithoutExtension: string): string {
-        const newName = mediaNameWithoutExtension + fileExtension();
-        return getParentFromPath(mediaPath) + newName;
+        return mediaPathOf(parentPathOf(mediaPath), mediaNameWithoutExtension + fileExtension());
     }
 </script>
 

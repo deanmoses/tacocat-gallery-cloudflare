@@ -14,7 +14,7 @@ import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import type { RenameEntry, RenameStatus, UploadEntry } from '$lib/models/album';
 import type { AlbumGalleryItem, ImageRecord, MediaRecord, VideoRecord } from '$lib/models/impl/server';
-import { getParentFromPath } from '$lib/utils/galleryPathUtils';
+import { mediaPath as mediaPathIn, parentPathOf } from 'tacocat-gallery-shared';
 
 /** The album every fixture sits in, unless a spec is about paths themselves */
 const ROOT_ALBUM_PATH = '/';
@@ -66,7 +66,7 @@ export function uploadEntry(fields: Partial<UploadEntry> & Pick<UploadEntry, 'st
 
 /** A rename in flight, from a path to the same path under a new name */
 export function renameEntry(oldPath: string, newName: string, status: RenameStatus): RenameEntry {
-    return { oldPath, newPath: getParentFromPath(oldPath) + newName, status };
+    return { oldPath, newPath: mediaPathIn(parentPathOf(oldPath), newName), status };
 }
 
 /** Built through the app's own factory, so specs get the album a caller is handed */

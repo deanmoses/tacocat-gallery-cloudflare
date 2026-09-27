@@ -1,5 +1,6 @@
 // Gallery paths, as the URL scheme has had them since 2001: the root album is `/`, a year album `/2001/`, a day album
-// `/2001/06-15/` and a media item `/2001/06-15/felix.jpg`. Albums end in a slash and media do not.
+// `/2001/06-15/` and a media item `/2001/06-15/felix.jpg`. Albums end in a slash and media do not. `parsePath` is the
+// one reader of a path; everything else about a path is a question asked of what it answers, or a builder.
 
 /** The image formats an upload may have, as the AWS gallery accepted them. */
 export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'] as const;
@@ -108,25 +109,81 @@ export function isHeicName(name: string): boolean {
     return HEIC_NAME.test(name);
 }
 
+/** A path read: which of the four kinds it is and what the database keys it by. An album stands at a date. */
+export type ParsedPath =
+    | { kind: 'root' }
+    | { kind: 'year'; parentPath: '/'; name: string; date: Date }
+    | { kind: 'day'; parentPath: string; name: string; date: Date }
+    | { kind: 'media'; parentPath: string; name: string };
+
+/**
+ * Reads a gallery path, or answers null for anything that is not one: an album without its slash, a media item outside
+ * a day album, a day that is not on the calendar, as `02-30` and `02-29` outside a leap year are not.
+ */
+export function parsePath(path: string): ParsedPath | null {
+    if (path === '/') {
+        return { kind: 'root' };
+    }
+    if (!path.startsWith('/')) {
+        return null;
+    }
+    const [year, day, name, deeper] = path.slice(1).split('/', 4);
+    if (year === undefined || !isYearName(year)) {
+        return null;
+    }
+    if (day === '' && name === undefined) {
+        return { kind: 'year', parentPath: '/', name: year, date: localDate(Number(year), 1, 1) };
+    }
+    if (day === undefined || !isDayName(day)) {
+        return null;
+    }
+    const date = calendarDate(year, day);
+    if (date === null) {
+        return null;
+    }
+    const parentPath = albumPath('/', year);
+    if (name === '' && deeper === undefined) {
+        return { kind: 'day', parentPath, name: day, date };
+    }
+    return name === undefined || deeper !== undefined || !isMediaName(name)
+        ? null
+        : { kind: 'media', parentPath: albumPath(parentPath, day), name };
+}
+
+/** The date `day` names in `year`, or null when the calendar has no such day. */
+function calendarDate(year: string, day: string): Date | null {
+    const [month = 0, dayOfMonth = 0] = day.split('-').map(Number);
+    const date = localDate(Number(year), month, dayOfMonth);
+    return date.getFullYear() === Number(year) && date.getMonth() === month - 1 && date.getDate() === dayOfMonth
+        ? date
+        : null;
+}
+
+/** Local midnight on a date, with the year taken as given: the Date constructor would read `50` as 1950. */
+function localDate(year: number, month: number, dayOfMonth: number): Date {
+    const date = new Date(0);
+    date.setFullYear(year, month - 1, dayOfMonth);
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
 /** Whether `path` is the root, a year album or a day album. */
 export function isAlbumPath(path: string): boolean {
-    if (path === '/') {
-        return true;
-    }
-    if (!path.startsWith('/') || !path.endsWith('/')) {
-        return false;
-    }
-    const [year = '', day, deeper] = path.slice(1, -1).split('/', 3);
-    return deeper === undefined && isYearName(year) && (day === undefined || isDayName(day));
+    const kind = parsePath(path)?.kind;
+    return kind !== undefined && kind !== 'media';
+}
+
+export function isYearAlbumPath(path: string): boolean {
+    return parsePath(path)?.kind === 'year';
 }
 
 export function isDayAlbumPath(path: string): boolean {
-    return isAlbumPath(path) && (albumKey(path)?.parentPath ?? '/') !== '/';
+    return parsePath(path)?.kind === 'day';
 }
 
 /** Whether `path` is a media item in a day album: `/2001/06-15/felix.jpg`. */
 export function isMediaPath(path: string): boolean {
-    return mediaKey(path) !== null;
+    return parsePath(path)?.kind === 'media';
 }
 
 /** How the database identifies an item: the album it is in, and its name there. */
@@ -135,24 +192,36 @@ export interface ItemKey {
     itemName: string;
 }
 
-/** An album's key: `/2001/06-15/` is `06-15` in `/2001/`. The root has none. */
+/** An album's key: `/2001/06-15/` is `06-15` in `/2001/`. The root has none, and nothing but an album has one. */
 export function albumKey(path: string): ItemKey | null {
-    if (path === '/') {
-        return null;
-    }
-    const cut = path.lastIndexOf('/', path.length - 2);
-    return { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1, -1) };
+    const album = parsePath(path);
+    return album?.kind === 'year' || album?.kind === 'day'
+        ? { parentPath: album.parentPath, itemName: album.name }
+        : null;
 }
 
 /** A media item's key: `/2001/06-15/felix.jpg` is `felix.jpg` in `/2001/06-15/`. Anything but a media path has none. */
 export function mediaKey(path: string): ItemKey | null {
-    const cut = path.lastIndexOf('/');
-    const key = { parentPath: path.slice(0, cut + 1), itemName: path.slice(cut + 1) };
-    return isDayAlbumPath(key.parentPath) && isMediaName(key.itemName) ? key : null;
+    const media = parsePath(path);
+    return media?.kind === 'media' ? { parentPath: media.parentPath, itemName: media.name } : null;
 }
 
-export function parentAlbumPath(path: string): string | null {
-    return albumKey(path)?.parentPath ?? null;
+/** The album that holds `path`. Throws for the root, which nothing holds, and for anything that is not a path. */
+export function parentPathOf(path: string): string {
+    const parsed = parsePath(path);
+    if (parsed === null || parsed.kind === 'root') {
+        throw new Error(`Not a path with a parent: [${path}]`);
+    }
+    return parsed.parentPath;
+}
+
+/** The date a year or day album stands at, a year at its first day. Throws for anything else, the root included. */
+export function albumDate(path: string): Date {
+    const album = parsePath(path);
+    if (album?.kind !== 'year' && album?.kind !== 'day') {
+        throw new Error(`Not a year or day album: [${path}]`);
+    }
+    return album.date;
 }
 
 export function albumPath(parentPath: string, itemName: string): string {
@@ -161,6 +230,21 @@ export function albumPath(parentPath: string, itemName: string): string {
 
 export function mediaPath(parentPath: string, itemName: string): string {
     return `${parentPath}${itemName}`;
+}
+
+/**
+ * The gallery path a page's URL names. The app's URLs carry no trailing slash, so an album gets its slash back, and
+ * a URL three segments deep is a media item, since nothing in a name says which it is. A deeper URL is no gallery
+ * path and comes back as it is.
+ */
+export function pathOfUrl(pathname: string): string {
+    const depth = pathname.split('/').length - 1;
+    return depth >= 3 || pathname.endsWith('/') ? pathname : `${pathname}/`;
+}
+
+/** The URL of a gallery path in the app, which is the path without an album's trailing slash: the inverse of `pathOfUrl`. */
+export function hrefOf(path: string): string {
+    return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
 }
 
 // The same rules as SQL, for the database's check constraints, so that what the code refuses the database refuses too,
@@ -205,10 +289,4 @@ export function mediaNameSql(column: string): string {
 /** `column` is the path of a media item in a day album: `/2001/06-15/felix.jpg`, its name as `mediaNameSql` has it. */
 export function mediaPathSql(column: string): string {
     return `${column} IS NOT NULL AND substr(${column}, 1, ${DAY_ALBUM_PATH_LENGTH}) GLOB '${DAY_ALBUM_PATH_GLOB}' AND ${mediaNameSql(`substr(${column}, ${DAY_ALBUM_PATH_LENGTH + 1})`)}`;
-}
-
-/** The albums from the top down to `path` itself, the root left out: `/2001/06-15/` gives `/2001/` then itself. */
-export function albumsEnclosing(path: string): ItemKey[] {
-    const key = isAlbumPath(path) ? albumKey(path) : null;
-    return key === null ? [] : [...albumsEnclosing(key.parentPath), key];
 }

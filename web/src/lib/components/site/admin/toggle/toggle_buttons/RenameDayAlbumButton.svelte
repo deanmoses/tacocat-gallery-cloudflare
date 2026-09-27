@@ -7,22 +7,18 @@
     import { page } from '$app/state';
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
     import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
-    import {
-        getNameFromPath,
-        getParentFromPath,
-        isValidDayAlbumPath,
-        sanitizeDayAlbumName,
-    } from '$lib/utils/galleryPathUtils';
+    import { sanitizeAlbumName } from '$lib/utils/galleryPathUtils';
+    import { albumKey, albumPath, isDayAlbumPath, parentPathOf, pathOfUrl } from 'tacocat-gallery-shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
     import { albumRenameMachine } from '$lib/stores/admin/AlbumRenameMachine.svelte';
 
-    let albumPath: string = $derived(`${page.url.pathname}/`);
-    let show: boolean = $derived(isValidDayAlbumPath(albumPath)); // Show this button only on day albums
+    let dayPath: string = $derived(pathOfUrl(page.url.pathname));
+    let show: boolean = $derived(isDayAlbumPath(dayPath)); // Show this button only on day albums
     let dialog: { show: () => void } | undefined = $state();
 
     function originalName(): string {
-        return getNameFromPath(albumPath);
+        return albumKey(dayPath)?.itemName ?? '';
     }
 
     function onButtonClick(): void {
@@ -31,18 +27,18 @@
 
     function onNewAlbumName(newAlbumName: string): void {
         const newAlbumPath = albumNameToPath(newAlbumName);
-        albumRenameMachine.renameDayAlbum(albumPath, newAlbumPath);
+        albumRenameMachine.renameDayAlbum(dayPath, newAlbumPath);
     }
 
     async function validateDayAlbumName(albumName: string): Promise<string | undefined> {
         const newAlbumPath = albumNameToPath(albumName);
-        if (!isValidDayAlbumPath(newAlbumPath)) return 'invalid album name';
+        if (!isDayAlbumPath(newAlbumPath)) return 'invalid album name';
         if (await albumLoadMachine.albumExists(newAlbumPath)) return 'already exists';
         return undefined; // name is valid
     }
 
     function albumNameToPath(albumName: string): string {
-        return `${getParentFromPath(albumPath) + albumName}/`;
+        return albumPath(parentPathOf(dayPath), albumName);
     }
 </script>
 
@@ -53,7 +49,7 @@
         initialValue={originalName()}
         label="New Album Name"
         onNewValue={onNewAlbumName}
-        sanitizor={sanitizeDayAlbumName}
+        sanitizor={sanitizeAlbumName}
         validator={validateDayAlbumName}
     />
 {/if}

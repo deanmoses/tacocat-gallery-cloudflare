@@ -41,6 +41,15 @@ describe('derived images through the Cache API', () => {
             .map((metric) => metric.trim().split(';', 1)[0] ?? '');
     }
 
+    it('reads its path percent-decoded, as the raw and video routes read theirs', async () => {
+        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        const response = await call(path.replace('a.jpg', 'a%2Ejpg'));
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-derived')).toBe('stored');
+    });
+
     it('says how long the cache lookup and the R2 read took when the colo misses', async () => {
         await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
         const response = await call(path);

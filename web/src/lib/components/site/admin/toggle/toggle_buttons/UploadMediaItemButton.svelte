@@ -8,13 +8,14 @@
     import { page } from '$app/state';
     import UploadIcon from '$lib/components/site/icons/UploadIcon.svelte';
     import { uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
-    import { getParentFromPath, isValidMediaPath, validMediaExtensionsString } from '$lib/utils/galleryPathUtils';
+    import { validMediaExtensionsString } from '$lib/utils/galleryPathUtils';
+    import { isMediaPath, parentPathOf } from 'tacocat-gallery-shared';
     import { replacementPath } from '$lib/utils/uploadUtils';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let mediaPath = $derived(page.url.pathname);
-    let show = $derived(isValidMediaPath(page.url.pathname)); // Show this button only on media pages
-    let albumPath = $derived(getParentFromPath(mediaPath));
+    let show = $derived(isMediaPath(mediaPath)); // Show this button only on media pages
+    let albumPath = $derived(show ? parentPathOf(mediaPath) : '');
 
     let fileInput: HTMLInputElement | undefined = $state();
 

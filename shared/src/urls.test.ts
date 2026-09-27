@@ -79,6 +79,9 @@ describe(parseImageRequest, () => {
         { name: 'a negative crop', url: '/i/2001/06-15/felix.jpg/v1?crop=-1,2,3,4' },
         { name: 'no version', url: '/i/2001/06-15/felix.jpg/' },
         { name: 'no path', url: '/iv1' },
+        { name: 'a version with a plus', url: '/i/2001/06-15/felix.jpg/a+b' },
+        { name: 'an album', url: '/i/2001/06-15/v1' },
+        { name: 'a key in another part of the bucket', url: '/i/backups/d1/2001-06-15.json/v1' },
     ])('refuses $name', ({ url }) => {
         expect(parse(url)).toBeNull();
     });
@@ -112,6 +115,7 @@ describe(parseMediaVersion, () => {
         expect(url.startsWith(`${prefix}/`)).toBe(true);
         expect(parseMediaVersion(url.slice(prefix.length))).toStrictEqual({
             path: url.includes('felix') ? '/2001/06-15/felix.jpg' : '/2001/06-15/clip.mov',
+            name: url.includes('felix') ? 'felix.jpg' : 'clip.mov',
             versionId: 'v1',
         });
     });
@@ -119,6 +123,7 @@ describe(parseMediaVersion, () => {
     it('accepts the ids AWS assigned', () => {
         expect(parseMediaVersion('/2001/06-15/felix.jpg/Abc.123_xyz-9')).toStrictEqual({
             path: '/2001/06-15/felix.jpg',
+            name: 'felix.jpg',
             versionId: 'Abc.123_xyz-9',
         });
     });

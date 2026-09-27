@@ -53,6 +53,14 @@ describe('creating an album', () => {
         expect(other.published).toBe(false);
     });
 
+    it('is not found for a day the calendar does not have', async () => {
+        const response = await write('PUT', '/api/album/1990/02-30/', {});
+        await response.body?.cancel();
+
+        expect(response.status).toBe(404);
+        await expect(storedItem('/1990/', '02-30')).resolves.toBeUndefined();
+    });
+
     it('refuses an album that is there already, and leaves it as it was', async () => {
         await write('PUT', '/api/album/1990/06-15/', { summary: 'First' });
         const response = await write('PUT', '/api/album/1990/06-15/', { summary: 'Second' });
@@ -298,6 +306,12 @@ describe('renaming a day album', () => {
             path: '/1990/06-15/',
             newName: 'picnic',
             message: 'New name for album is invalid: [picnic]',
+        },
+        {
+            what: 'a day the calendar does not have',
+            path: '/1990/06-15/',
+            newName: '02-30',
+            message: 'New name for album is invalid: [02-30]',
         },
         {
             what: 'the same name',

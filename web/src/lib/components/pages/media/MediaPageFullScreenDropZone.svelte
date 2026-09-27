@@ -9,7 +9,7 @@
     import { getDroppedFiles } from '$lib/stores/admin/DragDropUtils';
     import { uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
     import { sessionStore } from '$lib/stores/SessionStore.svelte';
-    import { getParentFromPath } from '$lib/utils/galleryPathUtils';
+    import { parentPathOf } from 'tacocat-gallery-shared';
     import { replacementPath } from '$lib/utils/uploadUtils';
     import { toast } from '@zerodevx/svelte-toast';
 
@@ -35,7 +35,7 @@
         const path = replacementPath(mediaPath, file.name);
         uploadMachine.uploadMediaItem(path, file, mediaPath);
         // A file in another format renames the item, so this page's URL is about to go stale; the album shows the upload
-        if (path !== mediaPath) void goto(getParentFromPath(mediaPath));
+        if (path !== mediaPath) void goto(parentPathOf(mediaPath));
     }
 </script>
 

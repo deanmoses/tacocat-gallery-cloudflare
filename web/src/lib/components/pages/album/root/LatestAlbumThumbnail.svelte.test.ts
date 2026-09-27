@@ -5,8 +5,7 @@ import LatestAlbumThumbnail from './LatestAlbumThumbnail.svelte';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord } from '$lib/test-support/records';
 import { currentYearAlbumPath } from '$lib/utils/latestAlbum';
-import { longDate } from '$lib/utils/date-utils';
-import { albumPathToDate } from '$lib/utils/galleryPathUtils';
+import { albumTitle } from '$lib/utils/date-utils';
 import type { AlbumGalleryItem } from '$lib/models/impl/server';
 
 /**
@@ -20,7 +19,7 @@ const YEAR = YEAR_PATH.slice(1, -1);
 const older = `${YEAR_PATH}06-15/`;
 const newer = `${YEAR_PATH}12-31/`;
 // The browser's locale decides the text; which album it names is the assertion
-const title = (path: string): string => longDate(albumPathToDate(path));
+const title = albumTitle;
 
 function year(newerPublished: boolean): AlbumGalleryItem {
     return albumRecord({

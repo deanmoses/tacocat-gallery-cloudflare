@@ -11,7 +11,7 @@
     import StatusMessage from './buttons/StatusMessage.svelte';
     import { DraftStatus } from '$lib/models/draft';
     import { page } from '$app/state';
-    import { isValidMediaPath } from '$lib/utils/galleryPathUtils';
+    import { pathOfUrl } from 'tacocat-gallery-shared';
     import { draftMachine } from '$lib/stores/admin/DraftMachine.svelte';
     import { editModeMachine } from '$lib/stores/admin/EditModeMachine.svelte';
 
@@ -40,8 +40,7 @@
         // I guess the only reason to do it here is that when you're
         // NOT in edit mode, there's no need to listen to it.
         if (pathname === undefined) throw new Error(`path is undefined`);
-        const backEndPath = isValidMediaPath(pathname) ? pathname : `${pathname}/`;
-        draftMachine.init(backEndPath);
+        draftMachine.init(pathOfUrl(pathname));
     }
 
     function onCancelButtonClick(): void {

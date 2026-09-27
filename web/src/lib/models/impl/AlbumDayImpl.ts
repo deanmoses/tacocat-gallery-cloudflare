@@ -1,15 +1,13 @@
-import { longDate } from '$lib/utils/date-utils';
-import { albumPathToDate } from '$lib/utils/galleryPathUtils';
+import { albumTitle } from '$lib/utils/date-utils';
 import { AlbumBaseImpl } from './AlbumBaseImpl';
 import type { Album } from '../GalleryItemInterfaces';
 
 export class AlbumDayImpl extends AlbumBaseImpl implements Album {
     get title(): string {
-        return longDate(this.date);
+        return albumTitle(this.path);
     }
 
     get parentTitle(): string {
-        const parentDate = albumPathToDate(this.json.parentPath);
-        return parentDate.getFullYear().toString();
+        return albumTitle(this.json.parentPath);
     }
 }

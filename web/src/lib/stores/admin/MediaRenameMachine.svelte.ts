@@ -1,7 +1,7 @@
 import { RenameStatus } from '$lib/models/album';
 import { renameMediaUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { getNameFromPath, getParentFromPath, isValidMediaPath } from '$lib/utils/galleryPathUtils';
+import { isMediaPath, parsePath } from 'tacocat-gallery-shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';
@@ -68,12 +68,13 @@ class MediaRenameMachine {
 
     async #renameMediaItem(oldMediaPath: string, newMediaPath: string): Promise<void> {
         try {
-            if (!isValidMediaPath(oldMediaPath)) throw new Error(`Invalid media path [${oldMediaPath}]`);
-            if (!isValidMediaPath(newMediaPath)) throw new Error(`Invalid media path [${newMediaPath}]`);
-            const albumPath = getParentFromPath(newMediaPath);
+            if (!isMediaPath(oldMediaPath)) throw new Error(`Invalid media path [${oldMediaPath}]`);
+            const target = parsePath(newMediaPath);
+            if (target?.kind !== 'media') throw new Error(`Invalid media path [${newMediaPath}]`);
+            const albumPath = target.parentPath;
             const album = albumState.albums.get(albumPath)?.album;
             if (!album) throw new Error(`Album [${albumPath}] not loaded`);
-            const newName = getNameFromPath(newMediaPath);
+            const newName = target.name;
             console.log(`Renaming [${oldMediaPath}] to [${newName}]...`);
             this.#renameStarted(oldMediaPath, newMediaPath);
             const response = await adminApi.post(renameMediaUrl(oldMediaPath), { newName });

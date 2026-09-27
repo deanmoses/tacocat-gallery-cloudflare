@@ -1,7 +1,7 @@
 import { DeleteStatus } from '$lib/models/album';
-import { deleteUrl } from '$lib/utils/config';
+import { itemUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { getParentFromPath, isValidAlbumPath } from '$lib/utils/galleryPathUtils';
+import { isAlbumPath, parentPathOf } from 'tacocat-gallery-shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';
@@ -60,14 +60,14 @@ class AlbumDeleteMachine {
 
     async #deleteAlbum(albumPath: string): Promise<void> {
         try {
-            if (!isValidAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
+            if (!isAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
             this.#deleteStarted(albumPath);
-            const response = await adminApi.delete(deleteUrl(albumPath));
+            const response = await adminApi.delete(itemUrl(albumPath));
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
             await albumLoadMachine.removeFromMemoryAndDisk(albumPath);
-            await albumLoadMachine.fetchFromServer(getParentFromPath(albumPath)); // reload parent album
+            await albumLoadMachine.fetchFromServer(parentPathOf(albumPath)); // reload parent album
             this.#success(albumPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

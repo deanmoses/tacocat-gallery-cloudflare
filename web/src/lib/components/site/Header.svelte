@@ -42,7 +42,7 @@
             <span class="hidden-xs">{siteTitle()}</span>
         {/if}
         {#if !hideSearch}
-            <a class="hidden-xxs" href="/search?returnPath={page.url.pathname}" title="Search">
+            <a class="hidden-xxs" href="/search?returnPath={encodeURIComponent(page.url.pathname)}" title="Search">
                 <SearchIcon />
             </a>
         {/if}

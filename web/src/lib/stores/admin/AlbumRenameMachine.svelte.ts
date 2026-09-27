@@ -1,7 +1,7 @@
 import { RenameStatus } from '$lib/models/album';
 import { renameAlbumUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { getNameFromPath, getParentFromPath, isValidDayAlbumPath } from '$lib/utils/galleryPathUtils';
+import { isDayAlbumPath, parentPathOf, parsePath } from 'tacocat-gallery-shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';
@@ -68,11 +68,12 @@ class AlbumRenameMachine {
 
     async #renameDayAlbum(oldAlbumPath: string, newAlbumPath: string): Promise<void> {
         try {
-            if (!isValidDayAlbumPath(oldAlbumPath)) throw new Error(`Invalid old album path [${oldAlbumPath}]`);
-            if (!isValidDayAlbumPath(newAlbumPath)) throw new Error(`Invalid new album path [${newAlbumPath}]`);
+            if (!isDayAlbumPath(oldAlbumPath)) throw new Error(`Invalid old album path [${oldAlbumPath}]`);
+            const target = parsePath(newAlbumPath);
+            if (target?.kind !== 'day') throw new Error(`Invalid new album path [${newAlbumPath}]`);
             const album = albumState.albums.get(oldAlbumPath)?.album;
             if (!album) throw new Error(`Album [${oldAlbumPath}] not loaded`);
-            const newName = getNameFromPath(newAlbumPath);
+            const newName = target.name;
             console.log(`Renaming album [${oldAlbumPath}] to [${newName}]...`);
             this.#renameStarted(oldAlbumPath, newAlbumPath);
             const response = await adminApi.post(renameAlbumUrl(oldAlbumPath), { newName });
@@ -81,7 +82,7 @@ class AlbumRenameMachine {
             }
             // The page at the old path moves to the new one on seeing this, while the parent is re-read
             this.#renamed(oldAlbumPath);
-            await albumLoadMachine.fetchFromServer(getParentFromPath(oldAlbumPath));
+            await albumLoadMachine.fetchFromServer(parentPathOf(oldAlbumPath));
             void albumLoadMachine.removeFromMemoryAndDisk(oldAlbumPath);
             this.#success(oldAlbumPath);
         } catch (error) {

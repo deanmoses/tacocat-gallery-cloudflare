@@ -1,3 +1,5 @@
+import { isMediaName } from 'tacocat-gallery-shared';
+
 export function match(param: string): boolean {
-    return /^[^.]+\.[^.]+$/u.test(param);
+    return isMediaName(param);
 }

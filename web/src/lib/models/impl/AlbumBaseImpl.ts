@@ -1,4 +1,4 @@
-import { albumPathToDate } from '$lib/utils/galleryPathUtils';
+import { hrefOf } from 'tacocat-gallery-shared';
 import type { AlbumGalleryItem, GalleryRecord } from './server';
 import { isAlbumRecord, isMediaRecord } from './server';
 import type { Album, Media, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
@@ -31,16 +31,8 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
         this.json.summary = summary;
     }
 
-    protected get date(): Date {
-        return albumPathToDate(this.path);
-    }
-
     get href(): string {
-        return this.path.slice(0, -1); // slice off trailing slash
-    }
-
-    override get parentHref(): string {
-        return this.json.parentPath.slice(0, -1); // slice off trailing slash
+        return hrefOf(this.path);
     }
 
     get thumbnailPath(): string | undefined {

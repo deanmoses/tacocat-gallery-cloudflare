@@ -1,7 +1,7 @@
 import { DeleteStatus } from '$lib/models/album';
-import { deleteUrl } from '$lib/utils/config';
+import { itemUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { getParentFromPath, isValidMediaPath } from '$lib/utils/galleryPathUtils';
+import { isMediaPath, parentPathOf } from 'tacocat-gallery-shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumState } from '../AlbumState.svelte';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -58,15 +58,15 @@ class MediaDeleteMachine {
 
     async #deleteMediaItem(mediaPath: string): Promise<void> {
         try {
-            if (!isValidMediaPath(mediaPath)) throw new Error(`Invalid media path [${mediaPath}]`);
+            if (!isMediaPath(mediaPath)) throw new Error(`Invalid media path [${mediaPath}]`);
             this.#deleteStarted(mediaPath);
-            const response = await adminApi.delete(deleteUrl(mediaPath));
+            const response = await adminApi.delete(itemUrl(mediaPath));
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }
             console.log(`Media [${mediaPath}] deleted`);
             // reload the album
-            await albumLoadMachine.fetchFromServer(getParentFromPath(mediaPath));
+            await albumLoadMachine.fetchFromServer(parentPathOf(mediaPath));
             this.#success(mediaPath);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
