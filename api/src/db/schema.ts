@@ -309,54 +309,5 @@ export const spentChallenge = sqliteTable(
     ],
 );
 
-/**
- * Timed requests from the scheduled idle-latency probes: Globalping probes in readers' regions fetching the site after
- * it has been left alone, to measure what a reader's first request costs. Performance research, not site data.
- */
-export const probeResult = sqliteTable(
-    'probe_result',
-    {
-        id: integer('id').primaryKey(),
-        runAt: text('run_at').notNull(),
-        /** Hours since the previous run, which is how long the Worker and D1 had been idle; null on the first run. */
-        idleHours: real('idle_hours'),
-        location: text('location').notNull(),
-        /** Position in the location's sequence of requests; 0 is the one that finds everything idle. */
-        seq: integer('seq').notNull(),
-        path: text('path').notNull(),
-        probeCity: text('probe_city'),
-        probeNetwork: text('probe_network'),
-        // The HTTP status and timings as Globalping measured them from the probe.
-        status: integer('status'),
-        totalMs: integer('total_ms'),
-        dnsMs: integer('dns_ms'),
-        tcpMs: integer('tcp_ms'),
-        tlsMs: integer('tls_ms'),
-        firstByteMs: integer('first_byte_ms'),
-        // What the Worker reported about itself in its response headers: where it and D1 ran, and for how long.
-        workerColo: text('worker_colo'),
-        workerMs: real('worker_ms'),
-        d1Region: text('d1_region'),
-        d1Colo: text('d1_colo'),
-        d1Primary: text('d1_primary'),
-        d1RttMs: real('d1_rtt_ms'),
-        measurementId: text('measurement_id'),
-        error: text('error'),
-        ...timestamps,
-    },
-    (table) => [
-        index('probe_result_run_at').on(table.runAt),
-        check('probe_result_seq_check', sql.raw(`seq >= 0`)),
-        check('probe_result_status_check', sql.raw(`status IS NULL OR status BETWEEN 100 AND 599`)),
-        check(
-            'probe_result_timings_check',
-            sql.raw(
-                `(total_ms IS NULL OR total_ms >= 0) AND (dns_ms IS NULL OR dns_ms >= 0) AND (tcp_ms IS NULL OR tcp_ms >= 0) AND (tls_ms IS NULL OR tls_ms >= 0) AND (first_byte_ms IS NULL OR first_byte_ms >= 0) AND (worker_ms IS NULL OR worker_ms >= 0) AND (d1_rtt_ms IS NULL OR d1_rtt_ms >= 0)`,
-            ),
-        ),
-        ...timestampChecks('probe_result'),
-    ],
-);
-
 export type Item = typeof item.$inferSelect;
 export type NewItem = typeof item.$inferInsert;

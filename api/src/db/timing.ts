@@ -1,6 +1,6 @@
 /**
- * Where a D1 query ran and how long it took, as a header Globalping can record without reading the body. A missing
- * value prints as `undefined`, as it always has, so rows already in probe_result stay comparable.
+ * Where a D1 query ran and how long it took, as a header a probe can record without reading the body. A missing value
+ * prints as `undefined`.
  */
 export function d1Header(meta: D1Meta, roundTripMs: number, rowsRead: number = meta.rows_read): string {
     return [

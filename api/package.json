@@ -18,8 +18,7 @@
         "deploy": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler deploy",
         "deploy:production": "env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler deploy --env production",
         "logs": "wrangler tail",
-        "logs:production": "wrangler tail --env production",
-        "probes": "wrangler d1 execute DB --remote --env production --command \"SELECT run_at, idle_hours, location, seq, path, probe_city, status, total_ms, tls_ms, first_byte_ms, worker_colo, worker_ms, d1_colo, d1_primary, d1_rtt_ms, error FROM probe_result ORDER BY run_at, location, seq\""
+        "logs:production": "wrangler tail --env production"
     },
     "dependencies": {
         "@cloudflare/containers": "^0.3.7",

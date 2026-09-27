@@ -1,6 +1,6 @@
 # Risks
 
-Risks that could stop pix.tacocat.com moving from AWS to Cloudflare, and what's been done to mitigate. Timings are [Globalping](https://globalping.io) probes from Paris, Marseille, Baton Rouge and Los Angeles, and `api/scripts/probe.sh` from Berkeley, with the D1 primary in SJC and read replication on. "Worker" is time spent inside the Worker; TTFB adds the visitor's connection. How performance is judged against the AWS site, and every measurement behind it, is in `docs/Perf.md`.
+Risks that could stop pix.tacocat.com moving from AWS to Cloudflare, and what's been done to mitigate. Timings are [Globalping](https://globalping.io) probes from Paris, Marseille, Baton Rouge and Los Angeles, and `curl` from Berkeley, with the D1 primary in SJC and read replication on. "Worker" is time spent inside the Worker; TTFB adds the visitor's connection. How performance is judged against the AWS site, and every measurement behind it, is in `docs/Perf.md`.
 
 Status: ✅ solved, ⚠️ solved with a catch, ❌ fails today, ⏳ open or untested.
 

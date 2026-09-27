@@ -37,13 +37,7 @@
     "workers_dev": true,
     "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
     "secrets": {
-        "required": [
-            "R2_ACCESS_KEY_ID",
-            "R2_SECRET_ACCESS_KEY",
-            "GLOBALPING_TOKEN",
-            "SESSION_SECRET",
-            "DEBUGBEAR_API_KEY",
-        ],
+        "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET", "DEBUGBEAR_API_KEY"],
     },
     "routes": [{ "pattern": "staging-pix.deanmoses.com", "custom_domain": true }],
     "vars": {
@@ -54,8 +48,6 @@
         // The buckets by their S3 names: uploads are presigned into the first, and the transcoder writes into the second.
         "MEDIA_BUCKET": "tacocat-staging-media",
         "DERIVED_BUCKET": "tacocat-staging-derived",
-        // What the idle-latency probes measure.
-        "PROBE_TARGET": "tacocat-gallery-cloudflare-staging.tacocat-gallery-cloudflare.workers.dev",
         // Where the browser puts an upload: "signed" is a presigned URL into the media bucket, whose event R2 sends to
         // the queue. A local Worker can consume no real queue, so `wrangler dev` sets this to "local" in .dev.vars
         // and the Worker takes the PUT itself, into its local bucket, and raises the event.
@@ -120,16 +112,10 @@
     "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
     "env": {
         "production": {
-            // The Worker's original name, so its custom domain, secrets, container and probe history stay where they are.
+            // The Worker's original name, so its custom domain, secrets and container stay where they are.
             "name": "tacocat-gallery-cloudflare",
             "secrets": {
-                "required": [
-                    "R2_ACCESS_KEY_ID",
-                    "R2_SECRET_ACCESS_KEY",
-                    "GLOBALPING_TOKEN",
-                    "SESSION_SECRET",
-                    "DEBUGBEAR_API_KEY",
-                ],
+                "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET", "DEBUGBEAR_API_KEY"],
             },
             "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
             "vars": {
@@ -137,7 +123,6 @@
                 "DERIVED_ORIGIN": "https://img.deanmoses.com",
                 "MEDIA_BUCKET": "tacocat-proto-media",
                 "DERIVED_BUCKET": "tacocat-proto-derived",
-                "PROBE_TARGET": "tacocat-gallery-cloudflare.tacocat-gallery-cloudflare.workers.dev",
                 "UPLOADS": "signed",
             },
             "d1_databases": [
@@ -174,8 +159,6 @@
                     // round, then a warm one fifteen minutes later. src/index.ts picks each job by its exact string.
                     "23 5,11,19,22 * * *",
                     "38 5,11,19,22 * * *",
-                    // The idle-latency probes (src/ops/probes.ts) ran at "23 0,1,3,7,15 * * *" and are paused with their
-                    // question answered; putting that line back here resumes them.
                 ],
             },
             "workflows": [

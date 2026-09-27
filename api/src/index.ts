@@ -5,7 +5,6 @@ import { startUploadPipeline } from './gallery/pipeline';
 import type { R2EventMessage } from './gallery/upload';
 import { backupDatabase } from './ops/backup';
 import { startBrowserRuns } from './ops/browser-runs';
-import { probeIdleLatency } from './ops/probes';
 import { createApp } from './routes/app';
 
 export { UploadPipeline } from './gallery/pipeline';
@@ -16,7 +15,6 @@ const app = createApp();
 const BACKUP_CRON = '17 9 * * *';
 const BROWSER_COLD_CRON = '23 5,11,19,22 * * *';
 const BROWSER_WARM_CRON = '38 5,11,19,22 * * *';
-const PROBE_CRON = '23 0,1,3,7,15 * * *';
 
 export default {
     fetch: app.fetch,
@@ -42,10 +40,6 @@ export default {
             }
             case BROWSER_WARM_CRON: {
                 await startBrowserRuns(env, 'warm');
-                break;
-            }
-            case PROBE_CRON: {
-                await probeIdleLatency(env);
                 break;
             }
             default: {
