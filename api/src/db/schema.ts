@@ -31,8 +31,9 @@ function sqlList(values: readonly string[]): string {
 /** SQLite's clock in the format `created_at` and `updated_at` hold: `2001-06-15T12:34:56.789Z`. */
 export const NOW = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
-// The path and name rules are the SQL forms of the ones in shared/, so the constraints and the code agree by
-// construction. A check whose expression comes out NULL passes, so every rule below says what it needs to be non-null.
+// The path and name rules are the SQL forms of the ones in shared/, written by hand beside them, and a test holds each
+// pair to the same answers. A check whose expression comes out NULL passes, so every rule below says what it needs to
+// be non-null.
 
 /**
  * `column` is a timestamp in the one format the defaults write, or, when `nullable`, null. SQLite reads the text as a
