@@ -5,8 +5,9 @@
 //
 // Usage: node api/scripts/debugbear.ts run                         a cold run of every page, then a warm one
 //        node api/scripts/debugbear.ts report [--from YYYY-MM-DD]  every run since that day, and their medians
-//        node api/scripts/debugbear.ts requests <analysis id>      when one run's page, first script and album
-//                                                                  requests started and ended; `report` prints the id
+//        node api/scripts/debugbear.ts requests <analysis id>      when one run's page, first script, album and first
+//                                                                  thumbnail requests started and ended; `report`
+//                                                                  prints the id
 //        node api/scripts/debugbear.ts pages                       every page: id, location, URL, tags and settings
 //        node api/scripts/debugbear.ts repoint /2026/09-13/        point every page at that album on its own site
 //        node api/scripts/debugbear.ts add-warm-pages              a `warm-browser` twin of every page that has none,
@@ -171,19 +172,22 @@ async function report(from: Date): Promise<void> {
 }
 
 /**
- * The page, its first script and every album request of one run, with when each started and ended in ms from the
- * page's start, so a waterfall can be read without the dashboard: whether the album JSON started with the page's
- * headers or after the app ran, and whether it was asked for once or twice.
+ * The page, its first script, every album request and the first thumbnail of one run, with when each started and
+ * ended in ms from the page's start, so a waterfall can be read without the dashboard: whether the album JSON started
+ * with the page's headers or after the app ran, whether it was asked for once or twice, and how long after it arrived
+ * the browser sent the first thumbnail's request. Both sites serve their images under `/i/`, AWS on its image host.
  */
 async function albumRequests(analysisId: string): Promise<void> {
     const requests = valibot.parse(REQUESTS, await debugbear(`/analysis/${analysisId}/requests`));
+    const byStart = requests.toSorted((one, other) => one.startTime - other.startTime);
     const document = requests.find((request) => request.resourceType === 'document');
-    const [firstScript] = requests
-        .filter((request) => request.resourceType === 'script')
-        .toSorted((one, other) => one.startTime - other.startTime);
+    const firstScript = byStart.find((request) => request.resourceType === 'script');
     const albums = requests.filter((request) => request.url.includes('/api/album/'));
+    const firstThumbnail = byStart.find(
+        (request) => request.resourceType === 'image' && new URL(request.url).pathname.startsWith('/i/'),
+    );
     console.info('  start     end  status  early hint  URL');
-    for (const request of [document, firstScript, ...albums].flatMap((found) => found ?? [])) {
+    for (const request of [document, firstScript, ...albums, firstThumbnail].flatMap((found) => found ?? [])) {
         console.info(
             [
                 ms(request.startTime, 7),
