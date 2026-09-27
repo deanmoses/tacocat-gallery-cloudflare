@@ -89,7 +89,6 @@ const AWS_ITEM = valibot.looseObject({
     dimensions: valibot.optional(valibot.looseObject({ width: valibot.unknown(), height: valibot.unknown() })),
     duration: valibot.optional(valibot.unknown()),
     thumbnail: valibot.optional(valibot.unknown()),
-    updatedOn: valibot.optional(valibot.string()),
 });
 type AwsItem = valibot.InferOutput<typeof AWS_ITEM>;
 
@@ -109,7 +108,7 @@ for (const [parentPath, media] of Map.groupBy(
     (row) => row.parentPath ?? '',
 )) {
     for (const renamed of renamedMedia(
-        media.map((row) => ({ itemName: row.itemName ?? '', updatedOn: row.updatedOn })),
+        media.map((row) => ({ itemName: row.itemName ?? '', mediaType: row.mediaType })),
     )) {
         renames.set(mediaPath(parentPath, renamed.from), renamed);
     }

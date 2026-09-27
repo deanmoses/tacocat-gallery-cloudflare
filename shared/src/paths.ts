@@ -1,5 +1,5 @@
 // Gallery paths, as the URL scheme has had them since 2001: the root album is `/`, a year album `/2001/`, a day album
-// `/2001/06-15/` and a media item `/2001/06-15/felix.jpg`. Albums end in a slash and media do not. `parsePath` is the
+// `/2001/06-15/` and a media item `/2001/06-15/felix`. Albums end in a slash and media do not. `parsePath` is the
 // one reader of a path; everything else about a path is a question asked of what it answers, or a builder.
 
 /** The image formats an upload may have, as the AWS gallery accepted them. */
@@ -162,7 +162,7 @@ export function isDayAlbumPath(path: string): boolean {
     return parsePath(path)?.kind === 'day';
 }
 
-/** Whether `path` is a media item in a day album: `/2001/06-15/felix.jpg`. */
+/** Whether `path` is a media item in a day album: `/2001/06-15/felix`. */
 export function isMediaPath(path: string): boolean {
     return parsePath(path)?.kind === 'media';
 }

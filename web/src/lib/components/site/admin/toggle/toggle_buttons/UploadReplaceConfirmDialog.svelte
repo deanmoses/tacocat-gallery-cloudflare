@@ -48,7 +48,7 @@
     {#snippet content()}
         Already in album:
         <ul>
-            {#each filesAlreadyInAlbum as file (file)}
+            {#each filesAlreadyInAlbum as file, index (index)}
                 <li>{file}</li>
             {/each}
         </ul>

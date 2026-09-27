@@ -10,9 +10,27 @@ function head(dataUrl: string): Uint8Array {
     return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1)).subarray(0, SNIFF_LENGTH);
 }
 
-/** An ISO base media file's first box: its length, `ftyp`, and the brand. */
-function ftyp(brand: string): Uint8Array {
-    return Uint8Array.from([0, 0, 0, 0x14, ...Array.from('ftyp', ascii), ...Array.from(brand, ascii), 0, 0, 0, 0]);
+/** An ISO base media file's first box: its length, `ftyp`, the major brand, a version, and the compatible brands. */
+function ftyp(brand: string, compatible: string[] = []): Uint8Array {
+    const brands = [brand, ...compatible].flatMap((each) => Array.from(each, ascii));
+    return Uint8Array.from([
+        0,
+        0,
+        0,
+        12 + brands.length,
+        ...Array.from('ftyp', ascii),
+        ...brands.slice(0, 4),
+        0,
+        0,
+        0,
+        0,
+        ...brands.slice(4),
+    ]);
+}
+
+/** A QuickTime movie from before `ftyp`: its first atom is whatever the camera wrote first. */
+function atom(kind: string): Uint8Array {
+    return Uint8Array.from([0, 0, 0x10, 0, ...Array.from(kind, ascii), 0, 0, 0, 0, 0, 0, 0, 0]);
 }
 
 /** An EBML header naming its document type, as WebM and Matroska files start. */
@@ -63,6 +81,22 @@ describe(sniffMedia, () => {
             sniffed: { mediaType: 'video', contentType: 'video/quicktime', extension: 'mov' },
         },
         {
+            name: 'an older QuickTime movie with no ftyp, starting at its movie atom',
+            bytes: atom('moov'),
+            sniffed: { mediaType: 'video', contentType: 'video/quicktime', extension: 'mov' },
+        },
+        {
+            name: 'an older QuickTime movie starting at its data atom',
+            bytes: atom('mdat'),
+            sniffed: { mediaType: 'video', contentType: 'video/quicktime', extension: 'mov' },
+        },
+        // A camera's own major brand, with the standard one among the compatible brands
+        {
+            name: "a Sony camera's MP4",
+            bytes: ftyp('XAVC', ['XAVC', 'mp42', 'iso2']),
+            sniffed: { mediaType: 'video', contentType: 'video/mp4', extension: 'mp4' },
+        },
+        {
             name: 'an M4V',
             bytes: ftyp('M4V '),
             sniffed: { mediaType: 'video', contentType: 'video/x-m4v', extension: 'm4v' },
@@ -107,9 +141,12 @@ describe(sniffMedia, () => {
         { name: 'nothing', bytes: new Uint8Array(0) },
         { name: 'zeros', bytes: new Uint8Array(16) },
         { name: 'text', bytes: Uint8Array.from(Array.from('hello there', ascii)) },
-        // An ISO base media file of a brand the gallery does not take: an AVIF image, or an audio file.
-        { name: 'an AVIF', bytes: ftyp('avif') },
-        { name: 'an M4A', bytes: ftyp('M4A ') },
+        // An ISO base media file of a brand the gallery does not take: an AVIF image, or an audio file, however
+        // compatible either says it is.
+        { name: 'an AVIF', bytes: ftyp('avif', ['mif1']) },
+        { name: 'an M4A', bytes: ftyp('M4A ', ['isom']) },
+        { name: 'an ISO base media file of brands the sniffer does not know', bytes: ftyp('abcd', ['efgh']) },
+        { name: 'an atom that starts no QuickTime movie', bytes: atom('junk') },
         { name: 'an EBML file that is neither WebM nor Matroska', bytes: ebml('other') },
         {
             name: 'a RIFF that is no AVI',

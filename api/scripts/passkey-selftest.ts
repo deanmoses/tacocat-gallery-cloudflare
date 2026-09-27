@@ -88,7 +88,7 @@ check('login', login.status === 200 && login.body.admin === admin, login);
 const status = await call('/api/auth/status', undefined, 'GET');
 check('status reports admin', status.body.admin === admin && status.authStatus === 'admin', status);
 // A delete of nothing writes nothing, and answers 404 only to an admin.
-const write = await call('/api/media/1826/01-01/nothing.jpg', undefined, 'DELETE');
+const write = await call('/api/media/1826/01-01/nothing', undefined, 'DELETE');
 check('write allowed as admin', write.status === 404, write);
 
 // Login needs the challenge cookie from its own options call, which login clears.

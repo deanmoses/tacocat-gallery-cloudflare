@@ -9,19 +9,27 @@ describe(renamedMedia, () => {
         ]);
     });
 
-    // A Live Photo's still and clip, or two spellings of one name
-    it('gives the earliest written of two that come out the same the name, and the later one _2', () => {
+    // A Live Photo's still and clip, and two spellings of one name: photos first, then the AWS names' own order
+    it('gives the photo the name and the video _2, and orders the rest by their AWS names', () => {
         expect(
             renamedMedia([
-                { itemName: 'img_1234.mov', updatedOn: '2024-06-15T12:00:01Z' },
-                { itemName: 'img_1234.jpg', updatedOn: '2024-06-15T12:00:00Z' },
+                { itemName: 'img_1234.mov', mediaType: 'video' },
+                { itemName: 'img_1234.jpg' },
                 { itemName: 'IMG_1234.JPG' },
             ]),
         ).toStrictEqual([
-            { from: 'img_1234.mov', to: 'img_1234_2', collided: true },
-            { from: 'img_1234.jpg', to: 'img_1234', collided: false },
-            { from: 'IMG_1234.JPG', to: 'img_1234_3', collided: true },
+            { from: 'img_1234.mov', to: 'img_1234_3', collided: true },
+            { from: 'img_1234.jpg', to: 'img_1234_2', collided: true },
+            { from: 'IMG_1234.JPG', to: 'img_1234', collided: false },
         ]);
+    });
+
+    it('answers the same whatever order it is given, so a later run maps as the first did', () => {
+        const items = [{ itemName: 'b.jpg' }, { itemName: 'a.mov', mediaType: 'video' }, { itemName: 'a.jpg' }];
+        const byName = (renamed: { from: string }[]): { from: string }[] =>
+            renamed.toSorted((first, second) => first.from.localeCompare(second.from));
+
+        expect(byName(renamedMedia(items))).toStrictEqual(byName(renamedMedia(items.toReversed())));
     });
 
     it('steps past a name another item already has', () => {
@@ -65,6 +73,16 @@ describe(rewriteLinks, () => {
         expect(rewriteLinks(html, resolve)).toStrictEqual({
             html: '<ul><li><a href="/2023/01-15">El Salvador</a></li><li><a href="/2016/12-18/dept_state1b">DC</a></li><li><a href="https://example.com/x.jpg">Elsewhere</a></li></ul>',
             links: [{ from: '/2016/12-18/dept_state1b.jpg', to: '/2016/12-18/dept_state1b' }],
+        });
+    });
+
+    it('decodes a link before resolving it, since the browser encoded the space in the name', () => {
+        const spaced = (path: string): string | null =>
+            path === '/2001/06-15/My Photo.JPG' ? '/2001/06-15/my_photo' : null;
+
+        expect(rewriteLinks('<a href="/2001/06-15/My%20Photo.JPG">x</a>', spaced)).toStrictEqual({
+            html: '<a href="/2001/06-15/my_photo">x</a>',
+            links: [{ from: '/2001/06-15/My%20Photo.JPG', to: '/2001/06-15/my_photo' }],
         });
     });
 

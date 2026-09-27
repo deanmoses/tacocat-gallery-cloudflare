@@ -40,12 +40,30 @@ export function extensionForType(contentType: string): string {
 }
 
 // The brands an ISO base media file declares in its `ftyp` box, which is the one place a HEIC and an MP4 differ in
-// their first bytes. A brand not listed is refused rather than guessed at: an AVIF or an audio file has the same box.
+// their first bytes: the major brand first, then the compatible ones, which is where a camera's own major brand,
+// Sony's XAVC for one, says it is also an MP4. A file whose brands are all unknown is refused rather than guessed at,
+// and one whose major brand is an AVIF or an audio file is refused however compatible it says it is.
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx']);
 const HEIF_BRANDS = new Set(['mif1', 'msf1']);
-const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'mp71', 'avc1', 'dash', 'mmp4']);
+const MP4_BRANDS = new Set([
+    'isom',
+    'iso2',
+    'iso3',
+    'iso4',
+    'iso5',
+    'iso6',
+    'mp41',
+    'mp42',
+    'mp71',
+    'avc1',
+    'dash',
+    'mmp4',
+]);
 const M4V_BRANDS = new Set(['M4V ', 'M4VH', 'M4VP']);
 const QUICKTIME_BRAND = 'qt  ';
+const REFUSED_BRANDS = new Set(['avif', 'avis', 'M4A ', 'M4B ', 'M4P ', 'F4A ', 'F4B ']);
+// The atoms a QuickTime movie from before `ftyp` starts with, as older cameras and phones wrote them.
+const QUICKTIME_ATOMS = new Set(['moov', 'mdat', 'wide', 'free', 'skip', 'pnot']);
 
 /** What `bytes`, the start of a file, say the file is, or null for a file in no format the gallery takes. */
 export function sniffMedia(bytes: Uint8Array): SniffedMedia | null {
@@ -67,11 +85,33 @@ export function sniffMedia(bytes: Uint8Array): SniffedMedia | null {
     if (startsWith(bytes, [0x00, 0x00, 0x01, 0xba]) || startsWith(bytes, [0x00, 0x00, 0x01, 0xb3])) {
         return video('video/mpeg', 'mpg');
     }
-    return startsWith(bytes.subarray(4), ascii('ftyp')) ? isoBaseMedia(text(bytes.subarray(8, 12))) : null;
+    if (startsWith(bytes.subarray(4), ascii('ftyp'))) {
+        return isoBaseMedia(bytes);
+    }
+    return QUICKTIME_ATOMS.has(text(bytes.subarray(4, 8))) ? video('video/quicktime', 'mov') : null;
 }
 
-/** A HEIC, an MP4, a QuickTime movie or a 3GP, told apart by the brand after `ftyp`. */
-function isoBaseMedia(brand: string): SniffedMedia | null {
+/** A HEIC, an MP4, a QuickTime movie or a 3GP, told apart by the first brand of its `ftyp` box that says which. */
+function isoBaseMedia(bytes: Uint8Array): SniffedMedia | null {
+    const major = text(bytes.subarray(8, 12));
+    if (REFUSED_BRANDS.has(major)) {
+        return null;
+    }
+    const boxEnd = Math.min(new DataView(bytes.buffer, bytes.byteOffset).getUint32(0), bytes.length);
+    const brands = [major];
+    for (let at = 16; at + 4 <= boxEnd; at += 4) {
+        brands.push(text(bytes.subarray(at, at + 4)));
+    }
+    for (const brand of brands) {
+        const known = byBrand(brand);
+        if (known !== null) {
+            return known;
+        }
+    }
+    return null;
+}
+
+function byBrand(brand: string): SniffedMedia | null {
     if (HEIC_BRANDS.has(brand)) {
         return image('image/heic', 'heic');
     }

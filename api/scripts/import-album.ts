@@ -54,7 +54,6 @@ const AWS_MEDIA = valibot.looseObject({
     description: valibot.optional(TEXT),
     dimensions: valibot.optional(valibot.object({ width: valibot.number(), height: valibot.number() })),
     thumbnail: valibot.optional(RECTANGLE),
-    updatedOn: valibot.optional(TEXT),
 });
 const AWS_ALBUM = valibot.looseObject({
     path: TEXT,
