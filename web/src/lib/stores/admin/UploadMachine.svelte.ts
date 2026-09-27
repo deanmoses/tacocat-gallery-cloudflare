@@ -235,20 +235,25 @@ class UploadMachine {
      * Poll the server, checking to see if the media have made it into the album
      */
     async #pollForProcessedMediaItems(albumPath: string): Promise<void> {
-        const POLL_INTERVAL_MS = 1500;
+        // A photo is usually an item a few seconds after its PUT, so the first checks come quickly, and the wait between
+        // them grows so that a video's minutes of transcoding are not spent asking every half second.
+        const FIRST_POLL_MS = 500;
+        const MAX_POLL_MS = 3000;
 
-        // Calculate max poll attempts based on the slowest-processing file type
+        // Watch for as long as the slowest-processing file type takes
         const uploads = getUploadsForAlbum(albumPath);
         const maxTimeoutMs = Math.max(...uploads.map((upload) => processingTimeout(upload.file.name)));
-        const maxPollAttempts = Math.ceil(maxTimeoutMs / POLL_INTERVAL_MS);
+        const deadline = Date.now() + maxTimeoutMs;
 
         let processingComplete: boolean;
         let pollAttemptCount = 0;
+        let pollDelayMs = FIRST_POLL_MS;
         do {
-            await sleep(POLL_INTERVAL_MS);
+            await sleep(pollDelayMs);
+            pollDelayMs = Math.min(pollDelayMs * 1.25, MAX_POLL_MS);
             processingComplete = await this.#areMediaProcessed(albumPath);
             pollAttemptCount++;
-        } while (!processingComplete && pollAttemptCount < maxPollAttempts);
+        } while (!processingComplete && Date.now() < deadline);
         console.log(`Media have been processed. Loop count: [${pollAttemptCount}]`);
 
         // If polling timed out with media still processing, clear them from UI and notify user

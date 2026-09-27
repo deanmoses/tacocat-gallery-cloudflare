@@ -21,5 +21,8 @@ export async function startUploadPipeline(env: Pick<Env, 'UPLOAD_PIPELINE'>, eve
     const started = await env.UPLOAD_PIPELINE.createBatch([{ id: versionId, params: event }]);
     if (started.length === 0) {
         console.info({ event: 'upload_redelivered', versionId });
+        return;
     }
+    // How long R2's notification and the queue took to bring the event, which the admin waits through after the PUT.
+    console.info({ event: 'upload_event_delivered', versionId, delayMs: Date.now() - Date.parse(event.eventTime) });
 }

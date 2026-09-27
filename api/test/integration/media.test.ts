@@ -239,6 +239,39 @@ describe('upload pipeline', () => {
         expect(detail.headers.get('x-derived')).toBe('stored');
     });
 
+    it('makes the three images at once, from the file it has already read', async () => {
+        const versionId = await stage(`${DAY}full_metadata`, jpg);
+        const originalReads = vi.spyOn(env.MEDIA, 'get');
+        // Each derivative's write waits until all three are being written, which only images made at once can reach.
+        const waiting: (() => void)[] = [];
+        const put = env.DERIVED.put.bind(env.DERIVED);
+        vi.spyOn(env.DERIVED, 'put').mockImplementation(async (key, value, options) => {
+            await new Promise<void>((resolve) => {
+                waiting.push(resolve);
+                if (waiting.length === 3) {
+                    for (const release of waiting) release();
+                }
+            });
+            return put(key, value, options);
+        });
+        await deliver(versionId);
+        const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
+
+        expect(stored.objects).toHaveLength(3);
+        expect(originalReads.mock.calls.filter(([key]) => key === originalKey(versionId))).toStrictEqual([]);
+    });
+
+    it('logs how long the upload event took to arrive', async () => {
+        const logged = vi.spyOn(console, 'info');
+        const versionId = await upload(`${DAY}full_metadata`, jpg);
+
+        expect(logged).toHaveBeenCalledWith({
+            event: 'upload_event_delivered',
+            versionId,
+            delayMs: expect.any(Number) as number,
+        });
+    });
+
     it('records a HEIC the Images binding cannot decode as an upload error, not an item', async () => {
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
             throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
@@ -341,7 +374,7 @@ describe('upload pipeline', () => {
             modify: async (modifier) => {
                 await modifier.disableRetryDelays();
                 await modifier.mockStepError(
-                    { name: 'read the image, store the original and make its derivatives' },
+                    { name: 'read the file, and store a photo and make its derivatives' },
                     new Error('R2 unavailable'),
                     1,
                 );
