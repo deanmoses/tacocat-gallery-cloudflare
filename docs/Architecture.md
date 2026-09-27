@@ -57,7 +57,7 @@ The gallery is a tree, and a path is a URL:
 
 `shared/src/paths.ts` is the grammar.
 
-- **An album** has a description, a one-line summary, a published flag, and the media item it shows as its thumbnail, from anywhere in its subtree. A day album can be published only while its year is.
+- **An album** has a description, a one-line summary, a published flag, and the media item it shows as its thumbnail, from anywhere in its subtree. A day album can be published only while its year is. A day album's media is in name order, since files are usually named in the order they should show before they are uploaded, until an admin drags it into an order of their own; media added after that goes at the end, in name order, until the next reorder.
 - **A media item** is an image or a video, decided by the file's first bytes when it is uploaded. It has the version id of its current file, its size, a video's duration, a title, a description, tags, and the rectangle its thumbnail is cut from. It shows whenever its album does.
 
 ## Database
@@ -142,6 +142,7 @@ If it changed a row, the Worker answers 204 with the bookmark. If it changed not
 
 - Renaming a day album moves the album and its children in one batch, each statement conditional on the rename being possible.
 - Deleting a media item deletes its row. The foreign key clears it from any album that showed it; its objects stay in the buckets.
+- Reordering a day album is one statement that gives each of its media rows its place in the order the admin saved, looked up by name, and none to media the order leaves out. The album read sorts by name in SQL, which the path index gives for free, and puts the placed media first in the Worker, since a sort in SQL passes every row through a temporary B-tree that D1 counts as reading it again. `DELETE /api/album-order/<path>` clears the places, which is back to name order.
 - `PUT /api/item` writes a whole row as given: the import path. When a constraint refuses the row it answers with the constraint's name.
 
 **Why a write's conditions are in its statement.** D1 has no interactive transactions: its one atomic unit is a batch of statements fixed before any runs, so a write cannot read, decide and then write. A rule that depends on another row is a condition of the writing statement instead, an `EXISTS` in its `WHERE` or an `INSERT … SELECT` that selects nothing when the rule fails. There is never a race between a check and the write it guards.

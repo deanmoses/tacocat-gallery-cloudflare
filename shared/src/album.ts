@@ -68,6 +68,8 @@ export const galleryRecordSchema = valibot.variant('itemType', [albumRecord, med
 /** An album with its children: its media, or its albums. */
 const albumGalleryItem = valibot.object({
     ...albumRecord.entries,
+    /** Present when an admin has put the album's media in an order of their own, rather than by name. */
+    order: valibot.optional(valibot.literal(true)),
     children: valibot.optional(valibot.array(galleryRecordSchema)),
 });
 

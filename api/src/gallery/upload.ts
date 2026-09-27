@@ -349,6 +349,7 @@ export function insertItem(database: Orm, albumId: number, upload: Upload, facts
                     durationSeconds: sql<number | null>`${facts.durationSeconds}`.as('duration_seconds'),
                     thumbnailId: sql<null>`NULL`.as('thumbnail_id'),
                     thumbnailCrop: sql<null>`NULL`.as('thumbnail_crop'),
+                    position: sql<null>`NULL`.as('position'),
                     createdAt: sql<string>`${NOW}`.as('created_at'),
                     updatedAt: sql<string>`${NOW}`.as('updated_at'),
                 })

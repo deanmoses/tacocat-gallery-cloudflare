@@ -108,6 +108,13 @@ export const item = sqliteTable(
         thumbnailId: integer('thumbnail_id').references((): AnySQLiteColumn => item.id, { onDelete: 'set null' }),
         /** The rectangle of a media item, in its EXIF-oriented pixels, that its thumbnail is cut from. */
         thumbnailCrop: text('thumbnail_crop', { mode: 'json' }).$type<Rectangle>(),
+        /**
+         * Where an admin placed a media item in its album. An album sorts by name until an admin reorders it; media
+         * added after that has none and follows the placed media, in name order. That only media has one is left
+         * unchecked: a check constraint means rebuilding the table, and dropping the old one inside a migration's
+         * transaction, where foreign keys cannot be turned off, clears every thumbnail and upload that points at it.
+         */
+        position: integer('position'),
         ...timestamps,
     },
     (table) => [

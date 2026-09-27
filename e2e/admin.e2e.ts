@@ -1,9 +1,10 @@
-import { type Page, expect, test } from '@playwright/test';
+import { type Locator, type Page, expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
     ADMIN_DAY_PATH,
     ADMIN_PHOTO_PATH,
+    ADMIN_REORDER_DAY_PATH,
     ADMIN_REPLACED_BASE_NAME,
     ADMIN_SECOND_PHOTO_PATH,
     ADMIN_UPLOAD_DAY_PATH,
@@ -60,6 +61,17 @@ function childVersionId(albumJson: unknown, path: string): string | undefined {
     return typeof child === 'object' && child !== null && 'versionId' in child && typeof child.versionId === 'string'
         ? child.versionId
         : undefined;
+}
+
+/** Presses on the middle of `from`, moves in steps to the middle of `to` and lets go, as a hand on a mouse would. */
+async function drag(page: Page, from: Locator, to: Locator): Promise<void> {
+    const start = await from.boundingBox();
+    const end = await to.boundingBox();
+    if (start === null || end === null) throw new Error('nothing to drag, or nowhere to drag it');
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 20 });
+    await page.mouse.up();
 }
 
 /** The album as the API answers for it, read to check what a journey wrote. */
@@ -272,6 +284,48 @@ test.describe('an admin', () => {
                 ]),
             });
             await expect(page.getByText('1 processing')).toBeHidden();
+        });
+    });
+
+    test("drags a day album's photos into an order of its own, and puts them back in name order", async ({ page }) => {
+        const titles = async (): Promise<string[]> =>
+            page.getByRole('region', { name: 'Thumbnails' }).getByRole('link').allTextContents();
+        // A retry runs against the same site, which the attempt before may have left reordered
+        await page.request.delete(`/api/album-order${ADMIN_REORDER_DAY_PATH}`);
+
+        await test.step('the album starts in name order', async () => {
+            await page.goto(ADMIN_REORDER_DAY_PATH);
+
+            await expect.poll(titles).toStrictEqual(['Apple', 'Banana', 'Cherry']);
+        });
+
+        await test.step('dragging a photo onto the next one and saving puts it after that one', async () => {
+            await revealAdminControls(page);
+            await page.getByRole('button', { name: 'Reorder' }).click();
+            await drag(
+                page,
+                page.getByRole('listitem', { name: 'Apple' }),
+                page.getByRole('listitem', { name: 'Banana' }),
+            );
+            await page.getByRole('button', { name: 'Save' }).click();
+
+            await expect(page.getByRole('list', { name: 'Photos in album order' })).toBeHidden();
+            await expect.poll(titles).toStrictEqual(['Banana', 'Apple', 'Cherry']);
+        });
+
+        await test.step("the order is the album's, not the page's", async () => {
+            await page.reload();
+
+            await expect.poll(titles).toStrictEqual(['Banana', 'Apple', 'Cherry']);
+        });
+
+        await test.step('resetting the order puts the photos back in name order', async () => {
+            await revealAdminControls(page);
+            await page.getByRole('button', { name: 'Reorder' }).click();
+            await page.getByRole('button', { name: 'Reset order' }).click();
+
+            await expect(page.getByRole('list', { name: 'Photos in album order' })).toBeHidden();
+            await expect.poll(titles).toStrictEqual(['Apple', 'Banana', 'Cherry']);
         });
     });
 });

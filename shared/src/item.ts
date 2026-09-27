@@ -100,6 +100,18 @@ export const albumWriteSchema = valibot.strictObject({
     published: valibot.optional(valibot.boolean()),
 });
 
+/**
+ * The body of `PUT /api/album-order/<path>`: the names of the album's media in the order an admin put them. Media left
+ * out follows, in name order.
+ */
+export const albumOrderSchema = valibot.strictObject({
+    itemNames: valibot.pipe(
+        valibot.array(valibot.string()),
+        valibot.minLength(1, 'No media to order'),
+        valibot.check((names) => new Set(names).size === names.length, 'names a media item twice'),
+    ),
+});
+
 /** The body of `PATCH /api/media/<path>`: what an admin writes about a photo or video, every field optional. */
 export const mediaWriteSchema = valibot.strictObject({
     title: valibot.optional(valibot.nullable(valibot.string())),

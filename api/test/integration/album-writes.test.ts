@@ -336,3 +336,112 @@ describe('renaming a day album', () => {
         expect(response.status).toBe(401);
     });
 });
+
+describe('reordering a day album', () => {
+    const DAY = '/1990/06-15/';
+
+    beforeEach(async () => {
+        await Promise.all([
+            putItem({ parentPath: '/', itemName: '1990', itemType: 'album', published: true }),
+            putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', published: true }),
+            putItem({ parentPath: '/1990/', itemName: '06-16', itemType: 'album', published: true }),
+            ...['img_1', 'img_2', 'img_3'].map(async (itemName) =>
+                putItem({ parentPath: DAY, itemName, ...IMAGE, title: `Taco ${itemName}` }),
+            ),
+        ]);
+    });
+
+    async function order(path: string): Promise<string[] | undefined> {
+        return (await album(path, false)).children?.map((child) => child.itemName);
+    }
+
+    it('shows the media in the order given, to guests as well', async () => {
+        const response = await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_1', 'img_2'] });
+
+        expect(response.status).toBe(204);
+        await expect(order(DAY)).resolves.toStrictEqual(['img_3', 'img_1', 'img_2']);
+        await expect(album(DAY)).resolves.toMatchObject({ order: true });
+    });
+
+    it('puts media added afterwards at the end, in name order', async () => {
+        await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_2', 'img_1'] });
+        await Promise.all([
+            putItem({ parentPath: DAY, itemName: 'img_5', ...IMAGE }),
+            putItem({ parentPath: DAY, itemName: 'img_0', ...IMAGE }),
+        ]);
+
+        await expect(order(DAY)).resolves.toStrictEqual(['img_3', 'img_2', 'img_1', 'img_0', 'img_5']);
+    });
+
+    it('puts media the order leaves out at the end, as an upload that finished after the album was loaded', async () => {
+        await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_2', 'img_1'] });
+        await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_2', 'img_gone'] });
+
+        await expect(order(DAY)).resolves.toStrictEqual(['img_2', 'img_1', 'img_3']);
+    });
+
+    it('keeps a media item in its place when it or the album is renamed', async () => {
+        await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_1', 'img_2'] });
+        await write('POST', `/api/media-rename${DAY}img_3`, { newName: 'zebra' });
+        await write('POST', `/api/album-rename${DAY}`, { newName: '07-04' });
+
+        await expect(order('/1990/07-04/')).resolves.toStrictEqual(['zebra', 'img_1', 'img_2']);
+    });
+
+    it('lists search results in the album order', async () => {
+        await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_2', 'img_3', 'img_1'] });
+        const found = await callAsAdmin('/api/search/taco');
+        const { items } = await found.json<{ items: { path: string }[] }>();
+
+        expect(items.map((item) => item.path)).toStrictEqual([`${DAY}img_2`, `${DAY}img_3`, `${DAY}img_1`]);
+    });
+
+    it('puts the media back in name order when the order is reset', async () => {
+        await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_1', 'img_2'] });
+        const response = await write('DELETE', `/api/album-order${DAY}`);
+        const reset = await album(DAY);
+
+        expect(response.status).toBe(204);
+        expect(reset.children?.map((child) => child.itemName)).toStrictEqual(['img_1', 'img_2', 'img_3']);
+        expect(reset).not.toHaveProperty('order');
+    });
+
+    it.each([
+        { what: 'no names', body: { itemNames: [] }, message: 'No media to order' },
+        { what: 'a name twice', body: { itemNames: ['img_1', 'img_1'] }, message: 'names a media item twice' },
+    ])('refuses $what', async ({ body, message }) => {
+        const response = await write('PUT', `/api/album-order${DAY}`, body);
+
+        expect(response.status).toBe(400);
+        await expect(errorMessage(response)).resolves.toContain(message);
+    });
+
+    it.each([
+        { what: 'a year', path: '/1990/', message: 'Cannot reorder year albums' },
+        { what: 'the root', path: '/', message: 'Cannot reorder the root album' },
+        { what: 'a day with no media', path: '/1990/06-16/', message: 'Album [/1990/06-16/] has no media' },
+    ])('refuses to reorder $what', async ({ path, message }) => {
+        const response = await write('PUT', `/api/album-order${path}`, { itemNames: ['img_1'] });
+
+        expect(response.status).toBe(400);
+        await expect(errorMessage(response)).resolves.toBe(message);
+    });
+
+    it('is not found for an album that is not there', async () => {
+        const response = await write('DELETE', '/api/album-order/1990/07-04/');
+
+        expect(response.status).toBe(404);
+        await expect(errorMessage(response)).resolves.toBe('Album not found: [/1990/07-04/]');
+    });
+
+    it.each(['PUT', 'DELETE'])('needs an admin to %s an order', async (method) => {
+        const response = await call(`/api/album-order${DAY}`, {
+            method,
+            body: JSON.stringify({ itemNames: ['img_3', 'img_1', 'img_2'] }),
+        });
+        await response.body?.cancel();
+
+        expect(response.status).toBe(401);
+        await expect(order(DAY)).resolves.toStrictEqual(['img_1', 'img_2', 'img_3']);
+    });
+});

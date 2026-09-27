@@ -43,6 +43,7 @@ const ROW_FIELDS = {
     height: valibot.nullable(valibot.number()),
     duration_seconds: valibot.nullable(valibot.number()),
     thumbnail_crop: valibot.nullable(CROP),
+    position: valibot.nullable(valibot.number()),
     thumb_parent_path: valibot.nullable(valibot.string()),
     thumb_item_name: valibot.nullable(valibot.string()),
     thumb_version_id: valibot.nullable(valibot.string()),

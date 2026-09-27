@@ -131,6 +131,19 @@ export const CropStatus = {
 } as const;
 export type CropStatus = (typeof CropStatus)[keyof typeof CropStatus];
 
+/**
+ * An album whose media an admin is dragging into an order of their own
+ */
+export interface ReorderEntry {
+    status: ReorderStatus;
+}
+
+export const ReorderStatus = {
+    REORDERING: 'Reordering',
+    SAVING: 'Saving',
+} as const;
+export type ReorderStatus = (typeof ReorderStatus)[keyof typeof ReorderStatus];
+
 /** What an admin is doing to an album right now, for its thumbnail to show. */
 export interface AlbumActivity {
     creating: boolean;

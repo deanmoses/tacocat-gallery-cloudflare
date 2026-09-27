@@ -2,6 +2,7 @@ import {
     type AlbumGalleryItem,
     type ItemKey,
     albumKey,
+    albumOrderSchema,
     albumPath,
     albumThumbnailSchema,
     albumWriteSchema,
@@ -18,6 +19,7 @@ import {
     createAlbum,
     deleteAlbum,
     describeAlbum,
+    orderAlbum,
     readAlbum,
     renameAlbum,
     setThumbnail,
@@ -213,6 +215,40 @@ export async function setAlbumThumbnail(request: Request, env: Env): Promise<Res
     return facts.exists
         ? failure(400, `Media not found: [${body.output.mediaPath}]`)
         : notFound(`Album not found: [${path}]`);
+}
+
+/** `PUT /api/album-order/<path>` with `{ itemNames }` puts a day album's media in that order. */
+export async function orderAlbumRoute(request: Request, env: Env): Promise<Response> {
+    const key = orderableAlbum(request);
+    if (key instanceof Response) {
+        return key;
+    }
+    const body = await parsedBody(request, albumOrderSchema);
+    return 'response' in body ? body.response : reordered(env, key, body.output.itemNames);
+}
+
+/** `DELETE /api/album-order/<path>` puts a day album's media back in name order. */
+export async function resetAlbumOrderRoute(request: Request, env: Env): Promise<Response> {
+    const key = orderableAlbum(request);
+    return key instanceof Response ? key : reordered(env, key, null);
+}
+
+/** The day album an order write names; only a day album holds media. */
+function orderableAlbum(request: Request): ItemKey | Response {
+    const key = writableAlbum(request, '/api/album-order/', 'reorder');
+    return key instanceof Response || key.parentPath !== '/' ? key : failure(400, 'Cannot reorder year albums');
+}
+
+async function reordered(env: Env, key: ItemKey, itemNames: string[] | null): Promise<Response> {
+    const path = albumPath(key.parentPath, key.itemName);
+    const session = env.DB.withSession('first-primary');
+    const started = performance.now();
+    const write = await orderAlbum(orm(session), key, itemNames);
+    if (write.changes > 0) {
+        return wrote(session, write, started);
+    }
+    const { exists } = await describeAlbum(orm(session), key);
+    return exists ? failure(400, `Album [${path}] has no media`) : notFound(`Album not found: [${path}]`);
 }
 
 function withTrailingSlash(path: string): string {
