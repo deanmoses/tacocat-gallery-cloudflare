@@ -1,12 +1,5 @@
-import {
-    type ImageRequest,
-    type MediaType,
-    type Size,
-    THUMBNAIL_SIZE,
-    THUMBNAIL_SIZE_2X,
-    detailSize,
-} from 'tacocat-gallery-shared';
-import { type Derivation, derivativeName, derivedImage, outputFormat } from '../media/images';
+import { type ImageRequest, type Size, THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize } from 'tacocat-gallery-shared';
+import { type Derivation, derivativeName, generateDerivative, outputFormat } from '../media/images';
 import { derivedImageKey, originalKey, posterKey } from '../storage/keys';
 
 /**
@@ -32,35 +25,31 @@ export type Warmed = { ok: true } | { ok: false; error: string };
 
 /**
  * Makes the derivatives the album page and the media page are about to ask for, the thumbnail at both densities and
- * the detail image, so the first reader of an upload never waits for a transformation. Made from what the URLs will ask for, so
- * they are found again by them. A file the Images binding refuses, as it does some HEICs, surfaces here rather than
- * as a broken image in the album. A video's stills come from its poster and from nothing else, since the binding
- * cannot read the video itself, so a video whose transcoder wrote no poster, which only a test's stand-in does, is
- * left for its first reader.
+ * the detail image, so the first reader of an upload never waits for a transformation. Made from what the URLs will
+ * ask for, so they are found again by them, and all at once from `source`, the photo or a video's poster, which the
+ * caller already holds. A file the Images binding refuses, as it does some HEICs, surfaces here rather than as a
+ * broken image in the album.
  */
 export async function warmDerivatives(
-    env: Pick<Env, 'MEDIA' | 'DERIVED' | 'IMAGES'>,
+    env: Pick<Env, 'DERIVED' | 'IMAGES'>,
     path: string,
     versionId: string,
-    facts: Size & { mediaType: MediaType },
+    size: Size,
+    source: Blob,
 ): Promise<Warmed> {
-    if (facts.mediaType === 'video' && (await env.DERIVED.head(posterKey(versionId))) === null) {
-        console.warn({ event: 'derivative_not_warmed', versionId, missing: posterKey(versionId) });
-        return { ok: true };
+    const made = await Promise.allSettled(
+        [THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize(size)].map(async (wanted) => {
+            const request: ImageRequest = { path, versionId, size: wanted, crop: null };
+            return generateDerivative(env, derivationFor(request, null, null), source.stream());
+        }),
+    );
+    const failures = made.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : []));
+    const refusal = failures.find(isRefusal);
+    if (refusal !== undefined) {
+        return { ok: false, error: `the image cannot be decoded: ${refusal.message}` };
     }
-    for (const size of [THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize(facts)]) {
-        const request: ImageRequest = { path, versionId, size, crop: null };
-        try {
-            const made = await derivedImage(env, derivationFor(request, null, null), {});
-            if ('missing' in made) {
-                throw new Error(`no source for ${made.missing}`);
-            }
-        } catch (error) {
-            if (isRefusal(error)) {
-                return { ok: false, error: `the image cannot be decoded: ${error.message}` };
-            }
-            throw error;
-        }
+    if (failures.length > 0) {
+        throw failures[0];
     }
     return { ok: true };
 }

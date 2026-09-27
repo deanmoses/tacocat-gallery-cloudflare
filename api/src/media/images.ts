@@ -51,15 +51,14 @@ export async function timed<T>(steps: Steps, name: string, work: () => Promise<T
 
 /**
  * The derivative `wanted` names: generated once with the Images binding, stored in the derived bucket, served from it
- * afterwards. Mirrors generateDerivedImage's crop-then-cover semantics. The original's key when there is neither it
- * nor a poster to generate from.
+ * afterwards. The original's key when there is neither it nor a poster to generate from.
  */
 export async function derivedImage(
     env: Pick<Env, 'MEDIA' | 'DERIVED' | 'IMAGES'>,
     wanted: Derivation,
     steps: Steps,
 ): Promise<Derivative | { missing: string }> {
-    const { request, format, key } = wanted;
+    const { format, key } = wanted;
 
     const stored = await timed(steps, 'r2', async () => env.DERIVED.get(key));
     if (stored) {
@@ -69,11 +68,21 @@ export async function derivedImage(
     // A video's stills come from the poster the transcoder wrote beside its MP4, and only a video has one, so looking
     // for it first is what tells a video from a photo: the file name in the URL decides nothing.
     const source = (await env.DERIVED.get(wanted.poster)) ?? (await env.MEDIA.get(wanted.original));
-    if (!source) {
-        return { missing: wanted.original };
-    }
+    return source
+        ? { body: await generateDerivative(env, wanted, source.body), format, how: 'generated' }
+        : { missing: wanted.original };
+}
 
-    let transformer = env.IMAGES.input(byteStream(source.body));
+/**
+ * The derivative `wanted` names, made from `source` with the Images binding and stored in the derived bucket. Mirrors
+ * generateDerivedImage's crop-then-cover semantics.
+ */
+export async function generateDerivative(
+    env: Pick<Env, 'DERIVED' | 'IMAGES'>,
+    { request, format, key }: Derivation,
+    source: ReadableStream,
+): Promise<ArrayBuffer> {
+    let transformer = env.IMAGES.input(byteStream(source));
     if (request.crop !== null) {
         const { x: left, y: top, width: cropWidth, height: cropHeight } = request.crop;
         transformer = transformer.transform({ trim: { left, top, width: cropWidth, height: cropHeight } });
@@ -81,7 +90,7 @@ export async function derivedImage(
     const output = await transformer.transform(resize(request)).output({ format, quality: 85 });
     const bytes = await output.response().arrayBuffer();
     await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
-    return { body: bytes, format, how: 'generated' };
+    return bytes;
 }
 
 /**
