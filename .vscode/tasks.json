@@ -19,6 +19,32 @@
             "presentation": { "reveal": "always", "panel": "shared" }
         },
         {
+            // Terminal > Run Task: the Worker on 8787 and vite on 5173, split side by side in one terminal, since the app
+            // hot-reloads only under vite, which passes the Worker's routes through to 8787.
+            "label": "Dev servers: Worker and web app",
+            "dependsOn": ["Dev server: Worker", "Dev server: web app"],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
+        },
+        {
+            "label": "Dev server: Worker",
+            "type": "npm",
+            "script": "dev",
+            "path": "api",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "new", "group": "dev" }
+        },
+        {
+            "label": "Dev server: web app",
+            "type": "npm",
+            "script": "dev",
+            "path": "web",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "new", "group": "dev" }
+        },
+        {
             "label": "Regenerate AI docs",
             "type": "npm",
             "script": "agent-docs",
