@@ -45,8 +45,8 @@ jobs:
                   # A pull request run would otherwise check out GitHub's merge of the branch into main, a commit no one
                   # can look up; the branch's own head is what the version gets tagged with.
                   ref: ${{ github.event.pull_request.head.sha || github.sha }}
-                  # The whole history, so the release can diff the tree against the commit serving to see whether the
-                  # transcoder changed.
+                  # The whole history, so the release can diff the tree against the commit the transcoder last shipped
+                  # from.
                   fetch-depth: 0
             - uses: ./.github/actions/setup
               with:

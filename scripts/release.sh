@@ -2,7 +2,7 @@
 # Releases the Worker to one environment without a moment in which readers can reach a version nothing has checked.
 #
 #   0. Ship the transcoder's image and container settings with api/scripts/ship-transcoder.ts, when either has changed
-#      since the commit serving. A Worker version carries neither, and nothing checks or rolls back the container, so an
+#      since the commit the container last shipped from. A Worker version carries neither, and nothing checks or rolls back the container, so an
 #      image has to work with both the version serving and the one being released, as a migration does; its rollout
 #      leaves an instance still encoding on the old image for up to its grace period anyway.
 #   1. Build the web app and upload a version. It serves no traffic.
@@ -165,17 +165,8 @@ fi
 echo "serving now: $previous"
 
 step "Shipping the transcoder"
-# First, so that a failure here comes before anything else has changed. Its image and settings changed if a file they
-# come from differs between the commit serving, which the health route's tag names, and the tree; a tag that names no
-# commit here, as a dirty one does or one from a branch CI did not fetch, ships it to be sure.
-body=$(fetch /api/health || true)
-deployed=$(json_field 'd.tag ?? ""' <<<"${body%$'\n'*}" 2>/dev/null || true)
-if [[ "$deployed" =~ ^[0-9a-f]{7}$ ]] && git cat-file -e "$deployed^{commit}" 2>/dev/null &&
-    git diff --quiet "$deployed" -- api/transcoder api/wrangler.jsonc; then
-    echo "unchanged since $deployed"
-else
-    (cd api && node scripts/ship-transcoder.ts "$1" "$short")
-fi
+# First, so that a failure here comes before anything else has changed.
+(cd api && node scripts/ship-transcoder.ts "$1" "$short")
 
 step "Building the web app"
 npm run --silent build --workspace web
