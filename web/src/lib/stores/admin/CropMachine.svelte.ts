@@ -1,8 +1,7 @@
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
-import { recropThumbnailUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
-import { parentPathOf } from '@tacocat-gallery/shared';
+import { API, parentPathOf } from '@tacocat-gallery/shared';
 import { albumState } from '../AlbumState.svelte';
 import { type Crop, CropStatus } from '$lib/models/album';
 
@@ -64,7 +63,7 @@ class CropMachine {
     async #crop(mediaPath: string, crop: Crop): Promise<void> {
         try {
             // Make the save request
-            const response = await adminApi.patch(recropThumbnailUrl(mediaPath), crop);
+            const response = await callApi(API.recutThumbnail, mediaPath, crop);
 
             // Check for errors
             if (!response.ok) {

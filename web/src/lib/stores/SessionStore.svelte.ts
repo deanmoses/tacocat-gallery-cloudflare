@@ -1,4 +1,4 @@
-import { checkAuthenticationUrl } from '$lib/utils/config';
+import { API, apiUrl } from '@tacocat-gallery/shared';
 import { get as getFromIdb, set as setToIdb } from 'idb-keyval';
 
 const HasBeenLoggedInIDBKey = 'HasBeenLoggedIn';
@@ -68,7 +68,7 @@ class SessionStore {
      */
     async #fetchUserStatus(): Promise<void> {
         try {
-            const response = await fetch(checkAuthenticationUrl(), {
+            const response = await fetch(apiUrl(API.authStatus), {
                 // no-store: the browser fetches from the remote server without first looking in the cache,
                 // and will not update the cache with the downloaded resource
                 cache: 'no-store',

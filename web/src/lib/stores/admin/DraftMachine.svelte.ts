@@ -2,10 +2,9 @@ import type { Draft, DraftContent } from '$lib/models/draft';
 import { DraftStatus } from '$lib/models/draft';
 import { produce } from 'immer';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
-import { isMediaPath, parentPathOf, parsePath } from '@tacocat-gallery/shared';
+import { API, isMediaPath, parentPathOf, parsePath } from '@tacocat-gallery/shared';
 import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
-import { itemUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumState } from '../AlbumState.svelte';
 
@@ -188,7 +187,9 @@ class DraftMachine {
             console.log(`Saving draft [${draft.path}]:`, draft.content);
             this.#saveStart();
             try {
-                const response = await adminApi.patch(itemUrl(draft.path), draft.content);
+                const response = isMediaPath(draft.path)
+                    ? await callApi(API.updateMedia, draft.path, draft.content)
+                    : await callApi(API.updateAlbum, draft.path, draft.content);
                 if (!response.ok) {
                     throw new Error(await failureMessage(response));
                 }

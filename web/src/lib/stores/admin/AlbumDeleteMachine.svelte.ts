@@ -1,7 +1,6 @@
 import { DeleteStatus } from '$lib/models/album';
-import { itemUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { isAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
+import { API, isAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';
@@ -62,7 +61,7 @@ class AlbumDeleteMachine {
         try {
             if (!isAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
             this.#deleteStarted(albumPath);
-            const response = await adminApi.delete(itemUrl(albumPath));
+            const response = await callApi(API.deleteAlbum, albumPath);
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }

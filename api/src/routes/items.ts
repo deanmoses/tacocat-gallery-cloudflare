@@ -1,4 +1,4 @@
-import { itemWriteSchema } from '@tacocat-gallery/shared';
+import { API_BODIES } from '@tacocat-gallery/shared';
 import { orm, upsertItem } from '../db';
 import { d1Header } from '../db/timing';
 import { written } from '../http/bookmark';
@@ -11,7 +11,7 @@ import { parsedBody } from '../http/body';
  * broke.
  */
 export async function putItem(request: Request, env: Env): Promise<Response> {
-    const body = await parsedBody(request, itemWriteSchema);
+    const body = await parsedBody(request, API_BODIES.putItem);
     if ('response' in body) {
         return body.response;
     }

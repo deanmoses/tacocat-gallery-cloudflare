@@ -1,15 +1,13 @@
 import {
+    API,
+    API_BODIES,
     type AlbumGalleryItem,
     type ItemKey,
     albumKey,
-    albumOrderSchema,
     albumPath,
-    albumThumbnailSchema,
-    albumWriteSchema,
     isAlbumPath,
     isDayAlbumPath,
     mediaKey,
-    renameSchema,
 } from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
@@ -38,7 +36,7 @@ import { failure, json, notFound } from '../http/responses';
  */
 export async function getAlbum(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const path = withTrailingSlash(`/${pathAfter(url, '/api/album/')}`);
+    const path = withTrailingSlash(pathAfter(url, API.readAlbum.prefix));
     if (!isAlbumPath(path)) {
         return notFound();
     }
@@ -81,7 +79,7 @@ export async function getAlbum(request: Request, env: Env): Promise<Response> {
 
 /** The album an admin write names, or the answer for a path that is no album or is the root, which has no row. */
 function writableAlbum(request: Request, prefix: string, verb: string): ItemKey | Response {
-    const path = withTrailingSlash(`/${pathAfter(new URL(request.url), prefix)}`);
+    const path = withTrailingSlash(pathAfter(new URL(request.url), prefix));
     if (!isAlbumPath(path)) {
         return notFound();
     }
@@ -91,11 +89,11 @@ function writableAlbum(request: Request, prefix: string, verb: string): ItemKey 
 
 /** `PUT /api/album/<path>` makes a year or day album, with whatever of its fields the body holds. */
 export async function createAlbumRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableAlbum(request, '/api/album/', 'create');
+    const key = writableAlbum(request, API.createAlbum.prefix, 'create');
     if (key instanceof Response) {
         return key;
     }
-    const body = await parsedBody(request, albumWriteSchema);
+    const body = await parsedBody(request, API_BODIES.createAlbum);
     if ('response' in body) {
         return body.response;
     }
@@ -109,11 +107,11 @@ export async function createAlbumRoute(request: Request, env: Env): Promise<Resp
 
 /** `PATCH /api/album/<path>` changes the fields the body holds; a day album is published only under a published year. */
 export async function updateAlbumRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableAlbum(request, '/api/album/', 'update');
+    const key = writableAlbum(request, API.updateAlbum.prefix, 'update');
     if (key instanceof Response) {
         return key;
     }
-    const body = await parsedBody(request, albumWriteSchema);
+    const body = await parsedBody(request, API_BODIES.updateAlbum);
     if ('response' in body) {
         return body.response;
     }
@@ -134,7 +132,7 @@ export async function updateAlbumRoute(request: Request, env: Env): Promise<Resp
 
 /** `DELETE /api/album/<path>` removes an empty album. */
 export async function deleteAlbumRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableAlbum(request, '/api/album/', 'delete');
+    const key = writableAlbum(request, API.deleteAlbum.prefix, 'delete');
     if (key instanceof Response) {
         return key;
     }
@@ -156,7 +154,7 @@ export async function deleteAlbumRoute(request: Request, env: Env): Promise<Resp
  * The new name is a day on that year's calendar.
  */
 export async function renameAlbumRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableAlbum(request, '/api/album-rename/', 'rename');
+    const key = writableAlbum(request, API.renameAlbum.prefix, 'rename');
     if (key instanceof Response) {
         return key;
     }
@@ -164,7 +162,7 @@ export async function renameAlbumRoute(request: Request, env: Env): Promise<Resp
     if (key.parentPath === '/') {
         return failure(400, 'Cannot rename year albums');
     }
-    const body = await parsedBody(request, renameSchema);
+    const body = await parsedBody(request, API_BODIES.renameAlbum);
     if ('response' in body) {
         return body.response;
     }
@@ -189,12 +187,12 @@ export async function renameAlbumRoute(request: Request, env: Env): Promise<Resp
 
 /** `PATCH /api/album-thumb/<path>` with `{ mediaPath }` of a media item in the album, or an album in it, makes that its thumbnail. */
 export async function setAlbumThumbnail(request: Request, env: Env): Promise<Response> {
-    const key = writableAlbum(request, '/api/album-thumb/', 'set a thumbnail on');
+    const key = writableAlbum(request, API.setAlbumThumbnail.prefix, 'set a thumbnail on');
     if (key instanceof Response) {
         return key;
     }
     const path = albumPath(key.parentPath, key.itemName);
-    const body = await parsedBody(request, albumThumbnailSchema);
+    const body = await parsedBody(request, API_BODIES.setAlbumThumbnail);
     if ('response' in body) {
         return body.response;
     }
@@ -223,7 +221,7 @@ export async function orderAlbumRoute(request: Request, env: Env): Promise<Respo
     if (key instanceof Response) {
         return key;
     }
-    const body = await parsedBody(request, albumOrderSchema);
+    const body = await parsedBody(request, API_BODIES.orderAlbum);
     return 'response' in body ? body.response : reordered(env, key, body.output.itemNames);
 }
 
@@ -235,7 +233,7 @@ export async function resetAlbumOrderRoute(request: Request, env: Env): Promise<
 
 /** The day album an order write names; only a day album holds media. */
 function orderableAlbum(request: Request): ItemKey | Response {
-    const key = writableAlbum(request, '/api/album-order/', 'reorder');
+    const key = writableAlbum(request, API.orderAlbum.prefix, 'reorder');
     return key instanceof Response || key.parentPath !== '/' ? key : failure(400, 'Cannot reorder year albums');
 }
 

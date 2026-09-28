@@ -1,4 +1,4 @@
-import { type SearchResponse, isYearName } from '@tacocat-gallery/shared';
+import { API, type SearchResponse, isYearName } from '@tacocat-gallery/shared';
 import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
@@ -33,7 +33,7 @@ const PARAMS = valibot.object({
  */
 export async function search(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const compiled = ftsQuery(pathAfter(url, '/api/search/'));
+    const compiled = ftsQuery(pathAfter(url, `${API.search.prefix}/`));
     if ('error' in compiled) {
         return failure(400, compiled.error);
     }

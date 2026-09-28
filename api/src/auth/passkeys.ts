@@ -6,6 +6,7 @@ import {
     verifyAuthenticationResponse,
     verifyRegistrationResponse,
 } from '@simplewebauthn/server';
+import { API_BODIES, AUTH_PREFIX } from '@tacocat-gallery/shared';
 import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
 import { type Orm, orm, schema } from '../db';
@@ -34,9 +35,8 @@ const ENCODER = new TextEncoder();
 // SimpleWebAuthn checks the rest of a passkey's answer, and throws on one that is malformed.
 const PASSKEY_ANSWER = (value: unknown): boolean =>
     typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string';
-const INVITE = valibot.object({ token: valibot.string() });
 const REGISTRATION = valibot.object({
-    token: valibot.string(),
+    ...API_BODIES.registerVerify.entries,
     response: valibot.custom<RegistrationResponseJSON>(PASSKEY_ANSWER, 'Expected a passkey answer'),
 });
 const AUTHENTICATION = valibot.custom<AuthenticationResponseJSON>(PASSKEY_ANSWER, 'Expected a passkey answer');
@@ -92,7 +92,7 @@ export async function currentAdmin(request: Request, env: AuthEnv): Promise<stri
 
 /** Whose passkey an invite would create, or a 404 once it is used, expired or never existed. */
 export async function inviteStatus(request: Request, env: AuthEnv): Promise<Response> {
-    const body = await parsedBody(request, INVITE);
+    const body = await parsedBody(request, API_BODIES.checkInvite);
     if ('response' in body) {
         return body.response;
     }
@@ -101,7 +101,7 @@ export async function inviteStatus(request: Request, env: AuthEnv): Promise<Resp
 }
 
 export async function registerOptions(request: Request, env: AuthEnv, site: URL): Promise<Response> {
-    const body = await parsedBody(request, INVITE);
+    const body = await parsedBody(request, API_BODIES.registerOptions);
     if ('response' in body) {
         return body.response;
     }
@@ -263,7 +263,7 @@ async function loggedIn(env: AuthEnv, name: string): Promise<Response> {
     const session = await sign(env, { name, exp: Date.now() + maxAge * 1000 });
     const headers = new Headers();
     headers.append('set-cookie', cookie(SESSION_COOKIE, session, { maxAge, path: '/' }));
-    headers.append('set-cookie', cookie(CHALLENGE_COOKIE, '', { maxAge: 0, path: '/api/auth/' }));
+    headers.append('set-cookie', cookie(CHALLENGE_COOKIE, '', { maxAge: 0, path: `${AUTH_PREFIX}/` }));
     return Response.json({ admin: name }, { headers });
 }
 
@@ -285,7 +285,11 @@ async function findInvite(env: AuthEnv, token: string): Promise<{ tokenHash: str
 
 async function challengeCookie(env: AuthEnv, challenge: string): Promise<string> {
     const value = await sign(env, { challenge, exp: Date.now() + CHALLENGE_MS });
-    return cookie(CHALLENGE_COOKIE, value, { maxAge: CHALLENGE_MS / 1000, path: '/api/auth/', sameSite: 'Strict' });
+    return cookie(CHALLENGE_COOKIE, value, {
+        maxAge: CHALLENGE_MS / 1000,
+        path: `${AUTH_PREFIX}/`,
+        sameSite: 'Strict',
+    });
 }
 
 async function readChallenge(request: Request, env: AuthEnv): Promise<string | null> {

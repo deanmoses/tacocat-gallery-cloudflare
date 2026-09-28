@@ -1,4 +1,4 @@
-import { isDayAlbumPath, presignRequestSchema } from '@tacocat-gallery/shared';
+import { API, API_BODIES, isDayAlbumPath } from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { presignUploads } from '../gallery/presign';
@@ -11,11 +11,11 @@ import { parsedBody } from '../http/body';
  * path as the app reads them.
  */
 export async function presignRoute(request: Request, env: Env): Promise<Response> {
-    const albumPath = `/${pathAfter(new URL(request.url), '/api/presigned/')}`;
+    const albumPath = pathAfter(new URL(request.url), API.presign.prefix);
     if (!isDayAlbumPath(albumPath)) {
         return failure(400, `Invalid day album path [${albumPath}]`);
     }
-    const body = await parsedBody(request, presignRequestSchema);
+    const body = await parsedBody(request, API_BODIES.presign);
     if ('response' in body) {
         return body.response;
     }

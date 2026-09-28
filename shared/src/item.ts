@@ -1,5 +1,5 @@
 import * as valibot from 'valibot';
-import { galleryRecordSchema, rectangleSchema } from './album.ts';
+import { rectangleSchema } from './album.ts';
 import { mediaTypeSchema } from './item-type.ts';
 import { albumKey, albumPath, isAlbumPath, mediaKey, mediaPath } from './paths.ts';
 
@@ -166,17 +166,3 @@ export function parsePresigned(input: unknown): PresignResponse {
 }
 
 export type AlbumWrite = valibot.InferOutput<typeof albumWriteSchema>;
-
-/** What `GET /api/search/<terms>` returns: the matches this viewer may see, as full records, newest first. */
-const searchResponse = valibot.object({
-    /** Every match, not only this page. */
-    total: valibot.number(),
-    items: valibot.array(galleryRecordSchema),
-});
-
-export type SearchResponse = valibot.InferOutput<typeof searchResponse>;
-
-/** Checks that `input`, a parsed JSON body, is a search response; throws with the first field that is not. */
-export function parseSearch(input: unknown): SearchResponse {
-    return valibot.parse(searchResponse, input);
-}

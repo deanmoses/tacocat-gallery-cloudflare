@@ -1,7 +1,6 @@
 import { RenameStatus } from '$lib/models/album';
-import { renameMediaUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { isMediaPath, parsePath } from '@tacocat-gallery/shared';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
+import { API, isMediaPath, parsePath } from '@tacocat-gallery/shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';
@@ -77,7 +76,7 @@ class MediaRenameMachine {
             const newName = target.name;
             console.log(`Renaming [${oldMediaPath}] to [${newName}]...`);
             this.#renameStarted(oldMediaPath, newMediaPath);
-            const response = await adminApi.post(renameMediaUrl(oldMediaPath), { newName });
+            const response = await callApi(API.renameMedia, oldMediaPath, { newName });
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }

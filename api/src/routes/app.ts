@@ -1,4 +1,5 @@
-import { Hono } from 'hono';
+import { API, AUTH_PREFIX, type Endpoint } from '@tacocat-gallery/shared';
+import { type Handler, Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import {
     currentAdmin,
@@ -47,6 +48,9 @@ interface App {
  */
 export function createApp(): Hono<App> {
     const app = new Hono<App>();
+    const answer = (endpoint: Endpoint, handler: Handler<App>): void => {
+        app.on(endpoint.method, route(endpoint), handler);
+    };
 
     // Every response carries the site's headers, says where it ran and how long the Worker took, and under /api/,
     // which view it served.
@@ -92,8 +96,8 @@ export function createApp(): Hono<App> {
 
     // Login and invites, open to anyone. The endpoints take a passkey bound to the site's own origin, so each needs the
     // request to come from it.
-    app.get('/api/auth/status', async (context) => json({ admin: await currentAdmin(context.req.raw, context.env) }));
-    app.post('/api/auth/*', async (context, next) => {
+    answer(API.authStatus, async (context) => json({ admin: await currentAdmin(context.req.raw, context.env) }));
+    app.post(`${AUTH_PREFIX}/*`, async (context, next) => {
         const site = requestSite(context.req.raw, context.env);
         if (site === null) {
             return failure(403, 'origin not allowed');
@@ -101,24 +105,18 @@ export function createApp(): Hono<App> {
         context.set('site', site);
         return next();
     });
-    app.post('/api/auth/invite', async (context) => inviteStatus(context.req.raw, context.env));
-    app.post('/api/auth/register/options', async (context) =>
-        registerOptions(context.req.raw, context.env, context.get('site')),
-    );
-    app.post('/api/auth/register/verify', async (context) =>
-        registerVerify(context.req.raw, context.env, context.get('site')),
-    );
-    app.post('/api/auth/login/options', async (context) => loginOptions(context.env, context.get('site')));
-    app.post('/api/auth/login/verify', async (context) =>
-        loginVerify(context.req.raw, context.env, context.get('site')),
-    );
-    app.post('/api/auth/logout', async () => logout());
+    answer(API.checkInvite, async (context) => inviteStatus(context.req.raw, context.env));
+    answer(API.registerOptions, async (context) => registerOptions(context.req.raw, context.env, context.get('site')));
+    answer(API.registerVerify, async (context) => registerVerify(context.req.raw, context.env, context.get('site')));
+    answer(API.loginOptions, async (context) => loginOptions(context.env, context.get('site')));
+    answer(API.loginVerify, async (context) => loginVerify(context.req.raw, context.env, context.get('site')));
+    answer(API.logout, async () => logout());
 
     // Reads never refuse: a guest gets the published view. A HEAD arrives at the GET handler with its own method.
-    app.get('/api/album/*', async (context) => getAlbum(context.req.raw, context.env));
-    app.get('/api/media/*', async (context) => headMedia(context.req.raw, context.env));
-    app.get('/api/search/*', async (context) => search(context.req.raw, context.env));
-    app.get('/api/health', async (context) => health(context.env));
+    answer(API.readAlbum, async (context) => getAlbum(context.req.raw, context.env));
+    answer(API.mediaExists, async (context) => headMedia(context.req.raw, context.env));
+    answer(API.search, async (context) => search(context.req.raw, context.env));
+    answer(API.health, async (context) => health(context.env));
     app.get('/raw/*', async (context) => raw(context.req.raw, context.env));
     app.get('/v/*', async (context) => media(context.req.raw, context.env));
     app.get('/i/*', async (context) => derivedViaCacheApi(context.req.raw, context.env, context.executionCtx));
@@ -134,25 +132,30 @@ export function createApp(): Hono<App> {
     app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', async (context, next) =>
         (await currentAdmin(context.req.raw, context.env)) === null ? failure(401, 'Unauthorized') : next(),
     );
-    app.put('/api/item', async (context) => putItem(context.req.raw, context.env));
-    app.post('/api/backup', async (context) => json(await backupDatabase(context.env)));
-    app.post('/api/presigned/*', async (context) => presignRoute(context.req.raw, context.env));
+    answer(API.putItem, async (context) => putItem(context.req.raw, context.env));
+    answer(API.backup, async (context) => json(await backupDatabase(context.env)));
+    answer(API.presign, async (context) => presignRoute(context.req.raw, context.env));
     app.put('/upload/:versionId', async (context) =>
         localUploadRoute(context.req.raw, context.env, context.req.param('versionId')),
     );
-    app.post('/api/errors', async (context) => uploadErrors(context.req.raw, context.env));
-    app.put('/api/album/*', async (context) => createAlbumRoute(context.req.raw, context.env));
-    app.patch('/api/album/*', async (context) => updateAlbumRoute(context.req.raw, context.env));
-    app.delete('/api/album/*', async (context) => deleteAlbumRoute(context.req.raw, context.env));
-    app.post('/api/album-rename/*', async (context) => renameAlbumRoute(context.req.raw, context.env));
-    app.patch('/api/album-thumb/*', async (context) => setAlbumThumbnail(context.req.raw, context.env));
-    app.put('/api/album-order/*', async (context) => orderAlbumRoute(context.req.raw, context.env));
-    app.delete('/api/album-order/*', async (context) => resetAlbumOrderRoute(context.req.raw, context.env));
-    app.patch('/api/media/*', async (context) => updateMediaRoute(context.req.raw, context.env));
-    app.delete('/api/media/*', async (context) => deleteMediaRoute(context.req.raw, context.env));
-    app.post('/api/media-rename/*', async (context) => renameMediaRoute(context.req.raw, context.env));
-    app.patch('/api/thumb/*', async (context) => recutThumbnailRoute(context.req.raw, context.env));
+    answer(API.uploadErrors, async (context) => uploadErrors(context.req.raw, context.env));
+    answer(API.createAlbum, async (context) => createAlbumRoute(context.req.raw, context.env));
+    answer(API.updateAlbum, async (context) => updateAlbumRoute(context.req.raw, context.env));
+    answer(API.deleteAlbum, async (context) => deleteAlbumRoute(context.req.raw, context.env));
+    answer(API.renameAlbum, async (context) => renameAlbumRoute(context.req.raw, context.env));
+    answer(API.setAlbumThumbnail, async (context) => setAlbumThumbnail(context.req.raw, context.env));
+    answer(API.orderAlbum, async (context) => orderAlbumRoute(context.req.raw, context.env));
+    answer(API.resetAlbumOrder, async (context) => resetAlbumOrderRoute(context.req.raw, context.env));
+    answer(API.updateMedia, async (context) => updateMediaRoute(context.req.raw, context.env));
+    answer(API.deleteMedia, async (context) => deleteMediaRoute(context.req.raw, context.env));
+    answer(API.renameMedia, async (context) => renameMediaRoute(context.req.raw, context.env));
+    answer(API.recutThumbnail, async (context) => recutThumbnailRoute(context.req.raw, context.env));
     return app;
+}
+
+/** The endpoint's path as a Hono route: a prefixed endpoint matches whatever goes on after its prefix. */
+export function route(endpoint: Endpoint): string {
+    return 'path' in endpoint ? endpoint.path : `${endpoint.prefix}/*`;
 }
 
 /** Where the request came in, from what Cloudflare adds to a request at the edge; wrangler dev adds nothing. */

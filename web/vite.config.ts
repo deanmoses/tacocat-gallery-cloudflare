@@ -7,6 +7,7 @@ import esx from 'eslint-plugin-es-x';
 import type { Plugin, ProxyOptions } from 'vite';
 import { defaultExclude, defineConfig } from 'vitest/config';
 import { BROWSER_FLOOR_RULES_UNTYPED } from '../browser-floor.ts';
+import { guestBundle } from './guest-bundle.ts';
 
 // The Worker, which `npm run dev --workspace api` serves with the app's build. `vite dev` serves the app itself, with
 // hot reloading, and passes the Worker's own routes through to it: the list is `run_worker_first` in
@@ -92,7 +93,7 @@ export async function browserFloorFindings(code: string, fileName: string): Prom
 }
 
 export default defineConfig({
-    plugins: [notFoundUnderTest(), sveltekit(), browserFloor()],
+    plugins: [notFoundUnderTest(), sveltekit(), browserFloor(), guestBundle()],
     // The browsers in .browserslistrc: Rolldown lowers the syntax they lack and Lightning CSS the CSS, media query
     // ranges included.
     build: { target: browserslistToEsbuild() },

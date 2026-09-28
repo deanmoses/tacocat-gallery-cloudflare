@@ -1,4 +1,5 @@
-import { readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { API, apiUrl } from '@tacocat-gallery/shared';
 import { describe, expect, inject, it } from 'vitest';
 import { SITE_HEADERS } from '../../src/http/headers.ts';
 
@@ -48,5 +49,20 @@ describe('robots.txt', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
         expect(body).toMatch(/^(?:#[^\n]*\n)*User-agent: \*\nAllow: \/\n$/v);
+    });
+});
+
+describe("the app's preloads", () => {
+    it('ask for albums at the URLs the app reads them from, or a browser fetches each album twice', async () => {
+        const headers = await readFile(new URL('../../../web/static/_headers', import.meta.url), 'utf8');
+        const links = headers
+            .split('\n')
+            .filter((line) => line.trimStart().startsWith('Link:'))
+            .flatMap((line) => line.slice(line.indexOf(':') + 1).split(','));
+        const preloaded = new Set(links.map((link) => link.slice(link.indexOf('<') + 1, link.indexOf('>'))));
+
+        expect(preloaded).toStrictEqual(
+            new Set([apiUrl(API.readAlbum, '/:year/'), apiUrl(API.readAlbum, '/:year/:day/')]),
+        );
     });
 });

@@ -1,12 +1,4 @@
-import {
-    type ItemKey,
-    cropPercentSchema,
-    isMediaName,
-    mediaKey,
-    mediaPath,
-    mediaWriteSchema,
-    renameSchema,
-} from '@tacocat-gallery/shared';
+import { API, API_BODIES, type ItemKey, isMediaName, mediaKey, mediaPath } from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { d1Header } from '../db/timing';
@@ -23,7 +15,7 @@ export async function headMedia(request: Request, env: Env): Promise<Response> {
     if (request.method !== 'HEAD') {
         return failure(405, 'Method Not Allowed');
     }
-    const key = mediaKey(`/${pathAfter(new URL(request.url), '/api/media/')}`);
+    const key = mediaKey(pathAfter(new URL(request.url), API.mediaExists.prefix));
     if (key === null) {
         return notFound();
     }
@@ -36,7 +28,7 @@ export async function headMedia(request: Request, env: Env): Promise<Response> {
 
 /** The media item an admin write names, or the 404 for a path that is no media item. */
 function writableMedia(request: Request, prefix: string): ItemKey | Response {
-    return mediaKey(`/${pathAfter(new URL(request.url), prefix)}`) ?? notFound();
+    return mediaKey(pathAfter(new URL(request.url), prefix)) ?? notFound();
 }
 
 function notFoundMedia(key: ItemKey): Response {
@@ -45,11 +37,11 @@ function notFoundMedia(key: ItemKey): Response {
 
 /** `PATCH /api/media/<path>` changes the fields the body holds. */
 export async function updateMediaRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableMedia(request, '/api/media/');
+    const key = writableMedia(request, API.updateMedia.prefix);
     if (key instanceof Response) {
         return key;
     }
-    const body = await parsedBody(request, mediaWriteSchema);
+    const body = await parsedBody(request, API_BODIES.updateMedia);
     if ('response' in body) {
         return body.response;
     }
@@ -64,7 +56,7 @@ export async function updateMediaRoute(request: Request, env: Env): Promise<Resp
 
 /** `DELETE /api/media/<path>` drops the item; its objects wait for the purge. */
 export async function deleteMediaRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableMedia(request, '/api/media/');
+    const key = writableMedia(request, API.deleteMedia.prefix);
     if (key instanceof Response) {
         return key;
     }
@@ -76,12 +68,12 @@ export async function deleteMediaRoute(request: Request, env: Env): Promise<Resp
 
 /** `POST /api/media-rename/<path>` with `{ newName }`: a media name, which the item takes unless another has it. */
 export async function renameMediaRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableMedia(request, '/api/media-rename/');
+    const key = writableMedia(request, API.renameMedia.prefix);
     if (key instanceof Response) {
         return key;
     }
     const path = mediaPath(key.parentPath, key.itemName);
-    const body = await parsedBody(request, renameSchema);
+    const body = await parsedBody(request, API_BODIES.renameMedia);
     if ('response' in body) {
         return body.response;
     }
@@ -106,11 +98,11 @@ export async function renameMediaRoute(request: Request, env: Env): Promise<Resp
 
 /** `PATCH /api/thumb/<path>` with a rectangle in percent of the image sets where its thumbnail is cut from. */
 export async function recutThumbnailRoute(request: Request, env: Env): Promise<Response> {
-    const key = writableMedia(request, '/api/thumb/');
+    const key = writableMedia(request, API.recutThumbnail.prefix);
     if (key instanceof Response) {
         return key;
     }
-    const body = await parsedBody(request, cropPercentSchema);
+    const body = await parsedBody(request, API_BODIES.recutThumbnail);
     if ('response' in body) {
         return body.response;
     }

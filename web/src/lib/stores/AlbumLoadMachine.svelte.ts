@@ -2,10 +2,9 @@ import { produce } from 'immer';
 import { del as delFromIdb, get as getFromIdb, set as setToIdb } from 'idb-keyval';
 import { type AlbumEntry, AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import toAlbum from '$lib/models/impl/AlbumCreator';
-import { isAlbumPath } from '@tacocat-gallery/shared';
+import { API, apiUrl, isAlbumPath } from '@tacocat-gallery/shared';
 import type { AlbumRecord } from '$lib/models/impl/server';
 import { parseAlbum } from '@tacocat-gallery/shared';
-import { albumUrl } from '$lib/utils/config';
 import { albumState } from './AlbumState.svelte';
 
 /**
@@ -165,7 +164,8 @@ class AlbumLoadMachine {
             // In the browser's default cache mode: the album page's headers preload this URL, and a browser hands the
             // preloaded response only to a request made the same way. A request that bypassed the cache would fetch
             // the album a second time.
-            const response = await fetch(albumUrl(path));
+            if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
+            const response = await fetch(apiUrl(API.readAlbum, path));
             if (response.status === 404) {
                 this.#notFound(path);
                 void this.#removeFromDisk(path); // Delete album from local disk
@@ -198,7 +198,7 @@ class AlbumLoadMachine {
      */
     async albumExists(path: string): Promise<boolean> {
         if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
-        const response = await fetch(albumUrl(path), { method: 'HEAD' });
+        const response = await fetch(apiUrl(API.readAlbum, path), { method: 'HEAD' });
         if (response.status === 404) {
             void this.#removeFromDisk(path);
             return false;
