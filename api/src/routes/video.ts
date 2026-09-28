@@ -1,4 +1,4 @@
-import { parseMediaVersion } from 'tacocat-gallery-shared';
+import { parseMediaVersion } from '@tacocat-gallery/shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
 import { IMMUTABLE } from '../media/images';

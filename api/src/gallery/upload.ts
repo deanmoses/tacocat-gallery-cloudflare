@@ -3,7 +3,7 @@ import type { RunnableQuery } from 'drizzle-orm/runnable-query';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { WorkflowStep } from 'cloudflare:workers';
 import * as valibot from 'valibot';
-import { type MediaType, type Size, mediaPath } from 'tacocat-gallery-shared';
+import { type MediaType, type Size, mediaPath } from '@tacocat-gallery/shared';
 import { NOW, type Orm, orm, schema } from '../db';
 import { readImage } from '../media/exif';
 import { SNIFF_LENGTH, type SniffedMedia, sniffMedia } from '../media/sniff';

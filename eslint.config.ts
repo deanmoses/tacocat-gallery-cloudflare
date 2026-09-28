@@ -184,7 +184,7 @@ interface Forbidden {
 
 const WORKER_CODE: Forbidden[] = [
     {
-        group: ['tacocat-gallery-api', 'tacocat-gallery-api/*', '**/api/src', '**/api/src/**'],
+        group: ['@tacocat-gallery/api', '@tacocat-gallery/api/*', '**/api/src', '**/api/src/**'],
         message: 'Put the shape in shared/ and have the Worker map to it.',
     },
     {
@@ -212,7 +212,7 @@ const TEST_SUPPORT: Forbidden = {
 const WEB_TESTS = ['web/src/**/*.test.ts', 'web/src/lib/test-support/**'];
 
 const WEB_CODE: Forbidden = {
-    group: ['tacocat-gallery-web', 'tacocat-gallery-web/*', '**/web/src', '**/web/src/**'],
+    group: ['@tacocat-gallery/web', '@tacocat-gallery/web/*', '**/web/src', '**/web/src/**'],
     message: 'Move what both sides need into shared/.',
 };
 

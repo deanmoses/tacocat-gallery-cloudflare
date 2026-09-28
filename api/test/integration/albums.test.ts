@@ -1,4 +1,4 @@
-import { type AlbumGalleryItem, parseAlbum } from 'tacocat-gallery-shared';
+import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { call, callAsAdmin, callForJson, parseExactly, putItem } from '../helpers';
 

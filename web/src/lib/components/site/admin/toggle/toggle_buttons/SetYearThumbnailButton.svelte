@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
     import { page } from '$app/state';
-    import { isMediaPath, parentPathOf } from 'tacocat-gallery-shared';
+    import { isMediaPath, parentPathOf } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import SetYearThumbnailConfirmDialog from './SetYearThumbnailConfirmDialog.svelte';
     import StarIcon from '$lib/components/site/icons/StarIcon.svelte';

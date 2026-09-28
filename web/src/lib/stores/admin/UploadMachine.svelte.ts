@@ -13,7 +13,7 @@ import {
     mediaPath,
     parentPathOf,
     sanitizeMediaName,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 import { isMediaFile, processingTimeout } from '$lib/utils/fileFormats';
 import { checkMediaErrors } from '$lib/utils/mediaErrors';
 

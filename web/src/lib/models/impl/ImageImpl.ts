@@ -1,7 +1,7 @@
 import type { ImageRecord } from './server';
 import type { Album, Image } from '../GalleryItemInterfaces';
 import { MediaBaseImpl } from './MediaBaseImpl';
-import { originalUrl } from 'tacocat-gallery-shared';
+import { originalUrl } from '@tacocat-gallery/shared';
 
 export class ImageImpl extends MediaBaseImpl implements Image {
     protected override readonly json: ImageRecord;

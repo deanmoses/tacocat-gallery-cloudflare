@@ -1,5 +1,5 @@
 {
-    "name": "tacocat-gallery-shared",
+    "name": "@tacocat-gallery/shared",
     "version": "0.0.1",
     "description": "The types and schemas the Worker and the web app agree on",
     "private": true,

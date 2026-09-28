@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
-import { type AlbumGalleryItem, parseAlbum } from 'tacocat-gallery-shared';
+import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { originalKey } from '../../src/storage/keys';

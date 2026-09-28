@@ -10,7 +10,7 @@
     import { albumState } from '$lib/stores/AlbumState.svelte';
     import { getSanitizedFiles, uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
     import { acceptedExtensions } from '$lib/utils/fileFormats';
-    import { isDayAlbumPath, pathOfUrl } from 'tacocat-gallery-shared';
+    import { isDayAlbumPath, pathOfUrl } from '@tacocat-gallery/shared';
     import { markReplacements } from '$lib/utils/uploadUtils';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import UploadReplaceConfirmDialog from './UploadReplaceConfirmDialog.svelte';

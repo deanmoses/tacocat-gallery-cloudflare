@@ -1,6 +1,6 @@
 import { DOMParser, onErrorStopParsing } from '@xmldom/xmldom';
 import ExifReader from 'exifreader';
-import type { Size } from 'tacocat-gallery-shared';
+import type { Size } from '@tacocat-gallery/shared';
 
 interface ImageFacts extends Size {
     title: string | null;

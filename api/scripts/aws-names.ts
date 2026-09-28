@@ -2,7 +2,7 @@
 // so each becomes the name the sanitizer makes of it, and two that come out the same in one day album are told apart
 // by `_n`. A link in a description that names an AWS media path is rewritten to the item's new path. Nothing here
 // touches the network, so both scripts share it and a test can hold it still.
-import { deduplicateNames, mediaKey, mediaPath, parsePath, sanitizeMediaName } from 'tacocat-gallery-shared';
+import { deduplicateNames, mediaKey, mediaPath, parsePath, sanitizeMediaName } from '@tacocat-gallery/shared';
 
 /** A media item as AWS lists it: its name there, and `video` for a video, which AWS says in `mediaType`. */
 export interface AwsNamed {

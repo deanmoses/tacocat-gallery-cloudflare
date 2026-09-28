@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
-import { mediaKey } from 'tacocat-gallery-shared';
+import { mediaKey } from '@tacocat-gallery/shared';
 import { derivedPrefix, originalKey } from '../src/storage/keys.ts';
 import { type ListedObject, listObjects } from '../src/storage/s3.ts';
 import { devVars } from './dev-vars.ts';

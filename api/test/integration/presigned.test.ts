@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { asc } from 'drizzle-orm';
-import { parsePresigned } from 'tacocat-gallery-shared';
+import { parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { inboxKey } from '../../src/storage/keys';

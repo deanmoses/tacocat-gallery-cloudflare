@@ -1,4 +1,4 @@
-import { parseImageRequest, parseMediaVersion } from 'tacocat-gallery-shared';
+import { parseImageRequest, parseMediaVersion } from '@tacocat-gallery/shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
 import { derivationFor } from '../gallery/derivatives';

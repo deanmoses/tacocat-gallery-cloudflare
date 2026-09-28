@@ -1,4 +1,4 @@
-import { type Size, detailSize } from 'tacocat-gallery-shared';
+import { type Size, detailSize } from '@tacocat-gallery/shared';
 
 /**
  * The size a media item is shown at on its page: the detail image's long side, and the short side scaled to match, so

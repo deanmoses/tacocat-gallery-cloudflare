@@ -6,7 +6,7 @@ import {
     albumKey,
     mediaKey,
     mediaPath,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 import { type Orm, schema } from '../db';
 import { inboxKey, localUploadUrl, mintVersionId } from '../storage/keys';
 import { type S3Credentials, presign } from '../storage/s3';

@@ -1,4 +1,4 @@
-import { hrefOf } from 'tacocat-gallery-shared';
+import { hrefOf } from '@tacocat-gallery/shared';
 import type { GalleryRecord } from './server';
 import type { ItemType, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 

@@ -4,7 +4,7 @@
 //
 // Their shapes live in shared/, where the Worker builds them.
 
-import type { AlbumRecord, GalleryRecord, ImageRecord, MediaRecord, VideoRecord } from 'tacocat-gallery-shared';
+import type { AlbumRecord, GalleryRecord, ImageRecord, MediaRecord, VideoRecord } from '@tacocat-gallery/shared';
 
 export type {
     AlbumGalleryItem,
@@ -14,7 +14,7 @@ export type {
     MediaRecord,
     Rectangle,
     VideoRecord,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 
 //
 // TYPE GUARDS

@@ -5,7 +5,7 @@ import {
     waitOnExecutionContext,
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import { parsePresigned } from 'tacocat-gallery-shared';
+import { parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import type { R2EventMessage } from '../../src/gallery/upload';

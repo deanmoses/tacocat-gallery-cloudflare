@@ -1,4 +1,4 @@
-import { itemWriteSchema } from 'tacocat-gallery-shared';
+import { itemWriteSchema } from '@tacocat-gallery/shared';
 import { orm, upsertItem } from '../db';
 import { d1Header } from '../db/timing';
 import { written } from '../http/bookmark';

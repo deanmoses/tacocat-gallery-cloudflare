@@ -1,7 +1,7 @@
 import { RenameStatus } from '$lib/models/album';
 import { renameAlbumUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { isDayAlbumPath, parentPathOf, parsePath } from 'tacocat-gallery-shared';
+import { isDayAlbumPath, parentPathOf, parsePath } from '@tacocat-gallery/shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';

@@ -1,4 +1,4 @@
-import { isVersionId } from 'tacocat-gallery-shared';
+import { isVersionId } from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { acceptLocalUpload } from '../gallery/local';
 import { failure, notFound } from '../http/responses';

@@ -1,4 +1,4 @@
-import { type PresignRequest, type PresignResponse, parsePresigned } from 'tacocat-gallery-shared';
+import { type PresignRequest, type PresignResponse, parsePresigned } from '@tacocat-gallery/shared';
 import { getPresignedUploadUrlGenerationUrl } from './config';
 import { adminApi, failureMessage } from './adminApi';
 

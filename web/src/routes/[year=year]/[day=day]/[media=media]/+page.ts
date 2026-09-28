@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
-import { albumPath, hrefOf, isMediaName, mediaPath, parsePath, sanitizeMediaName } from 'tacocat-gallery-shared';
+import { albumPath, hrefOf, isMediaName, mediaPath, parsePath, sanitizeMediaName } from '@tacocat-gallery/shared';
 import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
 
 export const load: PageLoad = ({ params }) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from 'tacocat-gallery-shared';
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@tacocat-gallery/shared';
 import { acceptedExtensions, browserCanDisplay, isMediaFile, processingTimeout } from './fileFormats';
 
 interface FormatCase {

@@ -1,4 +1,4 @@
-import { parsePath } from 'tacocat-gallery-shared';
+import { parsePath } from '@tacocat-gallery/shared';
 import { AlbumDayImpl } from './AlbumDayImpl';
 import type { Album } from '../GalleryItemInterfaces';
 import { AlbumRootImpl } from './AlbumRootImpl';

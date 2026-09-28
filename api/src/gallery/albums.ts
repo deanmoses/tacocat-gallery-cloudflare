@@ -8,7 +8,7 @@ import {
     albumKey,
     albumPath,
     mediaKey,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 import { type Orm, batchRun, schema } from '../db';
 import { type Row, type Selection, selectRecords, selectRecordsBatch, toAlbumRecord, toRecord } from './records';
 import { type Written, caption, isKey, written } from './writes';

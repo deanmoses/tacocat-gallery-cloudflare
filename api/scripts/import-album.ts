@@ -16,7 +16,7 @@
 // put` gave the deployed Workers.
 import { setTimeout as sleep } from 'node:timers/promises';
 import * as valibot from 'valibot';
-import { mediaPath, parsePath } from 'tacocat-gallery-shared';
+import { mediaPath, parsePath } from '@tacocat-gallery/shared';
 import { adminCookie } from './admin-cookie.ts';
 import { renamedMedia, rewriteLinks, sanitizedPath } from './aws-names.ts';
 import { devVars } from './dev-vars.ts';

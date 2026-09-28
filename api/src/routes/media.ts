@@ -6,7 +6,7 @@ import {
     mediaPath,
     mediaWriteSchema,
     renameSchema,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { d1Header } from '../db/timing';

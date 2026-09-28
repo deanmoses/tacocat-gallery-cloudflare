@@ -6,7 +6,7 @@
 <script lang="ts">
     import { flip } from 'svelte/animate';
     import { type DndEvent, dndzone } from 'svelte-dnd-action';
-    import { mediaKey } from 'tacocat-gallery-shared';
+    import { mediaKey } from '@tacocat-gallery/shared';
     import DayAlbumPageLayout from './DayAlbumPageLayout.svelte';
     import EditControlsLayout from '$lib/components/site/admin/edit_controls/EditControlsLayout.svelte';
     import CancelButton from '$lib/components/site/admin/edit_controls/buttons/CancelButton.svelte';

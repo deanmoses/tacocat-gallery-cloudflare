@@ -10,7 +10,7 @@ import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { eq } from 'drizzle-orm';
-import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from 'tacocat-gallery-shared';
+import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
 import worker from '../../src/index';

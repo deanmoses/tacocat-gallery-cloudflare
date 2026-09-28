@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { ItemWrite } from 'tacocat-gallery-shared';
+import type { ItemWrite } from '@tacocat-gallery/shared';
 import { adminCookie } from '../api/test/secrets.ts';
 
 export const E2E_PORT = 8790;

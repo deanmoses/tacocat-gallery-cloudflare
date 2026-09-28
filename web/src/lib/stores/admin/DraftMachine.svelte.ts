@@ -2,7 +2,7 @@ import type { Draft, DraftContent } from '$lib/models/draft';
 import { DraftStatus } from '$lib/models/draft';
 import { produce } from 'immer';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
-import { isMediaPath, parentPathOf, parsePath } from 'tacocat-gallery-shared';
+import { isMediaPath, parentPathOf, parsePath } from '@tacocat-gallery/shared';
 import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
 import { itemUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';

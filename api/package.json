@@ -1,5 +1,5 @@
 {
-    "name": "tacocat-gallery-api",
+    "name": "@tacocat-gallery/api",
     "version": "0.0.1",
     "description": "The Cloudflare Worker behind the pix.tacocat.com photo gallery",
     "private": true,
@@ -28,7 +28,7 @@
         "drizzle-orm": "^0.45.3",
         "exifreader": "^4.45.2",
         "hono": "^4.13.9",
-        "tacocat-gallery-shared": "0.0.1",
+        "@tacocat-gallery/shared": "0.0.1",
         "valibot": "^1.5.0"
     },
     "devDependencies": {

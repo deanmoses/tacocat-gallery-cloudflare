@@ -4,7 +4,7 @@ import { ReloadStatus } from '$lib/models/album';
 import { setThumbnailUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
-import { isYearAlbumPath, parentPathOf } from 'tacocat-gallery-shared';
+import { isYearAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
 import { albumTitle } from '$lib/utils/date-utils';
 
 /**

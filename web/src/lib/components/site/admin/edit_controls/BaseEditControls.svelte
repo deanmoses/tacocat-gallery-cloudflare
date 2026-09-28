@@ -11,7 +11,7 @@
     import StatusMessage from './buttons/StatusMessage.svelte';
     import { DraftStatus } from '$lib/models/draft';
     import { page } from '$app/state';
-    import { pathOfUrl } from 'tacocat-gallery-shared';
+    import { pathOfUrl } from '@tacocat-gallery/shared';
     import { draftMachine } from '$lib/stores/admin/DraftMachine.svelte';
     import { editModeMachine } from '$lib/stores/admin/EditModeMachine.svelte';
 

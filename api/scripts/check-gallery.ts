@@ -15,7 +15,7 @@
 // Usage: node api/scripts/check-gallery.ts prod-items.json [--site http://localhost:8787] [--paths]
 import { readFile } from 'node:fs/promises';
 import * as valibot from 'valibot';
-import { albumPath, mediaPath } from 'tacocat-gallery-shared';
+import { albumPath, mediaPath } from '@tacocat-gallery/shared';
 import { adminCookie } from './admin-cookie.ts';
 import { type Renamed, type RewrittenLink, renamedMedia, rewriteLinks } from './aws-names.ts';
 import { devVars } from './dev-vars.ts';

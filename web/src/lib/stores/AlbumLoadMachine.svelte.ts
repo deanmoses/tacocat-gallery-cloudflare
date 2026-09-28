@@ -2,9 +2,9 @@ import { produce } from 'immer';
 import { del as delFromIdb, get as getFromIdb, set as setToIdb } from 'idb-keyval';
 import { type AlbumEntry, AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import toAlbum from '$lib/models/impl/AlbumCreator';
-import { isAlbumPath } from 'tacocat-gallery-shared';
+import { isAlbumPath } from '@tacocat-gallery/shared';
 import type { AlbumRecord } from '$lib/models/impl/server';
-import { parseAlbum } from 'tacocat-gallery-shared';
+import { parseAlbum } from '@tacocat-gallery/shared';
 import { albumUrl } from '$lib/utils/config';
 import { albumState } from './AlbumState.svelte';
 

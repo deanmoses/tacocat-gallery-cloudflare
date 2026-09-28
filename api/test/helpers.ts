@@ -1,7 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
-import type { ItemWrite } from 'tacocat-gallery-shared';
+import type { ItemWrite } from '@tacocat-gallery/shared';
 import { expect } from 'vitest';
 import { orm, schema } from '../src/db';
 import worker from '../src/index';

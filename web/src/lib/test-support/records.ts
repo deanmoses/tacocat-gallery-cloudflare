@@ -14,7 +14,7 @@ import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import type { RenameEntry, RenameStatus, UploadEntry } from '$lib/models/album';
 import type { AlbumGalleryItem, ImageRecord, MediaRecord, VideoRecord } from '$lib/models/impl/server';
-import { mediaPath as mediaPathIn, parentPathOf } from 'tacocat-gallery-shared';
+import { mediaPath as mediaPathIn, parentPathOf } from '@tacocat-gallery/shared';
 
 /** The album every fixture sits in, unless a spec is about paths themselves */
 const ROOT_ALBUM_PATH = '/';

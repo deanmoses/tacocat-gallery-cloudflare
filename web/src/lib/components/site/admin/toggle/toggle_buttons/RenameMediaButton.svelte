@@ -13,7 +13,7 @@
         mediaPath as mediaPathOf,
         parentPathOf,
         sanitizeMediaNameAsTyped,
-    } from 'tacocat-gallery-shared';
+    } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
     import { mediaRenameMachine } from '$lib/stores/admin/MediaRenameMachine.svelte';

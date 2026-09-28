@@ -1,4 +1,4 @@
-import { type ImageRequest, type ImageSize, cropText, sizeText } from 'tacocat-gallery-shared';
+import { type ImageRequest, type ImageSize, cropText, sizeText } from '@tacocat-gallery/shared';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
 // Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets the
