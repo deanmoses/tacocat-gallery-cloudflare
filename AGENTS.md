@@ -6,11 +6,23 @@
 
 This file provides guidance to AI programming agents when working with code in this repository.
 
-This project is a production-quality prototype of the <https://pix.tacocat.com> photo gallery on Cloudflare. The current production gallery is on AWS; this repo is to prove out that it improves performance and developer ergonomics over the AWS version. I'm using the word 'prototype' because we haven't made the decision to switch, but if we decide to switch, this code DOES become production. A goal is to make this higher quality and more robust than the AWS version.
+This project is a re-imagining of the Tacocat photo gallery (<https://pix.tacocat.com>) on Cloudflare. The current production gallery is on AWS; this repo is to prove out that moving to Cloudflare would improve the system. The original goals, in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo, were all about performance, but we've expanded the criteria:
 
-The prototype's original goals are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo. Those two docs are all about performance, but since they were written we've found we like the developer ergonomics and 1-repo simplicity of Cloudflare enough that we might switch even if performance is merely slightly better rather than dramatically better. We're making the decision to move by closing down all the risks in `docs/Risks.md`.
+- **Developer ergonomics**: we find we much prefer Cloudflare's developer ergonomics. Things like:
+    - **Single repo development**. We replaced AWS's four repos (sveltekit, SPA hosting, SAM, auth) with this single monorepo. So much easier to manage! AIs can make coordinated changes. Vastly speeds up development. Now when I go back to the AWS I hate it, it feels agonizingly clunky.
+    - **Localhost support**. Cloudflare's stack run on localhost, meaning tests can run on the actual stuff that runs in prod. No more endlessly mocking out DynamoDB. I can run integration tests locally rather than in the cloud! I finally can log in and upload files on localhost! Much faster feedback loops, AI sessions can iterate on things super quick. Vastly speeds up development.
+    - **Simpler deploys**. Because we've improved testing (see below), I'm comfortable deploying to prod when merging a PR to main. No more manually clicking on Github Actions in four separate repos.
+- **Feature improvements**: we've found we can improve capabilities. For example:
+    - Switching to SQLite's built-in search allows for accent-insensitive search.
+    - Switching to SQLite and improved localhost support made it easier to add a users table and a photo re-ordering feature, things that I had been intimidated by on the DynamoDB based AWS system.
+- **Simplicity**: the Cloudflare stack is simpler: no subdomains (eliminating whole classes of domain management issues) and very little CORS, no API Gateway, no CloudFront, no Cognito, no Redis. We simplified media storage by making it truly immutable, meaning when we replace or rename an image, it's purely adding a new file under a new ID such that the only other things that change are in the database, which greatly simplified and speeded up renames and replaces.
+- **More robust**: it feels like the Cloudflare stack can be more easily made robust than AWS. Examples:
+    - Because Cloudflare is a monorepo we're able to easily share code between the front end and back end, making whole classes of errors impossible by construction.
+    - Because it's easier to write and run integration tests, we are writing more tests, and I feel more comfortable doing things like enabling Dependabot.
 
-No albums or media have been migrated from AWS. There is one admin, moses, only logged in to staging. The staging and production databases hold nothing that matters and can be deleted.
+We will make the go/no go decision by closing down all the items in `docs/Risks.md`.
+
+No albums or media have been migrated from AWS yet. For now there is only one admin, moses, only logged in to staging. The staging and production databases hold nothing that matters and can be deleted. So now is the time to do any destructive changes that would result in a better, simpler, more hardened system.
 
 ## This repo
 
