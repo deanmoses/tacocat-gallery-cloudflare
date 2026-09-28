@@ -1,9 +1,11 @@
 // Prints a media item's row and the objects stored for its version. The buckets are keyed by version id, so a gallery
-// path finds nothing in the dashboard; this is the way from a path to its objects. Reads the deployed database with
-// the account token and lists the buckets through the S3 API with the read-only R2 token, both from api/.dev.vars.
+// path finds nothing in the dashboard; this is the way from a path to its objects. Reads the deployed database and
+// lists the buckets with the OpenTofu token in api/.dev.vars, which doubles as S3 credentials: an API token's id is
+// an access key id, and the SHA-256 of its value the secret.
 //
 // Usage: node api/scripts/media.ts /2024/12-17/felix [--env production]
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
 import { mediaKey } from 'tacocat-gallery-shared';
@@ -39,6 +41,7 @@ if (key === null || (environment !== 'staging' && environment !== 'production'))
 const target = TARGETS[environment];
 
 const secrets = await devVars();
+const token = secrets['CLOUDFLARE_TERRAFORM_API_TOKEN'] ?? '';
 const [statement] = valibot.parse(
     EXECUTED,
     JSON.parse(
@@ -63,12 +66,24 @@ if (row.version_id !== null) {
     await listVersion(row.version_id);
 }
 
+const VERIFIED = valibot.looseObject({ result: valibot.looseObject({ id: valibot.string() }) });
+
+/** The token as S3 credentials. Its id comes from the verify route, which is the one route every token may call. */
+async function s3Credentials(): Promise<{ R2_ACCESS_KEY_ID: string; R2_SECRET_ACCESS_KEY: string }> {
+    const account = 'ed3ca575118099486baeb129959697c8';
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/tokens/verify`, {
+        headers: { authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        throw new Error(`verifying the OpenTofu token failed: ${String(response.status)}`);
+    }
+    const { result } = valibot.parse(VERIFIED, await response.json());
+    return { R2_ACCESS_KEY_ID: result.id, R2_SECRET_ACCESS_KEY: createHash('sha256').update(token).digest('hex') };
+}
+
 /** Prints what each bucket holds for the version. */
 async function listVersion(versionId: string): Promise<void> {
-    const credentials = {
-        R2_ACCESS_KEY_ID: secrets['R2_READER_ACCESS_KEY_ID'] ?? '',
-        R2_SECRET_ACCESS_KEY: secrets['R2_READER_SECRET_ACCESS_KEY'] ?? '',
-    };
+    const credentials = await s3Credentials();
     const [originals, derived] = await Promise.all([
         listObjects(credentials, target.originals, originalKey(versionId)),
         listObjects(credentials, target.derived, `${derivedPrefix(versionId)}/`),
@@ -101,7 +116,7 @@ async function wrangler(args: string[]): Promise<string> {
             ['wrangler', ...args],
             {
                 cwd: API_DIR,
-                env: { ...process.env, CLOUDFLARE_API_TOKEN: secrets['CLOUDFLARE_TERRAFORM_API_TOKEN'] ?? '' },
+                env: { ...process.env, CLOUDFLARE_API_TOKEN: token },
             },
             (error, stdout) => {
                 if (error) {

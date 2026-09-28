@@ -144,3 +144,40 @@ resource "cloudflare_r2_bucket_event_notification" "uploads" {
 output "d1_database_id" {
   value = cloudflare_d1_database.this.id
 }
+
+# The S3 key the Worker presigns with: the browser's PUT into uploads, and the transcoder's read from uploads and
+# writes into derived. Those two buckets and nothing else, so no URL the Worker signs can touch an original or a dump.
+# An API token's id is an S3 access key id and the SHA-256 of its value the secret.
+data "cloudflare_account_api_token_permission_groups_list" "bucket_item_write" {
+  account_id = var.account_id
+  name       = "Workers R2 Storage Bucket Item Write"
+}
+
+resource "cloudflare_account_token" "signing" {
+  account_id = var.account_id
+  name       = "${var.prefix} signing"
+  policies = [{
+    effect            = "allow"
+    permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_write.result[0].id }]
+    resources = jsonencode({
+      for bucket in [cloudflare_r2_bucket.uploads.name, cloudflare_r2_bucket.derived.name] :
+      "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${bucket}" => "*"
+    })
+  }]
+}
+
+output "signing_credentials" {
+  value = {
+    access_key_id     = cloudflare_account_token.signing.id
+    secret_access_key = sha256(cloudflare_account_token.signing.value)
+  }
+  sensitive = true
+}
+
+output "originals_bucket" {
+  value = cloudflare_r2_bucket.originals.name
+}
+
+output "backups_bucket" {
+  value = cloudflare_r2_bucket.backups.name
+}

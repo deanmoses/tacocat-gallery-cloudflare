@@ -72,3 +72,36 @@ module "environment" {
 output "d1_database_ids" {
   value = { for name, environment in module.environment : name => environment.d1_database_id }
 }
+
+# What the nightly backup workflow reads with: production's originals and dumps, and nothing it could write.
+data "cloudflare_account_api_token_permission_groups_list" "bucket_item_read" {
+  account_id = local.account_id
+  name       = "Workers R2 Storage Bucket Item Read"
+}
+
+resource "cloudflare_account_token" "backup" {
+  account_id = local.account_id
+  name       = "backup"
+  policies = [{
+    effect            = "allow"
+    permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_read.result[0].id }]
+    resources = jsonencode({
+      for bucket in [module.environment["production"].originals_bucket, module.environment["production"].backups_bucket] :
+      "com.cloudflare.edge.r2.bucket.${local.account_id}_default_${bucket}" => "*"
+    })
+  }]
+}
+
+# Each token as S3 credentials, for scripts/secrets.sh to put where they are used.
+output "r2_credentials" {
+  value = merge(
+    { for name, environment in module.environment : name => environment.signing_credentials },
+    {
+      backup = {
+        access_key_id     = cloudflare_account_token.backup.id
+        secret_access_key = sha256(cloudflare_account_token.backup.value)
+      }
+    },
+  )
+  sensitive = true
+}

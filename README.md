@@ -44,10 +44,13 @@ To seed staging, `node api/scripts/import-album.ts /2024/12-17/` copies a day al
 How both environments were made, and how a third would be, in order. Each environment's resources come from `infra/` (see Infrastructure), and the Worker's first deploy has to be the plain one, since `scripts/release.sh` releases onto a Worker that already serves a version and already has its container application.
 
 1. Add the environment to `local.environments` in `infra/main.tf` and apply; `tofu output d1_database_ids` prints the database id for `api/wrangler.jsonc`, which also needs the environment's block, its Worker name, hostname and resource names.
-2. In the dashboard, make the environment's R2 API token: Object Read & Write on its `uploads` and `derived` buckets and nothing else, so a URL the Worker signs can never touch an original or a dump. Its access key is the token's id and its secret the SHA-256 of the token, which the dashboard shows once.
-3. Deploy with the secrets in one go, `npm run deploy:production --workspace api -- --secrets-file <file>` (or `deploy` for staging), the file a dotenv of `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, a fresh `SESSION_SECRET` and `DEBUGBEAR_API_KEY`, deleted afterwards. Docker has to be up: the deploy builds and ships the transcoder's image. If the hostname is attached to another Worker, Wrangler asks whether to move it, and the answer moves it.
+2. Put a fresh `SESSION_SECRET_<ENVIRONMENT>` in `api/.dev.vars` (`openssl rand -hex 32`), which the import script signs with, then `scripts/secrets.sh <environment>`, which puts the Worker's secrets on it in one upload: the R2 pair from the signing token the apply just made (see Secrets below), that session secret and `DEBUGBEAR_API_KEY`. Wrangler creates the Worker as a draft to hold them.
+3. Deploy, `npm run deploy:production --workspace api` (or `deploy` for staging). Docker has to be up: the deploy builds and ships the transcoder's image. If the hostname is attached to another Worker, Wrangler asks whether to move it, and the answer moves it.
 4. Apply the migrations, `npm run db:migrate:production --workspace api` (or `db:migrate`), then `api/scripts/invite.sh <user> --env <environment>` for a passkey and `node api/scripts/import-album.ts <album> --to <environment>` for something to look at.
-5. Keep the session secret in `api/.dev.vars` as `SESSION_SECRET_<ENVIRONMENT>`, which the import script signs with, and the R2 pair as `R2_ACCESS_KEY_ID_<ENVIRONMENT>` and `R2_SECRET_ACCESS_KEY_<ENVIRONMENT>`; staging's pair is the plain `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, which `wrangler dev` uses too.
+
+### Secrets
+
+The Worker reaches its database, buckets and queue through bindings, which need no credentials. The one thing a binding cannot do is sign a URL, so each Worker holds an S3 key to presign the browser's upload and the transcoder's reads and writes, and an S3 key on R2 is an API token: the access key is the token's id and the secret the SHA-256 of its value. The tokens are defined in `infra/`, as roles would be: each environment's signing token may read and write its `uploads` and `derived` buckets and nothing else, so no URL the Worker signs can touch an original or a dump, and the backup token may read production's `originals` and `backups` buckets and nothing else. `scripts/secrets.sh` moves each token's credentials from OpenTofu's outputs to where they are used, the Worker (`staging`, `production`), the repository (`backup`) or `api/.dev.vars` (`dev`), so no value passes through a person. To rotate one, `tofu apply -replace=<its address>` in `infra/`, then the script again. The values sit in `infra/terraform.tfstate`, local and gitignored, which is the cost of defining them as code.
 
 ## Database schema
 
@@ -69,7 +72,7 @@ The nightly cron dumps the `item` table, not the FTS table, to the `backups` buc
 
 For an in-place undo, Time Travel restores `item` and `item_fts` consistently, but a restore to a timestamp can land minutes early. Before anything risky, note the current bookmark with `npx wrangler d1 time-travel info DB --env production` in `api/`, and restore to that with `npx wrangler d1 time-travel restore DB --env production --bookmark=<bookmark>`.
 
-The originals, and those dumps with them, are copied out of Cloudflare every night by the Backup workflow, which runs `scripts/backup-r2.sh` with rclone over `production-originals` and `production-backups`: on the target, each bucket's `current/` mirrors it, and whatever a night's sync deleted or replaced waits under its `deleted/<date>/` for 35 days. It needs three repository secrets, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` from an R2 API token with Object Read on those two buckets alone, and `BACKUP_TARGET`, an rclone connection string for the other provider's bucket with its credentials in it; the workflow's header has the shape. To restore, rclone copy from a bucket's `current/`, or from its dated tree, back into the bucket.
+The originals, and those dumps with them, are copied out of Cloudflare every night by the Backup workflow, which runs `scripts/backup-r2.sh` with rclone over `production-originals` and `production-backups`: on the target, each bucket's `current/` mirrors it, and whatever a night's sync deleted or replaced waits under its `deleted/<date>/` for 35 days. It needs three repository secrets: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, which `scripts/secrets.sh backup` sets from the backup token `infra/` defines (see Secrets), and `BACKUP_TARGET`, an rclone connection string for the other provider's bucket with its credentials in it; the workflow's header has the shape. To restore, rclone copy from a bucket's `current/`, or from its dated tree, back into the bucket.
 
 ## Development
 
@@ -113,7 +116,7 @@ The app has to load and run on iOS 15.6, the oldest browser a reader visits from
 
 ## Finding an item's objects
 
-The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix` prints the item's row from the deployed database and every object stored for its version in the originals and derived buckets, `--env production` for production. It lists the buckets with the read-only R2 API token `api/.dev.vars` holds as `R2_READER_ACCESS_KEY_ID` and `R2_READER_SECRET_ACCESS_KEY`, Object Read on every environment's originals and derived buckets. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
+The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix` prints the item's row from the deployed database and every object stored for its version in the originals and derived buckets, `--env production` for production. It reads the database and lists the buckets with the OpenTofu token in `api/.dev.vars`, which doubles as S3 credentials the way any API token does. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
 
 ## D1 rounds
 
@@ -125,7 +128,7 @@ The production Worker's cron starts the album journey in DebugBear four times a 
 
 ## Infrastructure
 
-`infra/` holds the OpenTofu config for everything outside the Worker: the zone and its settings once, and each environment's database, buckets, lifecycle rules and queues through the `environment` module, one instance per entry in `local.environments`, whose key is the environment's name and the prefix of everything in it. Its `d1_database_ids` output is what `api/wrangler.jsonc` binds. It uses an account API token named `CLOUDFLARE_TERRAFORM_API_TOKEN` in `api/.dev.vars`, kept out of `CLOUDFLARE_API_TOKEN` because Wrangler would pick that up over the `tacocat` profile. State is local and gitignored.
+`infra/` holds the OpenTofu config for everything outside the Worker: the zone and its settings once, the backup token, and each environment's database, buckets, lifecycle rules, queues and signing token through the `environment` module, one instance per entry in `local.environments`, whose key is the environment's name and the prefix of everything in it. Its `d1_database_ids` output is what `api/wrangler.jsonc` binds. It uses an account API token named `CLOUDFLARE_TERRAFORM_API_TOKEN` in `api/.dev.vars`, kept out of `CLOUDFLARE_API_TOKEN` because Wrangler would pick that up over the `tacocat` profile; it needs Account API Tokens Write as well as its resource permissions, since it makes the signing tokens. State is local and gitignored, and holds those tokens' values.
 
 ```bash
 cd infra
@@ -136,7 +139,7 @@ On a new account, R2 has to be enabled once in the dashboard before `tofu apply`
 
 `infra/tacocat.tf` also declares the `tacocat.com` zone with every record DreamHost serves today, ahead of moving the nameservers; until GoDaddy points at the nameservers `tofu output tacocat_name_servers` prints, nothing in it is live, and Cloudflare deletes a zone left pending 28 days, so apply again before the switch. Before switching, run the Zone diff workflow from the Actions tab with those nameservers: `scripts/zone-diff.sh` compares every record on both and must see authoritative answers, which a home network that intercepts DNS never gives it.
 
-The S3 credentials for presigned uploads come from an R2 API token scoped to the environment's uploads and derived buckets: the access key is the token's id, and the secret is the SHA-256 of the token. Tokens scope to whole buckets, never to a prefix, which is why each role has a bucket of its own.
+Tokens scope to whole buckets, never to a prefix, which is why each role has a bucket of its own (see Secrets under Environments).
 
 Adding `routes` to `api/wrangler.jsonc` switches off `workers.dev` unless `workers_dev` is set.
 
