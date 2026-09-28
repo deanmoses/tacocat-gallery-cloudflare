@@ -1,7 +1,7 @@
 import { type BrowserContext, type Locator, type Page, expect } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
-import { adminCookie } from '../api/test/secrets.ts';
-import { executeLocalSql } from '../api/test/stack/start.ts';
+import { adminCookie } from '@tacocat-gallery/api/test/secrets';
+import { executeLocalSql } from '@tacocat-gallery/api/test/stack';
 import { E2E_STATE } from './gallery.ts';
 
 /** Signs the context in as the test admin, with the cookie the Worker would have set at login. */

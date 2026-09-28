@@ -414,24 +414,43 @@ export default defineConfig(
     ),
     workerLayer('util', [], 'util/ is helpers with no layer; it imports nothing of the Worker.'),
     {
+        // How the import-x rules below find what an import names, in one place: ESLint merges settings across blocks
+        // but replaces an array whole, so a resolver set in a later block would silently override an earlier one.
+        name: 'import-x resolves as TypeScript does',
+        files: ['**/*.ts', '**/*.js', '**/*.svelte'],
+        settings: {
+            // Without these the plugin follows only .js imports and resolves only by the full file name: a cycle
+            // through a .ts file goes unseen, and so does the web app's extensionless import into another workspace,
+            // since no-relative-packages passes an import it cannot resolve.
+            'import-x/extensions': ['.ts', '.js', '.mjs'],
+            'import-x/resolver-next': [
+                createTypeScriptImportResolver({
+                    project: ['.', 'api', 'api/src', 'api/test', 'api/test/stack', 'shared', 'web', 'e2e'],
+                    // Many projects is the layout, not a mistake to warn about on every run.
+                    noWarnOnMultipleProjects: true,
+                }),
+            ],
+        },
+    },
+    {
         // A cycle between modules is a layering bug the rules above cannot see when it stays inside one layer. The web
         // app is not covered: its album models cycle (AlbumBaseImpl imports AlbumCreator, which imports the subclasses
         // of AlbumBaseImpl), as they did in the AWS app it was copied from, and untangling that is a change to the app.
         name: 'no import cycles',
         files: ['api/**/*.ts', 'shared/src/**/*.ts'],
         plugins: { 'import-x': importX },
-        settings: {
-            // Without this the plugin follows only .js imports, and a cycle through a .ts file goes unseen.
-            'import-x/extensions': ['.ts', '.js', '.mjs'],
-            'import-x/resolver-next': [
-                createTypeScriptImportResolver({
-                    project: ['api/src', 'api/test', 'shared'],
-                    // Three projects is the layout, not a mistake to warn about on every run.
-                    noWarnOnMultipleProjects: true,
-                }),
-            ],
-        },
         rules: { 'import-x/no-cycle': 'error' },
+    },
+    {
+        // A workspace reaches another only through that package's exports, which say what it offers the rest of the repo
+        // and let knip see the dependency. The two build configs are the exception, being where the root's tooling and
+        // the app's meet: the lint reads the app's Svelte config, and the app's build checks its output against the
+        // browser floor the lint holds the source to.
+        name: 'workspaces import each other by package name',
+        files: ['**/*.ts', '**/*.js', '**/*.svelte'],
+        ignores: ['eslint.config.ts', 'web/vite.config.ts'],
+        plugins: { 'import-x': importX },
+        rules: { 'import-x/no-relative-packages': 'error' },
     },
     {
         // Runs in both the Worker and the browser, so anything tied to one of them, Node included, breaks the other.

@@ -4,6 +4,11 @@
     "private": true,
     "description": "The Cloudflare Worker behind the Tacocat photo gallery",
     "type": "module",
+    "exports": {
+        "./test/secrets": "./test/secrets.ts",
+        "./test/stack": "./test/stack/start.ts",
+        "./fixtures/*": "./fixtures/*"
+    },
     "scripts": {
         "dev": "CI=true wrangler d1 migrations apply DB --local && env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler dev --local-upstream localhost:8787",
         "test": "vitest run",

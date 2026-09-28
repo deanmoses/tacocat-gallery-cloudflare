@@ -12,8 +12,8 @@ import {
 } from './gallery.ts';
 import { revealAdminControls, signInAsAdmin } from './support.ts';
 
-const JPEG_FIXTURE = fileURLToPath(new URL('../api/fixtures/FullMetadata.jpg', import.meta.url));
-const PNG_FIXTURE = fileURLToPath(new URL('../api/fixtures/pngFormat.png', import.meta.url));
+const JPEG_FIXTURE = fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg'));
+const PNG_FIXTURE = fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/pngFormat.png'));
 
 /** A month for each attempt of the album journey: its number, and its name as a day's title and as a year's link spell it. */
 const MONTHS = [

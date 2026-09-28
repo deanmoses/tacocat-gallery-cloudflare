@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { ItemWrite } from '@tacocat-gallery/shared';
-import { adminCookie } from '../api/test/secrets.ts';
+import { adminCookie } from '@tacocat-gallery/api/test/secrets';
 
 export const E2E_PORT = 8790;
 export const E2E_ORIGIN = `http://localhost:${E2E_PORT}`;
@@ -129,7 +129,7 @@ const GALLERY = {
 export const ORIGINALS = [
     {
         objectPath: `staging-originals/originals/${ADMIN_PHOTO_VERSION}`,
-        file: 'fixtures/FullMetadata.jpg',
+        file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
         contentType: 'image/jpeg',
     },
 ] as const;
