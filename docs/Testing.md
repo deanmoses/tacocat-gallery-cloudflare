@@ -24,7 +24,7 @@ Fake only what cannot run locally or would reach outside:
 
 - **The ffmpeg container.** Code that transcodes takes a narrowed env type (`TranscodeEnv`, `UploadEnv`) whose `TRANSCODER` is anything that answers `fetch`, and a test passes a stand-in.
 - **Third-party HTTP.** `api/test/setup.ts` makes every `fetch` throw unless the test stubs it with `vi.spyOn(globalThis, 'fetch')`, so a forgotten stub fails loudly instead of calling a real service.
-- **A binding failing.** Spy on the binding's method, as in `vi.spyOn(env.MEDIA, 'get')`, and pass every other call through to the real one.
+- **A binding failing.** Spy on the binding's method, as in `vi.spyOn(env.ORIGINALS, 'get')`, and pass every other call through to the real one.
 
 Don't mock modules or stub a sequence of storage calls: that tests how the code works rather than what it does, and the local bindings make it unnecessary. `restoreMocks` and `unstubGlobals` undo spies and stubbed globals after each test.
 
@@ -72,7 +72,7 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - Walk a journey in one test with a `test.step` per page, since a later page is usually reached from the one before it, and the step says where it failed. `e2e/navigation.e2e.ts` is the example.
 - Locators follow the web app's rule, and lint enforces it: roles and names, no CSS selectors, no `.first()` or `.nth()`.
 - The gallery's photos have no file behind them, but for the one the admin journeys crop, which `e2e/server.ts` puts into local R2 before the Worker starts, and the ffmpeg container does not run; so a thumbnail is a broken image, apart from that one and the ones the upload journey makes. Assert on text and links.
-- Uploads complete: the stack runs with `UPLOADS=local`, as `wrangler dev` does, so the Worker takes the browser's PUT into its local bucket and raises the event itself, and the upload journey ends with the item in the album.
+- Uploads complete: the stack runs with `UPLOAD_MODE=local`, as `wrangler dev` does, so the Worker takes the browser's PUT into its local bucket and raises the event itself, and the upload journey ends with the item in the album.
 - An admin journey signs in with `signInAsAdmin` in `e2e/support.ts`, the test cookie added to the browser context, and reveals the control strip with `revealAdminControls`, since the strip shows only under the pointer. Admin journeys write into the year `e2e/gallery.ts` reserves for them, so the reader journeys' albums never change.
 - The passkey journey in `e2e/passkeys.e2e.ts` signs in the real way, with Chromium's virtual authenticator standing in for Face ID or a password manager, and an invite `mintInvite` in `e2e/support.ts` writes into the running site's database for each attempt, since an attempt uses its invite up. The e2e Worker keeps the browser's origin, as `--local-upstream` does under `npm run dev`, since a passkey is bound to it.
 - A failure keeps a trace and a screenshot under `e2e/test-results/`. `npx playwright show-report e2e/playwright-report` opens the HTML report, trace included.

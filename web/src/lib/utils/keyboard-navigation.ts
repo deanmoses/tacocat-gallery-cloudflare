@@ -1,6 +1,6 @@
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { albumNav } from './albumNavigation';
-import { isAlbumPath, isMediaPath, parentPathOf, pathOfUrl } from 'tacocat-gallery-shared';
+import { isAlbumPath, isMediaPath, parentPathOf, pathOfUrl } from '@tacocat-gallery/shared';
 
 /**
  * Shape of function to retrieve an Album from its path.

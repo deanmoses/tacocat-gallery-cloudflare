@@ -1,4 +1,4 @@
-import { type ImageRequest, type Size, THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize } from 'tacocat-gallery-shared';
+import { type ImageRequest, type Size, THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize } from '@tacocat-gallery/shared';
 import { type Derivation, derivativeName, generateDerivative, outputFormat } from '../media/images';
 import { derivedImageKey, originalKey, posterKey } from '../storage/keys';
 

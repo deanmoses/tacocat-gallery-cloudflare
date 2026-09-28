@@ -8,7 +8,7 @@
     import { page } from '$app/state';
     import DeleteIcon from '$lib/components/site/icons/DeleteIcon.svelte';
     import { mediaDeleteMachine } from '$lib/stores/admin/MediaDeleteMachine.svelte';
-    import { isMediaPath, parentPathOf } from 'tacocat-gallery-shared';
+    import { isMediaPath, parentPathOf } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let imagePath: string = $derived(page.url.pathname);

@@ -20,7 +20,7 @@ import {
     mediaTypeSchema,
     versionIdSql,
     yearNameSql,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 
 // The FTS5 table `item_fts` and the triggers that keep it in sync with `item` are raw SQL in migrations/, because
 // Drizzle does not model virtual tables or triggers. drizzle-kit leaves them alone.

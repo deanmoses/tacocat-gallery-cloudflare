@@ -9,7 +9,7 @@ import {
 } from '$lib/models/album';
 import type { CropEntry, DeleteEntry, ReloadStatus, RenameEntry, ReorderEntry, UploadEntry } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { parentPathOf } from 'tacocat-gallery-shared';
+import { parentPathOf } from '@tacocat-gallery/shared';
 import { SvelteMap } from 'svelte/reactivity';
 
 /**

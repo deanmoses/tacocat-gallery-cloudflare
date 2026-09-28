@@ -10,7 +10,7 @@
     import type { AlbumEntry } from '$lib/models/album';
     import { albumDeleteMachine } from '$lib/stores/admin/AlbumDeleteMachine.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
-    import { isDayAlbumPath, isYearAlbumPath, parentPathOf, pathOfUrl } from 'tacocat-gallery-shared';
+    import { isDayAlbumPath, isYearAlbumPath, parentPathOf, pathOfUrl } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let albumPath = $derived(pathOfUrl(page.url.pathname));

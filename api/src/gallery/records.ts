@@ -9,7 +9,7 @@ import {
     mediaPath,
     mediaTypeSchema,
     rectangleSchema,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 import * as valibot from 'valibot';
 import { type Orm, batchRun, schema } from '../db';
 

@@ -1,6 +1,6 @@
 import { type SQL, and, asc, desc, exists, gte, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import type { GalleryRecord } from 'tacocat-gallery-shared';
+import type { GalleryRecord } from '@tacocat-gallery/shared';
 import * as valibot from 'valibot';
 import { type Orm, batchRun, schema } from '../db';
 import type { Match, Query } from './query';

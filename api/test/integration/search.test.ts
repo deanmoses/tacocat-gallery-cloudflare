@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { like } from 'drizzle-orm';
-import { type GalleryRecord, type ItemWrite, type SearchResponse, parseSearch } from 'tacocat-gallery-shared';
+import { type GalleryRecord, type ItemWrite, type SearchResponse, parseSearch } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import { call, callAsAdmin, parseExactly, putItem } from '../helpers';

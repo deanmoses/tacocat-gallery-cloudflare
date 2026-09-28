@@ -1,6 +1,6 @@
 import { type SQL, and, eq, notExists, sql } from 'drizzle-orm';
 import { type AnySQLiteColumn, alias } from 'drizzle-orm/sqlite-core';
-import type { CropPercent, ItemKey, MediaWrite } from 'tacocat-gallery-shared';
+import type { CropPercent, ItemKey, MediaWrite } from '@tacocat-gallery/shared';
 import * as valibot from 'valibot';
 import { type Orm, schema } from '../db';
 import { type Written, caption, isKey, written } from './writes';

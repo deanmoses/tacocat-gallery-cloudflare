@@ -1,4 +1,4 @@
-import { type SearchResponse, isYearName } from 'tacocat-gallery-shared';
+import { type SearchResponse, isYearName } from '@tacocat-gallery/shared';
 import * as valibot from 'valibot';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';

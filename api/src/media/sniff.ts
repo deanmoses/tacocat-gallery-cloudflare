@@ -1,4 +1,4 @@
-import type { MediaType } from 'tacocat-gallery-shared';
+import type { MediaType } from '@tacocat-gallery/shared';
 
 /** What a file's first bytes say it is: which kind of media, its content type, and the extension a download of it gets. */
 export interface SniffedMedia {

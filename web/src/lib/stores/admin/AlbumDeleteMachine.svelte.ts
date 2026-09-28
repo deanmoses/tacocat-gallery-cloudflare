@@ -1,7 +1,7 @@
 import { DeleteStatus } from '$lib/models/album';
 import { itemUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { isAlbumPath, parentPathOf } from 'tacocat-gallery-shared';
+import { isAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';

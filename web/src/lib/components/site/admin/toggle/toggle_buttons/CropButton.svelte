@@ -8,7 +8,7 @@
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import CropIcon from '$lib/components/site/icons/CropIcon.svelte';
-    import { isMediaPath } from 'tacocat-gallery-shared';
+    import { isMediaPath } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let path: string = $derived(page.url.pathname);

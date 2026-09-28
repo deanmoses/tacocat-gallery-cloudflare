@@ -1,4 +1,4 @@
-import { isDayAlbumPath, presignRequestSchema } from 'tacocat-gallery-shared';
+import { isDayAlbumPath, presignRequestSchema } from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { presignUploads } from '../gallery/presign';

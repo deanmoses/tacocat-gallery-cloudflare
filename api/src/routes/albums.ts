@@ -10,7 +10,7 @@ import {
     isDayAlbumPath,
     mediaKey,
     renameSchema,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 import { currentAdmin } from '../auth/passkeys';
 import { orm } from '../db';
 import { d1Header, round } from '../db/timing';

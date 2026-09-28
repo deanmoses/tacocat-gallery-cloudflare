@@ -2,7 +2,7 @@ import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { recropThumbnailUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
-import { parentPathOf } from 'tacocat-gallery-shared';
+import { parentPathOf } from '@tacocat-gallery/shared';
 import { albumState } from '../AlbumState.svelte';
 import { type Crop, CropStatus } from '$lib/models/album';
 

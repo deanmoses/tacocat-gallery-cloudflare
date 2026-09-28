@@ -1,6 +1,6 @@
 import { type SQL, and, eq } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
-import type { ItemKey } from 'tacocat-gallery-shared';
+import type { ItemKey } from '@tacocat-gallery/shared';
 
 // What every gallery write shares. Each write's conditions are in its statement, since D1's one atomic unit is a batch
 // of statements fixed before any runs: the statement's changes say whether the rule held, and a read afterwards says

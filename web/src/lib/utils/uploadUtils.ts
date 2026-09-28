@@ -1,6 +1,6 @@
 import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { isVideoFile } from 'tacocat-gallery-shared';
+import { isVideoFile } from '@tacocat-gallery/shared';
 
 export interface ProcessedUploadsResult {
     /** The paths of the uploads the album now holds */

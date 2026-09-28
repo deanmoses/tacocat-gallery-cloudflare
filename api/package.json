@@ -1,8 +1,8 @@
 {
-    "name": "tacocat-gallery-api",
+    "name": "@tacocat-gallery/api",
     "version": "0.0.1",
-    "description": "The Cloudflare Worker behind the pix.tacocat.com photo gallery",
     "private": true,
+    "description": "The Cloudflare Worker behind the Tacocat photo gallery",
     "type": "module",
     "scripts": {
         "dev": "CI=true wrangler d1 migrations apply DB --local && env -u npm_config_workspace npm run --silent --prefix ../web build && wrangler dev --local-upstream localhost:8787",
@@ -23,12 +23,12 @@
     "dependencies": {
         "@cloudflare/containers": "^0.3.7",
         "@simplewebauthn/server": "^14.0.2",
+        "@tacocat-gallery/shared": "*",
         "@xmldom/xmldom": "^0.9.12",
         "aws4fetch": "^1.0.20",
         "drizzle-orm": "^0.45.3",
         "exifreader": "^4.45.2",
         "hono": "^4.13.9",
-        "tacocat-gallery-shared": "0.0.1",
         "valibot": "^1.5.0"
     },
     "devDependencies": {

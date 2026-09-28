@@ -10,7 +10,7 @@ import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { eq } from 'drizzle-orm';
-import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from 'tacocat-gallery-shared';
+import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
 import worker from '../../src/index';
@@ -45,7 +45,7 @@ async function seedDay(): Promise<void> {
 function uploadEvent(versionId: string): R2EventMessage {
     return {
         action: 'PutObject',
-        bucket: 'tacocat-staging-media',
+        bucket: 'staging-uploads',
         object: { key: inboxKey(versionId) },
         eventTime: new Date().toISOString(),
     };
@@ -54,7 +54,7 @@ function uploadEvent(versionId: string): R2EventMessage {
 /** One batch of upload events, as the queue delivers them, with ids counting from 1. */
 function uploadBatch(versionIds: string[]): MessageBatch<R2EventMessage> {
     return createMessageBatch<R2EventMessage>(
-        'tacocat-staging-uploads',
+        'staging-uploads',
         versionIds.map((versionId, index) => ({
             id: String(index + 1),
             timestamp: new Date(),
@@ -113,7 +113,7 @@ async function stage(path: string, file: Uint8Array, { replace, contentType }: S
     if (presigned === undefined) {
         throw new Error(`nothing presigned for ${path}`);
     }
-    await env.MEDIA.put(inboxKey(presigned.versionId), file, {
+    await env.UPLOADS.put(inboxKey(presigned.versionId), file, {
         httpMetadata: { contentType: contentType ?? 'image/jpeg' },
     });
     return presigned.versionId;
@@ -177,10 +177,10 @@ describe('upload pipeline', () => {
         const versionId = await stage(`${DAY}full_metadata`, jpg);
         const acks = await deliver(versionId);
         const [inbox, item, originals, original, row] = await Promise.all([
-            env.MEDIA.head(inboxKey(versionId)),
+            env.UPLOADS.head(inboxKey(versionId)),
             storedItem(DAY, 'full_metadata'),
-            env.MEDIA.list({ prefix: 'originals/' }),
-            env.MEDIA.head(originalKey(versionId)),
+            env.ORIGINALS.list({ prefix: 'originals/' }),
+            env.ORIGINALS.head(originalKey(versionId)),
             uploadRow(versionId),
         ]);
 
@@ -208,7 +208,10 @@ describe('upload pipeline', () => {
             throw new Error('a photo has no business here');
         });
         const versionId = await upload(`${DAY}clip`, jpg, { contentType: 'application/octet-stream' });
-        const [item, original] = await Promise.all([storedItem(DAY, 'clip'), env.MEDIA.head(originalKey(versionId))]);
+        const [item, original] = await Promise.all([
+            storedItem(DAY, 'clip'),
+            env.ORIGINALS.head(originalKey(versionId)),
+        ]);
 
         expect(item).toMatchObject({ mediaType: 'image', width: 300, height: 225, versionId });
         expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
@@ -241,7 +244,7 @@ describe('upload pipeline', () => {
 
     it('makes the three images at once, from the file it has already read', async () => {
         const versionId = await stage(`${DAY}full_metadata`, jpg);
-        const originalReads = vi.spyOn(env.MEDIA, 'get');
+        const originalReads = vi.spyOn(env.ORIGINALS, 'get');
         // Each derivative's write waits until all three are being written, which only images made at once can reach.
         const waiting: (() => void)[] = [];
         const put = env.DERIVED.put.bind(env.DERIVED);
@@ -258,7 +261,7 @@ describe('upload pipeline', () => {
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
 
         expect(stored.objects).toHaveLength(3);
-        expect(originalReads.mock.calls.filter(([key]) => key === originalKey(versionId))).toStrictEqual([]);
+        expect(originalReads).not.toHaveBeenCalled();
     });
 
     it('logs how long the upload event took to arrive', async () => {
@@ -279,7 +282,7 @@ describe('upload pipeline', () => {
         const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
         const [item, inbox, errors, row] = await Promise.all([
             storedItem(DAY, 'tenbit'),
-            env.MEDIA.head(inboxKey(versionId)),
+            env.UPLOADS.head(inboxKey(versionId)),
             uploadErrors([`${DAY}tenbit`]),
             uploadRow(versionId),
         ]);
@@ -327,7 +330,7 @@ describe('upload pipeline', () => {
         await deliver(versionId);
         const [errors, inbox, row] = await Promise.all([
             uploadErrors([`${DAY}orphan`]),
-            env.MEDIA.head(inboxKey(versionId)),
+            env.UPLOADS.head(inboxKey(versionId)),
             uploadRow(versionId),
         ]);
 
@@ -347,10 +350,10 @@ describe('upload pipeline', () => {
     });
 
     it('leaves alone an inbox object nobody asked for', async () => {
-        await env.MEDIA.put(inboxKey('stray'), jpg);
+        await env.UPLOADS.put(inboxKey('stray'), jpg);
         const acks = await deliver('stray');
         const [inbox, items] = await Promise.all([
-            env.MEDIA.head(inboxKey('stray')),
+            env.UPLOADS.head(inboxKey('stray')),
             orm(env.DB).select().from(schema.item).where(eq(schema.item.itemType, 'media')).all(),
         ]);
 
@@ -380,7 +383,7 @@ describe('upload pipeline', () => {
                 );
             },
         });
-        const [item, inbox] = await Promise.all([storedItem(DAY, 'retried'), env.MEDIA.head(inboxKey(versionId))]);
+        const [item, inbox] = await Promise.all([storedItem(DAY, 'retried'), env.UPLOADS.head(inboxKey(versionId))]);
 
         expect(item?.versionId).toBe(versionId);
         expect(inbox).toBeNull();
@@ -425,7 +428,7 @@ describe('replacing a media item', () => {
         const versionId = await upload(`${DAY}felix`, png, { replace: true, contentType: 'image/png' });
         const [felix, original, album] = await Promise.all([
             storedItem(DAY, 'felix'),
-            env.MEDIA.head(originalKey(versionId)),
+            env.ORIGINALS.head(originalKey(versionId)),
             parseExactly(await callAsAdmin(`/api/album${DAY}`), parseAlbum),
         ]);
 
@@ -494,7 +497,7 @@ describe('image uploads', () => {
         const versionId = await upload(`${DAY}notes`, new TextEncoder().encode('just some notes'));
         const [item, inbox, errors] = await Promise.all([
             storedItem(DAY, 'notes'),
-            env.MEDIA.head(inboxKey(versionId)),
+            env.UPLOADS.head(inboxKey(versionId)),
             uploadErrors([`${DAY}notes`]),
         ]);
 
@@ -507,8 +510,8 @@ describe('image uploads', () => {
         const versionId = await upload(`${DAY}broken`, Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0]));
         const [item, originals, inbox, errors] = await Promise.all([
             storedItem(DAY, 'broken'),
-            env.MEDIA.list({ prefix: 'originals/' }),
-            env.MEDIA.head(inboxKey(versionId)),
+            env.ORIGINALS.list({ prefix: 'originals/' }),
+            env.UPLOADS.head(inboxKey(versionId)),
             uploadErrors([`${DAY}broken`]),
         ]);
 
@@ -536,7 +539,7 @@ describe('a batch of uploads', () => {
             await waitOnExecutionContext(ctx);
             await Promise.all(instances.map(async (instance) => instance.waitForStatus('complete')));
             const result = await getQueueResult(batch, ctx);
-            const originals = await env.MEDIA.list({ prefix: 'originals/' });
+            const originals = await env.ORIGINALS.list({ prefix: 'originals/' });
 
             expect(result.explicitAcks).toStrictEqual(['1', '2', '3']);
             expect(originals.objects.map((object) => object.key).toSorted()).toStrictEqual(
@@ -556,8 +559,8 @@ describe('video uploads', () => {
         const versionId = await upload(`${DAY}broken`, mov);
         const [item, originals, inbox, errors] = await Promise.all([
             storedItem(DAY, 'broken'),
-            env.MEDIA.list({ prefix: 'originals/' }),
-            env.MEDIA.head(inboxKey(versionId)),
+            env.ORIGINALS.list({ prefix: 'originals/' }),
+            env.UPLOADS.head(inboxKey(versionId)),
             uploadErrors([`${DAY}broken`, `${DAY}fine`]),
         ]);
 
@@ -598,8 +601,8 @@ describe('video upload retries', () => {
         });
 
         expect(acks).toStrictEqual(['1']);
-        await expect(env.MEDIA.head(inboxKey(versionId))).resolves.not.toBeNull();
-        await expect(env.MEDIA.list({ prefix: 'originals/' })).resolves.toMatchObject({ objects: [] });
+        await expect(env.UPLOADS.head(inboxKey(versionId))).resolves.not.toBeNull();
+        await expect(env.ORIGINALS.list({ prefix: 'originals/' })).resolves.toMatchObject({ objects: [] });
     });
 
     it('tries the container four times, then tells the admin why', async () => {
@@ -620,8 +623,8 @@ describe('video upload retries', () => {
     it('records no upload error when only dropping the inbox object fails, since the item was written', async () => {
         standInTranscoder(transcoding);
         const versionId = await stage(`${DAY}clip`, mov);
-        const drop = env.MEDIA.delete.bind(env.MEDIA);
-        vi.spyOn(env.MEDIA, 'delete').mockImplementation(async (keys) => {
+        const drop = env.UPLOADS.delete.bind(env.UPLOADS);
+        vi.spyOn(env.UPLOADS, 'delete').mockImplementation(async (keys) => {
             if (keys === inboxKey(versionId)) {
                 throw new Error('R2 unavailable');
             }
@@ -640,8 +643,8 @@ describe('video upload retries', () => {
         await deliver(versionId);
         const [item, originals, inbox] = await Promise.all([
             storedItem(DAY, 'clip'),
-            env.MEDIA.list({ prefix: 'originals/' }),
-            env.MEDIA.head(inboxKey(versionId)),
+            env.ORIGINALS.list({ prefix: 'originals/' }),
+            env.UPLOADS.head(inboxKey(versionId)),
         ]);
 
         expect(item).toMatchObject({
@@ -668,7 +671,7 @@ describe('video upload retries', () => {
         );
 
         expect(paths).toStrictEqual({
-            src: `/${env.MEDIA_BUCKET}/${inboxKey(versionId)}`,
+            src: `/${env.UPLOADS_BUCKET}/${inboxKey(versionId)}`,
             mp4Put: `/${env.DERIVED_BUCKET}/${videoKey(versionId)}`,
             posterPut: `/${env.DERIVED_BUCKET}/${posterKey(versionId)}`,
         });
@@ -755,7 +758,7 @@ describe('serving an original', () => {
     const HEIC = '/2024/06-15/img_0001';
 
     it('serves the file as uploaded, named for a download by its name and stored type, and kept for a year', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const response = await call(originalUrl(PHOTO, 'v1'));
         const body = await response.arrayBuffer();
 
@@ -771,7 +774,7 @@ describe('serving an original', () => {
     // Only Safari shows a HEIC. The bytes here are a JPEG under a HEIC's name, as some uploads are, which the binding
     // decodes anywhere; what is tested is the route's answer, not the binding's HEIC support.
     it('answers for a HEIC with a JPEG made on the way out', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/heic' } });
+        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/heic' } });
         const response = await call(originalUrl(HEIC, 'v1'));
         const body = new Uint8Array(await response.arrayBuffer());
 
@@ -782,7 +785,7 @@ describe('serving an original', () => {
     });
 
     it('serves a JPEG under a HEIC name as the JPEG it is, since the stored type is what the file is', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const response = await call(originalUrl(HEIC, 'v1'));
         await response.body?.cancel();
 
@@ -792,7 +795,7 @@ describe('serving an original', () => {
     });
 
     it('gives the HEIC itself when asked, and when the binding cannot decode it', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/heic' } });
+        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/heic' } });
         const asked = await call(`${originalUrl(HEIC, 'v1')}?format=original`);
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
             throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
@@ -806,9 +809,9 @@ describe('serving an original', () => {
         expect(bodies.map((body) => body.byteLength)).toStrictEqual([jpg.byteLength, jpg.byteLength]);
     });
 
-    it('reaches nothing but originals: a version with no original is not found, whatever else the bucket holds', async () => {
-        await env.MEDIA.put('inbox/2024/06-15/pending', jpg);
-        await env.MEDIA.put('backups/d1/2024-06-15.json', new Uint8Array(10));
+    it('reaches nothing but originals: a version with no original is not found, whatever the other buckets hold', async () => {
+        await env.UPLOADS.put('inbox/2024/06-15/pending', jpg);
+        await env.BACKUPS.put('backups/d1/2024-06-15.json', new Uint8Array(10));
         const [pending, backup, malformed] = await Promise.all([
             call(originalUrl('/2024/06-15/pending', 'v1')),
             call('/raw/backups/d1/2024-06-15.json/v1'),
@@ -822,7 +825,7 @@ describe('serving an original', () => {
     });
 
     it('finds the version by its id alone, whatever path the URL gives it', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const response = await call(originalUrl('/1999/01-01/renamed', 'v1'));
         await response.body?.cancel();
 
@@ -848,7 +851,7 @@ describe('serving media', () => {
     );
 
     it('generates a derivative once, then serves it from the cache', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg);
+        await env.ORIGINALS.put(originalKey('v1'), jpg);
         const first = await call('/i/2024/06-15/d/v1?size=200x200');
         const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-webp`);
         const second = await call('/i/2024/06-15/d/v1?size=200x200');
@@ -860,7 +863,7 @@ describe('serving media', () => {
     });
 
     it('serves the media page its image as JPEG, whatever the browser accepts, since readers drag it into other apps', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg);
+        await env.ORIGINALS.put(originalKey('v1'), jpg);
         const response = await call('/i/2024/06-15/d/v1?size=300', {
             headers: { accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
         });
@@ -872,7 +875,7 @@ describe('serving media', () => {
     });
 
     it('stores a cropped thumbnail under the size and crop the web app asks for', async () => {
-        await env.MEDIA.put(originalKey('v1'), jpg);
+        await env.ORIGINALS.put(originalKey('v1'), jpg);
         const url = imageUrl({
             path: '/2024/06-15/d',
             versionId: 'v1',
@@ -890,7 +893,7 @@ describe('serving media', () => {
         { name: 'a size the web app would not write', url: '/i/2024/06-15/d/v1?size=0200x200' },
         { name: 'a crop of three numbers', url: '/i/2024/06-15/d/v1?crop=1,2,3' },
     ])('refuses $name, and stores nothing', async ({ url }) => {
-        await env.MEDIA.put(originalKey('v1'), jpg);
+        await env.ORIGINALS.put(originalKey('v1'), jpg);
         const response = await call(url);
         await response.body?.cancel();
         const stored = await env.DERIVED.list({ prefix: 'derived/' });

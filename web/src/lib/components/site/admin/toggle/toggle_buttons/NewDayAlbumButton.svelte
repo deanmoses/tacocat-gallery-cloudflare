@@ -10,7 +10,7 @@
     import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
     import { albumCreateMachine } from '$lib/stores/admin/AlbumCreateMachine.svelte';
     import { sanitizeAlbumName } from '$lib/utils/albumName';
-    import { albumPath, isDayAlbumPath, isYearAlbumPath, pathOfUrl } from 'tacocat-gallery-shared';
+    import { albumPath, isDayAlbumPath, isYearAlbumPath, pathOfUrl } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
 

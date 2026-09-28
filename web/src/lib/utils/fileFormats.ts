@@ -1,4 +1,4 @@
-import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, extensionOf, isHeicFile, isVideoFile } from 'tacocat-gallery-shared';
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, extensionOf, isHeicFile, isVideoFile } from '@tacocat-gallery/shared';
 
 const EXTENSIONS: readonly string[] = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS];
 

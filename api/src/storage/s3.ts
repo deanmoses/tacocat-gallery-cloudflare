@@ -3,7 +3,8 @@ import { AwsClient } from 'aws4fetch';
 // R2's S3 API, for the two things the bucket bindings cannot do: hand a browser or the transcoder container a URL it
 // can read or write an object through on its own, and reach a bucket from a script running outside the Worker.
 
-const R2_S3_ENDPOINT = 'https://ed3ca575118099486baeb129959697c8.r2.cloudflarestorage.com';
+export const ACCOUNT_ID = 'ed3ca575118099486baeb129959697c8';
+const R2_S3_ENDPOINT = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 export interface S3Credentials {
     R2_ACCESS_KEY_ID: string;

@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { imageUrl } from 'tacocat-gallery-shared';
+import { imageUrl } from '@tacocat-gallery/shared';
 import { describe, expect, it } from 'vitest';
 import { derivedPrefix } from '../../src/storage/keys';
 import { call } from '../helpers';

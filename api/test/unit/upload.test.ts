@@ -127,11 +127,11 @@ describe(readImage, () => {
 });
 
 describe(transcodeJob, () => {
-    it('signs a read of the source in the media bucket and writes of both outputs in the derived bucket', async () => {
+    it('signs a read of the source in the uploads bucket and writes of both outputs in the derived bucket', async () => {
         const env = {
             R2_ACCESS_KEY_ID: 'test-access-key',
             R2_SECRET_ACCESS_KEY: 'test-secret-key',
-            MEDIA_BUCKET: 'test-media',
+            UPLOADS_BUCKET: 'test-uploads',
             DERIVED_BUCKET: 'test-derived',
         };
 
@@ -141,7 +141,7 @@ describe(transcodeJob, () => {
         expect(versionId).toBe('v1');
         expect(sourceKey).toBe('inbox/2024/06-15/a');
         expect(paths).toStrictEqual({
-            src: '/test-media/inbox/2024/06-15/a',
+            src: '/test-uploads/inbox/2024/06-15/a',
             mp4Put: '/test-derived/derived/v1/video.mp4',
             posterPut: '/test-derived/derived/v1/poster.jpg',
         });

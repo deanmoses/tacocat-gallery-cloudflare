@@ -1,4 +1,4 @@
-import { type PresignRequest, type PresignResponse, parsePresigned } from 'tacocat-gallery-shared';
+import { type PresignRequest, type PresignResponse, parsePresigned } from '@tacocat-gallery/shared';
 import { getPresignedUploadUrlGenerationUrl } from './config';
 import { adminApi, failureMessage } from './adminApi';
 
@@ -7,7 +7,7 @@ export type UploadResult = { success: true } | { success: false; error: string }
 export type PresignedUrlResult = { success: true; uploads: PresignResponse } | { success: false; error: string };
 
 /**
- * PUTs the file straight into the media bucket, at the URL the Worker signed for it.
+ * PUTs the file straight into the uploads bucket, at the URL the Worker signed for it.
  *
  * @param file File to upload
  * @param presignedUrl presigned URL

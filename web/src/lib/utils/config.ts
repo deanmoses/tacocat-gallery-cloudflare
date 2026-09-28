@@ -8,7 +8,7 @@ import {
     imageUrl,
     isAlbumPath,
     isMediaPath,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 
 /**
  * The API, the media and the login are all served by the Worker on the site's own origin, so every URL is a path.

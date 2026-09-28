@@ -1,10 +1,10 @@
 locals {
   account_id = "ed3ca575118099486baeb129959697c8"
-  # Each environment's data, named from its prefix. Production keeps the prototype's names: the real migration fills a
-  # fresh database and buckets anyway, and they get the final names then.
+  # Each environment's data, named from its prefix, which is the environment's own name: resource names are per
+  # account, and the account is the gallery's, so the environment is all a name has to say.
   environments = {
-    production = { prefix = "tacocat-proto", site_origin = "https://pix.deanmoses.com" }
-    staging    = { prefix = "tacocat-staging", site_origin = "https://staging-pix.deanmoses.com" }
+    production = { prefix = "production", site_origin = "https://pix.deanmoses.com" }
+    staging    = { prefix = "staging", site_origin = "https://staging-pix.deanmoses.com" }
   }
 }
 
@@ -68,38 +68,40 @@ module "environment" {
   site_origin = each.value.site_origin
 }
 
-# Production's resources predate the module; these keep their state where it is instead of destroying and recreating.
-moved {
-  from = cloudflare_d1_database.proto
-  to   = module.environment["production"].cloudflare_d1_database.this
-}
-
-moved {
-  from = cloudflare_r2_bucket.media
-  to   = module.environment["production"].cloudflare_r2_bucket.media
-}
-
-moved {
-  from = cloudflare_r2_bucket.derived
-  to   = module.environment["production"].cloudflare_r2_bucket.derived
-}
-
-moved {
-  from = cloudflare_queue.uploads
-  to   = module.environment["production"].cloudflare_queue.uploads
-}
-
-moved {
-  from = cloudflare_queue.uploads_dlq
-  to   = module.environment["production"].cloudflare_queue.uploads_dlq
-}
-
-moved {
-  from = cloudflare_r2_bucket_event_notification.uploads
-  to   = module.environment["production"].cloudflare_r2_bucket_event_notification.uploads
-}
-
 # What api/wrangler.jsonc needs from here.
 output "d1_database_ids" {
   value = { for name, environment in module.environment : name => environment.d1_database_id }
+}
+
+# What the nightly backup workflow reads with: production's originals and dumps, and nothing it could write.
+data "cloudflare_account_api_token_permission_groups_list" "bucket_item_read" {
+  account_id = local.account_id
+  name       = "Workers R2 Storage Bucket Item Read"
+}
+
+resource "cloudflare_account_token" "backup" {
+  account_id = local.account_id
+  name       = "backup"
+  policies = [{
+    effect            = "allow"
+    permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_read.result[0].id }]
+    resources = jsonencode({
+      for bucket in [module.environment["production"].originals_bucket, module.environment["production"].backups_bucket] :
+      "com.cloudflare.edge.r2.bucket.${local.account_id}_default_${bucket}" => "*"
+    })
+  }]
+}
+
+# Each token as S3 credentials, for scripts/secrets.sh to put where they are used.
+output "r2_credentials" {
+  value = merge(
+    { for name, environment in module.environment : name => environment.signing_credentials },
+    {
+      backup = {
+        access_key_id     = cloudflare_account_token.backup.id
+        secret_access_key = sha256(cloudflare_account_token.backup.value)
+      }
+    },
+  )
+  sensitive = true
 }

@@ -89,7 +89,7 @@ describe(presignUploads, () => {
         const requests = requestsToD1();
 
         const result = await presignUploads(
-            { ...TEST_SECRETS, MEDIA_BUCKET: 'test-media', UPLOADS: 'signed' },
+            { ...TEST_SECRETS, UPLOADS_BUCKET: 'test-uploads', UPLOAD_MODE: 'signed' },
             database,
             '/2001/06-15/',
             [{ path: '/2001/06-15/new' }],

@@ -8,7 +8,7 @@
     import UploadIcon from '$lib/components/site/icons/UploadIcon.svelte';
     import { uploadMachine } from '$lib/stores/admin/UploadMachine.svelte';
     import { acceptedExtensions } from '$lib/utils/fileFormats';
-    import { isMediaPath } from 'tacocat-gallery-shared';
+    import { isMediaPath } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let mediaPath = $derived(page.url.pathname);

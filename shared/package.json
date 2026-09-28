@@ -1,8 +1,8 @@
 {
-    "name": "tacocat-gallery-shared",
+    "name": "@tacocat-gallery/shared",
     "version": "0.0.1",
-    "description": "The types and schemas the Worker and the web app agree on",
     "private": true,
+    "description": "Code shared between the Worker and the web app, like types and schemas",
     "type": "module",
     "exports": {
         ".": "./src/index.ts"

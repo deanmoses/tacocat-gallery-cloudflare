@@ -1,4 +1,4 @@
-import { type ImageRequest, type ImageSize, cropText, sizeText } from 'tacocat-gallery-shared';
+import { type ImageRequest, type ImageSize, cropText, sizeText } from '@tacocat-gallery/shared';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
 // Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets the
@@ -30,7 +30,7 @@ export interface Derivation {
     key: string;
     /** The version's poster in the derived bucket, which a video has and a photo does not. */
     poster: string;
-    /** The version's file as uploaded, in the media bucket. */
+    /** The version's file as uploaded, in the originals bucket. */
     original: string;
 }
 
@@ -54,7 +54,7 @@ export async function timed<T>(steps: Steps, name: string, work: () => Promise<T
  * afterwards. The original's key when there is neither it nor a poster to generate from.
  */
 export async function derivedImage(
-    env: Pick<Env, 'MEDIA' | 'DERIVED' | 'IMAGES'>,
+    env: Pick<Env, 'ORIGINALS' | 'DERIVED' | 'IMAGES'>,
     wanted: Derivation,
     steps: Steps,
 ): Promise<Derivative | { missing: string }> {
@@ -67,7 +67,7 @@ export async function derivedImage(
 
     // A video's stills come from the poster the transcoder wrote beside its MP4, and only a video has one, so looking
     // for it first is what tells a video from a photo: the file name in the URL decides nothing.
-    const source = (await env.DERIVED.get(wanted.poster)) ?? (await env.MEDIA.get(wanted.original));
+    const source = (await env.DERIVED.get(wanted.poster)) ?? (await env.ORIGINALS.get(wanted.original));
     return source
         ? { body: await generateDerivative(env, wanted, source.body), format, how: 'generated' }
         : { missing: wanted.original };

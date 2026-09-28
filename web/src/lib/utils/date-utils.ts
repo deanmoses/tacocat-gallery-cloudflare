@@ -1,4 +1,4 @@
-import { parsePath } from 'tacocat-gallery-shared';
+import { parsePath } from '@tacocat-gallery/shared';
 
 export function shortDate(d: Date): string {
     return d.toLocaleString(undefined, { month: 'short', day: 'numeric' });

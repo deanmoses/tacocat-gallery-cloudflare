@@ -17,7 +17,7 @@ import {
     versionIdSql,
     yearAlbumPathSql,
     yearNameSql,
-} from 'tacocat-gallery-shared';
+} from '@tacocat-gallery/shared';
 
 // The check constraints are the SQL forms of the rules in shared/, written by hand since a GLOB cannot be made from a
 // regex. Each pair is held to the same answer on the same inputs, so a rule that changes in one place and not the

@@ -8,7 +8,7 @@
     import RenameIcon from '$lib/components/site/icons/RenameIcon.svelte';
     import { albumLoadMachine } from '$lib/stores/AlbumLoadMachine.svelte';
     import { sanitizeAlbumName } from '$lib/utils/albumName';
-    import { albumKey, albumPath, isDayAlbumPath, parentPathOf, pathOfUrl } from 'tacocat-gallery-shared';
+    import { albumKey, albumPath, isDayAlbumPath, parentPathOf, pathOfUrl } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
     import TextDialog from './TextDialog.svelte';
     import { albumRenameMachine } from '$lib/stores/admin/AlbumRenameMachine.svelte';

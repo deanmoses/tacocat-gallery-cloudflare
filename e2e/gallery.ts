@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { ItemWrite } from 'tacocat-gallery-shared';
+import type { ItemWrite } from '@tacocat-gallery/shared';
 import { adminCookie } from '../api/test/secrets.ts';
 
 export const E2E_PORT = 8790;
@@ -125,10 +125,10 @@ const GALLERY = {
     },
 } as const satisfies Record<string, ItemWrite>;
 
-/** The files behind the gallery's photos, as `<bucket>/<key>` in the media bucket the Worker's top-level config names. */
+/** The files behind the gallery's photos, as `<bucket>/<key>` in the originals bucket the Worker's top-level config names. */
 export const ORIGINALS = [
     {
-        objectPath: `tacocat-staging-media/originals/${ADMIN_PHOTO_VERSION}`,
+        objectPath: `staging-originals/originals/${ADMIN_PHOTO_VERSION}`,
         file: 'fixtures/FullMetadata.jpg',
         contentType: 'image/jpeg',
     },

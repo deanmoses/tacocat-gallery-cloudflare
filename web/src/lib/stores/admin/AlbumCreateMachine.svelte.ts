@@ -1,5 +1,5 @@
 import { toast } from '@zerodevx/svelte-toast';
-import { isAlbumPath, parentPathOf } from 'tacocat-gallery-shared';
+import { isAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
 import { albumUrl } from '$lib/utils/config';
 import { adminApi, failureMessage } from '$lib/utils/adminApi';
 import { albumState } from '../AlbumState.svelte';

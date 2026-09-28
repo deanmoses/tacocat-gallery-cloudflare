@@ -6,7 +6,7 @@ import { byteStream } from '../media/images';
 export async function debugImage(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const key = pathAfter(url, '/debug/image/');
-    const head = await env.MEDIA.get(key);
+    const head = await env.ORIGINALS.get(key);
     if (!head) {
         return notFound(`No object ${key}`);
     }
@@ -19,7 +19,7 @@ export async function debugImage(request: Request, env: Env): Promise<Response> 
         size: bytes.length,
         magic: decoder.decode(bytes.slice(4, 12)),
         infoFromR2Stream: await attempt(async () => {
-            const again = await env.MEDIA.get(key);
+            const again = await env.ORIGINALS.get(key);
             if (!again) {
                 throw new Error('object vanished');
             }

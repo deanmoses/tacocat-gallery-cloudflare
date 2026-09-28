@@ -36,12 +36,12 @@ case "${1:-}" in
 staging)
     # Staging is wrangler.jsonc's top level; an empty --env names it without Wrangler's warning that none was given.
     env_flag=(--env '')
-    worker=tacocat-gallery-cloudflare-staging
+    worker=staging
     origin=https://staging-pix.deanmoses.com
     ;;
 production)
     env_flag=(--env production)
-    worker=tacocat-gallery-cloudflare
+    worker=production
     origin=https://pix.deanmoses.com
     ;;
 *)

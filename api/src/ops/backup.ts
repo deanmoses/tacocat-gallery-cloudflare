@@ -6,7 +6,7 @@ export async function backupDatabase(env: Env): Promise<{ key: string; rows: num
     const rows = await itemsAfter(orm(env.DB), { parentPath: '', itemName: '' });
     const now = new Date();
     const key = `backups/d1/${now.toISOString()}.json`;
-    await env.MEDIA.put(key, JSON.stringify({ table: 'item', rows }), {
+    await env.BACKUPS.put(key, JSON.stringify({ table: 'item', rows }), {
         httpMetadata: { contentType: 'application/json' },
     });
     console.info({ event: 'd1_backup_written', key, rows: rows.length });

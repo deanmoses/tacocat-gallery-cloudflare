@@ -22,7 +22,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
-import { isDayAlbumPath } from 'tacocat-gallery-shared';
+import { isDayAlbumPath } from '@tacocat-gallery/shared';
 
 const API = 'https://www.debugbear.com/api/v1';
 const PROJECT_ID = '107830';

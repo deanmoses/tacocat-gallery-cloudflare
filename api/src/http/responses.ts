@@ -1,4 +1,4 @@
-import type { ErrorResponse } from 'tacocat-gallery-shared';
+import type { ErrorResponse } from '@tacocat-gallery/shared';
 
 /** Pretty-printed, since people read these responses in a browser or curl while measuring. */
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {

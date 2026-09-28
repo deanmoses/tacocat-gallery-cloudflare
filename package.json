@@ -1,7 +1,10 @@
 {
     "name": "tacocat-gallery-cloudflare",
     "version": "0.0.1",
-    "description": "The pix.tacocat.com photo gallery on Cloudflare",
+    "private": true,
+    "description": "The Tacocat photo gallery on Cloudflare",
+    "license": "MIT",
+    "type": "module",
     "workspaces": [
         "shared",
         "api",
@@ -19,15 +22,17 @@
         "prepare": "husky && playwright install chromium",
         "agent-docs": "node scripts/build-agent-instructions.ts"
     },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
-    "type": "module",
+    "lint-staged": {
+        "*.{ts,mjs,js,svelte,css,html,json,jsonc,md,yml,yaml}": [
+            "prettier --write"
+        ]
+    },
     "devDependencies": {
         "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
         "@eslint/js": "^10.0.1",
         "@eslint/json": "^2.1.0",
         "@playwright/test": "1.63.0",
+        "@tacocat-gallery/shared": "*",
         "@types/node": "^24.13.6",
         "@vitest/eslint-plugin": "^1.6.27",
         "eslint": "^10.11.0",
@@ -53,17 +58,18 @@
         "stylelint": "^17.15.0",
         "stylelint-config-html": "^2.0.0",
         "stylelint-config-standard": "^40.0.0",
-        "tacocat-gallery-shared": "0.0.1",
         "typescript": "~6.0.3",
         "typescript-eslint": "^8.70.1"
     },
-    "private": true,
-    "engines": {
-        "node": ">=24.2.0 <25"
+    "allowScripts": {
+        "esbuild": false,
+        "exifreader": false,
+        "fsevents": false,
+        "unrs-resolver": false,
+        "workerd": false
     },
-    "lint-staged": {
-        "*.{ts,mjs,js,svelte,css,html,json,jsonc,md,yml,yaml}": [
-            "prettier --write"
-        ]
+    "engines": {
+        "node": ">=24.2.0 <25",
+        "npm": ">=11.19.0 <12"
     }
 }

@@ -7,7 +7,7 @@
     import Thumbnails from '$lib/components/site/Thumbnails.svelte';
     import AlbumThumbnail from '$lib/components/site/AlbumThumbnail.svelte';
     import { albumTitle } from '$lib/utils/date-utils';
-    import { albumDate } from 'tacocat-gallery-shared';
+    import { albumDate } from '@tacocat-gallery/shared';
     import type { Album, Thumbable } from '$lib/models/GalleryItemInterfaces';
 
     interface Props {

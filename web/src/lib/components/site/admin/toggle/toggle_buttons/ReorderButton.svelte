@@ -8,7 +8,7 @@
     import ReorderIcon from '$lib/components/site/icons/ReorderIcon.svelte';
     import { albumReorderMachine } from '$lib/stores/admin/AlbumReorderMachine.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
-    import { isDayAlbumPath, pathOfUrl } from 'tacocat-gallery-shared';
+    import { isDayAlbumPath, pathOfUrl } from '@tacocat-gallery/shared';
     import ControlStripButton from '../../edit_controls/buttons/ControlStripButton.svelte';
 
     let dayPath: string = $derived(pathOfUrl(page.url.pathname));

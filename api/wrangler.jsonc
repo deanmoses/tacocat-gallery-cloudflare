@@ -3,7 +3,7 @@
     // Two environments, each its own Worker with its own data. The top level is staging, which is also what
     // `wrangler dev` and the tests run locally, so a Wrangler command without --env can only reach staging;
     // `--env production` is the only way to production. Bindings are not inherited, so each environment lists its own.
-    "name": "tacocat-gallery-cloudflare-staging",
+    "name": "staging",
     "account_id": "ed3ca575118099486baeb129959697c8",
     "main": "src/index.ts",
     "compatibility_date": "2026-09-01",
@@ -34,35 +34,41 @@
     "vars": {
         // The site's own origin, the only one besides local development that may create or use a passkey.
         "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
-        // The buckets by their S3 names: uploads are presigned into the first, and the transcoder writes into the second.
-        "MEDIA_BUCKET": "tacocat-staging-media",
-        "DERIVED_BUCKET": "tacocat-staging-derived",
-        // Where the browser puts an upload: "signed" is a presigned URL into the media bucket, whose event R2 sends to
+        // The buckets by their S3 names: uploads are presigned into the first, and the transcoder reads its source from
+        // there and writes into the second. The S3 key the Worker signs with reaches these two buckets and no other, so
+        // no signed URL can touch an original.
+        "UPLOADS_BUCKET": "staging-uploads",
+        "DERIVED_BUCKET": "staging-derived",
+        // Where the browser puts an upload: "signed" is a presigned URL into the uploads bucket, whose event R2 sends to
         // the queue. A local Worker can consume no real queue, so `wrangler dev` sets this to "local" in .dev.vars
         // and the Worker takes the PUT itself, into its local bucket, and raises the event.
-        "UPLOADS": "signed",
+        "UPLOAD_MODE": "signed",
     },
     "d1_databases": [
         {
             "binding": "DB",
-            "database_name": "tacocat-staging",
-            "database_id": "55f1fb52-b6df-497d-8beb-403e91dd0466",
+            "database_name": "staging",
+            "database_id": "e88e295d-d79b-4d5c-8736-434579bb3adf",
             "migrations_dir": "migrations",
         },
     ],
     "r2_buckets": [
-        { "binding": "MEDIA", "bucket_name": "tacocat-staging-media" },
-        { "binding": "DERIVED", "bucket_name": "tacocat-staging-derived" },
+        // One bucket per role, since an R2 token is scoped to whole buckets: the originals are written by the Worker's
+        // binding alone.
+        { "binding": "ORIGINALS", "bucket_name": "staging-originals" },
+        { "binding": "UPLOADS", "bucket_name": "staging-uploads" },
+        { "binding": "DERIVED", "bucket_name": "staging-derived" },
+        { "binding": "BACKUPS", "bucket_name": "staging-backups" },
     ],
     "images": { "binding": "IMAGES" },
     // The running version's id, which /api/health answers with so a release can prove its check reached the new code.
     "version_metadata": { "binding": "CF_VERSION_METADATA" },
     "queues": {
         // The producer is for local uploads only; deployed, R2's event notification is the producer.
-        "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "tacocat-staging-uploads" }],
+        "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "staging-uploads" }],
         "consumers": [
             {
-                "queue": "tacocat-staging-uploads",
+                "queue": "staging-uploads",
                 // One event per batch, delivered as it arrives: the consumer only starts a pipeline instance per event,
                 // so waiting to fill a batch would add the batch timeout to every upload for nothing.
                 "max_batch_size": 1,
@@ -71,7 +77,7 @@
                 // Seconds, so a short D1 or R2 outage can pass before the next attempt.
                 "retry_delay": 60,
                 // Messages that run out of retries are kept here for replay instead of being dropped.
-                "dead_letter_queue": "tacocat-staging-uploads-dlq",
+                "dead_letter_queue": "staging-uploads-dlq",
             },
         ],
     },
@@ -85,7 +91,7 @@
         {
             // Each upload's processing runs as its own instance, so a drop of fifty photos is fifty pipelines at once,
             // each with a Worker's memory to itself and each step retried on its own.
-            "name": "tacocat-staging-upload-pipeline",
+            "name": "staging-uploads",
             "binding": "UPLOAD_PIPELINE",
             "class_name": "UploadPipeline",
         },
@@ -110,42 +116,43 @@
     "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
     "env": {
         "production": {
-            // The Worker's original name, so its custom domain, secrets and container stay where they are.
-            "name": "tacocat-gallery-cloudflare",
+            "name": "production",
             "secrets": {
                 "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET", "DEBUGBEAR_API_KEY"],
             },
             "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
             "vars": {
                 "SITE_ORIGIN": "https://pix.deanmoses.com",
-                "MEDIA_BUCKET": "tacocat-proto-media",
-                "DERIVED_BUCKET": "tacocat-proto-derived",
-                "UPLOADS": "signed",
+                "UPLOADS_BUCKET": "production-uploads",
+                "DERIVED_BUCKET": "production-derived",
+                "UPLOAD_MODE": "signed",
             },
             "d1_databases": [
                 {
                     "binding": "DB",
-                    "database_name": "tacocat-proto",
-                    "database_id": "e833562b-4758-41e9-b545-d1aa250bb6c5",
+                    "database_name": "production",
+                    "database_id": "c6bb3dad-bfd1-4e7a-b8ae-55d25e5b46da",
                     "migrations_dir": "migrations",
                 },
             ],
             "r2_buckets": [
-                { "binding": "MEDIA", "bucket_name": "tacocat-proto-media" },
-                { "binding": "DERIVED", "bucket_name": "tacocat-proto-derived" },
+                { "binding": "ORIGINALS", "bucket_name": "production-originals" },
+                { "binding": "UPLOADS", "bucket_name": "production-uploads" },
+                { "binding": "DERIVED", "bucket_name": "production-derived" },
+                { "binding": "BACKUPS", "bucket_name": "production-backups" },
             ],
             "images": { "binding": "IMAGES" },
             "version_metadata": { "binding": "CF_VERSION_METADATA" },
             "queues": {
-                "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "tacocat-proto-uploads" }],
+                "producers": [{ "binding": "UPLOAD_EVENTS", "queue": "production-uploads" }],
                 "consumers": [
                     {
-                        "queue": "tacocat-proto-uploads",
+                        "queue": "production-uploads",
                         "max_batch_size": 1,
                         "max_batch_timeout": 1,
                         "max_retries": 5,
                         "retry_delay": 60,
-                        "dead_letter_queue": "tacocat-proto-uploads-dlq",
+                        "dead_letter_queue": "production-uploads-dlq",
                     },
                 ],
             },
@@ -160,7 +167,7 @@
             },
             "workflows": [
                 {
-                    "name": "tacocat-proto-upload-pipeline",
+                    "name": "production-uploads",
                     "binding": "UPLOAD_PIPELINE",
                     "class_name": "UploadPipeline",
                 },
@@ -168,9 +175,9 @@
             "containers": [
                 {
                     "class_name": "Transcoder",
-                    // The container application's default name ends in the environment's, so the one that exists is
-                    // named here.
-                    "name": "tacocat-gallery-cloudflare-transcoder",
+                    // Wrangler's default name appends the environment's under --env, which would make this one
+                    // production-transcoder-production; the top level, with no environment, gets staging-transcoder.
+                    "name": "production-transcoder",
                     "image": "./transcoder/Dockerfile",
                     "instance_type": "standard-4",
                     "max_instances": 10,
