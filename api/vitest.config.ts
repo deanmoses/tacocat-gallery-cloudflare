@@ -69,6 +69,15 @@ export default defineConfig({
                     globalSetup: ['./test/stack/global-setup.ts'],
                 },
             },
+            {
+                extends: true,
+                // Tests run in Node against the transcoder's server as its image runs it, with fake ffmpeg and ffprobe.
+                test: {
+                    name: 'transcoder',
+                    include: ['test/transcoder/*.test.ts'],
+                    environment: 'node',
+                },
+            },
         ],
     },
 });

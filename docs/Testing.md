@@ -4,7 +4,7 @@ How the Worker in `api/` and the web app in `web/` are tested, each alone and to
 
 ## Where a Worker test goes
 
-A test's directory says what it touches. All but `stack/` run inside workerd, the Workers runtime, through `@cloudflare/vitest-plugin`.
+A test's directory says what it touches. All but `stack/` and `transcoder/` run inside workerd, the Workers runtime, through `@cloudflare/vitest-plugin`.
 
 | Directory               | Touches                                                                                  | Example                                                  |
 | ----------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -12,8 +12,9 @@ A test's directory says what it touches. All but `stack/` run inside workerd, th
 | `api/test/db/`          | D1, through the query functions in `api/src`                                             | how many rows a write reads                              |
 | `api/test/integration/` | The Worker's `fetch`, `queue` and `scheduled` handlers, with D1, R2 and the Queue behind | an upload moving from the inbox to its immutable key     |
 | `api/test/stack/`       | Everything `wrangler dev` runs, from Node, the asset router included                     | which paths reach the Worker and which get the web app   |
+| `api/test/transcoder/`  | The container's server as its image runs it, from Node, with fake ffmpeg and ffprobe     | an encode stopped when the Worker hangs up               |
 
-Run one tier from `api/` with its directory, as in `npx vitest run test/db`, or the stack alone with `npx vitest run --project stack`.
+Run one tier from `api/` with its directory, as in `npx vitest run test/db`, or the stack or the transcoder alone with `npx vitest run --project stack` or `--project transcoder`. The transcoder's tests start `api/transcoder/server.ts` with `api/test/transcoder/bin/` first on its PATH, where shell scripts stand in for ffmpeg and ffprobe and record each process they start, so a test can tell whether an encode is still running; real ffmpeg is tuned in local Docker instead.
 
 ## Real bindings, fakes only at the edges
 

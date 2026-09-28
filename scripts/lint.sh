@@ -273,12 +273,12 @@ over_files pinned_actions -- '.github/*.yml'
 
 echo -n "Lint: shell scripts (shellcheck)... "
 if require shellcheck; then
-    over_files shellcheck -- '*.sh' .husky/pre-commit .husky/commit-msg
+    over_files shellcheck -- '*.sh' .husky/pre-commit .husky/commit-msg 'api/test/transcoder/bin/*'
 fi
 
 echo -n "Format: shell scripts (shfmt)... "
 if require shfmt; then
-    over_files shfmt --diff -- '*.sh' .husky/pre-commit .husky/commit-msg
+    over_files shfmt --diff -- '*.sh' .husky/pre-commit .husky/commit-msg 'api/test/transcoder/bin/*'
 fi
 
 echo -n "Lint: Dockerfiles (hadolint)... "

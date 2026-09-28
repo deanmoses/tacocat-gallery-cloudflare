@@ -346,6 +346,7 @@ export default defineConfig(
             'api/scripts/**/*.ts',
             'api/transcoder/**/*.ts',
             'api/test/stack/**/*.ts',
+            'api/test/transcoder/**/*.ts',
             'e2e/**/*.ts',
             'web/*.ts',
             'web/*.js',
@@ -357,7 +358,7 @@ export default defineConfig(
     {
         name: 'worker',
         files: ['api/src/**/*.ts', 'api/test/**/*.ts'],
-        ignores: ['api/test/stack/**'],
+        ignores: ['api/test/stack/**', 'api/test/transcoder/**'],
         languageOptions: { globals: globals.serviceworker },
     },
     {
@@ -665,6 +666,14 @@ export default defineConfig(
         name: 'javascript',
         files: ['**/*.js', '**/*.mjs'],
         rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
+    },
+    {
+        // The container's main process: on the platform's stop signal it exits as soon as its current answer is sent,
+        // where waiting for the event loop to drain, with the keep-alive sockets its uploads leave open, could hold the
+        // instance for the 15 minutes the platform allows before it kills it.
+        name: 'transcoder server',
+        files: ['api/transcoder/server.ts'],
+        rules: { 'n/no-process-exit': 'off', 'unicorn/no-process-exit': 'off' },
     },
     {
         name: 'turned off',

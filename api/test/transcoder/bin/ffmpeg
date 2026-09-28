@@ -1,0 +1,23 @@
+#!/bin/sh
+# Stands in for ffmpeg: records its process id, then does what FAKE_FFMPEG says.
+echo $$ >>"$FAKE_DIR/ffmpeg.pids"
+case "$FAKE_FFMPEG" in
+reject)
+    echo 'moov atom not found' >&2
+    exit 1
+    ;;
+crash) kill -SEGV $$ ;;
+# Runs until stopped, and says so the way ffmpeg 8.1 in the transcoder's image does at info level, as seen in local
+# Docker; the server tells a stopped encode from a bad file by this line.
+encode-forever)
+    trap 'echo "Exiting normally, received signal 15." >&2; exit 255' TERM
+    while :; do sleep 0.1; done
+    ;;
+# Runs until stopped, and says nothing, as ffmpeg does at -v error.
+encode-forever-quietly)
+    trap 'exit 255' TERM
+    while :; do sleep 0.1; done
+    ;;
+esac
+for output; do :; done
+: >"$output"

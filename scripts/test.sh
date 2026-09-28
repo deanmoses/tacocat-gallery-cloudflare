@@ -68,7 +68,8 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 
 # Runs a workspace's tests for what is staged: `run_staged <dir> <files that change every test> <code files>`, both
 # extended regexes over repo-relative paths. The first set changes every test without being imported by any, so
-# vitest's import graph cannot see it: test setup, bindings, migrations, dependencies and compiler settings.
+# vitest's import graph cannot see it: test setup, bindings, migrations, dependencies, compiler settings, and the
+# transcoder's server and fakes, which its tests start as processes rather than import.
 run_staged() {
     local workspace="$1" everything="$2" code_pattern="$3"
     if echo "$staged" | grep -qE "$everything"; then
@@ -97,7 +98,7 @@ run_staged shared \
 
 api_status=0
 run_staged api \
-    "$SHARED|^api/(package\.json|vitest\.config\.ts|wrangler\.jsonc|worker-configuration\.d\.ts|tsconfig\.json|(src|test)/tsconfig\.json|migrations/|test/(setup|helpers|secrets|env\.d)\.ts|fixtures/)" \
+    "$SHARED|^api/(package\.json|vitest\.config\.ts|wrangler\.jsonc|worker-configuration\.d\.ts|tsconfig\.json|(src|test)/tsconfig\.json|migrations/|test/(setup|helpers|secrets|env\.d)\.ts|fixtures/|transcoder/|test/transcoder/bin/)" \
     '^api/(src|test)/.*\.ts$' || api_status=$?
 web_status=0
 run_staged web \

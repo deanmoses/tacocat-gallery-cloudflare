@@ -10,7 +10,7 @@
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest",
         "types": "wrangler types --strict-vars=false",
-        "check": "wrangler types --strict-vars=false --check && tsc -p . && tsc -p src && tsc -p test && tsc -p test/stack",
+        "check": "wrangler types --strict-vars=false --check && tsc -p . && tsc -p src && tsc -p test && tsc -p test/stack && tsc -p test/transcoder",
         "db:generate": "drizzle-kit generate",
         "db:migrate:local": "wrangler d1 migrations apply DB --local",
         "db:migrate": "wrangler d1 migrations apply DB --remote",

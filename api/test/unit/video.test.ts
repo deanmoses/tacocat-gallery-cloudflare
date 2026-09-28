@@ -1,23 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../../src/media/transcoder';
 
-/** A transcoder that answers every request with `respond`, recording what it was sent. */
-function transcoderEnv(respond: () => Response): { env: TranscodeEnv; requests: Request[] } {
+/** A transcoder that answers every request with `respond`, recording what it was sent and which instance took it. */
+function transcoderEnv(respond: () => Response): { env: TranscodeEnv; requests: Request[]; instances: string[] } {
     const requests: Request[] = [];
+    const instances: string[] = [];
     const env: TranscodeEnv = {
         TRANSCODER: {
-            getByName: () => ({
+            getByName: (name) => ({
                 fetch: async (input, init): Promise<Response> => {
+                    instances.push(name);
                     requests.push(new Request(input, init));
                     return respond();
                 },
             }),
         },
     };
-    return { env, requests };
+    return { env, requests, instances };
 }
 
 const JOB: TranscodeJob = {
+    versionId: 'v1',
     sourceKey: 'inbox/a',
     src: 'https://bucket.example/inbox/a?signed',
     mp4Put: 'https://bucket.example/derived/v1/video.mp4?signed',
@@ -56,6 +59,15 @@ describe(transcodeVideo, () => {
         expect(body).toStrictEqual({ src: JOB.src, mp4Put: JOB.mp4Put, posterPut: JOB.posterPut });
     });
 
+    it('sends each version to a container instance of its own', async () => {
+        vi.spyOn(console, 'info').mockReturnValue();
+        const { env, instances } = transcoderEnv(() => transcoded(0));
+        await transcodeVideo(env, JOB);
+        await transcodeVideo(env, { ...JOB, versionId: 'v2' });
+
+        expect(instances).toStrictEqual(['v1', 'v2']);
+    });
+
     it.each([
         {
             how: 'as JSON',
@@ -73,7 +85,17 @@ describe(transcodeVideo, () => {
         await expect(transcodeVideo(env, JOB)).resolves.toStrictEqual({ ok: false, error });
     });
 
-    it('throws on any other failure, so the queue retries it', async () => {
+    it('throws with only the error the container reported, not its JSON', async () => {
+        const { env } = transcoderEnv(() =>
+            Response.json({ error: 'Error: ffmpeg exited 255: received signal 15' }, { status: 500 }),
+        );
+
+        await expect(transcodeVideo(env, JOB)).rejects.toThrow(
+            new Error('transcode failed 500: Error: ffmpeg exited 255: received signal 15'),
+        );
+    });
+
+    it('throws on any other failure, so the step retries it', async () => {
         const { env } = transcoderEnv(() => new Response('starting up', { status: 503 }));
 
         await expect(transcodeVideo(env, JOB)).rejects.toThrow('transcode failed 503: starting up');

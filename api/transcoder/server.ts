@@ -52,9 +52,10 @@ class MediaError extends Error {
     }
 }
 
-async function run(command: string, argv: string[]): Promise<string> {
+async function run(command: string, argv: string[], signal: AbortSignal): Promise<string> {
     return new Promise((resolve, reject) => {
-        const child = spawn(command, argv);
+        const child = spawn(command, argv, { signal });
+        child.on('error', reject);
         let stdout = '';
         let stderr = '';
         child.stdout.on('data', (chunk: Buffer) => {
@@ -63,26 +64,25 @@ async function run(command: string, argv: string[]): Promise<string> {
         child.stderr.on('data', (chunk: Buffer) => {
             stderr += chunk.toString();
         });
-        child.on('close', (code) => {
+        child.on('close', (code, killedBy) => {
             if (code === 0) {
                 resolve(stdout);
-            } else {
-                reject(new MediaError(`${command} exited ${String(code)}: ${stderr.slice(-2000)}`));
+                return;
             }
+            const message = `${command} exited ${String(code ?? killedBy)}: ${stderr.slice(-2000)}`;
+            // A stop signal, as when the platform stops or replaces the instance, is no fault of the file; ffmpeg
+            // catches it and exits 255, so only its log tells the two apart.
+            reject(stderr.includes('received signal') ? new Error(message) : new MediaError(message));
         });
     });
 }
 
-async function probe(file: string): Promise<ProbeInfo> {
-    const output = await run('ffprobe', [
-        '-v',
-        'error',
-        '-print_format',
-        'json',
-        '-show_streams',
-        '-show_format',
-        file,
-    ]);
+async function probe(file: string, signal: AbortSignal): Promise<ProbeInfo> {
+    const output = await run(
+        'ffprobe',
+        ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file],
+        signal,
+    );
     const info: unknown = JSON.parse(output);
     const streams = arrayField(info, 'streams');
     const video = streams.find((stream) => stringField(stream, 'codec_type') === 'video');
@@ -135,16 +135,17 @@ function readRequest(json: unknown): TranscodeRequest {
     return { src: original, mp4Put, posterPut };
 }
 
-async function download(url: string, file: string): Promise<void> {
-    const response = await fetch(url);
+async function download(url: string, file: string, signal: AbortSignal): Promise<void> {
+    const response = await fetch(url, { signal });
     if (!response.ok || !response.body) {
         throw new Error(`GET original ${response.status}`);
     }
-    await pipeline(Readable.fromWeb(response.body), createWriteStream(file));
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(file), { signal });
 }
 
-async function upload(file: string, url: string, type: string): Promise<void> {
-    const put = await fetch(url, { method: 'PUT', body: await readFile(file), headers: { 'content-type': type } });
+async function upload(file: string, url: string, type: string, signal: AbortSignal): Promise<void> {
+    const body = await readFile(file);
+    const put = await fetch(url, { method: 'PUT', body, headers: { 'content-type': type }, signal });
     if (put.ok) {
         return;
     }
@@ -154,9 +155,12 @@ async function upload(file: string, url: string, type: string): Promise<void> {
 
 function encodeArguments(input: string, filter: string, output: string): string[] {
     return [
-        // Input, using every core for the filters.
+        // Input, using every core for the filters. Info rather than error, since ffmpeg says it caught a signal only at
+        // info, and the stream summary it adds is short.
         '-v',
-        'error',
+        'info',
+        '-nostats',
+        '-hide_banner',
         '-filter_threads',
         String(availableParallelism()),
         '-i',
@@ -168,13 +172,14 @@ function encodeArguments(input: string, filter: string, output: string): string[
         '0:a:0?',
         '-vf',
         filter,
-        // H.264 High, capped at 5 Mbps like the MediaConvert job.
+        // H.264 High, capped at 5 Mbps like the MediaConvert job. On a two-minute 1080p60 screen recording, veryfast
+        // took 30% less time than medium for a slightly smaller file, at an SSIM 0.0004 lower.
         '-c:v',
         'libx264',
         '-profile:v',
         'high',
         '-preset',
-        'medium',
+        'veryfast',
         '-crf',
         '21',
         '-maxrate',
@@ -192,34 +197,38 @@ function encodeArguments(input: string, filter: string, output: string): string[
     ];
 }
 
-async function transcode(request: TranscodeRequest): Promise<TranscodeReport> {
+async function transcode(request: TranscodeRequest, signal: AbortSignal): Promise<TranscodeReport> {
     const directory = await mkdtemp(path.join(tmpdir(), 'tc-'));
     try {
-        return await transcodeIn(directory, request);
+        return await transcodeIn(directory, request, signal);
     } finally {
         await rm(directory, { recursive: true, force: true });
     }
 }
 
-async function transcodeIn(directory: string, { src, mp4Put, posterPut }: TranscodeRequest): Promise<TranscodeReport> {
+async function transcodeIn(
+    directory: string,
+    { src, mp4Put, posterPut }: TranscodeRequest,
+    signal: AbortSignal,
+): Promise<TranscodeReport> {
     const start = Date.now();
     const input = path.join(directory, 'input');
-    await download(src, input);
+    await download(src, input, signal);
     const downloaded = Date.now();
-    const source = await probe(input);
+    const source = await probe(input, signal);
 
     // HLG and PQ sources (iPhone HDR) look washed out unless tone-mapped to SDR BT.709.
     const isHdr = ['arib-std-b67', 'smpte2084'].includes(source.colorTransfer ?? '');
     const filter = isHdr ? `${FIT},${TONE_MAP},format=yuv420p` : `${FIT},format=yuv420p`;
     const mp4 = path.join(directory, 'out.mp4');
-    await run('ffmpeg', encodeArguments(input, filter, mp4));
+    await run('ffmpeg', encodeArguments(input, filter, mp4), signal);
     const transcoded = Date.now();
     const poster = path.join(directory, 'poster.jpg');
-    await run('ffmpeg', ['-v', 'error', '-i', mp4, '-frames:v', '1', '-q:v', '3', poster]);
-    const output = await probe(mp4);
+    await run('ffmpeg', ['-v', 'error', '-i', mp4, '-frames:v', '1', '-q:v', '3', poster], signal);
+    const output = await probe(mp4, signal);
 
-    await upload(mp4, mp4Put, 'video/mp4');
-    await upload(poster, posterPut, 'image/jpeg');
+    await upload(mp4, mp4Put, 'video/mp4', signal);
+    await upload(poster, posterPut, 'image/jpeg', signal);
     const uploaded = Date.now();
     const { size } = await stat(mp4);
     return {
@@ -230,6 +239,11 @@ async function transcodeIn(directory: string, { src, mp4Put, posterPut }: Transc
     };
 }
 
+/** The encode under way, which a newer request or a hang-up ends. */
+let current: AbortController | undefined;
+/** Whether the platform has asked the container to stop, as it does to replace or put an instance to sleep. */
+let stopping = false;
+
 async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     if (request.method === 'GET') {
         response.end('ok');
@@ -239,18 +253,46 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
     for await (const chunk of request) {
         body += String(chunk);
     }
+    // An instance serves one version, so a second request is the Worker's retry, and the attempt before it has nobody
+    // waiting; nor has an encode whose request the Worker hung up on, as when its step timed out. Either would take the
+    // CPU from the encode someone is waiting for.
+    current?.abort();
+    const job = new AbortController();
+    current = job;
+    response.on('close', () => {
+        if (!response.writableFinished) {
+            job.abort();
+        }
+        if (current !== job) {
+            return;
+        }
+        current = undefined;
+        if (stopping) {
+            process.exit(0);
+        }
+    });
     try {
-        const result = await transcode(readRequest(JSON.parse(body)));
+        const result = await transcode(readRequest(JSON.parse(body)), job.signal);
         response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result));
     } catch (error) {
-        // 422 tells the Worker not to retry; anything else (network, storage) is worth another attempt.
-        const status = error instanceof MediaError ? 422 : 500;
+        // 422 tells the Worker not to retry; anything else (network, storage, the instance stopping, which may have
+        // stopped ffmpeg without its saying so) is worth another attempt.
+        const status = error instanceof MediaError && !stopping ? 422 : 500;
         response
             .writeHead(status, { 'content-type': 'application/json' })
             .end(JSON.stringify({ error: String(error) }));
     }
 }
 
+// The platform waits up to 15 minutes after this before it kills the container, so the current request is answered
+// first.
+process.on('SIGTERM', () => {
+    stopping = true;
+    if (current === undefined) {
+        process.exit(0);
+    }
+});
+
 createServer((request, response) => {
     void handle(request, response);
-}).listen(8080);
+}).listen(Number(process.env['PORT'] ?? 8080));
