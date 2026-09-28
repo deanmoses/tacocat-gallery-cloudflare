@@ -29,8 +29,12 @@ export interface TranscodeEnv {
     };
 }
 
-/** Presigned URLs the container reads the source from and writes the MP4 and poster to, and the source's key for the log. */
+/**
+ * Presigned URLs the container reads the source from and writes the MP4 and poster to, the source's key for the log,
+ * and the version, which names the container instance.
+ */
 export interface TranscodeJob {
+    versionId: string;
     sourceKey: string;
     src: string;
     mp4Put: string;
@@ -42,20 +46,21 @@ export type TranscodeOutcome =
 
 /**
  * Hands the container the job and returns the display size. A file ffmpeg rejects comes back as a failed outcome,
- * since the same file would fail again; anything else throws so the queue retries it.
+ * since the same file would fail again; anything else throws so the step retries it.
  */
 export async function transcodeVideo(env: TranscodeEnv, job: TranscodeJob): Promise<TranscodeOutcome> {
-    const { sourceKey, src, mp4Put, posterPut } = job;
+    const { versionId, sourceKey, src, mp4Put, posterPut } = job;
     const body = JSON.stringify({ src, mp4Put, posterPut });
     const started = Date.now();
-    const transcoder = env.TRANSCODER.getByName('transcoder');
+    // An instance per version, so the videos of one drop transcode side by side, each with a whole instance's CPU.
+    const transcoder = env.TRANSCODER.getByName(versionId);
     const response = await transcoder.fetch('http://transcoder/transcode', { method: 'POST', body });
     const text = await response.text();
     if (response.status === UNPROCESSABLE) {
         return { ok: false, error: failureMessage(text) };
     }
     if (!response.ok) {
-        throw new Error(`transcode failed ${response.status}: ${text}`);
+        throw new Error(`transcode failed ${response.status}: ${failureMessage(text)}`);
     }
     const result = valibot.parse(TRANSCODE_RESULT, JSON.parse(text));
     console.info({ event: 'video_transcoded', sourceKey, wallMs: Date.now() - started, ...result });

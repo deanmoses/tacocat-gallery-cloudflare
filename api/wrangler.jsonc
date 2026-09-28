@@ -96,8 +96,17 @@
         {
             "class_name": "Transcoder",
             "image": "./transcoder/Dockerfile",
-            "instance_type": "lite",
-            "max_instances": 1,
+            // The largest there is, since the admin waits through the encode and a video comes about once a month. An
+            // instance per video sleeps 10 s after its encode; ten at 4 vCPU each keep both
+            // environments together inside the account's 100 vCPU of live instances.
+            "instance_type": "standard-4",
+            "max_instances": 10,
+            // A deploy's rollout stops a running instance, killing its encode, unless the instance started this many
+            // seconds ago or fewer: the transcode step's timeout, so no encode is cut off.
+            "rollout_active_grace_period": 1800,
+            // One step. Wrangler's default above one instance is 10% first, which protects a fleet of long-lived
+            // servers; an instance here lives for one video, so a first step would only hold the rollout back.
+            "rollout_step_percentage": 100,
         },
     ],
     "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
@@ -166,8 +175,10 @@
                     // named here.
                     "name": "tacocat-gallery-cloudflare-transcoder",
                     "image": "./transcoder/Dockerfile",
-                    "instance_type": "lite",
-                    "max_instances": 1,
+                    "instance_type": "standard-4",
+                    "max_instances": 10,
+                    "rollout_active_grace_period": 1800,
+                    "rollout_step_percentage": 100,
                 },
             ],
             "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },

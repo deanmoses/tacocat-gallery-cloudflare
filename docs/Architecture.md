@@ -179,7 +179,7 @@ app                        Worker                          R2 / Queue / Workflow
 
 **Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions, tags and every album showing it are kept. The thumbnail crop is kept only if the new image has exactly the old size.
 
-**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried.
+**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row, and the inbox object stays for a replay.
 
 **Locally**, a Worker cannot consume a real queue, so with `UPLOADS=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file and raises the event R2 would. The pipeline runs unchanged.
 
@@ -203,7 +203,7 @@ Every image is cached for a year, since its URL names one version and a new uplo
 - `/raw/<path>/<versionId>` is the original. A HEIC comes back as a JPEG, since only Safari shows HEIC, unless `?format=original` asks for the file itself.
 - `/v/<path>/<versionId>` is a video's MP4, with byte ranges for seeking.
 
-**The transcoder** is ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, asleep between videos. The Worker hands it presigned URLs to read the original and write the MP4 and poster, and it answers with the video's size and duration.
+**The transcoder** is ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, one instance per video on the largest instance type, so a drop of several videos transcodes them side by side, each asleep once its video is done. The Worker hands it presigned URLs to read the original and write the MP4 and poster, and it answers with the video's size and duration. When the Worker stops waiting, as when its step times out, the container kills the encode, so a retry never shares the CPU with the attempt before it.
 
 **Why one spelling.** `shared/src/urls.ts` builds every image URL, for the app and for the pipeline's pre-made images alike, and the stored name is spelled from the same text. A stored image is found only by a URL spelled exactly the same way, so there must be one place that spells them.
 

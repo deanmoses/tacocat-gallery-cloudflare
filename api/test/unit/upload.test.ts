@@ -135,9 +135,10 @@ describe(transcodeJob, () => {
             DERIVED_BUCKET: 'test-derived',
         };
 
-        const { sourceKey, ...urls } = await transcodeJob(env, 'inbox/2024/06-15/a', 'v1');
+        const { versionId, sourceKey, ...urls } = await transcodeJob(env, 'inbox/2024/06-15/a', 'v1');
         const paths = Object.fromEntries(Object.entries(urls).map(([name, url]) => [name, new URL(url).pathname]));
 
+        expect(versionId).toBe('v1');
         expect(sourceKey).toBe('inbox/2024/06-15/a');
         expect(paths).toStrictEqual({
             src: '/test-media/inbox/2024/06-15/a',

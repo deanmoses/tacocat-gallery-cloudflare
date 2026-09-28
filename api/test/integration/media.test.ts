@@ -602,6 +602,37 @@ describe('video upload retries', () => {
         await expect(env.MEDIA.list({ prefix: 'originals/' })).resolves.toMatchObject({ objects: [] });
     });
 
+    it('tries the container four times, then tells the admin why', async () => {
+        let attempts = 0;
+        standInTranscoder(async () => {
+            attempts++;
+            throw new Error('container unreachable');
+        });
+        const versionId = await stage(`${DAY}later`, mov);
+        await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
+
+        expect(attempts).toBe(4);
+        await expect(uploadErrors([`${DAY}later`])).resolves.toStrictEqual({
+            [`${DAY}later`]: 'container unreachable',
+        });
+    });
+
+    it('records no upload error when only dropping the inbox object fails, since the item was written', async () => {
+        standInTranscoder(transcoding);
+        const versionId = await stage(`${DAY}clip`, mov);
+        const drop = env.MEDIA.delete.bind(env.MEDIA);
+        vi.spyOn(env.MEDIA, 'delete').mockImplementation(async (keys) => {
+            if (keys === inboxKey(versionId)) {
+                throw new Error('R2 unavailable');
+            }
+            return drop(keys);
+        });
+        await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
+
+        await expect(storedItem(DAY, 'clip')).resolves.toMatchObject({ mediaType: 'video' });
+        await expect(uploadErrors([`${DAY}clip`])).resolves.toStrictEqual({});
+    });
+
     it('writes nothing twice when the event is delivered again after success, as Queues may do', async () => {
         standInTranscoder(transcoding);
         const versionId = await stage(`${DAY}clip`, mov);

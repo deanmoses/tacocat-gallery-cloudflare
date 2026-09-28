@@ -76,13 +76,42 @@ export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, s
         return;
     }
     const path = mediaPath(upload.parentPath, upload.itemName);
+    let written: MediaFacts | null;
+    try {
+        written = await processUpload(env, step, key, upload, path);
+    } catch (error) {
+        // A step before the item was written spent its retries: the admin reads why, and the instance still ends
+        // errored, with the inbox object kept for a replay.
+        const message = error instanceof Error ? error.message : String(error);
+        await step.do('record the failure', async () => {
+            await uploadErrorUpsert(database, path, message).run();
+        });
+        console.error({ event: 'upload_failed', path, versionId, error: message });
+        throw error;
+    }
+    if (written === null) {
+        return;
+    }
+    await step.do('drop the inbox object', async () => env.MEDIA.delete(key));
+    console.info({ event: 'upload_processed', path, versionId, ...written });
+}
+
+async function processUpload(
+    env: UploadEnv,
+    step: WorkflowStep,
+    key: string,
+    upload: Upload,
+    path: string,
+): Promise<MediaFacts | null> {
+    const { versionId } = upload;
+    const database = orm(env.DB);
     const prepared = await prepare(env, step, key, upload, path);
     if (prepared.outcome === 'rejected') {
         await step.do('record the rejection', async () => reject(env, key, path, prepared.error));
-        return;
+        return null;
     }
     if (prepared.outcome !== 'ready') {
-        return;
+        return null;
     }
     const outcome = await step.do('write the item', async () => recordUpload(database, upload, prepared.facts));
     if (!outcome.ok) {
@@ -90,11 +119,15 @@ export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, s
             await uploadErrorUpsert(database, path, outcome.error).run();
         });
         console.error({ event: 'upload_refused', path, versionId, error: outcome.error });
-        return;
+        return null;
     }
-    await step.do('drop the inbox object', async () => env.MEDIA.delete(key));
-    console.info({ event: 'upload_processed', path, versionId, ...prepared.facts });
+    return prepared.facts;
 }
+
+const TRANSCODE_STEP = {
+    retries: { limit: 3, delay: '30 seconds', backoff: 'exponential' },
+    timeout: '30 minutes',
+} as const;
 
 type Prepared =
     | { outcome: 'redelivered' | 'gone' }
@@ -128,7 +161,9 @@ async function prepare(
         return read;
     }
     const { contentType } = read;
-    const transcoded = await step.do('transcode the video', async () => {
+    // Room for a long clip, and retries spaced for a container that could not start, as when every instance is busy. A
+    // file ffmpeg rejects is an outcome rather than a throw, so it is never retried.
+    const transcoded = await step.do('transcode the video', TRANSCODE_STEP, async () => {
         const result = await transcodeVideo(env, await transcodeJob(env, key, versionId));
         return result.ok ? { outcome: 'transcoded' as const, ...result } : { outcome: 'rejected' as const, ...result };
     });
@@ -255,6 +290,7 @@ export async function transcodeJob(env: S3Env, sourceKey: string, versionId: str
     const media = env.MEDIA_BUCKET;
     const derived = env.DERIVED_BUCKET;
     return {
+        versionId,
         sourceKey,
         src: await presign(env, { method: 'GET', bucket: media, key: sourceKey }),
         mp4Put: await presign(env, {
