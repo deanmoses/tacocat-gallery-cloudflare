@@ -2,7 +2,7 @@ import { parseImageRequest, parseMediaVersion } from 'tacocat-gallery-shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
 import { derivationFor } from '../gallery/derivatives';
-import { type Derivation, type Derivative, IMMUTABLE, type Steps, asJpeg, derivedImage, timed } from '../media/images';
+import { type Derivation, IMMUTABLE, type Steps, asJpeg, derivedImage, timed } from '../media/images';
 import { extensionForType, isHeicType } from '../media/sniff';
 import { originalKey } from '../storage/keys';
 
@@ -59,7 +59,7 @@ export async function derivedViaCacheApi(
     env: Env,
     ctx: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<Response> {
-    const wanted = derivation(request, '/i');
+    const wanted = derivation(request);
     if (wanted === null) {
         return badImageUrl();
     }
@@ -103,48 +103,13 @@ function reported(request: Request, response: Response, how: string, steps: Step
     return response;
 }
 
-/**
- * Worker fetches the derivative through the derived bucket's custom domain, so it goes through the CDN cache and
- * Tiered Cache like any origin fetch. Generates on a 404.
- */
-export async function derivedViaCdn(request: Request, env: Env): Promise<Response> {
-    const wanted = derivation(request, '/i2');
-    if (wanted === null) {
-        return badImageUrl();
-    }
-    // Only successes are cached: a 404 from before the derivative was generated would otherwise stick for a year.
-    const upstream = await fetch(`${env.DERIVED_ORIGIN}/${wanted.key}`, {
-        cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31_536_000, '400-599': -1 } },
-    });
-    if (upstream.ok) {
-        const response = new Response(upstream.body, upstream);
-        const cacheStatus = upstream.headers.get('cf-cache-status')?.toLowerCase() ?? 'unknown';
-        response.headers.set('x-derived', `cdn-${cacheStatus}`);
-        response.headers.set('vary', 'Accept');
-        return response;
-    }
-    const derivative = await derivedImage(env, wanted, {});
-    return 'missing' in derivative ? sourceNotFound(derivative.missing) : generated(derivative);
-}
-
 /** What the URL asks for and where its derivative and sources are, or null for a URL imageUrl would not write. */
-function derivation(request: Request, prefix: string): Derivation | null {
+function derivation(request: Request): Derivation | null {
     const url = new URL(request.url);
-    const wanted = parseImageRequest(pathAfter(url, prefix), url.searchParams);
+    const wanted = parseImageRequest(pathAfter(url, '/i'), url.searchParams);
     return wanted === null
         ? null
         : derivationFor(wanted, url.searchParams.get('format'), request.headers.get('accept'));
-}
-
-function generated(derivative: Derivative): Response {
-    return new Response(derivative.body, {
-        headers: {
-            'cache-control': IMMUTABLE,
-            'content-type': derivative.format,
-            vary: 'Accept',
-            'x-derived': derivative.how,
-        },
-    });
 }
 
 function sourceNotFound(key: string): Response {

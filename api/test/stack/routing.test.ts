@@ -16,7 +16,6 @@ describe('the asset router', () => {
         ['GET', '/raw/2001/01-01/a/v1'],
         ['GET', '/v/2001/01-01/a/v1'],
         ['GET', '/i/2001/01-01/a/v1'],
-        ['GET', '/i2/2001/01-01/a/v1'],
         ['GET', '/debug/image/2001/01-01/a'],
         ['PUT', '/upload/v1'],
     ])('sends %s %s to the Worker', async (method, path) => {

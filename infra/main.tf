@@ -3,11 +3,9 @@ locals {
   # Each environment's data, named from its prefix. Production keeps the prototype's names: the real migration fills a
   # fresh database and buckets anyway, and they get the final names then.
   environments = {
-    production = { prefix = "tacocat-proto", image_host = "img.deanmoses.com", site_origin = "https://pix.deanmoses.com" }
-    staging    = { prefix = "tacocat-staging", image_host = "staging-img.deanmoses.com", site_origin = "https://staging-pix.deanmoses.com" }
+    production = { prefix = "tacocat-proto", site_origin = "https://pix.deanmoses.com" }
+    staging    = { prefix = "tacocat-staging", site_origin = "https://staging-pix.deanmoses.com" }
   }
-  # A request to either environment's image host, for the zone rules that apply to derived images alone.
-  image_hosts_expression = "(http.host in {${join(" ", [for environment in local.environments : format("%q", environment.image_host)])}})"
 }
 
 resource "cloudflare_zone" "deanmoses" {
@@ -15,8 +13,7 @@ resource "cloudflare_zone" "deanmoses" {
   name    = "deanmoses.com"
 }
 
-# Plain HTTP is answered with a redirect and TLS below 1.2 is refused, on every proxied hostname in the zone. The R2
-# custom domains set their own floor, since the zone's does not reach them.
+# Plain HTTP is answered with a redirect and TLS below 1.2 is refused, on every proxied hostname in the zone.
 resource "cloudflare_zone_setting" "deanmoses_always_use_https" {
   zone_id    = cloudflare_zone.deanmoses.id
   setting_id = "always_use_https"
@@ -63,55 +60,11 @@ resource "cloudflare_bot_management" "deanmoses" {
   }
 }
 
-# Derived-image keys have no file extension, which Cloudflare does not cache by default.
-resource "cloudflare_ruleset" "cache" {
-  zone_id = cloudflare_zone.deanmoses.id
-  name    = "cache"
-  kind    = "zone"
-  phase   = "http_request_cache_settings"
-  rules = [{
-    description = "Cache derived images from R2"
-    expression  = local.image_hosts_expression
-    action      = "set_cache_settings"
-    action_parameters = {
-      cache    = true
-      edge_ttl = { mode = "respect_origin" }
-    }
-  }]
-}
-
-# The image hosts serve stored derivatives straight from R2, never through the Worker, so the headers every response
-# from the site carries (api/src/http/headers.ts, with the reasons) are set here for them: the ones that mean something
-# on an image, since a frame, referrer or permissions policy says nothing there. Cross-Origin-Resource-Policy keeps
-# other sites from embedding the photos; the gallery is the same site, so it is unaffected.
-resource "cloudflare_ruleset" "image_headers" {
-  zone_id = cloudflare_zone.deanmoses.id
-  name    = "image headers"
-  kind    = "zone"
-  phase   = "http_response_headers_transform"
-  rules = [{
-    description = "Crawler opt-out and security headers on derived images from R2"
-    expression  = local.image_hosts_expression
-    action      = "rewrite"
-    action_parameters = {
-      headers = {
-        "X-Robots-Tag"                 = { operation = "set", value = "noindex, noimageindex, nosnippet, max-image-preview:none, notranslate, noarchive, noai, noimageai" }
-        "tdm-reservation"              = { operation = "set", value = "1" }
-        "Strict-Transport-Security"    = { operation = "set", value = "max-age=31536000; includeSubDomains" }
-        "X-Content-Type-Options"       = { operation = "set", value = "nosniff" }
-        "Cross-Origin-Resource-Policy" = { operation = "set", value = "same-site" }
-      }
-    }
-  }]
-}
-
 module "environment" {
   source      = "./environment"
   for_each    = local.environments
   account_id  = local.account_id
-  zone_id     = cloudflare_zone.deanmoses.id
   prefix      = each.value.prefix
-  image_host  = each.value.image_host
   site_origin = each.value.site_origin
 }
 
@@ -129,11 +82,6 @@ moved {
 moved {
   from = cloudflare_r2_bucket.derived
   to   = module.environment["production"].cloudflare_r2_bucket.derived
-}
-
-moved {
-  from = cloudflare_r2_custom_domain.img
-  to   = module.environment["production"].cloudflare_r2_custom_domain.img
 }
 
 moved {

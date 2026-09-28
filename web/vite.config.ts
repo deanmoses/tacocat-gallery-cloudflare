@@ -14,7 +14,7 @@ import { BROWSER_FLOOR_RULES_UNTYPED } from '../browser-floor.ts';
 // `/invite/` and `/images/`.
 const WORKER = 'http://localhost:8787';
 const workerProxy: Record<string, ProxyOptions> = Object.fromEntries(
-    ['/api/', '/raw/', '/v/', '/i/', '/i2/', '/debug/', '/upload/'].map((route) => [
+    ['/api/', '/raw/', '/v/', '/i/', '/debug/', '/upload/'].map((route) => [
         route,
         // wrangler dev rewrites an Origin that matches the request's Host to its own, which would hide the browser's
         // origin from the passkey check, so the request arrives with the Worker's Host instead.

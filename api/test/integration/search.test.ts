@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { like } from 'drizzle-orm';
 import { type GalleryRecord, type ItemWrite, type SearchResponse, parseSearch } from 'tacocat-gallery-shared';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { orm, schema } from '../../src/db';
+import { orm, schema, upsertItem } from '../../src/db';
 import { call, callAsAdmin, parseExactly, putItem } from '../helpers';
 
 const MEDIA = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
@@ -354,8 +354,25 @@ describe('search', () => {
     });
 
     it('keeps the FTS index consistent through writes and deletes', async () => {
-        await callAsAdmin('/api/seed?years=1', { method: 'POST' });
-        await orm(env.DB).delete(schema.item).where(like(schema.item.parentPath, '/2000/01-%'));
+        const database = orm(env.DB);
+        const words = ['beach', 'birthday', 'snow', 'taco'];
+        await database.batch([
+            upsertItem(database, { parentPath: '/', itemName: '2000', itemType: 'album', published: true }),
+            ...['01-01', '01-02', '02-01'].flatMap((day, dayIndex) => [
+                upsertItem(database, { parentPath: '/2000/', itemName: day, itemType: 'album', published: true }),
+                ...words.map((word, index) =>
+                    upsertItem(database, {
+                        parentPath: `/2000/${day}/`,
+                        itemName: `img_${index}`,
+                        ...MEDIA,
+                        title: `${word} ${dayIndex}`,
+                        description: `A photo about ${word}`,
+                        tags: [word],
+                    }),
+                ),
+            ]),
+        ]);
+        await database.delete(schema.item).where(like(schema.item.parentPath, '/2000/01-%'));
         // FTS5's integrity check is a command written as an insert into the index, which Drizzle cannot model.
         const check = env.DB.prepare("INSERT INTO item_fts(item_fts) VALUES('integrity-check')").run();
 
