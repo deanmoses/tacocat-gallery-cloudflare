@@ -192,32 +192,17 @@ class AlbumLoadMachine {
     //
 
     /**
-     * Return true if album exists
+     * Whether the server has an album at `path`. Memory and the disk cache are not consulted: either can hold an album
+     * deleted elsewhere, or one from before the database was emptied, and a stale yes refuses a new name for nothing.
+     * A 404 clears the disk copy, so the album page stops showing it too.
      */
     async albumExists(path: string): Promise<boolean> {
         if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
-
-        // First check in memory
-        console.log(`Checking if album [${path}] exists in memory`);
-        const status = albumState.albums.get(path)?.loadStatus ?? AlbumLoadStatus.NOT_LOADED;
-        if (AlbumLoadStatus.LOADED === status || AlbumLoadStatus.LOADING === status) {
-            return true;
-        } else if (AlbumLoadStatus.DOES_NOT_EXIST === status) {
+        const response = await fetch(albumUrl(path), { method: 'HEAD' });
+        if (response.status === 404) {
+            void this.#removeFromDisk(path);
             return false;
         }
-
-        // Then check disk cache
-        console.log(`Checking if album [${path}] exists on disk`);
-        const idbKey = this.#idbKey(path);
-        const albumObject: AlbumRecord | undefined = await getFromIdb(idbKey);
-        if (albumObject) {
-            return true;
-        }
-
-        // Then check server
-        console.log(`Checking if album [${path}] exists on server`);
-        const response = await fetch(albumUrl(path), { method: 'HEAD' });
-        if (response.status === 404) return false;
         if (response.ok) return true;
         throw new Error(`Unexpected response [${response.status}] fetching album [${path}]`);
     }
