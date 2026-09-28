@@ -95,7 +95,7 @@ resource "cloudflare_r2_bucket" "derived" {
   }
 }
 
-# The nightly database dumps. The off-site copy keeps its own history of them, so a quarter is enough here.
+# The nightly database dumps, kept a quarter. Off-site, a dump that expires here is held 35 days more.
 resource "cloudflare_r2_bucket" "backups" {
   account_id = var.account_id
   name       = "${var.prefix}-backups"

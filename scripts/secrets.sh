@@ -10,6 +10,9 @@
 #   backup                 the repository secrets the Backup workflow reads.
 #   dev                    api/.dev.vars's R2 pair, set to staging's, for `wrangler dev`.
 #
+# Every value is assigned to a variable before it is used: a `$(...)` inside an argument or a pipeline fails silently
+# under `set -e`, and would send an empty secret; `gh secret set` takes an empty stdin as a value.
+#
 # Usage: scripts/secrets.sh (staging | production | backup | dev)
 set -euo pipefail
 
@@ -35,9 +38,10 @@ dev_var() {
     printf '%s' "$value"
 }
 
-# `credential <who> <field>` prints one field of OpenTofu's r2_credentials output, read with the OpenTofu token.
+# `credential <who> <field>` prints one field of OpenTofu's r2_credentials output. Outputs come from the local state,
+# so no API token is needed.
 credential() {
-    CLOUDFLARE_API_TOKEN=$(dev_var CLOUDFLARE_TERRAFORM_API_TOKEN) tofu -chdir=infra output -json r2_credentials |
+    tofu -chdir=infra output -json r2_credentials |
         node -e "
             const [who, field] = process.argv.slice(1);
             const value = JSON.parse(require('fs').readFileSync(0, 'utf8'))[who]?.[field];
@@ -55,37 +59,36 @@ staging | production)
     else
         env_flag=(--env "$target")
     fi
-    # Wrangler reads the pairs from stdin; nothing is written to disk.
-    node -e "
-        const [id, secret, session, debugbear] = process.argv.slice(1);
-        process.stdout.write(JSON.stringify({
-            R2_ACCESS_KEY_ID: id,
-            R2_SECRET_ACCESS_KEY: secret,
-            SESSION_SECRET: session,
-            DEBUGBEAR_API_KEY: debugbear,
-        }));
-    " "$(credential "$target" access_key_id)" "$(credential "$target" secret_access_key)" \
-        "$(dev_var "SESSION_SECRET_$environment_upper")" "$(dev_var DEBUGBEAR_API_KEY)" |
-        (cd api && npx wrangler secret bulk "${env_flag[@]}")
+    access_key_id=$(credential "$target" access_key_id)
+    secret_access_key=$(credential "$target" secret_access_key)
+    session_secret=$(dev_var "SESSION_SECRET_$environment_upper")
+    debugbear_api_key=$(dev_var DEBUGBEAR_API_KEY)
+    # Through the environment and stdin, never as arguments, which `ps` shows; nothing is written to disk.
+    R2_ACCESS_KEY_ID=$access_key_id R2_SECRET_ACCESS_KEY=$secret_access_key SESSION_SECRET=$session_secret \
+        DEBUGBEAR_API_KEY=$debugbear_api_key node -e "
+        const names = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'SESSION_SECRET', 'DEBUGBEAR_API_KEY'];
+        process.stdout.write(JSON.stringify(Object.fromEntries(names.map((name) => [name, process.env[name]]))));
+    " | (cd api && npx wrangler secret bulk "${env_flag[@]}")
     ;;
 backup)
-    gh secret set R2_ACCESS_KEY_ID --body "$(credential backup access_key_id)"
-    gh secret set R2_SECRET_ACCESS_KEY --body "$(credential backup secret_access_key)"
+    id=$(credential backup access_key_id)
+    secret=$(credential backup secret_access_key)
+    printf '%s' "$id" | gh secret set R2_ACCESS_KEY_ID
+    printf '%s' "$secret" | gh secret set R2_SECRET_ACCESS_KEY
     echo "Set R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY on the repository."
     ;;
 dev)
     id=$(credential staging access_key_id)
     secret=$(credential staging secret_access_key)
     # In place, keeping every other line: the pair is staging's, since wrangler dev runs the top-level config.
-    node -e "
+    R2_ACCESS_KEY_ID=$id R2_SECRET_ACCESS_KEY=$secret node -e "
         const fs = require('fs');
-        const [id, secret] = process.argv.slice(1);
         const lines = fs.readFileSync('api/.dev.vars', 'utf8').split('\n').map((line) =>
-            line.startsWith('R2_ACCESS_KEY_ID=') ? 'R2_ACCESS_KEY_ID=' + id
-            : line.startsWith('R2_SECRET_ACCESS_KEY=') ? 'R2_SECRET_ACCESS_KEY=' + secret
+            line.startsWith('R2_ACCESS_KEY_ID=') ? 'R2_ACCESS_KEY_ID=' + process.env.R2_ACCESS_KEY_ID
+            : line.startsWith('R2_SECRET_ACCESS_KEY=') ? 'R2_SECRET_ACCESS_KEY=' + process.env.R2_SECRET_ACCESS_KEY
             : line);
         fs.writeFileSync('api/.dev.vars', lines.join('\n'));
-    " "$id" "$secret"
+    "
     echo "Set api/.dev.vars's R2 pair to staging's."
     ;;
 esac
