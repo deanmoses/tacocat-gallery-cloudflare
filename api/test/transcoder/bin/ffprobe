@@ -1,3 +1,9 @@
 #!/bin/sh
-# Stands in for ffprobe with what it says of a landscape 1080p clip.
-echo '{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,"height":1080}],"format":{"format_name":"mov","duration":"9.6"}}'
+# Stands in for ffprobe with what it says of a landscape 1080p clip: an iPhone's HDR one, HEVC in HLG, when FAKE_SOURCE
+# is hdr, and otherwise an SDR one with no colour tags.
+if [ "$FAKE_SOURCE" = hdr ]; then
+    colour='"codec_name":"hevc","pix_fmt":"yuv420p10le","color_primaries":"bt2020","color_transfer":"arib-std-b67","color_space":"bt2020nc"'
+else
+    colour='"codec_name":"h264","pix_fmt":"yuv420p"'
+fi
+echo "{\"streams\":[{\"codec_type\":\"video\",$colour,\"width\":1920,\"height\":1080}],\"format\":{\"format_name\":\"mov\",\"duration\":\"9.6\"}}"

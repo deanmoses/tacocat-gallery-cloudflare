@@ -1,6 +1,6 @@
 // Transcodes one video per request: pulls the original from a presigned GET, pushes the MP4 and poster to
 // Presigned PUTs, and reports what it probed. Output mirrors the MediaConvert job: progressive H.264 MP4,
-// 5 Mbps cap, AAC 128k, first-frame JPEG poster.
+// 5 Mbps cap, AAC 128k, the source's colour tags, first-frame JPEG poster.
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
@@ -23,7 +23,9 @@ interface ProbeInfo {
     codec: string | undefined;
     profile: string | undefined;
     pixFmt: string | undefined;
+    colorPrimaries: string | undefined;
     colorTransfer: string | undefined;
+    colorSpace: string | undefined;
     codedWidth: number | undefined;
     codedHeight: number | undefined;
     rotation: number;
@@ -33,13 +35,13 @@ interface ProbeInfo {
 /** The container's response; src/media/transcoder.ts reads output's size, rotation and duration, and logs the rest. */
 interface TranscodeReport {
     source: ProbeInfo;
-    output: ProbeInfo & { bytes: number; hdrToneMapped: boolean };
+    output: ProbeInfo & { bytes: number; posterToneMapped: boolean };
     host: { cpus: number; model: string | undefined; memGiB: number };
     ms: { download: number; transcode: number; upload: number };
 }
 
-// Long side capped at 1920: at a 5 Mbps cap 4K looks no better, and scaling before the float tone-map is what keeps
-// A 4K phone clip near real time.
+// Long side capped at 1920: at a 5 Mbps cap 4K looks no better, and scaling first keeps a 4K phone clip's decode
+// the only work done at 4K.
 const FIT = String.raw`scale=w=min(iw\,1920):h=min(ih\,1920):force_original_aspect_ratio=decrease:force_divisible_by=2`;
 const TONE_MAP =
     'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv';
@@ -95,7 +97,9 @@ async function probe(file: string, signal: AbortSignal): Promise<ProbeInfo> {
         codec: stringField(video, 'codec_name'),
         profile: stringField(video, 'profile'),
         pixFmt: stringField(video, 'pix_fmt'),
+        colorPrimaries: stringField(video, 'color_primaries'),
         colorTransfer: stringField(video, 'color_transfer'),
+        colorSpace: stringField(video, 'color_space'),
         codedWidth: numberField(video, 'width'),
         codedHeight: numberField(video, 'height'),
         rotation: rotations.find((rotation) => rotation !== undefined) ?? 0,
@@ -153,7 +157,21 @@ async function upload(file: string, url: string, type: string, signal: AbortSign
     throw new Error(`PUT ${type} ${put.status}: ${text}`);
 }
 
-function encodeArguments(input: string, filter: string, output: string): string[] {
+/**
+ * The source's colour tags, for the MP4 to carry unchanged as MediaConvert's defaults do. A browser converts an HLG or
+ * PQ video to its own screen, and Safari and iOS do it Apple's way, which a tone-map baked in here cannot match; the
+ * video is 8-bit, as H.264 at 10 bits plays almost nowhere, and a gradient may band, as it does on the AWS site.
+ */
+function colourTags({ colorPrimaries, colorTransfer, colorSpace }: ProbeInfo): string[] {
+    const tags: [string, string | undefined][] = [
+        ['-color_primaries', colorPrimaries],
+        ['-color_trc', colorTransfer],
+        ['-colorspace', colorSpace],
+    ];
+    return tags.flatMap(([flag, value]) => (value === undefined || value === 'unknown' ? [] : [flag, value]));
+}
+
+function encodeArguments(input: string, source: ProbeInfo, output: string): string[] {
     return [
         // Input, using every core for the filters. Info rather than error, since ffmpeg says it caught a signal only at
         // info, and the stream summary it adds is short.
@@ -171,7 +189,8 @@ function encodeArguments(input: string, filter: string, output: string): string[
         '-map',
         '0:a:0?',
         '-vf',
-        filter,
+        `${FIT},format=yuv420p`,
+        ...colourTags(source),
         // H.264 High, capped at 5 Mbps like the MediaConvert job. On a two-minute 1080p60 screen recording, veryfast
         // took 30% less time than medium for a slightly smaller file, at an SSIM 0.0004 lower.
         '-c:v',
@@ -217,14 +236,19 @@ async function transcodeIn(
     const downloaded = Date.now();
     const source = await probe(input, signal);
 
-    // HLG and PQ sources (iPhone HDR) look washed out unless tone-mapped to SDR BT.709.
-    const isHdr = ['arib-std-b67', 'smpte2084'].includes(source.colorTransfer ?? '');
-    const filter = isHdr ? `${FIT},${TONE_MAP},format=yuv420p` : `${FIT},format=yuv420p`;
     const mp4 = path.join(directory, 'out.mp4');
-    await run('ffmpeg', encodeArguments(input, filter, mp4), signal);
+    await run('ffmpeg', encodeArguments(input, source, mp4), signal);
     const transcoded = Date.now();
+    // A JPEG cannot carry HLG or PQ, so an HDR source's poster is tone-mapped to SDR BT.709, or it looks washed out.
+    // Made from the source rather than the MP4, since the MP4 is still HDR.
+    const isHdr = ['arib-std-b67', 'smpte2084'].includes(source.colorTransfer ?? '');
+    const posterFilter = isHdr ? `${FIT},${TONE_MAP},format=yuv420p` : `${FIT},format=yuv420p`;
     const poster = path.join(directory, 'poster.jpg');
-    await run('ffmpeg', ['-v', 'error', '-i', mp4, '-frames:v', '1', '-q:v', '3', poster], signal);
+    await run(
+        'ffmpeg',
+        ['-v', 'error', '-i', input, '-frames:v', '1', '-vf', posterFilter, '-q:v', '3', poster],
+        signal,
+    );
     const output = await probe(mp4, signal);
 
     await upload(mp4, mp4Put, 'video/mp4', signal);
@@ -233,7 +257,7 @@ async function transcodeIn(
     const { size } = await stat(mp4);
     return {
         source,
-        output: { ...output, bytes: size, hdrToneMapped: isHdr },
+        output: { ...output, bytes: size, posterToneMapped: isHdr },
         host: { cpus: availableParallelism(), model: cpus()[0]?.model, memGiB: Math.round(totalmem() / 2 ** 30) },
         ms: { download: downloaded - start, transcode: transcoded - downloaded, upload: uploaded - transcoded },
     };

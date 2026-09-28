@@ -32,7 +32,7 @@ async function freePort(): Promise<number> {
     return port;
 }
 
-async function startTranscoder(ffmpeg: FakeFfmpeg): Promise<ChildProcess> {
+async function startTranscoder(ffmpeg: FakeFfmpeg, source: 'sdr' | 'hdr' = 'sdr'): Promise<ChildProcess> {
     const port = await freePort();
     transcoderOrigin = `http://localhost:${String(port)}`;
     const child = spawn(process.execPath, [SERVER], {
@@ -41,6 +41,7 @@ async function startTranscoder(ffmpeg: FakeFfmpeg): Promise<ChildProcess> {
             PATH: `${FAKES}:${process.env['PATH'] ?? ''}`,
             PORT: String(port),
             FAKE_FFMPEG: ffmpeg,
+            FAKE_SOURCE: source,
             FAKE_DIR: directory,
         },
         stdio: 'ignore',
@@ -69,6 +70,17 @@ async function unanswered(init: RequestInit = {}): Promise<void> {
     } catch {
         // Hung up on, or cut off by the test's cleanup.
     }
+}
+
+/** The arguments of each ffmpeg the server ran, the encode first, then the poster's. */
+async function ffmpegCommands(): Promise<{ encode: string; poster: string }> {
+    const lines = (await readFile(path.join(directory, 'ffmpeg.args'), 'utf8')).split('\n');
+    const encode = lines.find((line) => line.includes('libx264'));
+    const poster = lines.find((line) => line.endsWith('poster.jpg'));
+    if (encode === undefined || poster === undefined) {
+        throw new Error(`expected an encode and a poster, got ${lines.join(' | ')}`);
+    }
+    return { encode, poster };
 }
 
 async function ffmpegPids(): Promise<number[]> {
@@ -148,6 +160,27 @@ describe('transcoder server', () => {
 
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toMatchObject({ output: { codedWidth: 1920, codedHeight: 1080 } });
+    });
+
+    // A browser converts HLG and PQ to its screen itself, and Safari and iOS do it Apple's way, which a tone-map baked
+    // in by ffmpeg cannot match; a JPEG cannot carry HLG, so the poster alone is tone-mapped.
+    it("passes an HDR source's colour tags through to the MP4, and tone-maps only its poster", async () => {
+        await startTranscoder('encode', 'hdr');
+        await transcode();
+        const { encode, poster } = await ffmpegCommands();
+
+        expect(encode).toContain('-color_primaries bt2020 -color_trc arib-std-b67 -colorspace bt2020nc');
+        expect(encode).not.toContain('tonemap');
+        expect(poster).toContain('tonemap');
+    });
+
+    it("leaves an SDR source's colours alone", async () => {
+        await startTranscoder('encode');
+        await transcode();
+        const { encode, poster } = await ffmpegCommands();
+
+        expect(encode).not.toContain('-color_trc');
+        expect(`${encode} ${poster}`).not.toContain('tonemap');
     });
 
     it.each([

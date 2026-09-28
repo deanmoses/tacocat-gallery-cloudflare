@@ -1,6 +1,7 @@
 #!/bin/sh
-# Stands in for ffmpeg: records its process id, then does what FAKE_FFMPEG says.
+# Stands in for ffmpeg: records its process id and its arguments, one line each, then does what FAKE_FFMPEG says.
 echo $$ >>"$FAKE_DIR/ffmpeg.pids"
+echo "$*" >>"$FAKE_DIR/ffmpeg.args"
 case "$FAKE_FFMPEG" in
 reject)
     echo 'moov atom not found' >&2
