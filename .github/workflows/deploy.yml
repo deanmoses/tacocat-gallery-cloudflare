@@ -45,6 +45,9 @@ jobs:
                   # A pull request run would otherwise check out GitHub's merge of the branch into main, a commit no one
                   # can look up; the branch's own head is what the version gets tagged with.
                   ref: ${{ github.event.pull_request.head.sha || github.sha }}
+                  # The whole history, so the release can diff the tree against the commit the transcoder last shipped
+                  # from.
+                  fetch-depth: 0
             - uses: ./.github/actions/setup
               with:
                   scripts: 'false'
@@ -67,6 +70,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
+                  fetch-depth: 0
             - uses: ./.github/actions/setup
               with:
                   scripts: 'false'

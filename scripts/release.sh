@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Releases the Worker to one environment without a moment in which readers can reach a version nothing has checked.
 #
+#   0. Ship the transcoder's image and container settings with api/scripts/ship-transcoder.ts, when either has changed
+#      since the commit the container last shipped from. A Worker version carries neither, and nothing checks or rolls back the container, so an
+#      image has to work with both the version serving and the one being released, as a migration does; its rollout
+#      leaves an instance still encoding on the old image for up to its grace period anyway.
 #   1. Build the web app and upload a version. It serves no traffic.
 #   2. Note the database's Time Travel bookmark, then apply the migrations. They are additive by rule (see
 #      scripts/lint.sh), so the version still serving should keep working on the new schema. It is checked, since a
@@ -14,10 +18,9 @@
 #   4. Switch the new version to 100%, check it again without the header, and roll back if that fails.
 #   5. Apply the config's triggers, the crons and the custom domain, which a version release leaves as they were.
 #
-# Four things are not part of this and ship with `npm run deploy --workspace api` (or deploy:production), the plain
-# `wrangler deploy`: the container's image, which `wrangler versions upload` never publishes, so a change under
-# api/transcoder/ needs it; a change to a Durable Object class; a new Workflow, which a version binds to by name but does
-# not create; and a queue consumer's settings, which a version release leaves as they were.
+# Three things are not part of this and ship with `npm run deploy --workspace api` (or deploy:production), the plain
+# `wrangler deploy`: a change to a Durable Object class; a new Workflow, which a version binds to by name but does not
+# create; and a queue consumer's settings, which a version release leaves as they were.
 #
 # The Deploy workflow (.github/workflows/deploy.yml) runs this on every push: staging for a pull request branch, both
 # environments for main. By hand it runs from anywhere in the repo. Either way Wrangler needs the account: a login
@@ -160,6 +163,10 @@ if ! [[ "$previous" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
     exit 1
 fi
 echo "serving now: $previous"
+
+step "Shipping the transcoder"
+# First, so that a failure here comes before anything else has changed.
+(cd api && node scripts/ship-transcoder.ts "$1" "$short")
 
 step "Building the web app"
 npm run --silent build --workspace web
