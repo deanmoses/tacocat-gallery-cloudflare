@@ -1,4 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
+import path from 'node:path';
+import { buildVersion } from './build-version.ts';
 
 /**
  * Runes mode for every component of the app. A dependency keeps the compiler's default, which reads the mode off each
@@ -27,6 +29,7 @@ const config = {
         adapter: adapter({
             fallback: 'index.html',
         }),
+        version: { name: buildVersion(path.resolve(import.meta.dirname, '..')) },
     },
 };
 
