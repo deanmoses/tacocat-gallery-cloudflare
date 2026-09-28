@@ -399,17 +399,19 @@ describe('rows read on a gallery-sized table', () => {
         expect(moved.results).toHaveLength(IMAGES_PER_DAY);
     });
 
+    // A new order clears the old places first, a second pass over the album's media.
     it.each([
         {
             what: 'putting a day in an order of its own',
             itemNames: Array.from({ length: IMAGES_PER_DAY }, (_, index) => `img_${IMAGES_PER_DAY - 1 - index}`),
+            passes: 2,
         },
-        { what: 'putting a day back in name order', itemNames: null },
-    ])('$what reads its media and a few rows besides', async ({ itemNames }) => {
+        { what: 'putting a day back in name order', itemNames: null, passes: 1 },
+    ])('$what reads its media $passes times and a few rows besides', async ({ itemNames, passes }) => {
         const result = await orderAlbum(database, { parentPath: '/2001/', itemName: dayName(4) }, itemNames);
 
         expect(result.changes).toBe(IMAGES_PER_DAY);
-        expect(result.meta?.rows_read).toBeLessThanOrEqual(IMAGES_PER_DAY + OVERHEAD);
+        expect(result.meta?.rows_read).toBeLessThanOrEqual(passes * IMAGES_PER_DAY + OVERHEAD);
     });
 
     it('explaining a refused write reads a few rows', async () => {

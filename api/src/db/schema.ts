@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { type AnySQLiteColumn, check, index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+import {
+    type AnySQLiteColumn,
+    check,
+    index,
+    integer,
+    real,
+    sqliteTable,
+    text,
+    unique,
+    uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 import {
     type Rectangle,
     dayAlbumKeySql,
@@ -110,9 +120,7 @@ export const item = sqliteTable(
         thumbnailCrop: text('thumbnail_crop', { mode: 'json' }).$type<Rectangle>(),
         /**
          * Where an admin placed a media item in its album. An album sorts by name until an admin reorders it; media
-         * added after that has none and follows the placed media, in name order. That only media has one is left
-         * unchecked: a check constraint means rebuilding the table, and dropping the old one inside a migration's
-         * transaction, where foreign keys cannot be turned off, clears every thumbnail and upload that points at it.
+         * added after that has none and follows the placed media, in name order.
          */
         position: integer('position'),
         ...timestamps,
@@ -122,6 +130,10 @@ export const item = sqliteTable(
         // An object's row is one lookup, and clearing a deleted thumbnail from the albums that show it is a seek.
         index('item_version_id').on(table.versionId),
         index('item_thumbnail_id').on(table.thumbnailId),
+        // No two media items of an album in one place.
+        uniqueIndex('item_album_position')
+            .on(table.parentPath, table.position)
+            .where(sql`position IS NOT NULL`),
         check('item_type_check', sql.raw(`item_type IN (${ITEM_TYPES_SQL})`)),
         // Every media item says which kind it is, and an album says nothing.
         check(
@@ -162,6 +174,11 @@ export const item = sqliteTable(
             sql.raw(`tags IS NULL OR (json_valid(tags) AND json_type(tags) = 'array' AND json_array_length(tags) > 0)`),
         ),
         check('item_published_check', sql.raw(`published IN (0, 1) AND (item_type = 'album' OR published = 0)`)),
+        // Only media is placed, at a whole number from zero; SQLite would keep 1.5 in an integer column.
+        check(
+            'item_position_check',
+            sql.raw(`position IS NULL OR (item_type = 'media' AND typeof(position) = 'integer' AND position >= 0)`),
+        ),
         // An album points at its thumbnail; a media item's crop is a rectangle inside its own frame.
         check(
             'item_thumbnail_check',
