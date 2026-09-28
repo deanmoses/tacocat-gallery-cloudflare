@@ -31,6 +31,9 @@ const EXECUTED = valibot.tuple([
     }),
 ]);
 
+// What the token-verify route answers with, of which the token's id is the S3 access key id.
+const VERIFIED = valibot.looseObject({ result: valibot.looseObject({ id: valibot.string() }) });
+
 const galleryPath = process.argv[2] ?? '';
 const key = mediaKey(galleryPath);
 const envAt = process.argv.indexOf('--env');
@@ -65,8 +68,6 @@ console.log(JSON.stringify(row, null, 4));
 if (row.version_id !== null) {
     await listVersion(row.version_id);
 }
-
-const VERIFIED = valibot.looseObject({ result: valibot.looseObject({ id: valibot.string() }) });
 
 /** The token as S3 credentials. Its id comes from the verify route, which is the one route every token may call. */
 async function s3Credentials(): Promise<{ R2_ACCESS_KEY_ID: string; R2_SECRET_ACCESS_KEY: string }> {
