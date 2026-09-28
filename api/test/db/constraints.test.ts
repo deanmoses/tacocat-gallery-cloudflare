@@ -157,6 +157,9 @@ describe('an item row', () => {
             row: { ...IMAGE, createdAt: '2001-06-15T12:00:00.000Z', updatedAt: '2001-06-15T11:59:59.999Z' },
             constraint: 'item_updated_after_created',
         },
+        { name: 'an album with a place', row: { ...DAY, position: 0 }, constraint: 'item_position_check' },
+        { name: 'media at a negative place', row: { ...IMAGE, position: -1 }, constraint: 'item_position_check' },
+        { name: 'media at a fractional place', row: { ...IMAGE, position: 1.5 }, constraint: 'item_position_check' },
     ])('refuses $name', async ({ row, constraint }) => {
         const insert = database()
             .insert(schema.item)
@@ -179,6 +182,7 @@ describe('an item row', () => {
         { name: 'a media name with digits and underscores', row: { ...IMAGE, itemName: 'img_0001_2' } },
         { name: 'a video', row: VIDEO },
         { name: 'a published album with a summary', row: { ...DAY, summary: 'Felix turns one', published: true } },
+        { name: 'media in the first place', row: { ...IMAGE, position: 0 } },
     ])('accepts $name', async ({ row }) => {
         const insert = database().insert(schema.item).values(row).run();
 
@@ -245,6 +249,28 @@ describe('an item row', () => {
         const day = await db.select().from(item).where(eq(item.itemName, DAY.itemName)).get();
 
         expect(day).toMatchObject({ itemName: DAY.itemName, thumbnailId: null });
+    });
+
+    it('cannot share its place in the album with another media item', async () => {
+        const db = database();
+        await db.insert(schema.item).values({ ...IMAGE, position: 3 });
+        const insert = db
+            .insert(schema.item)
+            .values({ ...IMAGE, itemName: 'milo', position: 3 })
+            .run();
+
+        await expect(insert).rejects.toMatchObject(refusedBy('item.parent_path, item.position'));
+    });
+
+    it('can take the place a media item in another album has', async () => {
+        const db = database();
+        await db.insert(schema.item).values({ ...IMAGE, position: 3 });
+        const insert = db
+            .insert(schema.item)
+            .values({ ...IMAGE, parentPath: '/2001/06-16/', position: 3 })
+            .run();
+
+        await expect(insert).resolves.toMatchObject({ success: true });
     });
 
     it('cannot point at a thumbnail row that does not exist', async () => {

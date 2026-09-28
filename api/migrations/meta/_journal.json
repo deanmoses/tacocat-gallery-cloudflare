@@ -36,6 +36,27 @@
       "when": 1790500586133,
       "tag": "20260927091626_media_position",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790553159854,
+      "tag": "20260927235239_keep_links_through_item_rebuild",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790553161331,
+      "tag": "20260927235241_item_position_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790553162821,
+      "tag": "20260927235242_restore_links_and_search_index",
+      "breakpoints": true
     }
   ]
 }

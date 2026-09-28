@@ -9,7 +9,7 @@ import {
     albumPath,
     mediaKey,
 } from 'tacocat-gallery-shared';
-import { type Orm, schema } from '../db';
+import { type Orm, batchRun, schema } from '../db';
 import { type Row, type Selection, selectRecords, selectRecordsBatch, toAlbumRecord, toRecord } from './records';
 import { type Written, caption, isKey, written } from './writes';
 
@@ -304,16 +304,35 @@ function selection(where: SQL | undefined): Selection {
  * Puts the album's media in the order of `itemNames`, or back in name order when that is null. Media not named, such
  * as an upload that finished after the admin loaded the album, is left without a place and follows the rest. Changes
  * no row unless the album has media.
+ *
+ * A new order clears the old places first, in the same batch: no two media of an album may share a place, and SQLite
+ * holds that after every row it updates, so one statement moving items past each other fails on the way.
  */
 export async function orderAlbum(database: Orm, key: ItemKey, itemNames: string[] | null): Promise<Written> {
     const { item } = schema;
-    const position = itemNames === null ? null : placeOf(itemNames);
-    const result = await database
+    const inAlbum = and(eq(item.parentPath, albumPath(key.parentPath, key.itemName)), eq(item.itemType, 'media'));
+    const clear = database.update(item).set({ position: null }).where(inAlbum);
+    if (itemNames === null) {
+        return written(await clear.run());
+    }
+    const place = database
         .update(item)
-        .set({ position })
-        .where(and(eq(item.parentPath, albumPath(key.parentPath, key.itemName)), eq(item.itemType, 'media')))
-        .run();
-    return written(result);
+        .set({ position: placeOf(itemNames) })
+        .where(inAlbum);
+    const [cleared, placed] = await batchRun(database, [clear, place]);
+    if (cleared === undefined || placed === undefined) {
+        throw new Error('D1 answered a batch of two statements with fewer results');
+    }
+    // What the batch cost, on the last statement's account of where and how long.
+    return written({
+        ...placed,
+        meta: {
+            ...placed.meta,
+            rows_read: cleared.meta.rows_read + placed.meta.rows_read,
+            rows_written: cleared.meta.rows_written + placed.meta.rows_written,
+            duration: cleared.meta.duration + placed.meta.duration,
+        },
+    });
 }
 
 /** Where an admin placed each item, then the rest; the sort is stable, so each part keeps the name order it came in. */

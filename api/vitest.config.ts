@@ -39,6 +39,9 @@ export default defineConfig({
                         miniflare: {
                             bindings: {
                                 TEST_MIGRATIONS: await readD1Migrations('./migrations'),
+                                // The search index's definition, split into statements the way Wrangler splits a
+                                // migration.
+                                SEARCH_INDEX: await readD1Migrations('./src/db'),
                                 ...TEST_SECRETS,
                                 // Uploads are presigned into the bucket, whatever a developer's .dev.vars says; a test
                                 // of local uploads passes UPLOADS itself.
