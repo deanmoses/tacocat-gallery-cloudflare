@@ -1,4 +1,5 @@
-import { mediaErrorsUrl } from './config';
+import { callApi } from './adminApi';
+import { API } from '@tacocat-gallery/shared';
 
 export interface MediaErrorsResponse {
     success: boolean;
@@ -19,13 +20,7 @@ export async function checkMediaErrors(paths: string[]): Promise<MediaErrorsResp
     }
 
     try {
-        const response = await fetch(mediaErrorsUrl(), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ paths }),
-        });
+        const response = await callApi(API.uploadErrors, { paths });
 
         if (!response.ok) {
             return {

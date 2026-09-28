@@ -1,7 +1,6 @@
 import { DeleteStatus } from '$lib/models/album';
-import { itemUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { isMediaPath, parentPathOf } from '@tacocat-gallery/shared';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
+import { API, isMediaPath, parentPathOf } from '@tacocat-gallery/shared';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumState } from '../AlbumState.svelte';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -60,7 +59,7 @@ class MediaDeleteMachine {
         try {
             if (!isMediaPath(mediaPath)) throw new Error(`Invalid media path [${mediaPath}]`);
             this.#deleteStarted(mediaPath);
-            const response = await adminApi.delete(itemUrl(mediaPath));
+            const response = await callApi(API.deleteMedia, mediaPath);
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }

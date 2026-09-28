@@ -1,3 +1,4 @@
+import { API, type Endpoint, apiUrl } from '@tacocat-gallery/shared';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { ORIGIN, call, callAsAdmin } from '../helpers';
@@ -84,9 +85,12 @@ describe('passkey endpoints', () => {
     });
 });
 
-describe('admin-only writes', () => {
-    it('refuses a guest', async () => {
-        const response = await call('/api/item', { method: 'PUT', body: '{}' });
+describe('admin-only endpoints', () => {
+    const adminOnly: [string, Endpoint][] = Object.entries(API).filter(([, endpoint]) => 'admin' in endpoint);
+
+    it.each(adminOnly)('%s refuses a guest', async (_name, endpoint) => {
+        const url = 'prefix' in endpoint ? apiUrl(endpoint, '/2001/12-31/') : apiUrl(endpoint);
+        const response = await call(url, { method: endpoint.method, body: '{}' });
 
         expect(response.status).toBe(401);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Unauthorized' });

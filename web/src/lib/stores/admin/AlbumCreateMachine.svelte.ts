@@ -1,7 +1,6 @@
 import { toast } from '@zerodevx/svelte-toast';
-import { isAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
-import { albumUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
+import { API, isAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
 import { albumState } from '../AlbumState.svelte';
 import { CreateStatus } from '$lib/models/album';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
@@ -63,7 +62,7 @@ class AlbumCreateMachine {
         try {
             if (!isAlbumPath(albumPath)) throw new Error(`Invalid album path [${albumPath}]`);
             this.#createStarted(albumPath);
-            const response = await adminApi.put(albumUrl(albumPath));
+            const response = await callApi(API.createAlbum, albumPath, {});
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }

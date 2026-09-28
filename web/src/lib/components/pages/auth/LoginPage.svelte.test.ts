@@ -84,7 +84,7 @@ describe('the login page', () => {
             expect(loadDocument).toHaveBeenCalledWith(RETURN_PATH);
         });
 
-        expect(server.calls).toContainEqual({ method: 'POST', pathname: '/api/auth/logout', body: {} });
+        expect(server.calls).toContainEqual({ method: 'POST', pathname: '/api/auth/logout', body: undefined });
     });
 
     it('links home with a whole-page load', async () => {

@@ -7,14 +7,14 @@ import type {
     PublicKeyCredentialCreationOptionsJSON,
     PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { authUrl } from '$lib/utils/config';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
+import { API } from '@tacocat-gallery/shared';
 
 /** What an invite link can do, asked before offering to create a passkey with it. */
 export type InviteCheck = { live: true; username: string } | { live: false; message: string };
 
 export async function checkInvite(token: string): Promise<InviteCheck> {
-    const response = await adminApi.post(authUrl('invite'), { token });
+    const response = await callApi(API.checkInvite, { token });
     if (!response.ok) return { live: false, message: await failureMessage(response) };
     const body: unknown = await response.json();
     if (!hasUsername(body)) throw new Error('Expected the invite to name an admin');
@@ -23,22 +23,22 @@ export async function checkInvite(token: string): Promise<InviteCheck> {
 
 export async function createPasskey(token: string): Promise<void> {
     const { startRegistration } = await import('@simplewebauthn/browser');
-    const optionsJSON = await okJson(await adminApi.post(authUrl('register/options'), { token }));
+    const optionsJSON = await okJson(await callApi(API.registerOptions, { token }));
     if (!isCreationOptions(optionsJSON)) throw new Error('Expected options for creating a passkey');
     const response = await ceremony(startRegistration({ optionsJSON }));
-    await okJson(await adminApi.post(authUrl('register/verify'), { token, response }));
+    await okJson(await callApi(API.registerVerify, { token, response }));
 }
 
 export async function logIn(): Promise<void> {
     const { startAuthentication } = await import('@simplewebauthn/browser');
-    const optionsJSON = await okJson(await adminApi.post(authUrl('login/options'), {}));
+    const optionsJSON = await okJson(await callApi(API.loginOptions));
     if (!isRequestOptions(optionsJSON)) throw new Error('Expected options for logging in with a passkey');
     const response = await ceremony(startAuthentication({ optionsJSON }));
-    await okJson(await adminApi.post(authUrl('login/verify'), response));
+    await okJson(await callApi(API.loginVerify, response));
 }
 
 export async function logOut(): Promise<void> {
-    await okJson(await adminApi.post(authUrl('logout'), {}));
+    await okJson(await callApi(API.logout));
 }
 
 /**

@@ -1,10 +1,9 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { ReloadStatus } from '$lib/models/album';
-import { setThumbnailUrl } from '$lib/utils/config';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
-import { isYearAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
+import { API, isYearAlbumPath, parentPathOf } from '@tacocat-gallery/shared';
 import { albumTitle } from '$lib/utils/date-utils';
 
 /**
@@ -101,7 +100,7 @@ class AlbumThumbnailSetMachine {
     async #setAlbumThumbnail(albumPath: string, newThumbnailMediaPath: string): Promise<void> {
         console.log(`Setting thumbnail of album [${albumPath}] to [${newThumbnailMediaPath}]`);
         try {
-            const response = await adminApi.patch(setThumbnailUrl(albumPath), {
+            const response = await callApi(API.setAlbumThumbnail, albumPath, {
                 mediaPath: newThumbnailMediaPath,
             });
             if (!response.ok) {

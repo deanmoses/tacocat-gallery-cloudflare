@@ -1,9 +1,9 @@
 import { toast } from '@zerodevx/svelte-toast';
 import { ReorderStatus } from '$lib/models/album';
-import { adminApi, failureMessage } from '$lib/utils/adminApi';
-import { albumOrderUrl } from '$lib/utils/config';
+import { callApi, failureMessage } from '$lib/utils/adminApi';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { albumState } from '../AlbumState.svelte';
+import { API } from '@tacocat-gallery/shared';
 
 /**
  * Album reorder state machine
@@ -66,8 +66,10 @@ class AlbumReorderMachine {
 
     async #saveOrder(albumPath: string, itemNames: string[] | null): Promise<void> {
         try {
-            const url = albumOrderUrl(albumPath);
-            const response = itemNames === null ? await adminApi.delete(url) : await adminApi.put(url, { itemNames });
+            const response =
+                itemNames === null
+                    ? await callApi(API.resetAlbumOrder, albumPath)
+                    : await callApi(API.orderAlbum, albumPath, { itemNames });
             if (!response.ok) {
                 throw new Error(await failureMessage(response));
             }

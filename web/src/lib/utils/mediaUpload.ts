@@ -1,6 +1,5 @@
-import { type PresignRequest, type PresignResponse, parsePresigned } from '@tacocat-gallery/shared';
-import { getPresignedUploadUrlGenerationUrl } from './config';
-import { adminApi, failureMessage } from './adminApi';
+import { API, type PresignRequest, type PresignResponse, parsePresigned } from '@tacocat-gallery/shared';
+import { callApi, failureMessage } from './adminApi';
 
 export type UploadResult = { success: true } | { success: false; error: string };
 
@@ -40,7 +39,7 @@ export async function uploadToBucket(file: File, presignedUrl: string): Promise<
  */
 export async function fetchPresignedUrls(albumPath: string, uploads: PresignRequest): Promise<PresignedUrlResult> {
     try {
-        const response = await adminApi.post(getPresignedUploadUrlGenerationUrl(albumPath), uploads);
+        const response = await callApi(API.presign, albumPath, uploads);
 
         return response.ok
             ? { success: true, uploads: parsePresigned(await response.json()) }
