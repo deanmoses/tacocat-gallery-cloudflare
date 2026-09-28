@@ -15,7 +15,7 @@
     },
     "dependencies": {
         "@simplewebauthn/browser": "^14.0.0",
-        "@tacocat-gallery/shared": "0.0.1",
+        "@tacocat-gallery/shared": "*",
         "idb-keyval": "^6.3.0",
         "immer": "^11.1.18",
         "quill": "^2.0.3",
