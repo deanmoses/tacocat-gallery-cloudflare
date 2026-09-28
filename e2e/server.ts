@@ -3,7 +3,7 @@
  * filled with the e2e gallery. Playwright starts and stops it.
  */
 import { rm } from 'node:fs/promises';
-import { putLocalObject, startStack } from '../api/test/stack/start.ts';
+import { putLocalObject, startStack } from '@tacocat-gallery/api/test/stack';
 import { E2E_ORIGIN, E2E_PORT, E2E_STATE, ORIGINALS, seedGallery } from './gallery.ts';
 
 // Emptied here rather than on exit, since wrangler ends the process on a signal before a handler of ours could run.

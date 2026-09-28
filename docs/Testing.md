@@ -68,6 +68,7 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 
 - Playwright starts `e2e/server.ts`, which builds the web app, starts the Worker on port 8790 with the test secrets, and writes the gallery in `e2e/gallery.ts` through the Worker's own `PUT /api/item`. Tests start once the last album of it answers.
 - Every test shares that gallery, and tests run in parallel, within a file too. Treat it as read-only, which is what lets a test assert exact titles and links; a test that writes makes an album no other test reads.
+- `e2e/` imports the stack, the test secrets and the fixtures as `@tacocat-gallery/api/...` through the `exports` in `api/package.json`. A new helper gets an entry there, since lint refuses a relative import into another workspace.
 - While writing tests, run `node e2e/server.ts` in a terminal: Playwright reuses a server already on the port, which skips the build. Restart it after changing the web app, the Worker or the gallery.
 - Walk a journey in one test with a `test.step` per page, since a later page is usually reached from the one before it, and the step says where it failed. `e2e/navigation.e2e.ts` is the example.
 - Locators follow the web app's rule, and lint enforces it: roles and names, no CSS selectors, no `.first()` or `.nth()`.
