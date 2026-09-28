@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { mediaImage, preloadedImages } from './support.ts';
+import { fetchedStylesheets, mediaImage, preloadedImages } from './support.ts';
 
 const DAY_TITLE = 'June 15, 2001';
 // The Worker's URL for each photo at the size the media page shows it: the landscape one by width, the portrait by height.
@@ -42,12 +42,21 @@ test.describe('the site', () => {
 /** What the reader of the weekly email does: opens the day it links to, then clicks through its photos. */
 test.describe('a reader arriving at a day album', () => {
     test('clicks through its photos, each already requested before the click', async ({ page }) => {
-        await test.step('the day links along to the newer day and down to its photos', async () => {
+        await test.step('the day links along to the newer day', async () => {
             await page.goto('/2001/06-15');
 
             await expect(page).toHaveTitle(DAY_TITLE);
             await expect(page.getByRole('link', { name: 'Jul 4', exact: true })).toHaveAttribute('href', '/2001/07-04');
+        });
 
+        await test.step("the photo page's code is fetched before any photo is clicked", async () => {
+            // The pointer has not moved, so no hover has started it.
+            await expect
+                .poll(async () => fetchedStylesheets(page))
+                .toContainEqual(expect.stringMatching(/^MediaDetail\./v));
+        });
+
+        await test.step('a photo opens from its thumbnail', async () => {
             await page.getByRole('link', { name: 'Cake', exact: true }).click();
 
             await expect(page).toHaveURL('/2001/06-15/cake');

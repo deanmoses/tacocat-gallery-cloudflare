@@ -5,9 +5,9 @@
 //
 // Usage: node api/scripts/debugbear.ts run                         a cold run of every page, then a warm one
 //        node api/scripts/debugbear.ts report [--from YYYY-MM-DD]  every run since that day, and their medians
-//        node api/scripts/debugbear.ts requests <analysis id>      when one run's page, first script, album and first
-//                                                                  thumbnail requests started and ended; `report`
-//                                                                  prints the id
+//        node api/scripts/debugbear.ts requests <analysis id>      when one run's page, first script, album, first
+//                                                                  thumbnail and first photo requests started and
+//                                                                  ended; `report` prints the id
 //        node api/scripts/debugbear.ts pages                       every page: id, location, URL, tags and settings
 //        node api/scripts/debugbear.ts repoint /2026/09-13/        point every page at that album on its own site
 //        node api/scripts/debugbear.ts add-warm-pages              a `warm-browser` twin of every page that has none,
@@ -66,6 +66,7 @@ const REQUESTS = valibot.array(
 );
 
 type Page = valibot.InferOutput<typeof PROJECT>['pages'][number];
+type RunRequest = valibot.InferOutput<typeof REQUESTS>[number];
 
 interface Run {
     id: string;
@@ -172,22 +173,40 @@ async function report(from: Date): Promise<void> {
 }
 
 /**
- * The page, its first script, every album request and the first thumbnail of one run, with when each started and
- * ended in ms from the page's start, so a waterfall can be read without the dashboard: whether the album JSON started
- * with the page's headers or after the app ran, whether it was asked for once or twice, and how long after it arrived
- * the browser sent the first thumbnail's request. Both sites serve their images under `/i/`, AWS on its image host.
+ * The page, its first script, every album request, the first thumbnail and the first photo of one run, with when each
+ * started and ended in ms from the page's start, so a waterfall can be read without the dashboard: whether the album
+ * JSON started with the page's headers or after the app ran, whether it was asked for once or twice, how long after it
+ * arrived the browser sent the first thumbnail's request, and how long the first photo took once asked for. Both sites
+ * serve their images under `/i/`, AWS on its image host.
  */
 async function albumRequests(analysisId: string): Promise<void> {
     const requests = valibot.parse(REQUESTS, await debugbear(`/analysis/${analysisId}/requests`));
     const byStart = requests.toSorted((one, other) => one.startTime - other.startTime);
     const document = requests.find((request) => request.resourceType === 'document');
     const firstScript = byStart.find((request) => request.resourceType === 'script');
-    const albums = requests.filter((request) => request.url.includes('/api/album/'));
-    const firstThumbnail = byStart.find(
+    // The Worker answers albums under /api/album/; the AWS API is its own host, api.pix.tacocat.com, under /album/.
+    const albums = requests.filter((request) =>
+        /^https:\/\/(?:api\.pix\.tacocat\.com\/|[^\/]+\/api\/)album\//v.test(request.url),
+    );
+    const images = byStart.filter(
         (request) => request.resourceType === 'image' && new URL(request.url).pathname.startsWith('/i/'),
     );
+    // Both apps ask for a thumbnail by both sides, as in 200x200, and a photo by its long side alone, 1024 or x768.
+    const isThumbnail = (request: RunRequest): boolean =>
+        /^\d+x\d+$/v.test(new URL(request.url).searchParams.get('size') ?? '');
+    const firstThumbnail = images.find(isThumbnail);
+    // The journey opens the first thumbnail's photo, which the photo page asks for just after preloading its
+    // neighbours, so it is found by the thumbnail's path rather than by when it started.
+    const firstPhoto =
+        firstThumbnail &&
+        images.find(
+            (request) =>
+                !isThumbnail(request) && new URL(request.url).pathname === new URL(firstThumbnail.url).pathname,
+        );
     console.info('  start     end  status  early hint  URL');
-    for (const request of [document, firstScript, ...albums, firstThumbnail].flatMap((found) => found ?? [])) {
+    for (const request of [document, firstScript, ...albums, firstThumbnail, firstPhoto].flatMap(
+        (found) => found ?? [],
+    )) {
         console.info(
             [
                 ms(request.startTime, 7),

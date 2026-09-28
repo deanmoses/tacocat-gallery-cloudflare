@@ -52,3 +52,14 @@ export async function preloadedImages(page: Page): Promise<string[]> {
         ),
     );
 }
+
+/** The file names of every stylesheet the page has fetched, as in `MediaDetail.BCFLIRHq.css`. */
+export async function fetchedStylesheets(page: Page): Promise<string[]> {
+    return page.evaluate(() =>
+        performance
+            .getEntriesByType('resource')
+            .map((entry) => new URL(entry.name).pathname)
+            .filter((pathname) => pathname.endsWith('.css'))
+            .map((pathname) => pathname.slice(pathname.lastIndexOf('/') + 1)),
+    );
+}

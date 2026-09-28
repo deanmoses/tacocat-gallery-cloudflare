@@ -1,4 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
+import path from 'node:path';
+import { buildVersion } from './build-version.ts';
 
 /**
  * Runes mode for every component of the app. A dependency keeps the compiler's default, which reads the mode off each
@@ -12,6 +14,8 @@ function inTheApp({ filename }) {
     return !inDependency || undefined;
 }
 
+const REPO = path.resolve(import.meta.dirname, '..');
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
     compilerOptions: {
@@ -21,12 +25,18 @@ const config = {
         // syntax a compile error instead of a silent per-component mode switch.
         // Removable in Svelte 6, once runes mode is the only mode.
         runes: inTheApp,
+        // Svelte hashes a component's path, relative to this, into its scoped CSS class, and defaults it to the
+        // directory the build started in. A dependency sits in the repo root's node_modules, outside web/, so relative
+        // to the repo is the one base that gives every component the same class, and every chunk carrying one the
+        // same name, from any checkout and any directory.
+        rootDir: REPO,
     },
 
     kit: {
         adapter: adapter({
             fallback: 'index.html',
         }),
+        version: { name: buildVersion(REPO) },
     },
 };
 
