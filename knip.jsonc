@@ -3,8 +3,8 @@
 
     "workspaces": {
         ".": {
-            // Started by the Playwright config's webServer command, which knip does not read.
-            "entry": ["e2e/server.ts"],
+            // Run by the Playwright config's webServer command and by scripts/lint.sh, neither of which knip reads.
+            "entry": ["e2e/server.ts", "scripts/check-dependency-versions.ts"],
         },
         "api": {
             // Run directly with node, and inside the transcoder image, rather than imported from anywhere.

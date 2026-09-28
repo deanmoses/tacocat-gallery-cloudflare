@@ -235,6 +235,10 @@ else
 Run \`npm run db:generate --workspace api\` after changing the schema, and never edit a generated migration or snapshot."
 fi
 
+# Whole project either way, since the package.json files and the lockfile are read together.
+echo -n "Dependencies: one copy across workspaces... "
+check node scripts/check-dependency-versions.ts
+
 # Whole project either way: an unused export is a fact about the files that don't import it.
 echo -n "Lint: unused files, exports and dependencies (knip)... "
 check knip --no-progress

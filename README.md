@@ -78,6 +78,8 @@ The originals, and those dumps with them, are copied out of Cloudflare every nig
 
 `npm run quality` formats, lints, type-checks and tests. The lint step needs `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`; without them it warns and skips those checks, where CI fails.
 
+The lint fails when workspaces that declare the same package give it different ranges or would load different copies of it, since a second copy of a package whose types cross workspaces, like `valibot`, breaks quietly. `scripts/check-dependency-versions.ts` lists the packages allowed to differ, today Vitest and its coverage plugin, each with why.
+
 ## Claude Code on the web
 
 A cloud session starts in a container that has only this repository, an older Node than `.nvmrc` pins and none of the lint's system tools, so `.claude/hooks/session-start.sh` prepares it: Node from `.nvmrc` through nvm, `npm install`, and the lint tools through `scripts/install-lint-tools.sh` plus shellcheck from apt. It runs only when `CLAUDE_CODE_REMOTE` is set, takes about a minute on a cold image, and its `[session-start]` lines in the session banner say how long each step took and which one failed if one did.
