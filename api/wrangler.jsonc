@@ -22,7 +22,7 @@
         // Every path the Worker serves, and only those; the rest are the app's files. Once this is a list, a request it
         // does not match never reaches the Worker, navigation or not, so a new route here has to be added to it, and to
         // the proxy in web/vite.config.ts.
-        "run_worker_first": ["/api/*", "/raw/*", "/v/*", "/i/*", "/i2/*", "/debug/*", "/upload/*"],
+        "run_worker_first": ["/api/*", "/raw/*", "/v/*", "/i/*", "/debug/*", "/upload/*"],
     },
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,
@@ -34,8 +34,6 @@
     "vars": {
         // The site's own origin, the only one besides local development that may create or use a passkey.
         "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
-        // The derived bucket's custom domain, which /i2/* fetches derivatives through.
-        "DERIVED_ORIGIN": "https://staging-img.deanmoses.com",
         // The buckets by their S3 names: uploads are presigned into the first, and the transcoder writes into the second.
         "MEDIA_BUCKET": "tacocat-staging-media",
         "DERIVED_BUCKET": "tacocat-staging-derived",
@@ -120,7 +118,6 @@
             "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
             "vars": {
                 "SITE_ORIGIN": "https://pix.deanmoses.com",
-                "DERIVED_ORIGIN": "https://img.deanmoses.com",
                 "MEDIA_BUCKET": "tacocat-proto-media",
                 "DERIVED_BUCKET": "tacocat-proto-derived",
                 "UPLOADS": "signed",

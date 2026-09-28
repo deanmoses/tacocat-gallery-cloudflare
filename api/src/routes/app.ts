@@ -14,7 +14,6 @@ import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
 import { failure, json, notFound } from '../http/responses';
 import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
-import { seed } from '../ops/seed';
 import {
     createAlbumRoute,
     deleteAlbumRoute,
@@ -28,7 +27,7 @@ import {
 import { deleteMediaRoute, headMedia, recutThumbnailRoute, renameMediaRoute, updateMediaRoute } from './media';
 import { debugImage } from './debug';
 import { uploadErrors } from './errors';
-import { derivedViaCacheApi, derivedViaCdn, raw } from './images';
+import { derivedViaCacheApi, raw } from './images';
 import { putItem } from './items';
 import { localUploadRoute } from './upload';
 import { presignRoute } from './presigned';
@@ -65,7 +64,7 @@ export function createApp(): Hono<App> {
         context.res.headers.set('x-worker-colo', colo(context.req.raw));
         context.res.headers.append('server-timing', `worker;dur=${(performance.now() - started).toFixed(1)}`);
     });
-    app.on('GET', ['/i/*', '/i2/*', '/v/*', '/raw/*'], async (context, next) => {
+    app.on('GET', ['/i/*', '/v/*', '/raw/*'], async (context, next) => {
         await next();
         for (const [name, value] of Object.entries(MEDIA_HEADERS)) {
             context.res.headers.set(name, value);
@@ -123,7 +122,6 @@ export function createApp(): Hono<App> {
     app.get('/raw/*', async (context) => raw(context.req.raw, context.env));
     app.get('/v/*', async (context) => media(context.req.raw, context.env));
     app.get('/i/*', async (context) => derivedViaCacheApi(context.req.raw, context.env, context.executionCtx));
-    app.get('/i2/*', async (context) => derivedViaCdn(context.req.raw, context.env));
     // What it reports about an object is for whoever can upload one.
     app.get('/debug/image/*', async (context) =>
         (await currentAdmin(context.req.raw, context.env)) === null
@@ -137,7 +135,6 @@ export function createApp(): Hono<App> {
         (await currentAdmin(context.req.raw, context.env)) === null ? failure(401, 'Unauthorized') : next(),
     );
     app.put('/api/item', async (context) => putItem(context.req.raw, context.env));
-    app.post('/api/seed', async (context) => seed(context.req.raw, context.env));
     app.post('/api/backup', async (context) => json(await backupDatabase(context.env)));
     app.post('/api/presigned/*', async (context) => presignRoute(context.req.raw, context.env));
     app.put('/upload/:versionId', async (context) =>

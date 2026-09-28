@@ -39,7 +39,7 @@ describe("the site's headers", () => {
         });
     });
 
-    it.each(['/raw/2001/01-01/a', '/v/2001/01-01/a', '/i2/2001/01-01/a/v1'])(
+    it.each(['/raw/2001/01-01/a', '/v/2001/01-01/a'])(
         'keep other sites from embedding what %s serves, even when it is missing',
         async (path) => {
             const response = await call(path);

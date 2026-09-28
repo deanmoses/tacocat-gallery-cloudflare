@@ -1,22 +1,13 @@
-# One environment's data: its database, its buckets, the queue its uploads arrive through, and the hostname its derived
-# images are served from. The Worker that binds them is declared per environment in api/wrangler.jsonc.
+# One environment's data: its database, its buckets and the queue its uploads arrive through. The Worker that binds
+# them is declared per environment in api/wrangler.jsonc.
 
 variable "account_id" {
-  type = string
-}
-
-variable "zone_id" {
   type = string
 }
 
 variable "prefix" {
   type        = string
   description = "What every resource's name starts with, such as tacocat-staging."
-}
-
-variable "image_host" {
-  type        = string
-  description = "The hostname the derived bucket is served from, such as img.deanmoses.com."
 }
 
 variable "site_origin" {
@@ -60,7 +51,6 @@ resource "cloudflare_r2_bucket_cors" "media" {
   }]
 }
 
-# Public through its custom domain, so it must never hold originals.
 resource "cloudflare_r2_bucket" "derived" {
   account_id = var.account_id
   name       = "${var.prefix}-derived"
@@ -68,15 +58,6 @@ resource "cloudflare_r2_bucket" "derived" {
   lifecycle {
     prevent_destroy = true
   }
-}
-
-resource "cloudflare_r2_custom_domain" "img" {
-  account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.derived.name
-  domain      = var.image_host
-  zone_id     = var.zone_id
-  enabled     = true
-  min_tls     = "1.2"
 }
 
 resource "cloudflare_queue" "uploads" {
@@ -104,8 +85,4 @@ resource "cloudflare_r2_bucket_event_notification" "uploads" {
 
 output "d1_database_id" {
   value = cloudflare_d1_database.this.id
-}
-
-output "image_host" {
-  value = var.image_host
 }

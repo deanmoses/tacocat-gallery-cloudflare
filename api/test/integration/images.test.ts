@@ -1,30 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { imageUrl } from 'tacocat-gallery-shared';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { derivedPrefix } from '../../src/storage/keys';
 import { call } from '../helpers';
-
-describe('derived images through the CDN', () => {
-    it("fetches the derivative from the environment's derived-image host", async () => {
-        const fetchSpy = vi
-            .spyOn(globalThis, 'fetch')
-            .mockResolvedValue(
-                new Response('webp bytes', { headers: { 'content-type': 'image/webp', 'cf-cache-status': 'HIT' } }),
-            );
-        const path = imageUrl({
-            path: '/2001/01-01/a',
-            versionId: 'v1',
-            size: { width: 200, height: 200 },
-            crop: null,
-        });
-        const response = await call(path.replace('/i/', '/i2/'));
-        const [fetched] = fetchSpy.mock.calls[0] ?? [];
-
-        expect(response.status).toBe(200);
-        expect(response.headers.get('x-derived')).toBe('cdn-hit');
-        expect(fetched).toBe(`${env.DERIVED_ORIGIN}/${derivedPrefix('v1')}/200x200-webp`);
-    });
-});
 
 describe('derived images through the Cache API', () => {
     const path = imageUrl({

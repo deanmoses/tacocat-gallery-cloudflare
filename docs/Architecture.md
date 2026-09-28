@@ -278,7 +278,7 @@ Traffic is never split between versions, since a split would serve one version's
 
 - **Nightly**: dump the database to `backups/d1/` in the media bucket, and delete upload errors and spent login challenges past their use. The search index is rebuilt from `item` on a restore, so it is not dumped.
 - **`GET /api/health`** answers with the running version and the newest migration, which is what a release checks.
-- **Measurement.** The rest of `api/src/ops/`, and routes such as `/i2/` and `/debug/`, serve the performance work in `docs/Perf.md`, not the gallery.
+- **Measurement.** The rest of `api/src/ops/`, and `/debug/`, serve the performance work in `docs/Perf.md`, not the gallery.
 
 ## Invariants
 
