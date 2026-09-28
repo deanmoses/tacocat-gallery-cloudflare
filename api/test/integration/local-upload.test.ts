@@ -15,7 +15,7 @@ import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers
 
 const DAY = '/2024/06-15/';
 const PATH = `${DAY}felix`;
-const LOCAL = { UPLOADS: 'local' } as const;
+const LOCAL = { UPLOAD_MODE: 'local' } as const;
 
 const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1));
 
@@ -63,24 +63,24 @@ describe('local uploads', () => {
         const sent = vi.spyOn(env.UPLOAD_EVENTS, 'send');
         const { url, versionId } = await presignOne(LOCAL);
         await callAsAdmin(url, { method: 'PUT', body: jpg, headers: { 'content-type': 'image/jpeg' } }, LOCAL);
-        const object = await env.MEDIA.get(inboxKey(versionId));
+        const object = await env.UPLOADS.get(inboxKey(versionId));
 
         expect(object?.httpMetadata?.contentType).toBe('image/jpeg');
         expect(object?.size).toBe(jpg.byteLength);
         expect(sent).toHaveBeenCalledExactlyOnceWith({
             action: 'PutObject',
-            bucket: env.MEDIA_BUCKET,
+            bucket: env.UPLOADS_BUCKET,
             object: { key: inboxKey(versionId), size: jpg.byteLength, eTag: expect.any(String) },
             eventTime: expect.any(String),
         });
 
         const event: R2EventMessage = {
             action: 'PutObject',
-            bucket: env.MEDIA_BUCKET,
+            bucket: env.UPLOADS_BUCKET,
             object: { key: inboxKey(versionId) },
             eventTime: new Date().toISOString(),
         };
-        const batch = createMessageBatch<R2EventMessage>('tacocat-staging-uploads', [
+        const batch = createMessageBatch<R2EventMessage>('staging-uploads', [
             { id: '1', timestamp: new Date(), attempts: 1, body: event },
         ]);
         await using instance = await introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId);

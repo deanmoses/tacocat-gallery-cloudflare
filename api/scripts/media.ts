@@ -1,6 +1,6 @@
 // Prints a media item's row and the objects stored for its version. The buckets are keyed by version id, so a gallery
 // path finds nothing in the dashboard; this is the way from a path to its objects. Reads the deployed database with
-// the account token and lists the buckets through the S3 API, both with what api/.dev.vars holds.
+// the account token and lists the buckets through the S3 API with the read-only R2 token, both from api/.dev.vars.
 //
 // Usage: node api/scripts/media.ts /2024/12-17/felix [--env production]
 import { execFile } from 'node:child_process';
@@ -14,11 +14,11 @@ import { devVars } from './dev-vars.ts';
 const API_DIR = fileURLToPath(new URL('..', import.meta.url));
 // Staging is wrangler.jsonc's top-level environment, so Wrangler reaches it without --env.
 const TARGETS = {
-    staging: { wranglerEnv: [], media: 'tacocat-staging-media', derived: 'tacocat-staging-derived' },
+    staging: { wranglerEnv: [], originals: 'staging-originals', derived: 'staging-derived' },
     production: {
         wranglerEnv: ['--env', 'production'],
-        media: 'tacocat-proto-media',
-        derived: 'tacocat-proto-derived',
+        originals: 'production-originals',
+        derived: 'production-derived',
     },
 };
 
@@ -66,14 +66,14 @@ if (row.version_id !== null) {
 /** Prints what each bucket holds for the version. */
 async function listVersion(versionId: string): Promise<void> {
     const credentials = {
-        R2_ACCESS_KEY_ID: secrets['R2_ACCESS_KEY_ID'] ?? '',
-        R2_SECRET_ACCESS_KEY: secrets['R2_SECRET_ACCESS_KEY'] ?? '',
+        R2_ACCESS_KEY_ID: secrets['R2_READER_ACCESS_KEY_ID'] ?? '',
+        R2_SECRET_ACCESS_KEY: secrets['R2_READER_SECRET_ACCESS_KEY'] ?? '',
     };
     const [originals, derived] = await Promise.all([
-        listObjects(credentials, target.media, originalKey(versionId)),
+        listObjects(credentials, target.originals, originalKey(versionId)),
         listObjects(credentials, target.derived, `${derivedPrefix(versionId)}/`),
     ]);
-    console.log(`\n${target.media}:`);
+    console.log(`\n${target.originals}:`);
     print(originals);
     console.log(`\n${target.derived}:`);
     print(derived);

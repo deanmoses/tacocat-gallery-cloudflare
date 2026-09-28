@@ -19,7 +19,7 @@ export async function raw(request: Request, env: Env): Promise<Response> {
     if (wanted === null) {
         return failure(400, 'expected /raw/<media path>/<versionId>');
     }
-    const object = await env.MEDIA.get(originalKey(wanted.versionId));
+    const object = await env.ORIGINALS.get(originalKey(wanted.versionId));
     if (!object) {
         return notFound();
     }

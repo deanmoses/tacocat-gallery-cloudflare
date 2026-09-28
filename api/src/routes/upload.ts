@@ -8,7 +8,7 @@ import { failure, notFound } from '../http/responses';
  * goes into the local bucket and its event onto the local queue. Deployed, the path is not there.
  */
 export async function localUploadRoute(request: Request, env: Env, versionId: string): Promise<Response> {
-    if (env.UPLOADS !== 'local' || !isVersionId(versionId)) {
+    if (env.UPLOAD_MODE !== 'local' || !isVersionId(versionId)) {
         return notFound();
     }
     if ((await currentAdmin(request, env)) === null) {

@@ -122,7 +122,7 @@ describe('asking for upload URLs', () => {
         expect(response.status).toBe(200);
         expect(Object.keys(uploads)).toStrictEqual([`${DAY}new`, `${DAY}existing`]);
         expect(signed.map((url) => url.pathname)).toStrictEqual(
-            [newUpload, replacement].map((upload) => `/${env.MEDIA_BUCKET}/${inboxKey(upload?.versionId ?? '')}`),
+            [newUpload, replacement].map((upload) => `/${env.UPLOADS_BUCKET}/${inboxKey(upload?.versionId ?? '')}`),
         );
         expect(signed.map((url) => url.searchParams.get('X-Amz-Signature'))).toStrictEqual([
             expect.stringMatching(/^[\da-f]{64}$/v),

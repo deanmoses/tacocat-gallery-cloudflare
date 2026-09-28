@@ -23,7 +23,7 @@ async function runCron(cron: string): Promise<void> {
 describe('nightly cron', () => {
     it('writes a dump to R2', async () => {
         await runCron('17 9 * * *');
-        const backups = await env.MEDIA.list({ prefix: 'backups/d1/' });
+        const backups = await env.BACKUPS.list({ prefix: 'backups/d1/' });
 
         expect(backups.objects).toHaveLength(1);
     });
@@ -59,7 +59,7 @@ describe('a cron the Worker does not name', () => {
     it('runs nothing, so a schedule an older release left behind is harmless', async () => {
         const warn = vi.spyOn(console, 'warn').mockReturnValue();
         await runCron('0 0 1 1 *');
-        const dumps = await env.MEDIA.list({ prefix: 'backups/d1/' });
+        const dumps = await env.BACKUPS.list({ prefix: 'backups/d1/' });
 
         expect(dumps.objects).toHaveLength(0);
         expect(warn).toHaveBeenCalledWith({ event: 'unknown_cron', cron: '0 0 1 1 *' });

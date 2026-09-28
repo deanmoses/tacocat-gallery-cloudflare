@@ -1,7 +1,7 @@
 import { inboxKey } from '../storage/keys';
 import type { R2EventMessage } from './upload';
 
-export type LocalUploadEnv = Pick<Env, 'MEDIA' | 'MEDIA_BUCKET' | 'UPLOAD_EVENTS'>;
+export type LocalUploadEnv = Pick<Env, 'UPLOADS' | 'UPLOADS_BUCKET' | 'UPLOAD_EVENTS'>;
 
 /**
  * Takes an upload the way the bucket would under `wrangler dev`, where the browser's PUT cannot reach the account's
@@ -15,10 +15,10 @@ export async function acceptLocalUpload(
     contentType: string | null,
 ): Promise<void> {
     const key = inboxKey(versionId);
-    const object = await env.MEDIA.put(key, file, { httpMetadata: contentType === null ? {} : { contentType } });
+    const object = await env.UPLOADS.put(key, file, { httpMetadata: contentType === null ? {} : { contentType } });
     const event: R2EventMessage = {
         action: 'PutObject',
-        bucket: env.MEDIA_BUCKET,
+        bucket: env.UPLOADS_BUCKET,
         object: { key, size: object.size, eTag: object.etag },
         eventTime: new Date().toISOString(),
     };

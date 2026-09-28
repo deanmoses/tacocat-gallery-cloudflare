@@ -207,7 +207,7 @@ describe('backup', () => {
         await putItem({ ...MEDIA, parentPath: '/2024/08-01/', itemName: 'd' });
         const response = await callAsAdmin('/api/backup', { method: 'POST' });
         const { key, rows } = await response.json<{ key: string; rows: number }>();
-        const object = await env.MEDIA.get(key);
+        const object = await env.BACKUPS.get(key);
         const dump = await object?.json<{ rows: { itemName: string }[] }>();
 
         expect(rows).toBe(2);

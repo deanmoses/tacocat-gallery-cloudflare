@@ -17,7 +17,7 @@ for (const { objectPath, file, contentType } of ORIGINALS) {
 const stack = await startStack({
     port: E2E_PORT,
     persistTo: E2E_STATE,
-    vars: { UPLOADS: 'local', SITE_ORIGIN: E2E_ORIGIN },
+    vars: { UPLOAD_MODE: 'local', SITE_ORIGIN: E2E_ORIGIN },
     localUpstream: true,
 });
 const { origin } = await stack.url;

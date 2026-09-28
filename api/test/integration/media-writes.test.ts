@@ -118,10 +118,10 @@ describe('a media item', () => {
         });
 
         it('leaves the objects for the purge', async () => {
-            await env.MEDIA.put(originalKey('v1'), new Uint8Array(3));
+            await env.ORIGINALS.put(originalKey('v1'), new Uint8Array(3));
             await write('DELETE', `/api/media${DAY}felix`);
 
-            await expect(env.MEDIA.head(originalKey('v1'))).resolves.not.toBeNull();
+            await expect(env.ORIGINALS.head(originalKey('v1'))).resolves.not.toBeNull();
         });
 
         it('is not found for a media item that is not there, and for an album', async () => {

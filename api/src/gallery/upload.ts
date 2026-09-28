@@ -22,9 +22,9 @@ export interface R2EventMessage {
 }
 
 /** What signing the transcoder's URLs takes: the credentials, and which bucket is which. */
-type S3Env = S3Credentials & Pick<Env, 'MEDIA_BUCKET' | 'DERIVED_BUCKET'>;
+type S3Env = S3Credentials & Pick<Env, 'UPLOADS_BUCKET' | 'DERIVED_BUCKET'>;
 
-export type UploadEnv = TranscodeEnv & S3Env & Pick<Env, 'DB' | 'MEDIA' | 'DERIVED' | 'IMAGES'>;
+export type UploadEnv = TranscodeEnv & S3Env & Pick<Env, 'DB' | 'UPLOADS' | 'ORIGINALS' | 'DERIVED' | 'IMAGES'>;
 
 export type Upload = typeof schema.upload.$inferSelect;
 
@@ -92,7 +92,7 @@ export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, s
     if (written === null) {
         return;
     }
-    await step.do('drop the inbox object', async () => env.MEDIA.delete(key));
+    await step.do('drop the inbox object', async () => env.UPLOADS.delete(key));
     console.info({ event: 'upload_processed', path, versionId, ...written });
 }
 
@@ -173,7 +173,7 @@ async function prepare(
     // Read afresh for the copy, since the transcode may have run for minutes. ExifReader has nothing to say about a
     // video container, so the caption stays empty.
     return step.do('store the original and make its derivatives', async () => {
-        const fresh = await env.MEDIA.get(key);
+        const fresh = await env.UPLOADS.get(key);
         if (!fresh) {
             return { outcome: 'rejected', error: 'the upload vanished during the transcode' };
         }
@@ -217,7 +217,7 @@ async function preparePhoto(
     if (kind.mediaType === 'video') {
         return { outcome: 'video', contentType };
     }
-    const object = await env.MEDIA.get(key);
+    const object = await env.UPLOADS.get(key);
     if (!object) {
         return { outcome: 'gone' };
     }
@@ -240,7 +240,7 @@ async function sniff(env: UploadEnv, key: string, upload: Upload): Promise<Sniff
     if (await redelivered(env, key, upload)) {
         return { outcome: 'redelivered' };
     }
-    const head = await env.MEDIA.get(key, { range: { offset: 0, length: SNIFF_LENGTH } });
+    const head = await env.UPLOADS.get(key, { range: { offset: 0, length: SNIFF_LENGTH } });
     if (head === null) {
         return { outcome: 'gone' };
     }
@@ -255,7 +255,7 @@ async function redelivered(env: UploadEnv, key: string, upload: Upload): Promise
     if (upload.completedAt === null) {
         return false;
     }
-    await env.MEDIA.delete(key);
+    await env.UPLOADS.delete(key);
     return true;
 }
 
@@ -279,20 +279,20 @@ async function storeOriginal(
     contentType: string,
     path: string,
 ): Promise<void> {
-    await env.MEDIA.put(originalKey(versionId), body, { httpMetadata: { contentType }, customMetadata: { path } });
+    await env.ORIGINALS.put(originalKey(versionId), body, { httpMetadata: { contentType }, customMetadata: { path } });
 }
 
 /**
- * Signed URLs for the container to read the source from the media bucket and write the MP4 and poster for `versionId`
- * into the derived bucket, where every derivative of a version lives.
+ * Signed URLs for the container to read the source from the uploads bucket and write the MP4 and poster for
+ * `versionId` into the derived bucket, where every derivative of a version lives.
  */
 export async function transcodeJob(env: S3Env, sourceKey: string, versionId: string): Promise<TranscodeJob> {
-    const media = env.MEDIA_BUCKET;
+    const uploads = env.UPLOADS_BUCKET;
     const derived = env.DERIVED_BUCKET;
     return {
         versionId,
         sourceKey,
-        src: await presign(env, { method: 'GET', bucket: media, key: sourceKey }),
+        src: await presign(env, { method: 'GET', bucket: uploads, key: sourceKey }),
         mp4Put: await presign(env, {
             method: 'PUT',
             bucket: derived,
@@ -452,6 +452,6 @@ async function explain(database: Orm, upload: Upload): Promise<string> {
 /** Records why the file could not become an item, for the admin to see, and drops it. */
 async function reject(env: UploadEnv, key: string, path: string, error: string): Promise<void> {
     await uploadErrorUpsert(orm(env.DB), path, error).run();
-    await env.MEDIA.delete(key);
+    await env.UPLOADS.delete(key);
     console.error({ event: 'upload_rejected', path, error });
 }

@@ -106,7 +106,7 @@ async function seedGallery(database: Orm): Promise<void> {
 }
 
 const EMPTY_DAY = dayName(DAYS);
-const PRESIGN_ENV = { ...TEST_SECRETS, MEDIA_BUCKET: 'test-media', UPLOADS: 'signed' };
+const PRESIGN_ENV = { ...TEST_SECRETS, UPLOADS_BUCKET: 'test-uploads', UPLOAD_MODE: 'signed' };
 
 /** What the pipeline learned from a file, as the item statements take it. */
 const FACTS: MediaFacts = {

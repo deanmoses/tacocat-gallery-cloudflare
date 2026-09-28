@@ -1,10 +1,10 @@
 locals {
   account_id = "ed3ca575118099486baeb129959697c8"
-  # Each environment's data, named from its prefix. Production keeps the prototype's names: the real migration fills a
-  # fresh database and buckets anyway, and they get the final names then.
+  # Each environment's data, named from its prefix, which is the environment's own name: resource names are per
+  # account, and the account is the gallery's, so the environment is all a name has to say.
   environments = {
-    production = { prefix = "tacocat-proto", site_origin = "https://pix.deanmoses.com" }
-    staging    = { prefix = "tacocat-staging", site_origin = "https://staging-pix.deanmoses.com" }
+    production = { prefix = "production", site_origin = "https://pix.deanmoses.com" }
+    staging    = { prefix = "staging", site_origin = "https://staging-pix.deanmoses.com" }
   }
 }
 
@@ -66,37 +66,6 @@ module "environment" {
   account_id  = local.account_id
   prefix      = each.value.prefix
   site_origin = each.value.site_origin
-}
-
-# Production's resources predate the module; these keep their state where it is instead of destroying and recreating.
-moved {
-  from = cloudflare_d1_database.proto
-  to   = module.environment["production"].cloudflare_d1_database.this
-}
-
-moved {
-  from = cloudflare_r2_bucket.media
-  to   = module.environment["production"].cloudflare_r2_bucket.media
-}
-
-moved {
-  from = cloudflare_r2_bucket.derived
-  to   = module.environment["production"].cloudflare_r2_bucket.derived
-}
-
-moved {
-  from = cloudflare_queue.uploads
-  to   = module.environment["production"].cloudflare_queue.uploads
-}
-
-moved {
-  from = cloudflare_queue.uploads_dlq
-  to   = module.environment["production"].cloudflare_queue.uploads_dlq
-}
-
-moved {
-  from = cloudflare_r2_bucket_event_notification.uploads
-  to   = module.environment["production"].cloudflare_r2_bucket_event_notification.uploads
 }
 
 # What api/wrangler.jsonc needs from here.

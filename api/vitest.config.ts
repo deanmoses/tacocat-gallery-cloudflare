@@ -44,8 +44,8 @@ export default defineConfig({
                                 SEARCH_INDEX: await readD1Migrations('./src/db'),
                                 ...TEST_SECRETS,
                                 // Uploads are presigned into the bucket, whatever a developer's .dev.vars says; a test
-                                // of local uploads passes UPLOADS itself.
-                                UPLOADS: 'signed',
+                                // of local uploads passes UPLOAD_MODE itself.
+                                UPLOAD_MODE: 'signed',
                             },
                         },
                     })),
