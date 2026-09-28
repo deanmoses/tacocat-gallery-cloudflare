@@ -300,15 +300,19 @@ describe('albumLoadMachine', () => {
                 seed: async () => {
                     seedLoadedAlbum(record());
                 },
-                expected: true,
             },
-            { where: 'disk', seed: async () => setOnDisk(PATH, record()), expected: true },
-        ])('finds an album in $where without asking the server', async ({ seed, expected }) => {
+            { where: 'disk', seed: async () => setOnDisk(PATH, record()) },
+        ])('asks the server even when $where holds the album, since either can be stale', async ({ seed }) => {
             await seed();
             const server = fakeServer();
+            server.head(ROUTE, notFound());
 
-            await expect(albumLoadMachine.albumExists(PATH)).resolves.toBe(expected);
-            expect(server.calls).toStrictEqual([]);
+            await expect(albumLoadMachine.albumExists(PATH)).resolves.toBe(false);
+            expect(server.calls).toStrictEqual([{ method: 'HEAD', pathname: ROUTE, body: undefined }]);
+
+            await vi.waitFor(async () => {
+                await expect(getFromDisk(PATH)).resolves.toBeUndefined();
+            });
         });
 
         it.each([
