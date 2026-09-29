@@ -52,7 +52,7 @@ function file(body: BodyInit, contentType: string, name: string): Response {
  * Worker in front, per-colo Cache API: a hit never reaches R2, but every colo fills from R2 on its own. Each response
  * says how long its steps took, in Server-Timing and a log line, since a colo's first request is the slow one. The
  * cache is keyed by the URL with the format the client gets spelled into it, so two clients that accept different
- * formats never get each other's derivative from one URL.
+ * formats never get each other's derivative from one URL; where the source decides the format, by the URL alone.
  */
 export async function derivedViaCacheApi(
     request: Request,
@@ -76,15 +76,19 @@ export async function derivedViaCacheApi(
         return sourceNotFound(derivative.missing);
     }
     const response = new Response(derivative.body, {
-        headers: { 'cache-control': IMMUTABLE, 'content-type': derivative.format, vary: 'Accept' },
+        headers: { 'cache-control': IMMUTABLE, 'content-type': derivative.contentType, vary: 'Accept' },
     });
     ctx.waitUntil(cache.put(cacheKey, response.clone()));
     return reported(request, response, derivative.how, steps);
 }
 
-function keyedByFormat(request: Request, format: string): Request {
+function keyedByFormat(request: Request, format: string | null): Request {
     const url = new URL(request.url);
-    url.searchParams.set('format', format);
+    if (format === null) {
+        url.searchParams.delete('format');
+    } else {
+        url.searchParams.set('format', format);
+    }
     return new Request(url, { method: 'GET' });
 }
 

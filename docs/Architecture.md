@@ -102,7 +102,7 @@ originals bucket
 derived bucket
   derived/0muhjn6yo3f9a1c07b2e4d58a/200x200-webp    the album page's thumbnail
   derived/0muhjn6yo3f9a1c07b2e4d58a/400x400-webp    the same for a 2x screen
-  derived/0muhjn6yo3f9a1c07b2e4d58a/1024-jpeg       the media page's image
+  derived/0muhjn6yo3f9a1c07b2e4d58a/1024            the media page's image, in the format its original calls for
   derived/0muhjn6yo3f9a1c07b2e4d58a/…               any other size or crop, made the first time it is asked for
   derived/<versionId>/video.mp4, poster.jpg         for a video: its transcode, and the still its images are cut from
 ```
@@ -199,7 +199,7 @@ The album page asks for `/i/2001/06-15/felix/0muhjn6yo3f9a1c07b2e4d58a?size=200x
 
 Every image is cached for a year, since its URL names one version and a new upload has a new URL. The path in the URL is for people reading it, in the network panel or the logs; only the version finds the object, so an old URL keeps working after a rename.
 
-- **Thumbnails are WebP, the media page's image is JPEG.** The Images binding leaves the original's IPTC and XMP blocks and most of its EXIF, GPS position included, in a JPEG whatever its `metadata` option says, three quarters of a thumbnail's bytes; its WebP carries nothing. The media page's image stays JPEG because readers drag it into other apps, most of which cannot open a WebP. A browser whose `Accept` header does not name `image/webp`, Safari before 14, gets a JPEG thumbnail made for the first one that asks. The format is part of the colo cache's key and the response says `Vary: Accept`, so one URL serves each browser its own.
+- **Thumbnails are WebP; the media page's image is WebP for a GIF or a PNG and JPEG for anything else**, as on AWS. The Images binding leaves the original's IPTC and XMP blocks and most of its EXIF, GPS position included, in a JPEG whatever its `metadata` option says, three quarters of a thumbnail's bytes; its WebP carries nothing. A GIF's WebP keeps its frames and a PNG's its transparency. The media page's image of a photo stays JPEG because readers drag it into other apps, most of which cannot open a WebP. Its format comes from the original's content type, sniffed from its bytes at upload, so its derivative's name carries no format and the colo cache keys it by the URL alone. A browser whose `Accept` header does not name `image/webp`, Safari before 14, gets a JPEG thumbnail made for the first one that asks. A thumbnail's format is part of the colo cache's key and the response says `Vary: Accept`, so one URL serves each browser its own.
 - `/raw/<path>/<versionId>` is the original. A HEIC comes back as a JPEG, since only Safari shows HEIC, unless `?format=original` asks for the file itself.
 - `/v/<path>/<versionId>` is a video's MP4, with byte ranges for seeking.
 

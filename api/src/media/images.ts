@@ -19,13 +19,16 @@ const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
  */
 const DEFAULT_FOCUS = { x: 0.5, y: 1 / 3, mode: 'box-center' } as const;
 
+const WEBP_SOURCES: ReadonlySet<string> = new Set(['image/gif', 'image/png']);
+
 /** How long each step of serving a derivative took, in milliseconds, keyed by its Server-Timing name. */
 export type Steps = Record<string, number>;
 
 /** What an image URL asks for, the format it gets, and where its derivative and the sources it is made from are. */
 export interface Derivation {
     request: ImageRequest;
-    format: ImageOutputOptions['format'];
+    /** Null when the source's content type decides the format. */
+    format: ImageOutputOptions['format'] | null;
     /** The derivative, in the derived bucket. */
     key: string;
     /** The version's poster in the derived bucket, which a video has and a photo does not. */
@@ -36,7 +39,7 @@ export interface Derivation {
 
 export interface Derivative {
     body: ArrayBuffer | ReadableStream;
-    format: ImageOutputOptions['format'];
+    contentType: string;
     how: 'stored' | 'generated';
 }
 
@@ -58,19 +61,20 @@ export async function derivedImage(
     wanted: Derivation,
     steps: Steps,
 ): Promise<Derivative | { missing: string }> {
-    const { format, key } = wanted;
-
-    const stored = await timed(steps, 'r2', async () => env.DERIVED.get(key));
+    const stored = await timed(steps, 'r2', async () => env.DERIVED.get(wanted.key));
     if (stored) {
-        return { body: stored.body, format, how: 'stored' };
+        const contentType = wanted.format ?? stored.httpMetadata?.contentType ?? 'application/octet-stream';
+        return { body: stored.body, contentType, how: 'stored' };
     }
 
     // A video's stills come from the poster the transcoder wrote beside its MP4, and only a video has one, so looking
     // for it first is what tells a video from a photo: the file name in the URL decides nothing.
     const source = (await env.DERIVED.get(wanted.poster)) ?? (await env.ORIGINALS.get(wanted.original));
-    return source
-        ? { body: await generateDerivative(env, wanted, source.body), format, how: 'generated' }
-        : { missing: wanted.original };
+    if (!source) {
+        return { missing: wanted.original };
+    }
+    const made = await generateDerivative(env, wanted, source.body, source.httpMetadata?.contentType);
+    return { body: made.bytes, contentType: made.format, how: 'generated' };
 }
 
 /**
@@ -79,9 +83,11 @@ export async function derivedImage(
  */
 export async function generateDerivative(
     env: Pick<Env, 'DERIVED' | 'IMAGES'>,
-    { request, format, key }: Derivation,
+    { request, format: asked, key }: Derivation,
     source: ReadableStream,
-): Promise<ArrayBuffer> {
+    sourceType: string | undefined,
+): Promise<{ bytes: ArrayBuffer; format: ImageOutputOptions['format'] }> {
+    const format = asked ?? formatForSource(sourceType);
     let transformer = env.IMAGES.input(byteStream(source));
     if (request.crop !== null) {
         const { x: left, y: top, width: cropWidth, height: cropHeight } = request.crop;
@@ -90,7 +96,7 @@ export async function generateDerivative(
     const output = await transformer.transform(resize(request)).output(outputOptions(format, request.size));
     const bytes = await output.response().arrayBuffer();
     await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
-    return bytes;
+    return { bytes, format };
 }
 
 /**
@@ -136,31 +142,44 @@ export async function asJpeg(env: Pick<Env, 'IMAGES'>, bytes: ArrayBuffer): Prom
 /**
  * The format a URL's `format` parameter asks for, when the binding can write it. Otherwise a thumbnail, which asks for
  * both sides, is WebP, or JPEG for a client whose `Accept` header does not name `image/webp`; and an image asked for
- * by one side, the media page's, is JPEG, since readers drag it into other apps, most of which cannot open a WebP. A
- * JPEG from the binding carries the original's IPTC and XMP blocks whole and most of its EXIF, GPS position included,
- * whatever its `metadata` option is set to, and on a thumbnail that is three quarters of the bytes; its WebP carries
- * nothing. Only an explicit `image/webp` counts, since a Safari too old to show WebP still accepts `image/*`.
+ * by one side, the media page's, is null, since its source decides. A JPEG from the binding carries the original's
+ * IPTC and XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is set to, and
+ * on a thumbnail that is three quarters of the bytes; its WebP carries nothing. Only an explicit `image/webp` counts,
+ * since a Safari too old to show WebP still accepts `image/*`.
  */
 export function outputFormat(
     requested: string | null,
     accept: string | null,
     size: ImageSize,
-): ImageOutputOptions['format'] {
+): ImageOutputOptions['format'] | null {
     const asked = OUTPUT_FORMATS.find((known) => known === requested);
     if (asked !== undefined) {
         return asked;
     }
-    const thumbnail = size.width !== null && size.height !== null;
-    return thumbnail && (accept === null || accept.includes('image/webp')) ? 'image/webp' : 'image/jpeg';
+    if (size.width === null || size.height === null) {
+        return null;
+    }
+    return accept === null || accept.includes('image/webp') ? 'image/webp' : 'image/jpeg';
 }
 
 /**
- * What a derivative is called under its version: the size, crop and format, spelled from the same text as the URL so
- * that it is found again only by a URL spelled the same way.
+ * The format of an image asked for by one side whose URL names none: WebP for a GIF or a PNG, as the AWS site made
+ * them, since it keeps a GIF's frames and a PNG's transparency; JPEG for a photo or a video's poster, since readers
+ * drag the media page's image into other apps, most of which cannot open a WebP.
  */
-export function derivativeName(request: ImageRequest, format: ImageOutputOptions['format']): string {
+export function formatForSource(contentType: string | undefined): ImageOutputOptions['format'] {
+    return contentType !== undefined && WEBP_SOURCES.has(contentType) ? 'image/webp' : 'image/jpeg';
+}
+
+/**
+ * What a derivative is called under its version: the size, crop and the format the URL settles, spelled from the same
+ * text as the URL so that it is found again only by a URL spelled the same way. One whose source decides its format
+ * has none in its name.
+ */
+export function derivativeName(request: ImageRequest, format: ImageOutputOptions['format'] | null): string {
     const cropped = request.crop === null ? '' : `-${cropText(request.crop)}`;
-    return `${sizeText(request.size)}${cropped}-${format.split('/', 2)[1] ?? ''}`;
+    const typed = format === null ? '' : `-${format.split('/', 2)[1] ?? ''}`;
+    return `${sizeText(request.size)}${cropped}${typed}`;
 }
 
 /**
