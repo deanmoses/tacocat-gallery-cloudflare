@@ -61,7 +61,7 @@ describe('a media item', () => {
             const felix = await mediaRecord('felix');
 
             expect(response.status).toBe(204);
-            expect(response.headers.get('set-cookie')).toMatch(/^d1_bookmark=\S+;/v);
+            expect(response.headers.get('set-cookie')).toMatch(/^__Host-d1_bookmark=\S+;/v);
             expect(felix).toMatchObject({ title: 'Felix', description: 'At the beach' });
         });
 

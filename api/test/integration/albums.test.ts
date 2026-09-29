@@ -248,8 +248,8 @@ describe('an album', () => {
     });
 
     it.each([
-        { name: 'an empty bookmark cookie', cookie: 'd1_bookmark=' },
-        { name: 'a bookmark cookie D1 cannot read', cookie: 'd1_bookmark=nonsense' },
+        { name: 'an empty bookmark cookie', cookie: '__Host-d1_bookmark=' },
+        { name: 'a bookmark cookie D1 cannot read', cookie: '__Host-d1_bookmark=nonsense' },
     ])('is served with $name as if it had none', async ({ cookie }) => {
         const response = await call(`/api/album${DAY}`, { headers: { cookie } });
 
@@ -292,7 +292,7 @@ describe('an album thumbnail', () => {
 
         expect(bookmark).toMatch(/^\S+$/v);
         expect(set.headers.get('set-cookie')).toBe(
-            `d1_bookmark=${bookmark}; Max-Age=300; Path=/; HttpOnly; Secure; SameSite=Strict`,
+            `__Host-d1_bookmark=${bookmark}; Max-Age=300; Path=/; HttpOnly; Secure; SameSite=Strict`,
         );
     });
 

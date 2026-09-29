@@ -17,7 +17,9 @@ import { type SignedCookie, readSigned, sign } from './session';
 
 type AuthEnv = Pick<Env, 'DB' | 'LOCAL_ORIGINS' | 'SESSION_SECRET' | 'SITE_ORIGIN'>;
 
-const SESSION_COOKIE = 'admin_session';
+// __Host-: the browser takes this cookie only from this host, at Path=/, so a page on another host of the site cannot
+// set one for all of them under a longer path, which the browser would send first and the Worker read in its place.
+const SESSION_COOKIE = '__Host-admin_session';
 const CHALLENGE_COOKIE = 'pk_challenge';
 const SESSION = {
     name: SESSION_COOKIE,

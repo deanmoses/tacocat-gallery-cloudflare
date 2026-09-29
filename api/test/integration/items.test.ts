@@ -113,7 +113,7 @@ describe('saving an item through the API', () => {
 
         expect(response.status).toBe(204);
         await expect(response.text()).resolves.toBe('');
-        expect(response.headers.get('set-cookie')).toMatch(/^d1_bookmark=\S+;/v);
+        expect(response.headers.get('set-cookie')).toMatch(/^__Host-d1_bookmark=\S+;/v);
         await expect(storedItem(ITEM.parentPath, ITEM.itemName)).resolves.toMatchObject({
             title: 'Saved',
             thumbnailCrop: { x: 1, y: 1, width: 2, height: 2 },

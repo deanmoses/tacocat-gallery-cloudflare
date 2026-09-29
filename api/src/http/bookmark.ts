@@ -3,8 +3,11 @@ import { cookie, readCookie } from './cookies';
 /** Carries the D1 Sessions API bookmark, so a client that just wrote can read its own write. */
 export const BOOKMARK_HEADER = 'x-d1-bookmark';
 
-/** The same bookmark for a browser, which sends it back on every read without the web app handling it. */
-const BOOKMARK_COOKIE = 'd1_bookmark';
+/**
+ * The same bookmark for a browser, which sends it back on every read without the web app handling it. __Host-, as the
+ * session cookie is, so another host of the site cannot plant one.
+ */
+const BOOKMARK_COOKIE = '__Host-d1_bookmark';
 
 // Long enough to cover replication lag and the next few pages; an old bookmark only asks for data at least that new,
 // which every replica soon has.

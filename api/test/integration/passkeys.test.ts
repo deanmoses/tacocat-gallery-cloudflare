@@ -213,7 +213,7 @@ describe('logging in with a passkey', () => {
         await expect(browser.admin()).resolves.toBe('lucie');
         expect(used).toStrictEqual({ username: 'lucie', counter: 1, lastUsedAt: expect.any(String) });
         expect(response.headers.getSetCookie()).toContainEqual(
-            expect.stringMatching(/^admin_session=[^;]+;.*\bSameSite=Strict\b/v),
+            expect.stringMatching(/^__Host-admin_session=[^;]+;.*\bSameSite=Strict\b/v),
         );
     });
 

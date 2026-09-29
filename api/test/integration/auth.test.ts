@@ -19,6 +19,14 @@ describe('session', () => {
         expect(response.headers.get('x-auth-status')).toBe('admin');
     });
 
+    it('reads its own session past a cookie another host of the site planted under a longer path', async () => {
+        // The browser sends the longer path's cookie first. It cannot take one named __Host- from another host.
+        const planted = 'admin_session=junk';
+        const response = await call('/api/auth/status', { headers: { cookie: `${planted}; ${await adminCookie()}` } });
+
+        await expect(response.json()).resolves.toStrictEqual({ admin: 'moses' });
+    });
+
     it('rejects a tampered cookie', async () => {
         const cookie = await adminCookie();
         const tampered = cookie.replace(/.(?=\.[^.]+$)/v, 'x');
@@ -37,7 +45,7 @@ describe('session', () => {
     it('clears the cookie on logout', async () => {
         const response = await call('/api/auth/logout', { method: 'POST', headers: { origin: ORIGIN } });
 
-        expect(response.headers.get('set-cookie')).toMatch(/^admin_session=; Max-Age=0;/v);
+        expect(response.headers.get('set-cookie')).toMatch(/^__Host-admin_session=; Max-Age=0;/v);
     });
 });
 
