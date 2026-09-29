@@ -12,7 +12,7 @@ export async function adminCookie(secret: string, name: string): Promise<string>
         'sign',
     ]);
     const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(body)));
-    return `admin_session=${body}.${base64url(signature)}`;
+    return `__Host-admin_session=${body}.${base64url(signature)}`;
 }
 
 function base64url(bytes: Uint8Array): string {

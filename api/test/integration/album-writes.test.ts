@@ -35,7 +35,7 @@ describe('creating an album', () => {
         const row = await storedItem(key.parentPath, key.itemName);
 
         expect(response.status).toBe(204);
-        expect(response.headers.get('set-cookie')).toMatch(/^d1_bookmark=\S+;/v);
+        expect(response.headers.get('set-cookie')).toMatch(/^__Host-d1_bookmark=\S+;/v);
         expect(row).toMatchObject({ ...key, itemType: 'album', published: false, summary: null, description: null });
     });
 

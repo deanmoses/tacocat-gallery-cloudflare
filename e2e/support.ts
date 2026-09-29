@@ -2,12 +2,16 @@ import { type BrowserContext, type Locator, type Page, expect } from '@playwrigh
 import { createHash, randomBytes } from 'node:crypto';
 import { adminCookie } from '@tacocat-gallery/api/test/secrets';
 import { executeLocalSql } from '@tacocat-gallery/api/test/stack';
-import { E2E_STATE } from './gallery.ts';
+import { E2E_ORIGIN, E2E_STATE } from './gallery.ts';
 
 /** Signs the context in as the test admin, with the cookie the Worker would have set at login. */
 export async function signInAsAdmin(context: BrowserContext): Promise<void> {
     const [name = '', value = ''] = (await adminCookie()).split('=', 2);
-    await context.addCookies([{ name, value, domain: 'localhost', path: '/' }]);
+    // A __Host- cookie belongs to its host alone, so it is set by URL rather than domain, and it has to be Secure,
+    // which Chromium takes only for an https URL. The browser sends it to the http site on localhost all the same.
+    const url = new URL(E2E_ORIGIN);
+    url.protocol = 'https:';
+    await context.addCookies([{ name, value, url: url.origin, secure: true }]);
 }
 
 /**

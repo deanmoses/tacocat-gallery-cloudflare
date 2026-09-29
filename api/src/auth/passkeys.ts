@@ -15,9 +15,11 @@ import { cookie } from '../http/cookies';
 import { failure, json } from '../http/responses';
 import { type SignedCookie, readSigned, sign } from './session';
 
-type AuthEnv = Pick<Env, 'DB' | 'SESSION_SECRET' | 'SITE_ORIGIN'>;
+type AuthEnv = Pick<Env, 'DB' | 'LOCAL_ORIGINS' | 'SESSION_SECRET' | 'SITE_ORIGIN'>;
 
-const SESSION_COOKIE = 'admin_session';
+// __Host-: the browser takes this cookie only from this host, at Path=/, so a page on another host of the site cannot
+// set one for all of them under a longer path, which the browser would send first and the Worker read in its place.
+const SESSION_COOKIE = '__Host-admin_session';
 const CHALLENGE_COOKIE = 'pk_challenge';
 const SESSION = {
     name: SESSION_COOKIE,
@@ -44,12 +46,10 @@ const TO_BASE64URL = { alphabet: 'base64url', omitPadding: true } as const;
 const FROM_BASE64URL = { alphabet: 'base64url' } as const;
 
 // A passkey is bound to the site it was created on. The browser's Origin header names that site, and only the
-// environment's own site and local development are accepted: the Worker's own port, and vite dev's, which serves the
-// app in front of it. wrangler dev rewrites request.url to the custom domain, so the URL can't be used for this.
-const LOCAL_ORIGINS = new Set(['http://localhost:8787', 'http://localhost:5173']);
-
+// environment's own site and its local development origins are accepted. wrangler dev rewrites request.url to the
+// custom domain, so the URL can't be used for this.
 function isAllowedOrigin(origin: string, env: AuthEnv): boolean {
-    return origin === env.SITE_ORIGIN || LOCAL_ORIGINS.has(origin);
+    return origin === env.SITE_ORIGIN || env.LOCAL_ORIGINS.includes(origin);
 }
 
 /** The site a passkey request comes from, as a URL, or null when it is not one a passkey may be bound to. */
@@ -60,7 +60,9 @@ export function requestSite(request: Request, env: AuthEnv): URL | null {
 
 /** Ends the admin session by expiring its cookie. */
 export function logout(): Response {
-    return json({ admin: null }, 200, { 'set-cookie': cookie(SESSION_COOKIE, '', { maxAge: 0, path: '/' }) });
+    return json({ admin: null }, 200, {
+        'set-cookie': cookie(SESSION_COOKIE, '', { maxAge: 0, path: '/' }),
+    });
 }
 
 /** Records a login challenge as used, changing no row if it already was. */
@@ -288,7 +290,6 @@ async function challengeCookie(env: AuthEnv, challenge: string): Promise<string>
     return cookie(CHALLENGE_COOKIE, value, {
         maxAge: CHALLENGE_MS / 1000,
         path: `${AUTH_PREFIX}/`,
-        sameSite: 'Strict',
     });
 }
 

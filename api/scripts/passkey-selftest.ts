@@ -95,8 +95,8 @@ check('write allowed as admin', write.status === 404, write);
 const replay = await call('/api/auth/login/verify', assertion);
 check('login without a fresh challenge refused', replay.status !== 200);
 
-const [body = '', signature = ''] = (cookies.get('admin_session') ?? '').split('.', 2);
+const [body = '', signature = ''] = (cookies.get('__Host-admin_session') ?? '').split('.', 2);
 const flipped = signature.slice(0, 10) + (signature[10] === 'A' ? 'B' : 'A') + signature.slice(11);
-cookies = new Map([['admin_session', `${body}.${flipped}`]]);
+cookies = new Map([['__Host-admin_session', `${body}.${flipped}`]]);
 const tampered = await call('/api/auth/status', undefined, 'GET');
 check('tampered session refused', tampered.body.admin === null);

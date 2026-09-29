@@ -25,7 +25,7 @@ export async function adminCookie(
         'sign',
     ]);
     const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, ENCODER.encode(body)));
-    return `admin_session=${body}.${base64url(signature)}`;
+    return `__Host-admin_session=${body}.${base64url(signature)}`;
 }
 
 // Node 24 has no Uint8Array.prototype.toBase64.

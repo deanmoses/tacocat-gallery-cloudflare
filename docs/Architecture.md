@@ -215,8 +215,8 @@ Every image is cached for a year, since its URL names one version and a new uplo
 
 - Admins log in with passkeys (`api/src/auth/`). There is no password and no identity service.
 - The users are seeded by a migration. An invite link lets its holder register a passkey as one of them, once.
-- A passkey is bound to the site's origin, `SITE_ORIGIN` in each environment's vars, or `localhost` in development.
-- A session is a signed cookie holding the admin's name and an expiry. Checking it reads no database; the price is that a session can be ended early only by rotating `SESSION_SECRET`, which logs everyone out.
+- A passkey is bound to the site's origin, `SITE_ORIGIN` in each environment's vars, or in development one of `LOCAL_ORIGINS`, which production leaves empty.
+- A session is a signed cookie holding the admin's name and an expiry, `SameSite=Strict` as the AWS token cookies were, so the browser sends it only with requests from pages of the same site. A site to the browser is the registrable domain, so a page on another host of it, staging say, sends it too; what keeps such a page from writing is that every write from a browser must name one of the environment's own origins in `Origin`. Checking the cookie reads no database; the price is that a session can be ended early only by rotating `SESSION_SECRET`, which logs everyone out.
 - Reads never require login. Writes always do.
 
 ## Headers and crawlers
