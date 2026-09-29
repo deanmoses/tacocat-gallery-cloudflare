@@ -1,4 +1,4 @@
-import { type ImageRequest, type ImageSize, cropText, sizeText } from '@tacocat-gallery/shared';
+import { type ImageRequest, type ImageSize, THUMBNAIL_SIZE_2X, cropText, sizeText } from '@tacocat-gallery/shared';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
 // Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets the
@@ -87,7 +87,7 @@ export async function generateDerivative(
         const { x: left, y: top, width: cropWidth, height: cropHeight } = request.crop;
         transformer = transformer.transform({ trim: { left, top, width: cropWidth, height: cropHeight } });
     }
-    const output = await transformer.transform(resize(request)).output({ format, quality: 85 });
+    const output = await transformer.transform(resize(request)).output(outputOptions(format, request.size));
     const bytes = await output.response().arrayBuffer();
     await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
     return bytes;
@@ -102,6 +102,18 @@ export function resize({ size: { width, height }, crop }: ImageRequest): ImageTr
     return width !== null && height !== null
         ? { width, height, fit: 'cover', ...(crop === null && { gravity: DEFAULT_FOCUS }) }
         : { ...(width !== null && { width }), ...(height !== null && { height }), fit: 'scale-down' };
+}
+
+/**
+ * How the binding encodes a derivative. A thumbnail, which asks for both sides, is one frame whatever the source: an
+ * album page of animated GIFs would be a wall of motion, and the binding animates by default. The 2x WebP thumbnail
+ * alone is encoded softer, for the reasons measured in https://github.com/deanmoses/tacocat-gallery-cloudflare/issues/81.
+ */
+export function outputOptions(format: ImageOutputOptions['format'], size: ImageSize): ImageOutputOptions {
+    const thumbnail = size.width !== null && size.height !== null;
+    const softer =
+        format === 'image/webp' && size.width === THUMBNAIL_SIZE_2X.width && size.height === THUMBNAIL_SIZE_2X.height;
+    return { format, quality: softer ? 75 : 85, ...(thumbnail && { anim: false }) };
 }
 
 /**
