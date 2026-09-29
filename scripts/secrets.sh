@@ -2,7 +2,7 @@
 # Puts the R2 signing credentials where they are used, straight from OpenTofu's outputs, so no token value passes
 # through a person. The tokens themselves are defined in infra/: one per environment that can read and write its
 # uploads and derived buckets and nothing else, and one for the backup that can read production's originals and
-# backups buckets and nothing else. Rotating one is `tofu apply -replace=<its address>` in infra/, then this again.
+# backups buckets and nothing else. Rotating one is `scripts/tofu.sh apply -replace=<its address>`, then this again.
 #
 #   staging | production   the Worker's secrets, in one bulk upload: the environment's R2 pair from OpenTofu, and its
 #                          SESSION_SECRET_<ENVIRONMENT> and DEBUGBEAR_API_KEY from api/.dev.vars. Wrangler creates a
@@ -38,10 +38,13 @@ dev_var() {
     printf '%s' "$value"
 }
 
-# `credential <who> <field>` prints one field of OpenTofu's r2_credentials output. Outputs come from the local state,
-# so no API token is needed.
+# Read once: each read verifies the token and fetches the state from R2. Handed on by printf, a builtin, rather
+# than a here-string, which bash 3.2 backs with a temp file.
+credentials=$(scripts/tofu.sh output -json r2_credentials)
+
+# `credential <who> <field>` prints one field of OpenTofu's r2_credentials output.
 credential() {
-    tofu -chdir=infra output -json r2_credentials |
+    printf '%s' "$credentials" |
         node -e "
             const [who, field] = process.argv.slice(1);
             const value = JSON.parse(require('fs').readFileSync(0, 'utf8'))[who]?.[field];
