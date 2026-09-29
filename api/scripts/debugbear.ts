@@ -195,7 +195,7 @@ async function albumRequests(analysisId: string): Promise<void> {
     const isThumbnail = (request: RunRequest): boolean =>
         /^\d+x\d+$/v.test(new URL(request.url).searchParams.get('size') ?? '');
     const firstThumbnail = images.find(isThumbnail);
-    // The journey opens the first thumbnail's photo, which the photo page asks for just after preloading its
+    // The journey opens the first thumbnail's photo, which the media page asks for just after preloading its
     // neighbours, so it is found by the thumbnail's path rather than by when it started.
     const firstPhoto =
         firstThumbnail &&

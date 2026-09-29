@@ -1,7 +1,7 @@
 <!--
   @component 
   
-  The main content of a page.  In an image page, that'd be the caption and image.  In an album, the thumbnails.
+  The main content of a page.  In a media page, that'd be the caption and the image or video.  In an album, the thumbnails.
 -->
 <script lang="ts">
     import type { Snippet } from 'svelte';

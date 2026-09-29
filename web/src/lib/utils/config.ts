@@ -33,7 +33,7 @@ export function thumbnailSrcset(mediaPath: string, versionId: string, crop?: Rec
 }
 
 /**
- * URL to image optimized for display on the media detail page
+ * URL to image optimized for display on the media page
  * @param mediaPath Path to the source media like /2001/12-31/image.jpg or /2001/12-31/video.mp4
  * @param versionId Version of the source media
  * @param dimensions Size of the source media, from which the detail size follows

@@ -1,8 +1,8 @@
 <!--
     @component 
   
-    Layout of an image page for displaying waiting or error.
-    For use when you don't actually have an image to display.
+    Layout of a media page for displaying waiting or error.
+    For use when you don't actually have a media item to display.
 -->
 <script lang="ts">
     import MediaPageLayout from './MediaPageLayout.svelte';

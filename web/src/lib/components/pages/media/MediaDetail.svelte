@@ -1,7 +1,7 @@
 <!--
   @component
 
-  Renders the appropriate detail page hero contents for a media item (the image or video player)
+  Renders the appropriate media page hero contents for a media item (the image or video player)
 -->
 <script lang="ts">
     import BigImage from '../image/BigImage.svelte';

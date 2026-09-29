@@ -23,7 +23,7 @@
         return on(globalThis, 'load', markLoaded, { once: true });
     });
 
-    // The photo page's code, which the click would otherwise fetch; a mouse's hover would start it a little sooner, a
+    // The media page's code, which the click would otherwise fetch; a mouse's hover would start it a little sooner, a
     // tap barely.
     $effect(() => {
         if (pageLoaded && firstMedia !== undefined) void preloadCode(firstMedia.href);
