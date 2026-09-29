@@ -56,7 +56,7 @@ test.describe('a reader arriving at a day album', () => {
             await expect(page.getByRole('link', { name: 'Jul 4', exact: true })).toHaveAttribute('href', '/2001/07-04');
         });
 
-        await test.step("the photo page's code is fetched before any photo is clicked", async () => {
+        await test.step("the media page's code is fetched before any photo is clicked", async () => {
             // The pointer has not moved, so no hover has started it.
             await expect
                 .poll(async () => fetchedStylesheets(page))
@@ -82,7 +82,7 @@ test.describe('a reader arriving at a day album', () => {
                     ),
                 )
                 .toBe(true);
-            // The album page's fetch is the only one that moved bytes; the photo page's was answered from it.
+            // The album page's fetch is the only one that moved bytes; the media page's was answered from it.
             expect((await bytesFetched(page, CAKE_DETAIL)).filter((bytes) => bytes > 0)).toHaveLength(1);
             await expect.poll(async () => preloadedImages(page)).toContain(FELIX_DETAIL);
         });

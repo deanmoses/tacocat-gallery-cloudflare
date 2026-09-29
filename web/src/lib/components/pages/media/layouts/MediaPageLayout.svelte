@@ -1,7 +1,7 @@
 <!-- 
     @component 
     
-    Layout of an image page 
+    Layout of a media page
 -->
 <script lang="ts">
     import SiteLayout from '$lib/components/site/SiteLayout.svelte';
