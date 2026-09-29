@@ -70,13 +70,13 @@ resource "cloudflare_r2_bucket_lifecycle" "uploads" {
 }
 
 # The browser PUTs an upload straight to the bucket with a URL the Worker signed, which is a cross-origin request
-# from the site, and from the local dev server while developing. The one header it sends is the file's own content type.
+# from the site. The one header it sends is the file's own content type.
 resource "cloudflare_r2_bucket_cors" "uploads" {
   account_id  = var.account_id
   bucket_name = cloudflare_r2_bucket.uploads.name
   rules = [{
     allowed = {
-      origins = [var.site_origin, "http://localhost:8787"]
+      origins = [var.site_origin]
       methods = ["PUT"]
       headers = ["content-type"]
     }
