@@ -32,8 +32,13 @@
     },
     "routes": [{ "pattern": "staging-pix.deanmoses.com", "custom_domain": true }],
     "vars": {
-        // The site's own origin, the only one besides local development that may create or use a passkey.
+        // The site's own origin, the only one besides LOCAL_ORIGINS that may create or use a passkey, or write.
         "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
+        // Local development's origins, the Worker's own port and vite dev's, which serves the app in front of it.
+        // `wrangler dev` and the tests run this top level, so staging accepts them, and only SameSite keeps a page on
+        // localhost, another site, from writing to staging with its cookie. Production lists none, so a page on localhost
+        // never gets past its Origin check.
+        "LOCAL_ORIGINS": ["http://localhost:8787", "http://localhost:5173"],
         // The buckets by their S3 names: uploads are presigned into the first, and the transcoder reads its source from
         // there and writes into the second. The S3 key the Worker signs with reaches these two buckets and no other, so
         // no signed URL can touch an original.
@@ -122,6 +127,7 @@
             "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
             "vars": {
                 "SITE_ORIGIN": "https://pix.deanmoses.com",
+                "LOCAL_ORIGINS": [],
                 "UPLOADS_BUCKET": "production-uploads",
                 "DERIVED_BUCKET": "production-derived",
                 "UPLOAD_MODE": "signed",

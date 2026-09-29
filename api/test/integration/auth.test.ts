@@ -95,4 +95,50 @@ describe('admin-only endpoints', () => {
         expect(response.status).toBe(401);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'Unauthorized' });
     });
+
+    it('refuses a write from a page on another host of the site, which sends the cookie whatever SameSite says', async () => {
+        const response = await callAsAdmin('/api/album-rename/2001/12-31/', {
+            method: 'POST',
+            // As a form or a text/plain fetch sends it: no preflight asks the Worker first.
+            headers: { origin: 'https://other.deanmoses.com', 'content-type': 'text/plain' },
+            body: JSON.stringify({ newName: '01-01' }),
+        });
+
+        expect(response.status).toBe(403);
+        await expect(response.json()).resolves.toStrictEqual({ errorMessage: 'origin not allowed' });
+    });
+
+    it('refuses a write from a page whose origin the browser hides, which is no script', async () => {
+        const response = await callAsAdmin('/api/album/2001/', {
+            method: 'PUT',
+            // What a sandboxed iframe or a data: URL page sends.
+            headers: { origin: 'null' },
+            body: '{}',
+        });
+
+        expect(response.status).toBe(403);
+    });
+
+    it('refuses a write from a page on localhost where the environment lists no local origins, as production', async () => {
+        const response = await callAsAdmin(
+            '/api/album/2001/',
+            { method: 'PUT', headers: { origin: 'http://localhost:5173' }, body: '{}' },
+            { LOCAL_ORIGINS: [] },
+        );
+
+        expect(response.status).toBe(403);
+    });
+
+    it.each([
+        { what: "the site's own pages", origin: env.SITE_ORIGIN },
+        { what: 'a script, which names no page', origin: undefined },
+    ])('takes a write from $what', async ({ origin }) => {
+        const response = await callAsAdmin('/api/album/2001/', {
+            method: 'PUT',
+            headers: origin === undefined ? {} : { origin },
+            body: '{}',
+        });
+
+        expect(response.status).toBe(204);
+    });
 });

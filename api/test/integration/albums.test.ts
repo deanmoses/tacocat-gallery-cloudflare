@@ -292,7 +292,7 @@ describe('an album thumbnail', () => {
 
         expect(bookmark).toMatch(/^\S+$/v);
         expect(set.headers.get('set-cookie')).toBe(
-            `d1_bookmark=${bookmark}; Max-Age=300; Path=/; HttpOnly; Secure; SameSite=Lax`,
+            `d1_bookmark=${bookmark}; Max-Age=300; Path=/; HttpOnly; Secure; SameSite=Strict`,
         );
     });
 
