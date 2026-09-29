@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { fetchedStylesheets, mediaImage, preloadedImages } from './support.ts';
+import {
+    bytesFetched,
+    fetchStarted,
+    fetchedStylesheets,
+    loadEventStart,
+    mediaImage,
+    preloadedImages,
+} from './support.ts';
 
 const DAY_TITLE = 'June 15, 2001';
 // The Worker's URL for each photo at the size the media page shows it: the landscape one by width, the portrait by height.
@@ -56,14 +63,27 @@ test.describe('a reader arriving at a day album', () => {
                 .toContainEqual(expect.stringMatching(/^MediaDetail\./v));
         });
 
+        await test.step('the first photo is fetched before any is clicked, once the page has loaded', async () => {
+            await expect.poll(async () => fetchStarted(page, CAKE_DETAIL)).toBeGreaterThan(await loadEventStart(page));
+        });
+
         await test.step('a photo opens from its thumbnail', async () => {
             await page.getByRole('link', { name: 'Cake', exact: true }).click();
 
             await expect(page).toHaveURL('/2001/06-15/cake');
         });
 
-        await test.step('the photo is asked for at its display size, and the next one is being fetched ahead', async () => {
+        await test.step('the photo is the one fetched ahead, and the next one is being fetched ahead', async () => {
             await expect(mediaImage(page)).toHaveAttribute('src', CAKE_DETAIL);
+            await expect
+                .poll(async () =>
+                    mediaImage(page).evaluate(
+                        (img) => img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0,
+                    ),
+                )
+                .toBe(true);
+            // The album page's fetch is the only one that moved bytes; the photo page's was answered from it.
+            expect((await bytesFetched(page, CAKE_DETAIL)).filter((bytes) => bytes > 0)).toHaveLength(1);
             await expect.poll(async () => preloadedImages(page)).toContain(FELIX_DETAIL);
         });
 

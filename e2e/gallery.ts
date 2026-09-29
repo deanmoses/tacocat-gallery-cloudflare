@@ -30,7 +30,8 @@ export const ADMIN_REORDER_DAY_PATH = '/2003/10-01/';
  * The gallery every e2e test starts from, written once when the server starts. Tests read it and never change it, since
  * they share one server and run in parallel; a test that writes makes an album of its own, in the admin year. The
  * photos are rows alone, with no file behind them, but for the admin photo, whose original ORIGINALS puts into local
- * R2 so its thumbnail can be cut: R2 event notifications, which carry an upload into the gallery, have no local
+ * R2 so its thumbnail can be cut, and the reader's day, whose photos share a version id and so one file, so that the
+ * photo the reader opens can load: R2 event notifications, which carry an upload into the gallery, have no local
  * stand-in, so a test asserts which image the page asks for rather than that it arrived.
  */
 const GALLERY = {
@@ -129,6 +130,11 @@ const GALLERY = {
 export const ORIGINALS = [
     {
         objectPath: `staging-originals/originals/${ADMIN_PHOTO_VERSION}`,
+        file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
+        contentType: 'image/jpeg',
+    },
+    {
+        objectPath: `staging-originals/originals/${GALLERY.cake.versionId}`,
         file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
         contentType: 'image/jpeg',
     },

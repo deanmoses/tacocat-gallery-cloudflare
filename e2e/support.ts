@@ -63,3 +63,35 @@ export async function fetchedStylesheets(page: Page): Promise<string[]> {
             .map((pathname) => pathname.slice(pathname.lastIndexOf('/') + 1)),
     );
 }
+
+/** How many bytes each fetch of `url`, a path and query on the site, moved, in the order the page made them; 0 for one answered from a cache. */
+export async function bytesFetched(page: Page, url: string): Promise<number[]> {
+    return page.evaluate(
+        (wanted) =>
+            performance
+                .getEntriesByType('resource')
+                .filter((entry) => entry instanceof PerformanceResourceTiming)
+                .filter((entry) => `${new URL(entry.name).pathname}${new URL(entry.name).search}` === wanted)
+                .map((entry) => entry.transferSize),
+        url,
+    );
+}
+
+/** When the first fetch of `url` started, in ms from the page's start; undefined until the page asks for it. */
+export async function fetchStarted(page: Page, url: string): Promise<number | undefined> {
+    return page.evaluate(
+        (wanted) =>
+            performance
+                .getEntriesByType('resource')
+                .find((entry) => `${new URL(entry.name).pathname}${new URL(entry.name).search}` === wanted)?.startTime,
+        url,
+    );
+}
+
+/** When the page's load event fired, in ms from the page's start. */
+export async function loadEventStart(page: Page): Promise<number> {
+    return page.evaluate(() => {
+        const [navigation] = performance.getEntriesByType('navigation');
+        return navigation instanceof PerformanceNavigationTiming ? navigation.loadEventStart : 0;
+    });
+}
