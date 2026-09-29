@@ -27,6 +27,9 @@
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,
     "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+    // `wrangler dev` builds the transcoder's image as it starts, which needs Docker up, and only a video upload uses it.
+    // `npm run dev:video` turns it on.
+    "dev": { "enable_containers": false },
     "secrets": {
         "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET", "DEBUGBEAR_API_KEY"],
     },
