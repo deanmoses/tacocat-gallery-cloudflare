@@ -216,7 +216,7 @@ Every image is cached for a year, since its URL names one version and a new uplo
 - Admins log in with passkeys (`api/src/auth/`). There is no password and no identity service.
 - The users are seeded by a migration. An invite link lets its holder register a passkey as one of them, once.
 - A passkey is bound to the site's origin, `SITE_ORIGIN` in each environment's vars, or `localhost` in development.
-- A session is a signed cookie holding the admin's name and an expiry. Checking it reads no database; the price is that a session can be ended early only by rotating `SESSION_SECRET`, which logs everyone out.
+- A session is a signed cookie holding the admin's name and an expiry, sent by the browser only with requests from the site's own pages, as the AWS token cookies were. A site to the browser is the registrable domain, so a page on another host of it, staging say, sends it too; what keeps such a page from writing is that every write from a browser must name the site's own origin in `Origin`. Checking the cookie reads no database; the price is that a session can be ended early only by rotating `SESSION_SECRET`, which logs everyone out.
 - Reads never require login. Writes always do.
 - Every `/api/` response says what the Worker made of the cookie in `x-auth-status`: `none`, `valid` or `invalid`. A read with a refused cookie, usually an expired one, is answered with the guest view, so `invalid` is how the app learns mid-visit that its admin is a guest now: it drops its admin state and asks them to log in again.
 

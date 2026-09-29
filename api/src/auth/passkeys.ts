@@ -60,7 +60,9 @@ export function requestSite(request: Request, env: AuthEnv): URL | null {
 
 /** Ends the admin session by expiring its cookie. */
 export function logout(): Response {
-    return json({ admin: null }, 200, { 'set-cookie': cookie(SESSION_COOKIE, '', { maxAge: 0, path: '/' }) });
+    return json({ admin: null }, 200, {
+        'set-cookie': cookie(SESSION_COOKIE, '', { maxAge: 0, path: '/', sameSite: 'Strict' }),
+    });
 }
 
 /** Records a login challenge as used, changing no row if it already was. */
@@ -289,7 +291,10 @@ async function loggedIn(env: AuthEnv, name: string): Promise<Response> {
     const maxAge = SESSION_DAYS * 86_400;
     const session = await sign(env, { name, exp: Date.now() + maxAge * 1000 });
     const headers = new Headers();
-    headers.append('set-cookie', cookie(SESSION_COOKIE, session, { maxAge, path: '/' }));
+    // Strict: the browser sends the cookie only with requests from the site's own pages. A link followed from
+    // elsewhere loads the app without it, and the app's own fetch of the session status then carries it, so nothing
+    // an admin does is lost.
+    headers.append('set-cookie', cookie(SESSION_COOKIE, session, { maxAge, path: '/', sameSite: 'Strict' }));
     headers.append('set-cookie', cookie(CHALLENGE_COOKIE, '', { maxAge: 0, path: `${AUTH_PREFIX}/` }));
     return Response.json({ admin: name }, { headers });
 }

@@ -127,11 +127,17 @@ export function createApp(): Hono<App> {
             : debugImage(context.req.raw, context.env),
     );
 
-    // Every write needs a logged-in admin. This comes after the login routes, which answer before it would run, and
-    // before every route it guards, since Hono runs what matches in the order it was registered.
-    app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', async (context, next) =>
-        (await currentAdmin(context.req.raw, context.env)) === null ? failure(401, 'Unauthorized') : next(),
-    );
+    // Every write needs a logged-in admin, and a browser's write has to come from the site's own pages: a browser
+    // names the page in Origin, and a page on another host of the same site, staging say, sends the session cookie
+    // whatever the cookie's SameSite says. A request with no Origin is a script's, whose cookie no page could have
+    // attached. This comes after the login routes, which answer before it would run, and before every route it
+    // guards, since Hono runs what matches in the order it was registered.
+    app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', async (context, next) => {
+        if (context.req.header('origin') !== undefined && requestSite(context.req.raw, context.env) === null) {
+            return failure(403, 'origin not allowed');
+        }
+        return (await currentAdmin(context.req.raw, context.env)) === null ? failure(401, 'Unauthorized') : next();
+    });
     answer(API.putItem, async (context) => putItem(context.req.raw, context.env));
     answer(API.presign, async (context) => presignRoute(context.req.raw, context.env));
     app.put('/upload/:versionId', async (context) =>
