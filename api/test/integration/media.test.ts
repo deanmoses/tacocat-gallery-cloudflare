@@ -891,11 +891,12 @@ describe('serving media', () => {
         },
     );
 
-    it('serves a stored media page image as the type it was stored with, from the cache the second time', async () => {
+    it('serves a media page image from the cache the second time, whatever format the URL names in vain', async () => {
         await env.ORIGINALS.put(originalKey('v1'), gif, { httpMetadata: { contentType: 'image/gif' } });
         const first = await call('/i/2024/06-15/d/v1?size=20');
         await first.body?.cancel();
         const second = await call('/i/2024/06-15/d/v1?size=20&format=bmp');
+        await second.body?.cancel();
 
         expect(second.headers.get('x-derived')).toBe('cache-api-hit');
         expect(second.headers.get('content-type')).toBe('image/webp');
