@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { outputFormat, resize } from '../../src/media/images';
+import { outputFormat, outputOptions, resize } from '../../src/media/images';
 
 const PHOTO = { path: '/2001/06-15/felix', versionId: 'v1' };
 
@@ -94,5 +94,42 @@ describe(outputFormat, () => {
         { name: 'a word', requested: 'bmp', accept: CHROME, size: THUMBNAIL, format: 'image/webp' },
     ])('answers $name asked for with $format', ({ requested, accept, size, format }) => {
         expect(outputFormat(requested, accept, size)).toBe(format);
+    });
+});
+
+describe(outputOptions, () => {
+    it.each([
+        {
+            name: 'a 200x200 thumbnail: one frame, at the quality the album page has always had',
+            format: 'image/webp',
+            size: { width: 200, height: 200 },
+            expected: { format: 'image/webp', quality: 85, anim: false },
+        },
+        {
+            name: 'the 2x thumbnail: one frame, softer, since a 2x screen halves every artifact',
+            format: 'image/webp',
+            size: { width: 400, height: 400 },
+            expected: { format: 'image/webp', quality: 75, anim: false },
+        },
+        {
+            name: 'the 2x thumbnail as JPEG, for a browser without WebP: the usual quality',
+            format: 'image/jpeg',
+            size: { width: 400, height: 400 },
+            expected: { format: 'image/jpeg', quality: 85, anim: false },
+        },
+        {
+            name: 'the detail image: the usual quality, and no frame limit of its own',
+            format: 'image/jpeg',
+            size: { width: 1024, height: null },
+            expected: { format: 'image/jpeg', quality: 85 },
+        },
+        {
+            name: 'a detail image asked for as WebP: the usual quality and its frames kept, since only the 2x thumbnail is softer',
+            format: 'image/webp',
+            size: { width: 1024, height: null },
+            expected: { format: 'image/webp', quality: 85 },
+        },
+    ] as const)('encodes $name', ({ format, size, expected }) => {
+        expect(outputOptions(format, size)).toStrictEqual(expected);
     });
 });

@@ -57,7 +57,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 `web/` started as the AWS app unchanged, so the rounds to 2026-09-25 compared the platforms alone; since then it changes wherever that makes the site faster or simpler, and every difference is listed here so a result is read against what both sites were doing. AWS took two of them back.
 
 - **2026-09-26: the album page preloads its JSON.** `web/static/_headers` names the album's JSON and its year's as `Link: rel=preload`, so the browser asks for them as the page's headers arrive, with Early Hints on for the zone, and the album JSON says `Cache-Control: private, no-cache` so the browser hands the app the preloaded copy. AWS did the same on 2026-09-27, through a CloudFront function that also serves the album page as `index.html` from the edge, where it had gone to the origin on every request.
-- **2026-09-26: WebP thumbnails, with a 400x400 for 2x screens.** AWS switched to WebP on 2026-09-27; its thumbnails weigh 14.7 KB at the median against 16.0 here.
+- **2026-09-26: WebP thumbnails, with a 400x400 for 2x screens.** AWS switched to WebP on 2026-09-27; its thumbnails weigh 14.7 KB at the median against 16.0 here. Since 2026-09-29 the 400x400 is encoded at quality 75 and every thumbnail is one frame, as on AWS; [#81](https://github.com/deanmoses/tacocat-gallery-cloudflare/issues/81) has the measurement.
 - **2026-09-26: the app is built for iOS 15.6.** The bundles differ by nothing a measurement sees.
 - **2026-09-26: login is a page of the app**, on a chunk a reader never loads.
 - **2026-09-27: uploads are polled sooner, and 2026-09-27: an admin can reorder a day album.** Admin-only code and an `order` flag; a reader's page is unchanged.
