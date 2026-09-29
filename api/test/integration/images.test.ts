@@ -37,33 +37,31 @@ describe('derived images through the Cache API', () => {
         expect(timingNames(response)).toStrictEqual(['cache', 'r2', 'worker']);
     });
 
-    // What each browser sends for an <img>: only the old one lacks image/webp.
-    const CHROME = { accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' };
-    const OLD_SAFARI = { accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5' };
+    it('serves a thumbnail as WebP even to a browser whose Accept header does not name it, with no Vary', async () => {
+        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes', {
+            httpMetadata: { contentType: 'image/webp' },
+        });
+        const response = await call(path, { headers: { accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5' } });
 
-    it('serves WebP to a browser that accepts it and JPEG to one that does not, from one URL', async () => {
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-jpeg`, 'jpeg bytes');
-        const modern = await call(path, { headers: CHROME });
-        const old = await call(path, { headers: OLD_SAFARI });
-
-        expect([modern.headers.get('content-type'), await modern.text()]).toStrictEqual(['image/webp', 'webp bytes']);
-        expect([old.headers.get('content-type'), await old.text()]).toStrictEqual(['image/jpeg', 'jpeg bytes']);
-        expect(modern.headers.get('vary')).toBe('Accept');
+        expect([response.headers.get('content-type'), await response.text()]).toStrictEqual([
+            'image/webp',
+            'webp bytes',
+        ]);
+        expect(response.headers.get('vary')).toBeNull();
     });
 
-    it('keeps the two formats apart in the cache, so the first browser does not decide for the next', async () => {
+    it('serves every URL that names one derivative from one cache entry', async () => {
         await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-jpeg`, 'jpeg bytes');
-        const first = await call(path, { headers: CHROME });
+        const first = await call(path);
         await first.body?.cancel();
-        const old = await call(path, { headers: OLD_SAFARI });
-        const modernAgain = await call(path, { headers: CHROME });
+        const renamed = await call(path.replace('/a/', '/renamed/'));
+        await renamed.body?.cancel();
+        const tagged = await call(`${path}&utm_source=email`);
+        await tagged.body?.cancel();
 
-        expect([old.headers.get('x-derived'), await old.text()]).toStrictEqual(['stored', 'jpeg bytes']);
-        expect([modernAgain.headers.get('x-derived'), await modernAgain.text()]).toStrictEqual([
+        expect([renamed.headers.get('x-derived'), tagged.headers.get('x-derived')]).toStrictEqual([
             'cache-api-hit',
-            'webp bytes',
+            'cache-api-hit',
         ]);
     });
 

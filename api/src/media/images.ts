@@ -63,7 +63,7 @@ export async function derivedImage(
 ): Promise<Derivative | { missing: string }> {
     const stored = await timed(steps, 'r2', async () => env.DERIVED.get(wanted.key));
     if (stored) {
-        const contentType = wanted.format ?? stored.httpMetadata?.contentType ?? 'application/octet-stream';
+        const contentType = stored.httpMetadata?.contentType ?? 'application/octet-stream';
         return { body: stored.body, contentType, how: 'stored' };
     }
 
@@ -140,26 +140,18 @@ export async function asJpeg(env: Pick<Env, 'IMAGES'>, bytes: ArrayBuffer): Prom
 }
 
 /**
- * The format a URL's `format` parameter asks for, when the binding can write it. Otherwise a thumbnail, which asks for
- * both sides, is WebP, or JPEG for a client whose `Accept` header does not name `image/webp`; and an image asked for
- * by one side, the media page's, is null, since its source decides. A JPEG from the binding carries the original's
- * IPTC and XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is set to, and
- * on a thumbnail that is three quarters of the bytes; its WebP carries nothing. Only an explicit `image/webp` counts,
- * since a Safari too old to show WebP still accepts `image/*`.
+ * The format a URL settles: the one its `format` parameter asks for, when the binding can write it, and otherwise WebP
+ * for a thumbnail, which asks for both sides, since every browser the app supports shows it; null for an image asked
+ * for by one side, the media page's, since its source decides. A JPEG from the binding carries the original's IPTC and
+ * XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is set to, and on a
+ * thumbnail that is three quarters of the bytes; its WebP carries nothing.
  */
-export function outputFormat(
-    requested: string | null,
-    accept: string | null,
-    size: ImageSize,
-): ImageOutputOptions['format'] | null {
+export function outputFormat(requested: string | null, size: ImageSize): ImageOutputOptions['format'] | null {
     const asked = OUTPUT_FORMATS.find((known) => known === requested);
     if (asked !== undefined) {
         return asked;
     }
-    if (size.width === null || size.height === null) {
-        return null;
-    }
-    return accept === null || accept.includes('image/webp') ? 'image/webp' : 'image/jpeg';
+    return size.width !== null && size.height !== null ? 'image/webp' : null;
 }
 
 /**
