@@ -58,7 +58,6 @@
         { "binding": "ORIGINALS", "bucket_name": "staging-originals" },
         { "binding": "UPLOADS", "bucket_name": "staging-uploads" },
         { "binding": "DERIVED", "bucket_name": "staging-derived" },
-        { "binding": "BACKUPS", "bucket_name": "staging-backups" },
     ],
     "images": { "binding": "IMAGES" },
     // The running version's id, which /api/health answers with so a release can prove its check reached the new code.
@@ -83,7 +82,7 @@
     },
     "triggers": {
         "crons": [
-            // Daily D1 backup and upload-error purge. src/index.ts picks the job by this exact string (BACKUP_CRON), so change both together.
+            // The nightly cleanup of upload errors and spent login challenges. src/index.ts picks the job by this exact string (NIGHTLY_CRON), so change both together.
             "17 9 * * *",
         ],
     },
@@ -139,7 +138,6 @@
                 { "binding": "ORIGINALS", "bucket_name": "production-originals" },
                 { "binding": "UPLOADS", "bucket_name": "production-uploads" },
                 { "binding": "DERIVED", "bucket_name": "production-derived" },
-                { "binding": "BACKUPS", "bucket_name": "production-backups" },
             ],
             "images": { "binding": "IMAGES" },
             "version_metadata": { "binding": "CF_VERSION_METADATA" },

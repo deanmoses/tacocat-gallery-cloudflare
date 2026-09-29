@@ -22,8 +22,8 @@ export async function updateMedia(database: Orm, key: ItemKey, fields: MediaWrit
 }
 
 /**
- * Drops the row. The database clears it from any album it was the thumbnail of, and its objects wait for the purge,
- * so a photo deleted by mistake is restored by pointing a new row at its version.
+ * Drops the row. The database clears it from any album it was the thumbnail of; its objects stay, so a photo deleted
+ * by mistake is restored by pointing a new row at its version.
  */
 export async function deleteMedia(database: Orm, key: ItemKey): Promise<Written> {
     const { item } = schema;

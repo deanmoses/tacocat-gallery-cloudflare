@@ -20,18 +20,18 @@ The whole site is one Worker per environment, serving the web app and everything
   media upload:  browser --PUT--> R2 uploads --event--> Queue --> Worker --> Workflow
 ```
 
-| Piece                           | What it does                                                                                 |
-| ------------------------------- | -------------------------------------------------------------------------------------------- |
-| **`api/` (worker)**             | Serves the app's files, the API, login and the media; consumes upload events; runs the cron  |
-| **`web/` (web app)**            | The SvelteKit single-page app, built to static files the Worker serves                       |
-| **`shared/`**                   | Code shared between the worker and web app: record shapes, path grammar, URL builders        |
-| **`infra/` (OpenTofu)**         | Creates everything outside the Worker: the zone, the database, the buckets, the queues       |
-| **Cloudflare D1**               | The database: every album and media item, the search index, uploads, login                   |
-| **Cloudflare R2, four buckets** | `originals`, `uploads` as they arrive, `derived` images and video, `backups` of the database |
-| **Cloudflare Images binding**   | Resizes and crops images, HEIC included                                                      |
-| **Cloudflare Queue**            | Carries R2's event for each finished upload to the Worker                                    |
-| **Cloudflare Workflow**         | Runs one upload pipeline per uploaded file                                                   |
-| **Cloudflare Container**        | ffmpeg, for transcoding video                                                                |
+| Piece                            | What it does                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| **`api/` (worker)**              | Serves the app's files, the API, login and the media; consumes upload events; runs the cron |
+| **`web/` (web app)**             | The SvelteKit single-page app, built to static files the Worker serves                      |
+| **`shared/`**                    | Code shared between the worker and web app: record shapes, path grammar, URL builders       |
+| **`infra/` (OpenTofu)**          | Creates everything outside the Worker: the zone, the database, the buckets, the queues      |
+| **Cloudflare D1**                | The database: every album and media item, the search index, uploads, login                  |
+| **Cloudflare R2, three buckets** | `originals`, `uploads` as they arrive, `derived` images and video                           |
+| **Cloudflare Images binding**    | Resizes and crops images, HEIC included                                                     |
+| **Cloudflare Queue**             | Carries R2's event for each finished upload to the Worker                                   |
+| **Cloudflare Workflow**          | Runs one upload pipeline per uploaded file                                                  |
+| **Cloudflare Container**         | ffmpeg, for transcoding video                                                               |
 
 **One origin.** There's no `api.`, `img.` or `auth.` subdomains, meaning there's no CORS between the app and the API, the session cookie needs no cross-site settings, and every URL the app builds is a root-relative path with no host. The one request that leaves the origin is the upload itself, a PUT straight to R2's S3 endpoint, so the media bucket alone carries a CORS rule, in `infra/`.
 
@@ -99,9 +99,6 @@ uploads bucket
 originals bucket
   originals/0muhjn6yo3f9a1c07b2e4d58a               the file as uploaded, written once
 
-backups bucket
-  backups/d1/2026-09-25T09:17:00.000Z.json          a nightly database dump (not per photo); 90 days
-
 derived bucket
   derived/0muhjn6yo3f9a1c07b2e4d58a/200x200-webp    the album page's thumbnail
   derived/0muhjn6yo3f9a1c07b2e4d58a/400x400-webp    the same for a 2x screen
@@ -112,7 +109,7 @@ derived bucket
 
 A version id is the moment it was minted, in base 36, followed by 64 random bits, so listings come out in upload order and an id cannot be guessed. `api/src/storage/keys.ts` builds every key. Each original also carries the path it was uploaded to as metadata, and `api/scripts/media.ts` prints an item's row and every object stored for it.
 
-**Why no path is in a key.** An original is written once and never overwritten, and the `item` row says which version is current. So create, edit, publish, rename, set a thumbnail and delete are database writes that touch no object: renaming an album full of photos is one batch of row updates. A replacement is a new version, and a delete leaves the objects, so either can be undone by pointing a row back at the old version. Objects no row references any more are garbage, and reclaiming them is never the job of the write that orphaned them.
+**Why no path is in a key.** An original is written once and never overwritten, and the `item` row says which version is current. So create, edit, publish, rename, set a thumbnail and delete are database writes that touch no object: renaming an album full of photos is one batch of row updates. A replacement is a new version, and a delete leaves the objects, so either can be undone by pointing a row back at the old version. Objects no row references any more stay where they are.
 
 ## Reading
 
@@ -239,7 +236,7 @@ api/src/index.ts   the three handlers, wired to the layers
 api/src/routes/    HTTP: parse the request, check the admin, call gallery/, shape the response
 api/src/gallery/   the operations: reads, writes, search, presign, the upload pipeline
 api/src/auth/      passkeys and sessions
-api/src/ops/       health, backup, and the performance measurements
+api/src/ops/       health, and the performance measurements
 api/src/http/      request bodies, responses, cookies, the bookmark, the site's headers
 api/src/db/        the schema, and Drizzle over D1 sessions
 api/src/storage/   object keys and S3 presigning
@@ -281,7 +278,7 @@ Traffic is never split between versions, since a split would serve one version's
 
 ## Jobs
 
-- **Nightly**: dump the database to the backups bucket, and delete upload errors and spent login challenges past their use. The search index is rebuilt from `item` on a restore, so it is not dumped.
+- **Nightly**: delete upload errors and spent login challenges past their use. The backup is not the Worker's job: a GitHub workflow exports the database and copies the originals off-site (Backup and restore in `README.md`).
 - **`GET /api/health`** answers with the running version and the newest migration, which is what a release checks.
 - **Measurement.** The rest of `api/src/ops/`, and `/debug/`, serve the performance work in `docs/Perf.md`, not the gallery.
 

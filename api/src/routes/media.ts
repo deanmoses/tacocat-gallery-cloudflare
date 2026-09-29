@@ -54,7 +54,7 @@ export async function updateMediaRoute(request: Request, env: Env): Promise<Resp
     return write.changes > 0 ? wrote(session, write, started) : notFoundMedia(key);
 }
 
-/** `DELETE /api/media/<path>` drops the item; its objects wait for the purge. */
+/** `DELETE /api/media/<path>` drops the item; its objects stay. */
 export async function deleteMediaRoute(request: Request, env: Env): Promise<Response> {
     const key = writableMedia(request, API.deleteMedia.prefix);
     if (key instanceof Response) {

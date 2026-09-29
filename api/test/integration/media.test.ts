@@ -811,16 +811,16 @@ describe('serving an original', () => {
 
     it('reaches nothing but originals: a version with no original is not found, whatever the other buckets hold', async () => {
         await env.UPLOADS.put('inbox/2024/06-15/pending', jpg);
-        await env.BACKUPS.put('backups/d1/2024-06-15.json', new Uint8Array(10));
-        const [pending, backup, malformed] = await Promise.all([
+        await env.ORIGINALS.put('elsewhere/2024-06-15.json', new Uint8Array(10));
+        const [pending, elsewhere, malformed] = await Promise.all([
             call(originalUrl('/2024/06-15/pending', 'v1')),
-            call('/raw/backups/d1/2024-06-15.json/v1'),
+            call('/raw/elsewhere/2024-06-15.json/v1'),
             call('/raw/originals/2024/06-15/pending/v1'),
         ]);
-        await Promise.all([pending, backup, malformed].map(async (response) => response.body?.cancel()));
+        await Promise.all([pending, elsewhere, malformed].map(async (response) => response.body?.cancel()));
 
         expect(pending.status).toBe(404);
-        expect(backup.status).toBe(400);
+        expect(elsewhere.status).toBe(400);
         expect(malformed.status).toBe(400);
     });
 

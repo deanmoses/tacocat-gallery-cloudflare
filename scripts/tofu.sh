@@ -7,6 +7,9 @@
 # credentials go in through the environment. They are set for this one process only: Wrangler would take a
 # CLOUDFLARE_API_TOKEN it found in the environment over the `tacocat` profile.
 #
+# The backup bucket is in AWS, whose provider takes the AWS CLI's own credentials, whatever they come from, as
+# variables: the AWS_* names are taken by the state backend, which reads R2 through them.
+#
 # Usage: scripts/tofu.sh <tofu arguments>
 set -euo pipefail
 
@@ -29,5 +32,16 @@ token_id=$(curl -sS --fail-with-body -H @<(printf 'Authorization: Bearer %s' "$t
     ")
 secret=$(printf '%s' "$token" | shasum -a 256 | cut -d' ' -f1)
 
+aws_credentials=$(aws configure export-credentials --format env)
+aws_access_key_id=$(printf '%s\n' "$aws_credentials" | sed -n 's/^export AWS_ACCESS_KEY_ID=//p')
+aws_secret_access_key=$(printf '%s\n' "$aws_credentials" | sed -n 's/^export AWS_SECRET_ACCESS_KEY=//p')
+aws_session_token=$(printf '%s\n' "$aws_credentials" | sed -n 's/^export AWS_SESSION_TOKEN=//p')
+if [ -z "$aws_access_key_id" ] || [ -z "$aws_secret_access_key" ]; then
+    echo "the AWS CLI has no credentials to export; sign it in to the gallery's AWS account first" >&2
+    exit 1
+fi
+
 CLOUDFLARE_API_TOKEN=$token AWS_ACCESS_KEY_ID=$token_id AWS_SECRET_ACCESS_KEY=$secret \
+    TF_VAR_aws_access_key_id=$aws_access_key_id TF_VAR_aws_secret_access_key=$aws_secret_access_key \
+    TF_VAR_aws_session_token=$aws_session_token \
     exec tofu -chdir=infra "$@"

@@ -3,7 +3,6 @@ import { orm } from './db';
 import { purgeUploadErrors } from './gallery/errors';
 import { startUploadPipeline } from './gallery/pipeline';
 import type { R2EventMessage } from './gallery/upload';
-import { backupDatabase } from './ops/backup';
 import { startBrowserRuns } from './ops/browser-runs';
 import { createApp } from './routes/app';
 
@@ -12,7 +11,7 @@ export { Transcoder } from './media/transcoder';
 
 const app = createApp();
 
-const BACKUP_CRON = '17 9 * * *';
+const NIGHTLY_CRON = '17 9 * * *';
 const BROWSER_COLD_CRON = '23 5,11,19,22 * * *';
 const BROWSER_WARM_CRON = '38 5,11,19,22 * * *';
 
@@ -28,8 +27,7 @@ export default {
 
     async scheduled(controller, env): Promise<void> {
         switch (controller.cron) {
-            case BACKUP_CRON: {
-                await backupDatabase(env);
+            case NIGHTLY_CRON: {
                 await purgeUploadErrors(env);
                 await purgeSpentChallenges(orm(env.DB));
                 break;

@@ -5,6 +5,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5.0"
     }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
   }
 
   # The bucket is made by hand, since a config cannot create the bucket its own state is read from. R2 honours the

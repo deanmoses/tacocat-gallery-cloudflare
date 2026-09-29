@@ -1,12 +1,15 @@
 name: Backup
 
-# Nightly copy of production's originals and backups buckets to storage outside Cloudflare (scripts/backup-r2.sh), an
-# hour after the Worker's cron has written the D1 dump into the backups bucket. A failed run is the alert: GitHub
-# mails the repository owner when a scheduled workflow fails.
+# Nightly copy of production to storage outside Cloudflare, the way AWS Backup covered the S3 originals: the originals
+# bucket, and the database exported a table at a time, since `wrangler d1 export` refuses a database with an FTS5
+# table whole. rclone mirrors each into a tree of its own name in a versioned bucket that keeps 35 days of history
+# (infra/backup/main.tf), so a night that copies a mistake is undone by copying the versions as of the night before.
+# A failed run is the alert: GitHub mails the repository owner when a scheduled workflow fails.
 #
-# Secrets: R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, the S3 credentials of an R2 API token that can read the two
-# buckets and nothing else, and BACKUP_TARGET, the rclone path to back up to as a connection string carrying the target's own
-# credentials, such as ':b2,account=<key id>,key=<key>:<bucket>'.
+# Secrets, all set by scripts/secrets.sh backup from the tokens infra/ defines: D1_EXPORT_API_TOKEN, which can
+# reach D1 and nothing else; R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, the S3 credentials of a token that can read the
+# originals bucket and nothing else; and BACKUP_TARGET, the rclone path to back up to as a connection string carrying
+# the target's own credentials.
 on:
     schedule:
         - cron: '17 10 * * *'
@@ -28,9 +31,32 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
+            # Only Wrangler is needed, so no install scripts: nothing here runs the app or its tests.
+            - uses: ./.github/actions/setup
+              with:
+                  scripts: 'false'
             - name: Install rclone
               run: sudo apt-get install -y --no-install-recommends rclone
-            - name: Copy the buckets
+            # The tables a restore would miss: the gallery and the passkeys, with D1's own record of the migrations
+            # applied, which says what shape the rows are in. The users are seeded by a migration; upload errors,
+            # invites and spent login challenges expire within a day; and upload rows are read once, when the file
+            # lands. Rows only: a restore goes into a database migrated to that shape.
+            - name: Export the database
+              working-directory: api
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.D1_EXPORT_API_TOKEN }}
+              run: |
+                  mkdir -p ../d1
+                  for table in d1_migrations item passkey; do
+                      npx wrangler d1 export DB --remote --env production --no-schema --table "$table" --output "../d1/$table.sql"
+                  done
+            # Neither sync compares modification times, which S3 keeps in metadata that costs a HEAD per object to
+            # read, a request Glacier Instant Retrieval charges for: 38,000 originals a night would cost several times
+            # what the class saves. An original is written once under a key that never changes, so its size settles
+            # it; the export's files are compared by the checksums the listing already carries. The originals go to
+            # the archive class since nothing overwrites them; the export is small and replaced nightly, which that
+            # class's 90-day minimum would charge for.
+            - name: Copy the originals and the export
               env:
                   RCLONE_CONFIG_R2_TYPE: s3
                   RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -39,4 +65,9 @@ jobs:
                   RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
                   RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
                   BACKUP_TARGET: ${{ secrets.BACKUP_TARGET }}
-              run: scripts/backup-r2.sh r2:production-originals r2:production-backups
+              run: |
+                  rclone sync r2:production-originals "$BACKUP_TARGET/production-originals" \
+                      --size-only --s3-storage-class GLACIER_IR \
+                      --fast-list --transfers 16 --checkers 32 --stats-one-line --stats 5m
+                  rclone sync d1 "$BACKUP_TARGET/d1" --checksum --stats-one-line
+                  rclone size "$BACKUP_TARGET"

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Puts the R2 signing credentials where they are used, straight from OpenTofu's outputs, so no token value passes
 # through a person. The tokens themselves are defined in infra/: one per environment that can read and write its
-# uploads and derived buckets and nothing else, and one for the backup that can read production's originals and
-# backups buckets and nothing else. Rotating one is `scripts/tofu.sh apply -replace=<its address>`, then this again.
+# uploads and derived buckets and nothing else, one for the backup that can read production's originals bucket and
+# nothing else, one that can reach D1 and nothing else, and the AWS key that can reach the backup bucket and nothing
+# else. Rotating one is `scripts/tofu.sh apply -replace=<its address>`, then this again.
 #
 #   staging | production   the Worker's secrets, in one bulk upload: the environment's R2 pair from OpenTofu, and its
 #                          SESSION_SECRET_<ENVIRONMENT> and DEBUGBEAR_API_KEY from api/.dev.vars. Wrangler creates a
 #                          Worker that does not exist yet as a draft, so this can run before the first deploy.
-#   backup                 the repository secrets the Backup workflow reads.
+#   backup                 the repository secrets the Backup workflow reads: the R2 pair, the D1 token and the target.
 #   dev                    api/.dev.vars's R2 pair, set to staging's, for `wrangler dev`.
 #
 # Every value is assigned to a variable before it is used: a `$(...)` inside an argument or a pipeline fails silently
@@ -76,9 +77,17 @@ staging | production)
 backup)
     id=$(credential backup access_key_id)
     secret=$(credential backup secret_access_key)
+    target=$(scripts/tofu.sh output -raw backup_target)
+    d1_token=$(scripts/tofu.sh output -raw d1_export_token)
+    if [ -z "$target" ] || [ -z "$d1_token" ]; then
+        echo "no backup_target or d1_export_token in the OpenTofu outputs" >&2
+        exit 1
+    fi
     printf '%s' "$id" | gh secret set R2_ACCESS_KEY_ID
     printf '%s' "$secret" | gh secret set R2_SECRET_ACCESS_KEY
-    echo "Set R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY on the repository."
+    printf '%s' "$d1_token" | gh secret set D1_EXPORT_API_TOKEN
+    printf '%s' "$target" | gh secret set BACKUP_TARGET
+    echo "Set R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, D1_EXPORT_API_TOKEN and BACKUP_TARGET on the repository."
     ;;
 dev)
     id=$(credential staging access_key_id)
