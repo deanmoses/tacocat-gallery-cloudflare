@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildVersion } from '../build-version';
 
 let repo: string;
@@ -12,10 +12,26 @@ function write(file: string, content: string): void {
     writeFileSync(path.join(repo, file), content);
 }
 
+function git(...args: string[]): void {
+    execFileSync('git', args, { cwd: repo });
+}
+
 describe(buildVersion, () => {
+    /**
+     * Keeps every git here, the code under test's too, on the temporary repository. A commit hook exports `GIT_DIR` and
+     * `GIT_INDEX_FILE` to the tests it runs: `buildVersion` would then list the real repository's index, and a
+     * `git init` inheriting a `GIT_DIR` that names a linked worktree's gitdir reinitialises the real repository as
+     * bare, which breaks every git command in every checkout of it.
+     */
+    beforeAll(() => {
+        for (const name of Object.keys(process.env).filter((key) => key.startsWith('GIT_'))) {
+            vi.stubEnv(name, undefined);
+        }
+    });
+
     beforeEach(() => {
         repo = mkdtempSync(path.join(tmpdir(), 'build-version-'));
-        execFileSync('git', ['init', '--quiet'], { cwd: repo });
+        git('init', '--quiet');
         write('.gitignore', 'web/build/\n');
         write('web/src/app.ts', 'app');
         write('web/src/app.test.ts', 'test');
@@ -25,11 +41,15 @@ describe(buildVersion, () => {
         write('tsconfig.base.json', '{}');
         write('api/src/index.ts', 'worker');
         write('docs/Perf.md', 'perf');
-        execFileSync('git', ['add', '.'], { cwd: repo });
+        git('add', '.');
     });
 
     afterEach(() => {
         rmSync(repo, { recursive: true, force: true });
+    });
+
+    afterAll(() => {
+        vi.unstubAllEnvs();
     });
 
     it('names the same tree the same every time', () => {
