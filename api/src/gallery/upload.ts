@@ -1,4 +1,4 @@
-import { type SQLWrapper, and, eq, exists, isNull, notExists, sql } from 'drizzle-orm';
+import { type SQL, type SQLWrapper, and, eq, exists, isNull, notExists, sql } from 'drizzle-orm';
 import type { RunnableQuery } from 'drizzle-orm/runnable-query';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { WorkflowStep } from 'cloudflare:workers';
@@ -398,8 +398,8 @@ export function insertItem(database: Orm, albumId: number, upload: Upload, facts
 
 /**
  * The target row pointed at the new file, under the name it has now, whatever the upload was issued for. The captions
- * stay, and the file's fill in where the row has none. The crop is pixels of the old image, so it survives only a
- * file of exactly the old size.
+ * stay, and the file's fill in where the row has none; the file's tags join the row's, since a tag is never wrong for
+ * being on the old file too. The crop is pixels of the old image, so it survives only a file of exactly the old size.
  */
 export function replaceItem(database: Orm, targetId: number, upload: Upload, facts: MediaFacts): ItemWrite {
     const { item } = schema;
@@ -413,7 +413,7 @@ export function replaceItem(database: Orm, targetId: number, upload: Upload, fac
             durationSeconds: facts.durationSeconds,
             title: sql`coalesce(${item.title}, ${facts.title})`,
             description: sql`coalesce(${item.description}, ${facts.description})`,
-            tags: sql`coalesce(${item.tags}, ${tagsJson(facts)})`,
+            tags: mergedTags(item.tags, tagsJson(facts)),
             thumbnailCrop: sql`CASE WHEN ${item.width} = ${facts.width} AND ${item.height} = ${facts.height} THEN ${item.thumbnailCrop} ELSE NULL END`,
         })
         .where(and(eq(item.id, targetId), eq(item.itemType, 'media')))
@@ -423,6 +423,16 @@ export function replaceItem(database: Orm, targetId: number, upload: Upload, fac
 /** The tags as the column stores them, since a value bound inside `sql` is not mapped by the column. */
 function tagsJson(facts: MediaFacts): string | null {
     return facts.tags === null ? null : JSON.stringify(facts.tags);
+}
+
+/**
+ * The row's tags and the file's, each once, in no promised order, since nothing reads one; null when there are none,
+ * since the column refuses an empty list.
+ */
+function mergedTags(existing: SQLWrapper, incoming: string | null): SQL {
+    return sql`(SELECT nullif(json_group_array(DISTINCT value), '[]') FROM (
+        SELECT value FROM json_each(${existing}) UNION ALL SELECT value FROM json_each(${incoming})
+    ))`;
 }
 
 const EXPLANATION = valibot.array(valibot.object({ album: valibot.nullable(valibot.number()) }));

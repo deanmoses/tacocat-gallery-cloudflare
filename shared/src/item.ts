@@ -18,8 +18,12 @@ const caption = valibot.pipe(
     valibot.check((text) => text.trim() !== '', 'is blank; leave it out or clear it with null'),
 );
 
-/** At least one tag, none blank. */
-const tags = valibot.pipe(valibot.array(caption), valibot.minLength(1, 'has no tags; clear them with null'));
+/** A set of at least one tag, none blank: order means nothing, so a list only carries it. */
+const tags = valibot.pipe(
+    valibot.array(caption),
+    valibot.minLength(1, 'has no tags; clear them with null'),
+    valibot.check((list) => new Set(list).size === list.length, 'names a tag twice'),
+);
 
 const writeFields = {
     parentPath: valibot.string(),

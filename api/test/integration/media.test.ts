@@ -9,6 +9,7 @@ import { env } from 'cloudflare:workers';
 import gifDataUrl from '../../fixtures/animated.gif?inline';
 import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
+import noTagsDataUrl from '../../fixtures/NoTags.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { eq } from 'drizzle-orm';
 import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from '@tacocat-gallery/shared';
@@ -27,7 +28,10 @@ function bytes(dataUrl: string): Uint8Array {
 }
 
 const jpg = bytes(jpgDataUrl);
+const JPG_TAGS = ['halloween', 'dog', 'parade'];
 const heic = bytes(heicDataUrl);
+// A captioned JPEG with no keywords.
+const noTags = bytes(noTagsDataUrl);
 // 220 by 212, so it is not the size of the JPEG, which is 300 by 225.
 const png = bytes(pngDataUrl);
 // Two frames, 32 by 24.
@@ -195,7 +199,7 @@ describe('upload pipeline', () => {
             published: false,
             title: 'My Image Title',
             description: 'My image description',
-            tags: ['halloween', 'dog', 'parade'],
+            tags: JPG_TAGS,
             width: 300,
             height: 225,
             versionId,
@@ -428,10 +432,27 @@ describe('replacing a media item', () => {
             title: 'Felix',
             // The row had no description, so the file's fills it in.
             description: 'My image description',
-            tags: ['halloween', 'dog', 'parade'],
+            tags: JPG_TAGS,
             thumbnailCrop: CROP,
         });
         expect(day?.thumbnailId).toBe(felix?.id);
+    });
+
+    it("joins the file's tags to the row's, each once, so a tag given by hand survives the file", async () => {
+        await putItem({ parentPath: DAY, itemName: 'tagged', ...IMAGE, versionId: 'old', tags: ['felix', 'dog'] });
+
+        await upload(`${DAY}tagged`, jpg, { replace: true });
+        const tagged = await storedItem(DAY, 'tagged');
+
+        expect(tagged?.tags?.toSorted()).toStrictEqual(['felix', ...JPG_TAGS].toSorted());
+    });
+
+    it("keeps the row's tags when the file brings none", async () => {
+        await putItem({ parentPath: DAY, itemName: 'tagged', ...IMAGE, versionId: 'old', tags: ['felix'] });
+
+        await upload(`${DAY}tagged`, noTags, { replace: true });
+
+        await expect(storedItem(DAY, 'tagged')).resolves.toMatchObject({ tags: ['felix'] });
     });
 
     it('takes a file in another format under the same name, dropping a crop cut from another size', async () => {

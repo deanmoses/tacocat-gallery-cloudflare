@@ -57,7 +57,7 @@ The gallery is a tree, and a path is a URL:
 `shared/src/paths.ts` is the grammar.
 
 - **An album** has a description, a one-line summary, a published flag, and the media item it shows as its thumbnail, from anywhere in its subtree. A day album can be published only while its year is. A day album's media is in name order, since files are usually named in the order they should show before they are uploaded, until an admin drags it into an order of their own; media added after that goes at the end, in name order, until the next reorder.
-- **A media item** is an image or a video, decided by the file's first bytes when it is uploaded. It has the version id of its current file, its size, a video's duration, a title, a description, tags, and the rectangle its thumbnail is cut from. It shows whenever its album does.
+- **A media item** is an image or a video, decided by the file's first bytes when it is uploaded. It has the version id of its current file, its size, a video's duration, a title, a description, a set of tags, and the rectangle its thumbnail is cut from. It shows whenever its album does.
 
 ## Database
 
@@ -177,7 +177,7 @@ app                        Worker                          R2 / Queue / Workflow
 4. **One batch** inserts the item into the album and marks the upload complete; the first photo in a day becomes its thumbnail. Then the inbox object is dropped.
 5. **The app** sees the new version in the album and shows it.
 
-**Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions, tags and every album showing it are kept. The thumbnail crop is kept only if the new image has exactly the old size.
+**Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions and every album showing it are kept, and the file's tags join the row's. The thumbnail crop is kept only if the new image has exactly the old size.
 
 **When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row, and the inbox object stays for a replay.
 
