@@ -9,14 +9,14 @@ describe('session', () => {
         const response = await call('/api/auth/status');
 
         await expect(response.json()).resolves.toStrictEqual({ admin: null });
-        expect(response.headers.get('x-auth-status')).toBe('guest');
+        expect(response.headers.get('x-auth-status')).toBe('none');
     });
 
     it('reports the admin with a signed cookie', async () => {
         const response = await callAsAdmin('/api/auth/status');
 
         await expect(response.json()).resolves.toStrictEqual({ admin: 'moses' });
-        expect(response.headers.get('x-auth-status')).toBe('admin');
+        expect(response.headers.get('x-auth-status')).toBe('valid');
     });
 
     it('rejects a tampered cookie', async () => {
@@ -25,13 +25,15 @@ describe('session', () => {
         const response = await call('/api/auth/status', { headers: { cookie: tampered } });
 
         await expect(response.json()).resolves.toStrictEqual({ admin: null });
+        expect(response.headers.get('x-auth-status')).toBe('invalid');
     });
 
-    it('rejects an expired cookie', async () => {
+    it('rejects an expired cookie, and says so, since the app has to learn its admin is a guest now', async () => {
         const cookie = await adminCookie('Old', Date.now() - 1);
         const response = await call('/api/auth/status', { headers: { cookie } });
 
         await expect(response.json()).resolves.toStrictEqual({ admin: null });
+        expect(response.headers.get('x-auth-status')).toBe('invalid');
     });
 
     it('clears the cookie on logout', async () => {

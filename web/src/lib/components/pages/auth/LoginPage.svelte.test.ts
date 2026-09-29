@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { startAuthentication, type startRegistration } from '@simplewebauthn/browser';
-import { sessionStore } from '$lib/stores/SessionStore.svelte';
 import { loadDocument } from '$lib/utils/documentLoad';
-import { fakeServer, jsonResponse } from '$lib/test-support/http';
+import { jsonResponse } from '$lib/test-support/http';
+import { signedIn } from '$lib/test-support/session';
 import { render } from '$lib/test-support/render.svelte';
 import LoginPage from './LoginPage.svelte';
 
@@ -16,24 +16,6 @@ vi.mock(import('@simplewebauthn/browser'), () => ({
 }));
 
 const RETURN_PATH = '/search/tacos?oldest=2001';
-
-/**
- * The server, and the session store saying who is logged in, as the root layout has it on any page. The store is asked
- * only when it says otherwise, so the test waits out every answer it asks for: a guest's lands only after an IndexedDB
- * read, late enough to overwrite what the next test set up.
- */
-async function signedIn(admin: string | null): Promise<ReturnType<typeof fakeServer>> {
-    const server = fakeServer();
-    server.get('/api/auth/status', jsonResponse({ admin }));
-    const wanted = admin !== null;
-    if (sessionStore.isCheckingAuth || sessionStore.isAdmin !== wanted) {
-        sessionStore.fetchUserStatus();
-        await vi.waitFor(() => {
-            expect(!sessionStore.isCheckingAuth && sessionStore.isAdmin === wanted).toBe(true);
-        });
-    }
-    return server;
-}
 
 describe('the login page', () => {
     it('logs a guest in with a passkey, then loads the page they came from afresh', async () => {

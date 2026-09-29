@@ -6,6 +6,7 @@ import { API, apiUrl, isAlbumPath } from '@tacocat-gallery/shared';
 import type { AlbumRecord } from '$lib/models/impl/server';
 import { parseAlbum } from '@tacocat-gallery/shared';
 import { albumState } from './AlbumState.svelte';
+import { noteAuthStatus } from '$lib/utils/session';
 
 /**
  * Album loading state machine
@@ -166,6 +167,7 @@ class AlbumLoadMachine {
             // the album a second time.
             if (!isAlbumPath(path)) throw new Error(`Invalid album path [${path}]`);
             const response = await fetch(apiUrl(API.readAlbum, path));
+            noteAuthStatus(response);
             if (response.status === 404) {
                 this.#notFound(path);
                 void this.#removeFromDisk(path); // Delete album from local disk

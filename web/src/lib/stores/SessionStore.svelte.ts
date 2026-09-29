@@ -1,5 +1,6 @@
 import { API, apiUrl } from '@tacocat-gallery/shared';
 import { get as getFromIdb, set as setToIdb } from 'idb-keyval';
+import { onSessionRefused } from '$lib/utils/session';
 
 const HasBeenLoggedInIDBKey = 'HasBeenLoggedIn';
 /**
@@ -12,6 +13,12 @@ class SessionStore {
     isCheckingAuth: boolean = $derived(this.#isCheckingAuth);
     #hasBeenLoggedIn: boolean = $state(false);
     hasBeenLoggedIn: boolean = $derived(this.#hasBeenLoggedIn);
+
+    constructor() {
+        onSessionRefused(() => {
+            this.sessionExpired();
+        });
+    }
 
     //
     // STATE TRANSITION METHODS
@@ -35,6 +42,18 @@ class SessionStore {
 
     fetchHasBeenLoggedIn(): void {
         void this.#fetchHasBeenLoggedIn(); // invoke async service in fire-and-forget fashion
+    }
+
+    /**
+     * The Worker refused the cookie. An admin is a guest now, one who has been logged in, and is told so; a guest
+     * whose stale cookie is refused on every request is told nothing.
+     */
+    sessionExpired(): void {
+        if (!this.#isAdmin) return;
+        this.#isAdmin = false;
+        this.#isCheckingAuth = false;
+        this.#hasBeenLoggedIn = true;
+        void this.#tellSessionExpired(); // invoke async service in fire-and-forget fashion
     }
 
     #authenticationSuccess(): void {
@@ -111,6 +130,12 @@ class SessionStore {
                 `Expected response to be in JSON.  Instead got ${String(contentType)}. ${response.statusText}`,
             );
         }
+    }
+
+    /** The toast is loaded on demand, since a guest's page never shows one. */
+    async #tellSessionExpired(): Promise<void> {
+        const { toast } = await import('@zerodevx/svelte-toast');
+        toast.push('Your session has expired. Please log in again.');
     }
 
     async #fetchHasBeenLoggedIn(): Promise<void> {

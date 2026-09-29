@@ -1,8 +1,9 @@
-import { API, AUTH_PREFIX, type Endpoint } from '@tacocat-gallery/shared';
+import { API, AUTH_PREFIX, AUTH_STATUS_HEADER, type Endpoint } from '@tacocat-gallery/shared';
 import { type Handler, Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import {
     currentAdmin,
+    currentSession,
     inviteStatus,
     loginOptions,
     loginVerify,
@@ -75,8 +76,8 @@ export function createApp(): Hono<App> {
     });
     app.use('/api/*', async (context, next) => {
         await next();
-        const admin = await currentAdmin(context.req.raw, context.env);
-        context.res.headers.set('x-auth-status', admin === null ? 'guest' : 'admin');
+        const { status } = await currentSession(context.req.raw, context.env);
+        context.res.headers.set(AUTH_STATUS_HEADER, status);
     });
     app.notFound(() => notFound());
     app.onError((error, context) => {

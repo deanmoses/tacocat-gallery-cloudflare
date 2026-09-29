@@ -5,6 +5,7 @@ import toAlbum from '$lib/models/impl/AlbumCreator';
 import { ImageThumbableImpl } from '$lib/models/impl/ImageThumbableImpl';
 import { VideoThumbableImpl } from '$lib/models/impl/VideoThumbableImpl';
 import { searchUrl } from '$lib/utils/config';
+import { noteAuthStatus } from '$lib/utils/session';
 import { albumTitle } from '$lib/utils/date-utils';
 import { parentPathOf } from '@tacocat-gallery/shared';
 import type { GalleryRecord, ImageRecord, VideoRecord } from '$lib/models/impl/server';
@@ -77,6 +78,7 @@ class SearchStore {
         const pageSize = 30;
         try {
             const response = await fetch(searchUrl(query, startAt, pageSize));
+            noteAuthStatus(response);
             if (!response.ok) {
                 this.#handleFetchError(query, new Error(response.statusText), await refusal(response));
                 return;

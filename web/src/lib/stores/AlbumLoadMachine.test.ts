@@ -4,6 +4,9 @@ import { albumState } from './AlbumState.svelte';
 import { AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import { clear as clearDisk, keys as diskKeys, get as getFromDisk, set as setOnDisk } from 'idb-keyval';
 import { fakeServer, jsonResponse, notFound, serverError } from '$lib/test-support/http';
+import { signedIn } from '$lib/test-support/session';
+import { sessionStore } from '$lib/stores/SessionStore.svelte';
+import { AUTH_STATUS_HEADER } from '@tacocat-gallery/shared';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord, mediaPath } from '$lib/test-support/records';
 import type { AlbumGalleryItem } from '$lib/models/impl/server';
@@ -324,6 +327,19 @@ describe('albumLoadMachine', () => {
 
             await expect(albumLoadMachine.albumExists(PATH)).resolves.toBe(expected);
             expect(server.calls).toStrictEqual([{ method: 'HEAD', pathname: ROUTE, body: undefined }]);
+        });
+    });
+
+    describe('an admin whose session lapsed', () => {
+        it('is made a guest by an album read the Worker answered with the guest view', async () => {
+            const server = await signedIn('moses');
+            server.get(ROUTE, Response.json(record(), { headers: { [AUTH_STATUS_HEADER]: 'invalid' } }));
+
+            albumLoadMachine.fetch(PATH);
+
+            await vi.waitFor(() => {
+                expect(sessionStore.isAdmin).toBe(false);
+            });
         });
     });
 });

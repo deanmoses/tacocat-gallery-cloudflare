@@ -45,7 +45,7 @@ describe('HEAD, which the app asks before creating or renaming', () => {
         const response = await head(path);
 
         expect(response.status).toBe(200);
-        expect(response.headers.get('x-auth-status')).toBe('guest');
+        expect(response.headers.get('x-auth-status')).toBe('none');
     });
 
     it.each([

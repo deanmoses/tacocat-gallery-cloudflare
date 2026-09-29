@@ -6,12 +6,12 @@ import {
     verifyAuthenticationResponse,
     verifyRegistrationResponse,
 } from '@simplewebauthn/server';
-import { API_BODIES, AUTH_PREFIX } from '@tacocat-gallery/shared';
+import { API_BODIES, AUTH_PREFIX, type AuthStatus } from '@tacocat-gallery/shared';
 import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import * as valibot from 'valibot';
 import { type Orm, orm, schema } from '../db';
 import { parsedBody } from '../http/body';
-import { cookie } from '../http/cookies';
+import { cookie, readCookie } from '../http/cookies';
 import { failure, json } from '../http/responses';
 import { type SignedCookie, readSigned, sign } from './session';
 
@@ -84,10 +84,37 @@ export async function purgeSpentChallenges(database: Orm): Promise<D1Result> {
     return purged;
 }
 
+/** Who a request's session cookie says is asking, and what the Worker made of the cookie. */
+export interface Session {
+    admin: string | null;
+    status: AuthStatus;
+}
+
+// A request's cookie is read once, however many times the route and the middleware ask, since it cannot change
+// while the request is answered.
+const SESSIONS = new WeakMap<Request, Promise<Session>>();
+
+/** The request's session, verified once per request. */
+export async function currentSession(request: Request, env: AuthEnv): Promise<Session> {
+    let session = SESSIONS.get(request);
+    if (session === undefined) {
+        session = readSession(request, env);
+        SESSIONS.set(request, session);
+    }
+    return session;
+}
+
+async function readSession(request: Request, env: AuthEnv): Promise<Session> {
+    if (readCookie(request, SESSION_COOKIE) === undefined) {
+        return { admin: null, status: 'none' };
+    }
+    const session = await readSigned(request, env, SESSION);
+    return session === null ? { admin: null, status: 'invalid' } : { admin: session.name, status: 'valid' };
+}
+
 /** The logged-in admin's name, or null for a guest. */
 export async function currentAdmin(request: Request, env: AuthEnv): Promise<string | null> {
-    const session = await readSigned(request, env, SESSION);
-    return session?.name ?? null;
+    return (await currentSession(request, env)).admin;
 }
 
 /** Whose passkey an invite would create, or a 404 once it is used, expired or never existed. */

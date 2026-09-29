@@ -3,6 +3,7 @@
  */
 
 import { type Endpoint, type EndpointArgs, apiUrl } from '@tacocat-gallery/shared';
+import { noteAuthStatus } from './session';
 
 /** Sends a request to `endpoint`, with the gallery path it goes on with and the JSON body it takes, both typed by it. */
 export async function callApi<E extends Endpoint>(endpoint: E, ...args: EndpointArgs<E>): Promise<Response> {
@@ -10,7 +11,7 @@ export async function callApi<E extends Endpoint>(endpoint: E, ...args: Endpoint
     const values: readonly unknown[] = args;
     const [url, body] =
         'prefix' in target ? [apiUrl(target, String(values[0])), values[1]] : [apiUrl(target), values[0]];
-    return fetch(url, {
+    const response = await fetch(url, {
         method: target.method,
         ...(body === undefined
             ? { headers: { accept: 'application/json' } }
@@ -19,6 +20,8 @@ export async function callApi<E extends Endpoint>(endpoint: E, ...args: Endpoint
                   body: JSON.stringify(body),
               }),
     });
+    noteAuthStatus(response);
+    return response;
 }
 
 /**
