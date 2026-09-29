@@ -1,3 +1,4 @@
+# The state is in R2 (versions.tf); a state file here is a `state pull` copy or an errored.tfstate.
 .terraform/
 *.tfstate
 *.tfstate.*

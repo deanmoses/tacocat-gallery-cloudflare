@@ -299,8 +299,8 @@ else
         check tofu -chdir=infra fmt -check -recursive
     fi
 
-    # validate needs the providers, which a fresh clone or a CI runner has not downloaded. -backend=false leaves the
-    # local state alone.
+    # validate needs the providers, which a fresh clone or a CI runner has not downloaded. -backend=false skips the
+    # state in R2, which neither has credentials for.
     echo -n "Lint: OpenTofu (tofu validate)... "
     if require tofu; then
         if [ ! -d infra/.terraform ]; then

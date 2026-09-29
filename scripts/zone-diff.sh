@@ -2,7 +2,7 @@
 # Checks that two nameservers answer identically for every record of the tacocat.com zone in infra/tacocat.tf, so that
 # the zone on Cloudflare can be proved a copy of DreamHost's before the nameservers change at GoDaddy, and again just
 # before they do. Cloudflare's assigned nameservers answer for the zone before it is delegated, which is what makes
-# the check possible ahead of the switch; `tofu output tacocat_name_servers` in infra/ names them.
+# the check possible ahead of the switch; `scripts/tofu.sh output tacocat_name_servers` names them.
 #
 # Every name is asked for every record type the zone uses, not only the type declared for it, so a record present on
 # one side alone shows up as well as one that differs. TXT answers are compared as one string, since a server may
