@@ -66,6 +66,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 - **2026-09-28: a release keeps the app's file names when the app has not changed**, by naming the build from a hash of its inputs rather than the time; until then every release renamed about 60 of 75 JS files.
 - **2026-09-28: a day album fetches the photo page's code on its load event**, behind the thumbnails, where it was fetched on the first click, 120 to 183 ms in a fresh browser; AWS's service worker had precached it.
 - **2026-09-28: less of the app loads before a page's own code.** `shared/` is marked side-effect free, so the JS the page preloads fell from 46.7 to 43.9 KB gzipped and valibot loads with the album page.
+- **2026-09-28: a day album fetches its first photo once the page has loaded**, since a reader's first click is usually the first thumbnail. A first photo cost 103 to 190 ms at every median but the cached California cold cell's 341, against 33 to 46 for the later photos the photo page had already fetched; the difference is the photo's own request, 131 KB for the comparison album's first photo against 16 to 18 per thumbnail, now spent on every album view whether or not the reader clicks. On a direct arrival the load event usually comes after the thumbnails; after an in-app navigation the fetch starts beside them, and `fetchpriority="low"` keeps it behind them in Chrome, Safari 17.2 and Firefox 132 on, while older browsers, iOS 15.6 among them, fetch it as they would a thumbnail.
 
 ## How it is measured
 
