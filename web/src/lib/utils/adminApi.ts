@@ -22,9 +22,17 @@ export async function callApi<E extends Endpoint>(endpoint: E, ...args: Endpoint
 }
 
 /**
- * The server's own account of a failed request when it sent one, else the status text.
+ * Why a write failed. The app offers writes only to an admin, so one refused for want of a session means the session
+ * lapsed since the page loaded.
  */
 export async function failureMessage(response: Response): Promise<string> {
+    return response.status === 401 ? 'Your session has expired; please log back in.' : serverMessage(response);
+}
+
+/**
+ * The server's own account of a failed request when it sent one, else the status text.
+ */
+export async function serverMessage(response: Response): Promise<string> {
     let body: unknown;
     try {
         body = await response.json();

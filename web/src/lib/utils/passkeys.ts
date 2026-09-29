@@ -7,7 +7,7 @@ import type {
     PublicKeyCredentialCreationOptionsJSON,
     PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
-import { callApi, failureMessage } from '$lib/utils/adminApi';
+import { callApi, serverMessage } from '$lib/utils/adminApi';
 import { API } from '@tacocat-gallery/shared';
 
 /** What an invite link can do, asked before offering to create a passkey with it. */
@@ -15,7 +15,7 @@ export type InviteCheck = { live: true; username: string } | { live: false; mess
 
 export async function checkInvite(token: string): Promise<InviteCheck> {
     const response = await callApi(API.checkInvite, { token });
-    if (!response.ok) return { live: false, message: await failureMessage(response) };
+    if (!response.ok) return { live: false, message: await serverMessage(response) };
     const body: unknown = await response.json();
     if (!hasUsername(body)) throw new Error('Expected the invite to name an admin');
     return { live: true, username: body.username };
@@ -57,7 +57,7 @@ async function ceremony<T>(prompt: Promise<T>): Promise<T> {
 }
 
 async function okJson(response: Response): Promise<unknown> {
-    if (!response.ok) throw new Error(await failureMessage(response));
+    if (!response.ok) throw new Error(await serverMessage(response));
     return response.json();
 }
 
