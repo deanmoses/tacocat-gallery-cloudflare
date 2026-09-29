@@ -13,7 +13,6 @@ import {
 } from '../auth/passkeys';
 import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
 import { failure, json, notFound } from '../http/responses';
-import { backupDatabase } from '../ops/backup';
 import { health } from '../ops/health';
 import {
     createAlbumRoute,
@@ -133,7 +132,6 @@ export function createApp(): Hono<App> {
         (await currentAdmin(context.req.raw, context.env)) === null ? failure(401, 'Unauthorized') : next(),
     );
     answer(API.putItem, async (context) => putItem(context.req.raw, context.env));
-    answer(API.backup, async (context) => json(await backupDatabase(context.env)));
     answer(API.presign, async (context) => presignRoute(context.req.raw, context.env));
     app.put('/upload/:versionId', async (context) =>
         localUploadRoute(context.req.raw, context.env, context.req.param('versionId')),

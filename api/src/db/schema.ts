@@ -209,8 +209,7 @@ export const user = sqliteTable(
 
 /**
  * Every version id the Worker mints, one row per presigned URL: what the upload is for, who asked, and whether the
- * pipeline has made it an item. Completed rows stay as the record of who uploaded what and when; rows that never
- * complete leave with their inbox objects in the purge.
+ * pipeline has made it an item. A row is read once, when its file lands; completed rows stay.
  */
 export const upload = sqliteTable(
     'upload',

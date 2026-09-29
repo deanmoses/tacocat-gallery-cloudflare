@@ -14,7 +14,6 @@ export async function health(env: Env): Promise<Response> {
         env.ORIGINALS.head('health'),
         env.UPLOADS.head('health'),
         env.DERIVED.head('health'),
-        env.BACKUPS.head('health'),
     ]);
     return json({
         version: env.CF_VERSION_METADATA.id,

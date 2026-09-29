@@ -73,7 +73,7 @@ output "d1_database_ids" {
   value = { for name, environment in module.environment : name => environment.d1_database_id }
 }
 
-# What the nightly backup workflow reads with: production's originals and dumps, and nothing it could write.
+# What the nightly backup workflow reads the originals with: production's bucket, and nothing it could write.
 data "cloudflare_account_api_token_permission_groups_list" "bucket_item_read" {
   account_id = local.account_id
   name       = "Workers R2 Storage Bucket Item Read"
@@ -86,10 +86,31 @@ resource "cloudflare_account_token" "backup" {
     effect            = "allow"
     permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_read.result[0].id }]
     resources = jsonencode({
-      for bucket in [module.environment["production"].originals_bucket, module.environment["production"].backups_bucket] :
-      "com.cloudflare.edge.r2.bucket.${local.account_id}_default_${bucket}" => "*"
+      "com.cloudflare.edge.r2.bucket.${local.account_id}_default_${module.environment["production"].originals_bucket}" = "*"
     })
   }]
+}
+
+# What the nightly backup workflow exports the database with: D1 and nothing else, in place of the deploy token.
+# Write rather than Read, since the export endpoint refuses a read-only token.
+data "cloudflare_account_api_token_permission_groups_list" "d1_edit" {
+  account_id = local.account_id
+  name       = "D1 Write"
+}
+
+resource "cloudflare_account_token" "d1_export" {
+  account_id = local.account_id
+  name       = "d1-export"
+  policies = [{
+    effect            = "allow"
+    permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.d1_edit.result[0].id }]
+    resources         = jsonencode({ "com.cloudflare.api.account.${local.account_id}" = "*" })
+  }]
+}
+
+output "d1_export_token" {
+  value     = cloudflare_account_token.d1_export.value
+  sensitive = true
 }
 
 # Each token as S3 credentials, for scripts/secrets.sh to put where they are used.

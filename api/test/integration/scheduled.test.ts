@@ -21,13 +21,6 @@ async function runCron(cron: string): Promise<void> {
 }
 
 describe('nightly cron', () => {
-    it('writes a dump to R2', async () => {
-        await runCron('17 9 * * *');
-        const backups = await env.BACKUPS.list({ prefix: 'backups/d1/' });
-
-        expect(backups.objects).toHaveLength(1);
-    });
-
     it('purges upload errors older than a day and keeps newer ones', async () => {
         const { uploadError } = schema;
         const database = orm(env.DB);
@@ -57,11 +50,17 @@ describe('nightly cron', () => {
 
 describe('a cron the Worker does not name', () => {
     it('runs nothing, so a schedule an older release left behind is harmless', async () => {
+        const { uploadError } = schema;
+        const database = orm(env.DB);
+        await database
+            .insert(uploadError)
+            .values({ path: '/2024/06-15/old', message: 'stale', createdAt: hoursAgo(26), updatedAt: hoursAgo(25) })
+            .run();
         const warn = vi.spyOn(console, 'warn').mockReturnValue();
         await runCron('0 0 1 1 *');
-        const dumps = await env.BACKUPS.list({ prefix: 'backups/d1/' });
+        const kept = await database.select({ path: uploadError.path }).from(uploadError);
 
-        expect(dumps.objects).toHaveLength(0);
+        expect(kept).toStrictEqual([{ path: '/2024/06-15/old' }]);
         expect(warn).toHaveBeenCalledWith({ event: 'unknown_cron', cron: '0 0 1 1 *' });
     });
 });

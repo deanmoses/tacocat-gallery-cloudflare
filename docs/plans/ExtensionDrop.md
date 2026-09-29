@@ -94,5 +94,4 @@ The name rule in `shared/` and so in the `CHECK`s, with the date round trip; the
 
 ## Out of scope
 
-- The nightly purge of objects no row references, which `docs/plans/AwsMigration.md` describes and which is still owed. Replacements leave their old versions in R2 until it exists, as they do now.
 - The copy of the whole gallery, which step 3 prepares for but does not run.

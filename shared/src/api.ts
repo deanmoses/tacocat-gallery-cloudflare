@@ -61,7 +61,6 @@ export const API = {
     health: { method: 'GET', path: '/api/health' },
 
     putItem: takes<typeof itemWriteSchema>()({ method: 'PUT', path: '/api/item', admin: true }),
-    backup: { method: 'POST', path: '/api/backup', admin: true },
     presign: takes<typeof presignRequestSchema>()({ method: 'POST', prefix: '/api/presigned', admin: true }),
     uploadErrors: takes<typeof uploadErrorsSchema>()({ method: 'POST', path: '/api/errors', admin: true }),
     createAlbum: takes<typeof albumWriteSchema>()({ method: 'PUT', prefix: '/api/album', admin: true }),

@@ -32,7 +32,7 @@ resource "cloudflare_d1_database" "this" {
 }
 
 # One bucket per role, because an R2 API token is scoped to whole buckets: the key the Worker signs upload and
-# transcode URLs with reaches uploads and derived, so no URL it signs can touch an original or a backup.
+# transcode URLs with reaches uploads and derived, so no URL it signs can touch an original.
 
 # The originals, each under a key that never changes. Written by the Worker's binding alone.
 resource "cloudflare_r2_bucket" "originals" {
@@ -95,29 +95,6 @@ resource "cloudflare_r2_bucket" "derived" {
   }
 }
 
-# The nightly database dumps, kept a quarter. Off-site, a dump that expires here is held 35 days more.
-resource "cloudflare_r2_bucket" "backups" {
-  account_id = var.account_id
-  name       = "${var.prefix}-backups"
-  location   = "wnam"
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "cloudflare_r2_bucket_lifecycle" "backups" {
-  account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.backups.name
-  rules = [{
-    id         = "expire-dumps"
-    enabled    = true
-    conditions = { prefix = "" }
-    delete_objects_transition = {
-      condition = { type = "Age", max_age = 90 * local.day }
-    }
-  }]
-}
-
 resource "cloudflare_queue" "uploads" {
   account_id = var.account_id
   queue_name = "${var.prefix}-uploads"
@@ -176,8 +153,4 @@ output "signing_credentials" {
 
 output "originals_bucket" {
   value = cloudflare_r2_bucket.originals.name
-}
-
-output "backups_bucket" {
-  value = cloudflare_r2_bucket.backups.name
 }
