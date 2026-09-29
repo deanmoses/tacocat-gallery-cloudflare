@@ -6,6 +6,7 @@ import {
     waitOnExecutionContext,
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
+import gifDataUrl from '../../fixtures/animated.gif?inline';
 import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
@@ -29,6 +30,8 @@ const jpg = bytes(jpgDataUrl);
 const heic = bytes(heicDataUrl);
 // 220 by 212, so it is not the size of the JPEG, which is 300 by 225.
 const png = bytes(pngDataUrl);
+// Two frames, 32 by 24.
+const gif = bytes(gifDataUrl);
 
 // A QuickTime movie's first box, which is all the sniffer reads and all the stand-in transcoder needs.
 const mov = Uint8Array.from([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 0, 0]);
@@ -234,12 +237,19 @@ describe('upload pipeline', () => {
         // The JPEG is 300 by 225, so its detail image is its own width.
         expect(stored.objects.map((object) => object.key).toSorted()).toStrictEqual([
             `${derivedPrefix(versionId)}/200x200-webp`,
-            `${derivedPrefix(versionId)}/300-jpeg`,
+            `${derivedPrefix(versionId)}/300`,
             `${derivedPrefix(versionId)}/400x400-webp`,
         ]);
         expect(thumbnail.headers.get('x-derived')).toBe('stored');
         expect(thumbnail2x.headers.get('x-derived')).toBe('stored');
         expect(detail.headers.get('x-derived')).toBe('stored');
+    });
+
+    it('makes the detail image of a GIF a WebP, from what its bytes are rather than the type the browser sent', async () => {
+        const versionId = await upload(`${DAY}animated`, gif, { contentType: 'image/jpeg' });
+        const detail = await env.DERIVED.head(`${derivedPrefix(versionId)}/32`);
+
+        expect(detail?.httpMetadata?.contentType).toBe('image/webp');
     });
 
     it('makes the three images at once, from the file it has already read', async () => {
@@ -862,16 +872,33 @@ describe('serving media', () => {
         expect(second.headers.get('x-derived')).toBe('cache-api-hit');
     });
 
-    it('serves the media page its image as JPEG, whatever the browser accepts, since readers drag it into other apps', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg);
-        const response = await call('/i/2024/06-15/d/v1?size=300', {
-            headers: { accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
-        });
-        await response.body?.cancel();
-        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/300-jpeg`);
+    it.each([
+        { name: 'a JPEG', file: jpg, source: 'image/jpeg', served: 'image/jpeg' },
+        { name: 'a PNG', file: png, source: 'image/png', served: 'image/webp' },
+        { name: 'a GIF', file: gif, source: 'image/gif', served: 'image/webp' },
+    ])(
+        'serves the media page its image of $name as $served, whatever the browser accepts',
+        async ({ file, source, served }) => {
+            await env.ORIGINALS.put(originalKey('v1'), file, { httpMetadata: { contentType: source } });
+            const response = await call('/i/2024/06-15/d/v1?size=20', {
+                headers: { accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5' },
+            });
+            await response.body?.cancel();
+            const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/20`);
 
-        expect(response.headers.get('content-type')).toBe('image/jpeg');
-        expect(stored).not.toBeNull();
+            expect(response.headers.get('content-type')).toBe(served);
+            expect(stored?.httpMetadata?.contentType).toBe(served);
+        },
+    );
+
+    it('serves a stored media page image as the type it was stored with, from the cache the second time', async () => {
+        await env.ORIGINALS.put(originalKey('v1'), gif, { httpMetadata: { contentType: 'image/gif' } });
+        const first = await call('/i/2024/06-15/d/v1?size=20');
+        await first.body?.cancel();
+        const second = await call('/i/2024/06-15/d/v1?size=20&format=bmp');
+
+        expect(second.headers.get('x-derived')).toBe('cache-api-hit');
+        expect(second.headers.get('content-type')).toBe('image/webp');
     });
 
     it('stores a cropped thumbnail under the size and crop the web app asks for', async () => {

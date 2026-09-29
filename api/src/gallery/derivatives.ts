@@ -3,8 +3,8 @@ import { type Derivation, derivativeName, generateDerivative, outputFormat } fro
 import { derivedImageKey, originalKey, posterKey } from '../storage/keys';
 
 /**
- * Where the derivative an image URL asks for lives, in the format its `format` parameter asks for or the client's
- * `Accept` header allows, and its sources.
+ * Where the derivative an image URL asks for lives and what it is made from. Its format is the one the URL's `format`
+ * parameter asks for or the client's `Accept` header allows, or null where the source decides.
  */
 export function derivationFor(
     request: ImageRequest,
@@ -36,11 +36,12 @@ export async function warmDerivatives(
     versionId: string,
     size: Size,
     source: Blob,
+    sourceType: string | undefined,
 ): Promise<Warmed> {
     const made = await Promise.allSettled(
         [THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize(size)].map(async (wanted) => {
             const request: ImageRequest = { path, versionId, size: wanted, crop: null };
-            return generateDerivative(env, derivationFor(request, null, null), source.stream());
+            return generateDerivative(env, derivationFor(request, null, null), source.stream(), sourceType);
         }),
     );
     const failures = made.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : []));

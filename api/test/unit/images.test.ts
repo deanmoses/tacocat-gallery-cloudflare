@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { outputFormat, outputOptions, resize } from '../../src/media/images';
+import { formatForSource, outputFormat, outputOptions, resize } from '../../src/media/images';
 
 const PHOTO = { path: '/2001/06-15/felix', versionId: 'v1' };
 
@@ -60,14 +60,14 @@ describe(outputFormat, () => {
             requested: null,
             accept: CHROME,
             size: DETAIL,
-            format: 'image/jpeg',
+            format: null,
         },
         {
             name: 'nothing, for the detail image, with no Accept header',
             requested: null,
             accept: null,
             size: DETAIL,
-            format: 'image/jpeg',
+            format: null,
         },
         {
             name: 'JPEG, for a thumbnail, by a browser that accepts WebP',
@@ -92,8 +92,21 @@ describe(outputFormat, () => {
         },
         { name: 'raw pixels', requested: 'rgb', accept: OLD_SAFARI, size: THUMBNAIL, format: 'image/jpeg' },
         { name: 'a word', requested: 'bmp', accept: CHROME, size: THUMBNAIL, format: 'image/webp' },
+        { name: 'a word, for the detail image', requested: 'bmp', accept: CHROME, size: DETAIL, format: null },
     ])('answers $name asked for with $format', ({ requested, accept, size, format }) => {
         expect(outputFormat(requested, accept, size)).toBe(format);
+    });
+});
+
+describe(formatForSource, () => {
+    it.each([
+        { source: 'image/gif', format: 'image/webp' },
+        { source: 'image/png', format: 'image/webp' },
+        { source: 'image/jpeg', format: 'image/jpeg' },
+        { source: 'image/heic', format: 'image/jpeg' },
+        { source: undefined, format: 'image/jpeg' },
+    ])('makes $format from $source', ({ source, format }) => {
+        expect(formatForSource(source)).toBe(format);
     });
 });
 

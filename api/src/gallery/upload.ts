@@ -195,7 +195,7 @@ async function prepare(
             console.warn({ event: 'derivative_not_warmed', versionId, missing: posterKey(versionId) });
             return { outcome: 'ready', facts };
         }
-        return deriving(env, path, versionId, facts, await poster.blob());
+        return deriving(env, path, versionId, facts, await poster.blob(), poster.httpMetadata?.contentType);
     });
 }
 
@@ -230,7 +230,7 @@ async function preparePhoto(
     const facts: MediaFacts = { mediaType: 'image', ...read.facts, durationSeconds: null };
     const [, prepared] = await Promise.all([
         storeOriginal(env, upload.versionId, file, contentType, path),
-        deriving(env, path, upload.versionId, facts, file),
+        deriving(env, path, upload.versionId, facts, file, contentType),
     ]);
     return prepared;
 }
@@ -266,8 +266,9 @@ async function deriving(
     versionId: string,
     facts: MediaFacts,
     source: Blob,
+    sourceType: string | undefined,
 ): Promise<Prepared> {
-    const warmed = await warmDerivatives(env, path, versionId, facts, source);
+    const warmed = await warmDerivatives(env, path, versionId, facts, source, sourceType);
     return warmed.ok ? { outcome: 'ready', facts } : { outcome: 'rejected', error: warmed.error };
 }
 
