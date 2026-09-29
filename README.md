@@ -114,21 +114,14 @@ A guest downloads no admin code: admin pages, stores and libraries reach a guest
 
 `api/scripts/invite.sh <user> --env staging` (or `--env production`) prints a one-time invite link for that environment's Worker; `--local` is for `npm run dev --workspace api`. The name has to be in the `user` table, which no screen edits: a migration seeds it (`api/migrations/*_seed_users.sql`), so adding a user is another migration, and every environment gets the same users. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh moses --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
 
-## Copying an album from AWS
+## Scripts
 
-`node api/scripts/import-album.ts /2025/09-29/ --from prod` copies one day album from the AWS production gallery into this project's staging site; `--to production` sends it to production and `--to local` to `npm run dev --workspace api`, and without `--from prod` the source is the AWS staging gallery. Everything goes through the Worker's own routes: each original is presigned as the admin `--user` names (`moses` unless told otherwise) and PUT to R2 as a browser's upload is, so the pipeline records it and makes its derived images, and the album's and photos' titles, descriptions, crops and thumbnail go through the admin write routes. Tags are not copied: the pipeline reads them from each file's XMP keywords, as the AWS Lambda did, so a tag edited on AWS after the upload stays behind. The script signs its session with the target Worker's `SESSION_SECRET`, which `api/.dev.vars` holds for each: `SESSION_SECRET` for local, and `SESSION_SECRET_STAGING` and `SESSION_SECRET_PRODUCTION` for the deployed Workers, the values `wrangler secret put` gave them. Running the same album again replaces every photo under a new version. Videos are left behind: the script does not copy them yet.
+Each script in `api/scripts/` says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`.
 
-## Finding an item's objects
-
-The buckets are keyed by version id, not gallery path, so the dashboard cannot browse them by album. `node api/scripts/media.ts /2024/12-17/felix` prints the item's row from the deployed database and every object stored for its version in the originals and derived buckets, `--env production` for production. It reads the database and lists the buckets with the OpenTofu token in `api/.dev.vars`, which doubles as S3 credentials the way any API token does. Each original also carries the path it was uploaded to as custom metadata, so a stray object can say where it came from.
-
-## D1 rounds
-
-`node api/scripts/d1-round.ts pix.deanmoses.com /api/album/2025/09-29/` reads the album through Globalping from one Paris probe, first once and then three times a second apart, then twice from San Jose, and prints what each response's headers said about the Worker and D1; `--from` and `--repeats` change the locations and the repeats. It sends `GLOBALPING_TOKEN` from `api/.dev.vars`, which raises Globalping's rate limit from a per-IP one.
-
-## Browser runs
-
-The production Worker's cron starts the album journey in DebugBear four times a day, with the `DEBUGBEAR_API_KEY` Worker secret. `.github/workflows/perf.yml` starts a run by hand from the Actions tab; to start one from here, run `node api/scripts/debugbear.ts run`; to read the results, `node api/scripts/debugbear.ts report --from <YYYY-MM-DD>`. Both need the same key as `DEBUGBEAR_API_KEY`, in `api/.dev.vars` locally and as a repository secret for the workflow. The pages, device and journey script are described in `docs/Perf.md`.
+- `import-album.ts` copies one day album from the AWS gallery, staging or production, into staging, production or `npm run dev`, through the Worker's own routes: presign and the pipeline for each original, the admin write routes for the words, crops and thumbnail. Tags come from each file's XMP keywords, as on AWS; videos are not copied yet; the same album again replaces every photo under a new version.
+- `media.ts` prints an item's row and every object stored for its version, since the buckets are keyed by version id and the dashboard cannot browse them by album.
+- `debugbear.ts` starts the browser runs, reports them, reads one run's requests, and manages the DebugBear pages; `docs/Perf.md` says what the runs measure. `.github/workflows/perf.yml` starts a run from the Actions tab.
+- `d1-round.ts` reads an album through Globalping from Paris and then San Jose and prints what each response said about the Worker and D1.
 
 ## Infrastructure
 
