@@ -138,6 +138,7 @@ describe('saving an item through the API', () => {
         { name: 'a blank title', body: { ...ITEM, title: '  ' } },
         { name: 'no tags in the list', body: { ...ITEM, tags: [] } },
         { name: 'a blank tag', body: { ...ITEM, tags: ['sand', ''] } },
+        { name: 'a tag twice', body: { ...ITEM, tags: ['sand', 'sea', 'sand'] } },
         { name: 'a width of zero', body: { ...ITEM, width: 0 } },
         {
             name: 'a crop that runs off the image',
