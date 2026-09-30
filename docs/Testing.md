@@ -44,6 +44,7 @@ Before each test, `api/test/setup.ts` calls `reset()`, which empties every bindi
 - A stack test may import a constant from `api/src` when it holds a copy of something to the Worker's value, as `api/test/stack/headers.test.ts` holds `web/static/_headers` to `SITE_HEADERS`; it runs in Node, so what it imports has to be free of Worker types.
 - Drive the queue with `createMessageBatch` and read what was acked with `getQueueResult`; drive a cron with `createScheduledController`. The consumer starts a Workflow instance per upload event, named by the version id, so a pipeline test makes an introspector for that id with `introspectWorkflowInstance` before delivering the event, waits on it with `waitForStatus`, and disposes it, which `await using` does; `modify` can fail a step once or skip the delays between retries. The instance runs in the test's isolate, so a spy on a binding reaches it, which is how the transcoder is stood in. A step a test makes fail is logged by the local engine as an uncaught exception, which is not a failing test. `api/test/integration/media.test.ts` and `scheduled.test.ts` show all of this.
 - Files from `api/fixtures/` load with a `?inline` import.
+- A version id a test writes comes from `testVersionId` in `api/test/version-id.ts`, which pads a short label such as `v1` into a ULID the constraint and the URL parser admit, so a failure still reads as the label.
 
 ## Rows read
 

@@ -1,7 +1,13 @@
--- resets: the migrations start over from one baseline for the second time, since media names lost their extensions
--- and the day album's date joined the constraints, which SQLite can only change by rebuilding item; with both
--- databases emptied by hand for the copy from AWS, nothing was there to carry across, so a baseline was cheaper than
--- the three-migration rebuild. The search index migration of 2026-09-26 is folded in below.
+-- non-additive: the search index file drops its own tables before making them, which on the bare database a baseline runs against removes nothing.
+-- resets: the migrations start over from one baseline for the third time, since the version id format changed to a
+-- ULID, which SQLite can only hold item and upload to by rebuilding them; with both databases emptied by hand, since
+-- no row in them was in the new format and nothing in them mattered, a baseline was cheaper than the three-migration
+-- rebuild. From the blank line on this file is src/db/search-index.sql verbatim.
+
+-- The search index: a view of item, two FTS5 tables over the view, and the triggers that keep them in step with item.
+-- Drizzle models none of these, so this file is their definition, and a migration that touches them is a copy of it.
+-- Dropping item drops its triggers, and the view has to go before item is rebuilt, so every rebuild of item ends with
+-- this file as a migration, and a test holds the file to what the migrations leave in the database.
 --
 -- The search indexes are built over a view of item rather than over item itself, so that what is indexed can be
 -- computed in SQL and the triggers, the rebuild and a restore all agree on it:
@@ -27,6 +33,17 @@
 -- triggers fire only for the columns the view reads, so a write that touches none of them, such as setting a
 -- thumbnail, publishing, pointing a row at a new version or moving an album's children when it is renamed, leaves the
 -- indexes alone.
+--
+-- The index tables are dropped and made again rather than kept, since a rebuild of item leaves them holding entries
+-- for a table that no longer exists, and FTS5 rebuilds them from the view at the end.
+DROP TRIGGER IF EXISTS item_ai;
+DROP TRIGGER IF EXISTS item_bd;
+DROP TRIGGER IF EXISTS item_bu;
+DROP TRIGGER IF EXISTS item_au;
+DROP TABLE IF EXISTS item_fts;
+DROP TABLE IF EXISTS item_fts_exact;
+DROP VIEW IF EXISTS item_indexed;
+
 CREATE VIEW item_indexed AS
 SELECT id,
     replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(item_name, ' ', '_'), '0', ' 0 '), '1', ' 1 '), '2', ' 2 '), '3', ' 3 '), '4', ' 4 '), '5', ' 5 '), '6', ' 6 '), '7', ' 7 '), '8', ' 8 '), '9', ' 9 '), '  ', '') AS name,
@@ -66,3 +83,6 @@ CREATE TRIGGER item_au AFTER UPDATE OF item_name, media_type, title, description
     INSERT INTO item_fts_exact (rowid, name, title, description, tags, summary)
     SELECT id, name, title, description, tags, summary FROM item_indexed WHERE id = new.id;
 END;
+
+INSERT INTO item_fts (item_fts) VALUES ('rebuild');
+INSERT INTO item_fts_exact (item_fts_exact) VALUES ('rebuild');

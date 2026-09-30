@@ -14,7 +14,7 @@ We'll copy only originals, not derived.
 
 ### IDs
 
-Each current original in the AWS bucket gets a new version ID, minted by the copy oldest album first and newest photo last, so a listing of the originals bucket follows album order and every later upload sorts after the copy. S3's version ids are not kept: S3 documents them as opaque, its own example contains `/` and `+`, which the URL parser and the `version_id` constraint would both refuse, and keeping them would hold every id to the loosest format any of them has. Their dates say nothing either, since the photos were bulk-copied into AWS too. Each original carries its gallery path and its S3 version id as metadata, and no `upload` row, since that table tracks uploads in progress.
+Each current original in the AWS bucket gets a new version ID, a ULID whose timestamps the copy assigns itself, oldest album first and newest photo last, so a listing of the originals bucket follows album order and every later upload sorts after the copy. The copy runs many objects at a time, so the timestamps cannot be the moments the ids were minted: they are a counter, and say nothing about when a photo was taken or copied. S3's version ids are not kept: S3 documents them as opaque, its own example contains `/` and `+`, which the URL parser and the `version_id` constraint would both refuse, and keeping them would hold every id to the loosest format any of them has. Their dates say nothing either, since the photos were bulk-copied into AWS too. Each original carries its gallery path and its S3 version id as metadata, and no `upload` row, since that table tracks uploads in progress.
 
 ### Originals bucket
 

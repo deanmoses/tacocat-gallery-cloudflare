@@ -5,6 +5,7 @@ import { readAlbum } from '../../src/gallery/albums';
 import { presignUploads } from '../../src/gallery/presign';
 import { searchItems } from '../../src/gallery/search';
 import { TEST_SECRETS } from '../secrets';
+import { testVersionId } from '../version-id';
 
 // A read that sends D1 two requests can have them answered by different instances, or a write land between them, so
 // what belongs together goes in one.
@@ -34,7 +35,7 @@ describe(readAlbum, () => {
                 itemName: 'felix',
                 itemType: 'media',
                 mediaType: 'image',
-                versionId: 'v1',
+                versionId: testVersionId('v1'),
                 width: 4,
                 height: 3,
             }),
@@ -60,7 +61,7 @@ describe(searchItems, () => {
                 itemType: 'media',
                 mediaType: 'image',
                 title: 'Felix',
-                versionId: 'v1',
+                versionId: testVersionId('v1'),
                 width: 4,
                 height: 3,
             }),

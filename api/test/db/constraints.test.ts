@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
+import { testVersionId } from '../version-id';
 
 // Every rule about a single row is a constraint, so that no code path can write a row the rules forbid. These write
 // rows straight to the tables, past the shared schema, and expect the database to refuse each one by name. Drizzle
@@ -10,12 +11,15 @@ function refusedBy(constraint: string): { cause: { message: string } } {
     return { cause: { message: expect.stringContaining(`constraint failed: ${constraint}`) } };
 }
 
+/** The ULID from the spec's own README. */
+const ULID = '01ARYZ6S41TSV4RRFFQ69G5FAV';
+
 const IMAGE: schema.NewItem = {
     parentPath: '/2001/06-15/',
     itemName: 'felix',
     itemType: 'media',
     mediaType: 'image',
-    versionId: 'v1',
+    versionId: testVersionId('v1'),
     width: 4032,
     height: 3024,
 };
@@ -72,12 +76,36 @@ describe('an item row', () => {
             row: { ...IMAGE, parentPath: '/2001/02-30/' },
             constraint: 'item_path_check',
         },
-        { name: 'an album with a version', row: { ...DAY, versionId: 'v1' }, constraint: 'item_file_check' },
+        { name: 'an album with a version', row: { ...DAY, versionId: ULID }, constraint: 'item_file_check' },
         { name: 'an album with a size', row: { ...DAY, width: 1, height: 1 }, constraint: 'item_file_check' },
         { name: 'media without a version', row: { ...IMAGE, versionId: null }, constraint: 'item_file_check' },
         { name: 'media with a blank version', row: { ...IMAGE, versionId: '' }, constraint: 'item_file_check' },
         { name: 'a version with a slash', row: { ...IMAGE, versionId: 'a/b' }, constraint: 'item_file_check' },
-        { name: 'a version with a plus', row: { ...IMAGE, versionId: 'a+b' }, constraint: 'item_file_check' },
+        {
+            name: 'a version as AWS assigned them',
+            row: { ...IMAGE, versionId: 'AbC.123_xyz-9' },
+            constraint: 'item_file_check',
+        },
+        {
+            name: 'a version in lowercase',
+            row: { ...IMAGE, versionId: ULID.toLowerCase() },
+            constraint: 'item_file_check',
+        },
+        {
+            name: 'a version a character short',
+            row: { ...IMAGE, versionId: ULID.slice(1) },
+            constraint: 'item_file_check',
+        },
+        {
+            name: 'a version with a letter Crockford leaves out',
+            row: { ...IMAGE, versionId: `${ULID.slice(0, 25)}I` },
+            constraint: 'item_file_check',
+        },
+        {
+            name: 'a version whose timestamp is past 48 bits',
+            row: { ...IMAGE, versionId: `8${ULID.slice(1)}` },
+            constraint: 'item_file_check',
+        },
         { name: 'media without a width', row: { ...IMAGE, width: null }, constraint: 'item_file_check' },
         { name: 'media with a height of zero', row: { ...IMAGE, height: 0 }, constraint: 'item_file_check' },
         { name: 'an image with a duration', row: { ...IMAGE, durationSeconds: 1 }, constraint: 'item_duration_check' },
@@ -178,7 +206,7 @@ describe('an item row', () => {
             name: 'a crop with fractional sides',
             row: { ...IMAGE, thumbnailCrop: { x: 0.5, y: 0.5, width: 1.5, height: 1.5 } },
         },
-        { name: 'a version as AWS assigned them', row: { ...IMAGE, versionId: 'AbC.123_xyz-9' } },
+        { name: 'a ULID', row: { ...IMAGE, versionId: ULID } },
         { name: 'a media name with digits and underscores', row: { ...IMAGE, itemName: 'img_0001_2' } },
         { name: 'a video', row: VIDEO },
         { name: 'a published album with a summary', row: { ...DAY, summary: 'Felix turns one', published: true } },
@@ -285,7 +313,7 @@ describe('an item row', () => {
 
 describe('an upload row', () => {
     const UPLOAD: typeof schema.upload.$inferInsert = {
-        versionId: 'v1',
+        versionId: testVersionId('v1'),
         parentPath: '/2001/06-15/',
         itemName: 'felix',
         username: 'moses',
@@ -296,6 +324,16 @@ describe('an upload row', () => {
         {
             name: 'a version with a slash',
             row: { ...UPLOAD, versionId: 'a/b' },
+            constraint: 'upload_version_id_format',
+        },
+        {
+            name: 'a version in lowercase',
+            row: { ...UPLOAD, versionId: ULID.toLowerCase() },
+            constraint: 'upload_version_id_format',
+        },
+        {
+            name: 'a version a character long',
+            row: { ...UPLOAD, versionId: `${ULID}V` },
             constraint: 'upload_version_id_format',
         },
         {
@@ -347,12 +385,16 @@ describe('an upload row', () => {
     it('is cleared of an album that is deleted before it finishes', async () => {
         const db = database();
         const [day] = await db.insert(schema.item).values(DAY).returning();
-        await db.insert(schema.upload).values({ ...UPLOAD, versionId: 'v3', albumId: day?.id });
+        await db.insert(schema.upload).values({ ...UPLOAD, versionId: testVersionId('v3'), albumId: day?.id });
         await db
             .delete(schema.item)
             .where(eq(schema.item.id, day?.id ?? 0))
             .run();
-        const upload = await db.select().from(schema.upload).where(eq(schema.upload.versionId, 'v3')).get();
+        const upload = await db
+            .select()
+            .from(schema.upload)
+            .where(eq(schema.upload.versionId, testVersionId('v3')))
+            .get();
 
         expect(upload).toMatchObject({ albumId: null, parentPath: '/2001/06-15/' });
     });
@@ -360,12 +402,18 @@ describe('an upload row', () => {
     it('keeps saying it was a replacement after its target is deleted', async () => {
         const db = database();
         const [media] = await db.insert(schema.item).values(IMAGE).returning();
-        await db.insert(schema.upload).values({ ...UPLOAD, versionId: 'v2', replacement: true, targetId: media?.id });
+        await db
+            .insert(schema.upload)
+            .values({ ...UPLOAD, versionId: testVersionId('v2'), replacement: true, targetId: media?.id });
         await db
             .delete(schema.item)
             .where(eq(schema.item.id, media?.id ?? 0))
             .run();
-        const upload = await db.select().from(schema.upload).where(eq(schema.upload.versionId, 'v2')).get();
+        const upload = await db
+            .select()
+            .from(schema.upload)
+            .where(eq(schema.upload.versionId, testVersionId('v2')))
+            .get();
 
         expect(upload).toMatchObject({ targetId: null, replacement: true });
     });

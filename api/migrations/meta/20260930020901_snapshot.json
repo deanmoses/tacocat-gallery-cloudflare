@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ef8c26db-cfdf-4127-b058-0de3dd11d54c",
-  "prevId": "d6f94c31-6b00-4f33-b16a-e0ac505425f7",
+  "id": "7884eb9d-d82a-494c-9f1f-a12f7f1d0fed",
+  "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "invite": {
       "name": "invite",
@@ -252,6 +252,15 @@
           ],
           "isUnique": false
         },
+        "item_album_position": {
+          "name": "item_album_position",
+          "columns": [
+            "parent_path",
+            "position"
+          ],
+          "isUnique": true,
+          "where": "position IS NOT NULL"
+        },
         "item_parent_path_item_name_unique": {
           "name": "item_parent_path_item_name_unique",
           "columns": [
@@ -293,7 +302,7 @@
         },
         "item_file_check": {
           "name": "item_file_check",
-          "value": "CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END"
+          "value": "CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND length(version_id) = 26 AND version_id GLOB '[0-7]*' AND version_id NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END"
         },
         "item_duration_check": {
           "name": "item_duration_check",
@@ -310,6 +319,10 @@
         "item_published_check": {
           "name": "item_published_check",
           "value": "published IN (0, 1) AND (item_type = 'album' OR published = 0)"
+        },
+        "item_position_check": {
+          "name": "item_position_check",
+          "value": "position IS NULL OR (item_type = 'media' AND typeof(position) = 'integer' AND position >= 0)"
         },
         "item_thumbnail_check": {
           "name": "item_thumbnail_check",
@@ -645,7 +658,7 @@
       "checkConstraints": {
         "upload_version_id_format": {
           "name": "upload_version_id_format",
-          "value": "version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*'"
+          "value": "version_id IS NOT NULL AND length(version_id) = 26 AND version_id GLOB '[0-7]*' AND version_id NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*'"
         },
         "upload_path_check": {
           "name": "upload_path_check",

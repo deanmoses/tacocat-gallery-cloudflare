@@ -7,11 +7,12 @@ import {
     mediaImage,
     preloadedImages,
 } from './support.ts';
+import { READER_PHOTOS } from './gallery.ts';
 
 const DAY_TITLE = 'June 15, 2001';
 // The Worker's URL for each photo at the size the media page shows it: the landscape one by width, the portrait by height.
-const CAKE_DETAIL = '/i/2001/06-15/cake/v1?size=1024';
-const FELIX_DETAIL = '/i/2001/06-15/felix/v1?size=x1024';
+const CAKE_DETAIL = `/i${READER_PHOTOS.cake.path}/${READER_PHOTOS.cake.versionId}?size=1024`;
+const FELIX_DETAIL = `/i${READER_PHOTOS.felix.path}/${READER_PHOTOS.felix.versionId}?size=x1024`;
 
 test.describe('the site', () => {
     test('asks search engines to stay out', async ({ page }) => {

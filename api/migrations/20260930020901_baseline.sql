@@ -31,17 +31,19 @@ CREATE TABLE `item` (
 	`duration_seconds` real,
 	`thumbnail_id` integer,
 	`thumbnail_crop` text,
+	`position` integer,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`thumbnail_id`) REFERENCES `item`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "item_type_check" CHECK(item_type IN ('album', 'media')),
 	CONSTRAINT "item_media_type_check" CHECK((item_type = 'media') = (media_type IS NOT NULL) AND (media_type IS NULL OR media_type IN ('image', 'video'))),
 	CONSTRAINT "item_path_check" CHECK(CASE item_type WHEN 'album' THEN (parent_path = '/' AND item_name GLOB '[0-9][0-9][0-9][0-9]') OR (parent_path GLOB '/[0-9][0-9][0-9][0-9]/' AND item_name GLOB '[0-9][0-9]-[0-9][0-9]' AND date(substr(parent_path, 2, 4) || '-' || item_name) IS substr(parent_path, 2, 4) || '-' || item_name) ELSE parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND date(substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5)) IS substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5) AND item_name GLOB '[0-9a-z]*' AND item_name NOT GLOB '*[^0-9a-z_]*' AND item_name NOT GLOB '*__*' AND item_name NOT GLOB '*_' END),
-	CONSTRAINT "item_file_check" CHECK(CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END),
+	CONSTRAINT "item_file_check" CHECK(CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND length(version_id) = 26 AND version_id GLOB '[0-7]*' AND version_id NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END),
 	CONSTRAINT "item_duration_check" CHECK((media_type IS 'video') = (duration_seconds IS NOT NULL) AND (duration_seconds IS NULL OR duration_seconds > 0)),
 	CONSTRAINT "item_caption_check" CHECK(CASE item_type WHEN 'album' THEN title IS NULL AND tags IS NULL ELSE summary IS NULL END AND (title IS NULL OR trim(title, char(32, 9, 10, 13)) <> '') AND (description IS NULL OR trim(description, char(32, 9, 10, 13)) <> '') AND (summary IS NULL OR trim(summary, char(32, 9, 10, 13)) <> '')),
 	CONSTRAINT "item_tags_check" CHECK(tags IS NULL OR (json_valid(tags) AND json_type(tags) = 'array' AND json_array_length(tags) > 0)),
 	CONSTRAINT "item_published_check" CHECK(published IN (0, 1) AND (item_type = 'album' OR published = 0)),
+	CONSTRAINT "item_position_check" CHECK(position IS NULL OR (item_type = 'media' AND typeof(position) = 'integer' AND position >= 0)),
 	CONSTRAINT "item_thumbnail_check" CHECK(CASE item_type WHEN 'album' THEN thumbnail_crop IS NULL ELSE thumbnail_id IS NULL AND (thumbnail_crop IS NULL OR (json_valid(thumbnail_crop) AND json_type(thumbnail_crop) = 'object' AND coalesce(json_type(thumbnail_crop, '$.x'), '') IN ('integer', 'real') AND coalesce(json_type(thumbnail_crop, '$.y'), '') IN ('integer', 'real') AND coalesce(json_type(thumbnail_crop, '$.width'), '') IN ('integer', 'real') AND coalesce(json_type(thumbnail_crop, '$.height'), '') IN ('integer', 'real') AND json_extract(thumbnail_crop, '$.x') >= 0 AND json_extract(thumbnail_crop, '$.y') >= 0 AND json_extract(thumbnail_crop, '$.width') > 0 AND json_extract(thumbnail_crop, '$.height') > 0 AND json_extract(thumbnail_crop, '$.x') + json_extract(thumbnail_crop, '$.width') <= coalesce(width, 0) AND json_extract(thumbnail_crop, '$.y') + json_extract(thumbnail_crop, '$.height') <= coalesce(height, 0))) END),
 	CONSTRAINT "item_created_at_format" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
 	CONSTRAINT "item_updated_at_format" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),
@@ -50,6 +52,7 @@ CREATE TABLE `item` (
 --> statement-breakpoint
 CREATE INDEX `item_version_id` ON `item` (`version_id`);--> statement-breakpoint
 CREATE INDEX `item_thumbnail_id` ON `item` (`thumbnail_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `item_album_position` ON `item` (`parent_path`,`position`) WHERE position IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `item_parent_path_item_name_unique` ON `item` (`parent_path`,`item_name`);--> statement-breakpoint
 CREATE TABLE `passkey` (
 	`credential_id` text PRIMARY KEY NOT NULL,
@@ -70,40 +73,6 @@ CREATE TABLE `passkey` (
 	CONSTRAINT "passkey_updated_after_created" CHECK(updated_at >= created_at)
 );
 --> statement-breakpoint
-CREATE TABLE `probe_result` (
-	`id` integer PRIMARY KEY NOT NULL,
-	`run_at` text NOT NULL,
-	`idle_hours` real,
-	`location` text NOT NULL,
-	`seq` integer NOT NULL,
-	`path` text NOT NULL,
-	`probe_city` text,
-	`probe_network` text,
-	`status` integer,
-	`total_ms` integer,
-	`dns_ms` integer,
-	`tcp_ms` integer,
-	`tls_ms` integer,
-	`first_byte_ms` integer,
-	`worker_colo` text,
-	`worker_ms` real,
-	`d1_region` text,
-	`d1_colo` text,
-	`d1_primary` text,
-	`d1_rtt_ms` real,
-	`measurement_id` text,
-	`error` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	CONSTRAINT "probe_result_seq_check" CHECK(seq >= 0),
-	CONSTRAINT "probe_result_status_check" CHECK(status IS NULL OR status BETWEEN 100 AND 599),
-	CONSTRAINT "probe_result_timings_check" CHECK((total_ms IS NULL OR total_ms >= 0) AND (dns_ms IS NULL OR dns_ms >= 0) AND (tcp_ms IS NULL OR tcp_ms >= 0) AND (tls_ms IS NULL OR tls_ms >= 0) AND (first_byte_ms IS NULL OR first_byte_ms >= 0) AND (worker_ms IS NULL OR worker_ms >= 0) AND (d1_rtt_ms IS NULL OR d1_rtt_ms >= 0)),
-	CONSTRAINT "probe_result_created_at_format" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
-	CONSTRAINT "probe_result_updated_at_format" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),
-	CONSTRAINT "probe_result_updated_after_created" CHECK(updated_at >= created_at)
-);
---> statement-breakpoint
-CREATE INDEX `probe_result_run_at` ON `probe_result` (`run_at`);--> statement-breakpoint
 CREATE TABLE `spent_challenge` (
 	`challenge` text PRIMARY KEY NOT NULL,
 	`expires_at` text NOT NULL,
@@ -130,7 +99,7 @@ CREATE TABLE `upload` (
 	FOREIGN KEY (`album_id`) REFERENCES `item`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`target_id`) REFERENCES `item`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`username`) REFERENCES `user`(`username`) ON UPDATE no action ON DELETE no action,
-	CONSTRAINT "upload_version_id_format" CHECK(version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*'),
+	CONSTRAINT "upload_version_id_format" CHECK(version_id IS NOT NULL AND length(version_id) = 26 AND version_id GLOB '[0-7]*' AND version_id NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*'),
 	CONSTRAINT "upload_path_check" CHECK(parent_path GLOB '/[0-9][0-9][0-9][0-9]/[0-9][0-9]-[0-9][0-9]/' AND date(substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5)) IS substr(parent_path, 2, 4) || '-' || substr(parent_path, 7, 5) AND item_name GLOB '[0-9a-z]*' AND item_name NOT GLOB '*[^0-9a-z_]*' AND item_name NOT GLOB '*__*' AND item_name NOT GLOB '*_'),
 	CONSTRAINT "upload_target_check" CHECK(replacement IN (0, 1) AND (replacement = 1 OR target_id IS NULL)),
 	CONSTRAINT "upload_completed_at_format" CHECK(completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at) IS completed_at),
