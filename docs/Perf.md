@@ -122,6 +122,7 @@ What touched production during the current series, so a round is read against it
 - **2026-09-28, 08:11 to 09:01 UTC:** three releases carried the stable chunk names, the media-page prefetch and the bundle split, ahead of the 11:23 round.
 - **2026-09-28, 19:24 UTC:** every Cloudflare run from California was slow while AWS's were as usual, page TTFB 130 to 252 ms against 65 to 77 in other rounds: the path from DebugBear's machine, not the site. Kept in the table.
 - **2026-09-28, 21:06 UTC:** production moved to a Worker, database and buckets named for the environment, and only `/2025/09-29` was imported into it, so the 22:23 round's Cloudflare pages got a 404 and are left out. `/2026/09-13/` imported again at 00:33 UTC on the 29th.
+- **2026-09-30, 02:20 to 02:31 UTC:** production's database emptied and migrated from a new baseline for the ULID version ids, then both albums imported again, `/2025/09-29/` from 02:29 and `/2026/09-13/` finishing at 02:31, so every image URL and edge cache is new ahead of the 05:23 round.
 
 ## Appendix: the journey script
 

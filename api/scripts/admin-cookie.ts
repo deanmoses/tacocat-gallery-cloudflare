@@ -7,7 +7,8 @@ export async function adminCookie(secret: string, name: string): Promise<string>
         throw new Error('SESSION_SECRET is not set in api/.dev.vars');
     }
     const encoder = new TextEncoder();
-    const body = base64url(encoder.encode(JSON.stringify({ name, exp: Date.now() + 3_600_000 })));
+    const now = Date.now();
+    const body = base64url(encoder.encode(JSON.stringify({ name, iat: now, exp: now + 3_600_000 })));
     const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
         'sign',
     ]);
