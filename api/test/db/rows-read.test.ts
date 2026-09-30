@@ -158,6 +158,37 @@ async function uploadRow(
     return row;
 }
 
+/**
+ * Sums the rows read by every statement and batch D1 runs from here on, for code that does not hand back its meta.
+ * `first` and `raw` report no meta, so a call to either fails the sum rather than leaving its rows out of it.
+ */
+function rowsReadByD1(): () => Promise<number> {
+    const statement: unknown = Object.getPrototypeOf(env.DB.prepare('SELECT 1'));
+    const database: unknown = Object.getPrototypeOf(env.DB);
+    const unmetered = [
+        vi.spyOn(statement as D1PreparedStatement, 'first'),
+        vi.spyOn(statement as D1PreparedStatement, 'raw'),
+    ];
+    const statements = [
+        vi.spyOn(statement as D1PreparedStatement, 'run'),
+        vi.spyOn(statement as D1PreparedStatement, 'all'),
+    ];
+    const batches = vi.spyOn(database as D1Database, 'batch');
+    return async () => {
+        if (unmetered.some((spy) => spy.mock.calls.length > 0)) {
+            throw new Error('D1 ran a statement whose rows read it does not report');
+        }
+        const results = (await Promise.all([...statements, batches].map(settled))).flat();
+        return results.reduce((sum, result) => sum + result.meta.rows_read, 0);
+    };
+}
+
+/** What a spied statement or batch answered, one result for each statement it ran. */
+async function settled(spy: { mock: { results: { value: unknown }[] } }): Promise<D1Result[]> {
+    const answers = await Promise.all(spy.mock.results.map((result) => result.value));
+    return answers.flat() as D1Result[];
+}
+
 describe('rows read on a gallery', () => {
     const { item } = schema;
     let database: Orm;
@@ -376,16 +407,15 @@ describe('rows read on a gallery', () => {
     });
 
     it('explaining a refused media write reads a few rows', async () => {
-        const key = { parentPath: dayPath(4), itemName: 'img_1' };
-        const facts = await describeMedia(database, key, { newName: 'img_2' });
-        const cost = await database
-            .select({ id: item.id })
-            .from(item)
-            .where(and(eq(item.parentPath, key.parentPath), eq(item.itemName, key.itemName)))
-            .run();
+        const rowsRead = rowsReadByD1();
+        const facts = await describeMedia(
+            database,
+            { parentPath: dayPath(4), itemName: 'img_1' },
+            { newName: 'img_2' },
+        );
 
         expect(facts).toStrictEqual({ exists: true, taken: true });
-        expect(cost.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
+        await expect(rowsRead()).resolves.toBeLessThanOrEqual(OVERHEAD);
     });
 
     it('refusing to delete a day with photos reads a few rows', async () => {
@@ -396,7 +426,9 @@ describe('rows read on a gallery', () => {
     });
 
     it('renaming a day moves its photos and reads a few rows besides them', async () => {
+        const rowsRead = rowsReadByD1();
         const result = await renameAlbum(database, { parentPath: '/2001/', itemName: dayName(4) }, '12-31');
+        const read = await rowsRead();
         const moved = await database
             .select({ id: item.id })
             .from(item)
@@ -405,6 +437,8 @@ describe('rows read on a gallery', () => {
 
         expect(result.changes).toBe(1);
         expect(moved.results).toHaveLength(IMAGES_PER_DAY);
+        // About four reads a photo moved, and the day's own rename, which the search index's triggers see.
+        expect(read).toBeLessThanOrEqual(4 * IMAGES_PER_DAY + 2 * OVERHEAD);
     });
 
     // A new order clears the old places first, a second pass over the album's media.
@@ -422,17 +456,13 @@ describe('rows read on a gallery', () => {
         expect(result.meta?.rows_read).toBeLessThanOrEqual(passes * IMAGES_PER_DAY + OVERHEAD);
     });
 
-    it('explaining a refused write reads a few rows', async () => {
+    it('explaining a refused album write counts its children and reads a few rows besides', async () => {
+        const rowsRead = rowsReadByD1();
         const facts = await describeAlbum(
             database,
             { parentPath: '/2001/', itemName: dayName(4) },
             { newName: dayName(5), mediaPath: `${dayPath(4)}img_1` },
         );
-        const cost = await database
-            .select({ id: item.id })
-            .from(item)
-            .where(and(eq(item.parentPath, '/2001/'), eq(item.itemName, dayName(4))))
-            .run();
 
         expect(facts).toStrictEqual({
             exists: true,
@@ -441,7 +471,7 @@ describe('rows read on a gallery', () => {
             taken: true,
             mediaExists: true,
         });
-        expect(cost.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
+        await expect(rowsRead()).resolves.toBeLessThanOrEqual(IMAGES_PER_DAY + OVERHEAD);
     });
 
     it('setting an album thumbnail reads a few rows', async () => {
