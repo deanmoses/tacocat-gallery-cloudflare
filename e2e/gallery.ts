@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { ItemWrite } from '@tacocat-gallery/shared';
-import { adminCookie } from '@tacocat-gallery/api/test/secrets';
 import { testVersionId } from '@tacocat-gallery/api/test/version-id';
+import { putItem } from './api.ts';
 
 export const E2E_PORT = 8790;
 export const E2E_ORIGIN = `http://localhost:${E2E_PORT}`;
@@ -13,19 +13,6 @@ const YEAR_PATH = '/2001/';
 const DAY_PATH = '/2001/06-15/';
 const NEXT_DAY_PATH = '/2001/07-04/';
 
-/** The year the admin journeys create, rename and delete albums in; the reader journeys never open it. */
-export const ADMIN_YEAR_PATH = '/2003/';
-/** The day album the admin journeys upload into, holding the one photo they caption, crop and replace. */
-export const ADMIN_DAY_PATH = '/2003/08-01/';
-export const ADMIN_PHOTO_PATH = `${ADMIN_DAY_PATH}photo`;
-/** A second photo in that day, so one of the two is always not the day's thumbnail and can be made it. */
-export const ADMIN_SECOND_PHOTO_PATH = `${ADMIN_DAY_PATH}second`;
-/** The day the upload journey drops files into, and the photo it replaces. */
-export const ADMIN_UPLOAD_DAY_PATH = '/2003/09-01/';
-export const ADMIN_REPLACED_BASE_NAME = 'replace_me';
-const ADMIN_PHOTO_VERSION = testVersionId('e2e-photo');
-/** The day the reorder journey drags into an order of its own, and back. */
-export const ADMIN_REORDER_DAY_PATH = '/2003/10-01/';
 /** The reader's two photos, each under its own version, so a test can spell the URL the media page asks for. */
 export const READER_PHOTOS = {
     cake: { path: `${DAY_PATH}cake`, versionId: testVersionId('v1') },
@@ -33,12 +20,12 @@ export const READER_PHOTOS = {
 } as const;
 
 /**
- * The gallery every e2e test starts from, written once when the server starts. Tests read it and never change it, since
- * they share one server and run in parallel; a test that writes makes an album of its own, in the admin year. The
- * photos are rows alone, with no file behind them, but for the admin photo, whose original ORIGINALS puts into local
- * R2 so its thumbnail can be cut, and the reader's day, whose photos each get the same file under their own version
- * id, so that the photo the reader opens can load: R2 event notifications, which carry an upload into the gallery,
- * have no local stand-in, so a test asserts which image the page asks for rather than that it arrived.
+ * The gallery the reader journeys walk, written once when the server starts. Tests share one server and run in
+ * parallel, so no test changes it; an admin journey writes into a year of its own instead, which adds a year to the
+ * root for as long as the server runs, so a test asserts no list of years. The photos are rows whose
+ * file `server.ts` puts straight into local R2, the same file under each one's version id, so that the photo the
+ * reader opens can load. A test that needs an item the upload pipeline made, with its original and derivatives,
+ * uploads one: the site runs with `UPLOAD_MODE=local`, so an upload becomes an item as it would deployed.
  */
 const GALLERY = {
     year: { parentPath: '/', itemName: '2001', itemType: 'album', published: true },
@@ -66,90 +53,14 @@ const GALLERY = {
         width: 3024,
         height: 4032,
     },
-    adminYear: { parentPath: '/', itemName: '2003', itemType: 'album', published: true },
-    adminDay: { parentPath: ADMIN_YEAR_PATH, itemName: '08-01', itemType: 'album', published: true },
-    adminPhoto: {
-        parentPath: ADMIN_DAY_PATH,
-        itemName: 'photo',
-        itemType: 'media',
-        mediaType: 'image',
-        title: 'Photo',
-        versionId: ADMIN_PHOTO_VERSION,
-        width: 4032,
-        height: 3024,
-    },
-    adminSecondPhoto: {
-        parentPath: ADMIN_DAY_PATH,
-        itemName: 'second',
-        itemType: 'media',
-        mediaType: 'image',
-        title: 'Second',
-        versionId: testVersionId('e2e-second'),
-        width: 4032,
-        height: 3024,
-    },
-    adminUploadDay: { parentPath: ADMIN_YEAR_PATH, itemName: '09-01', itemType: 'album', published: true },
-    adminReplaced: {
-        parentPath: ADMIN_UPLOAD_DAY_PATH,
-        itemName: ADMIN_REPLACED_BASE_NAME,
-        itemType: 'media',
-        mediaType: 'image',
-        title: 'Replace me',
-        versionId: testVersionId('e2e-replaced'),
-        width: 4032,
-        height: 3024,
-    },
-    adminReorderDay: { parentPath: ADMIN_YEAR_PATH, itemName: '10-01', itemType: 'album', published: true },
-    apple: {
-        parentPath: ADMIN_REORDER_DAY_PATH,
-        itemName: 'apple',
-        itemType: 'media',
-        mediaType: 'image',
-        title: 'Apple',
-        versionId: testVersionId('e2e-apple'),
-        width: 4032,
-        height: 3024,
-    },
-    banana: {
-        parentPath: ADMIN_REORDER_DAY_PATH,
-        itemName: 'banana',
-        itemType: 'media',
-        mediaType: 'image',
-        title: 'Banana',
-        versionId: testVersionId('e2e-banana'),
-        width: 4032,
-        height: 3024,
-    },
-    cherry: {
-        parentPath: ADMIN_REORDER_DAY_PATH,
-        itemName: 'cherry',
-        itemType: 'media',
-        mediaType: 'image',
-        title: 'Cherry',
-        versionId: testVersionId('e2e-cherry'),
-        width: 4032,
-        height: 3024,
-    },
 } as const satisfies Record<string, ItemWrite>;
 
 /** The files behind the gallery's photos, as `<bucket>/<key>` in the originals bucket the Worker's top-level config names. */
-export const ORIGINALS = [
-    {
-        objectPath: `staging-originals/originals/${ADMIN_PHOTO_VERSION}`,
-        file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
-        contentType: 'image/jpeg',
-    },
-    {
-        objectPath: `staging-originals/originals/${GALLERY.cake.versionId}`,
-        file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
-        contentType: 'image/jpeg',
-    },
-    {
-        objectPath: `staging-originals/originals/${GALLERY.felix.versionId}`,
-        file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
-        contentType: 'image/jpeg',
-    },
-] as const;
+export const ORIGINALS = [GALLERY.cake, GALLERY.felix].map(({ versionId }) => ({
+    objectPath: `staging-originals/originals/${versionId}`,
+    file: fileURLToPath(import.meta.resolve('@tacocat-gallery/api/fixtures/FullMetadata.jpg')),
+    contentType: 'image/jpeg',
+}));
 
 /**
  * An album that answers only once the rest of the gallery is written, since it is written last: the server is ready
@@ -161,30 +72,5 @@ export const READY_PATH = `/api/album${NEXT_DAY_PATH}`;
 export async function seedGallery(origin: string): Promise<void> {
     const { nextDay, ...rest } = GALLERY;
     await Promise.all(Object.values(rest).map(async (item) => putItem(origin, item)));
-    await setThumbnail(origin, ADMIN_DAY_PATH, ADMIN_PHOTO_PATH);
     await putItem(origin, nextDay);
-}
-
-async function setThumbnail(origin: string, albumPath: string, mediaPath: string): Promise<void> {
-    const response = await fetch(new URL(`/api/album-thumb${albumPath}`, origin), {
-        method: 'PATCH',
-        headers: { cookie: await adminCookie() },
-        body: JSON.stringify({ mediaPath }),
-    });
-    if (!response.ok) {
-        throw new Error(`setting ${albumPath}'s thumbnail failed: ${response.status} ${await response.text()}`);
-    }
-}
-
-async function putItem(origin: string, item: ItemWrite): Promise<void> {
-    const response = await fetch(new URL('/api/item', origin), {
-        method: 'PUT',
-        headers: { cookie: await adminCookie() },
-        body: JSON.stringify(item),
-    });
-    if (!response.ok) {
-        throw new Error(
-            `writing ${item.parentPath}${item.itemName} failed: ${response.status} ${await response.text()}`,
-        );
-    }
 }

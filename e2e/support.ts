@@ -1,17 +1,48 @@
-import { type BrowserContext, type Locator, type Page, expect } from '@playwright/test';
+import { type BrowserContext, type Locator, type Page, expect, test } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
 import { adminCookie } from '@tacocat-gallery/api/test/secrets';
 import { executeLocalSql } from '@tacocat-gallery/api/test/stack';
+import { createPublishedAlbum, readAlbum } from './api.ts';
 import { E2E_ORIGIN, E2E_STATE } from './gallery.ts';
 
+/**
+ * A test signed in as the admin, with a published year no other attempt has had, as in `2002`, to write in. The
+ * database outlives an attempt, on a retry and on a rerun against a reused server, so a fresh year is what makes every
+ * attempt start from the same state.
+ */
+export const adminTest = test.extend<{ year: string }>({
+    context: async ({ context }, use) => {
+        await signInAsAdmin(context);
+        await use(context);
+    },
+    year: async ({}, use) => {
+        await use(await claimYear(E2E_ORIGIN));
+    },
+});
+
 /** Signs the context in as the test admin, with the cookie the Worker would have set at login. */
-export async function signInAsAdmin(context: BrowserContext): Promise<void> {
+async function signInAsAdmin(context: BrowserContext): Promise<void> {
     const [name = '', value = ''] = (await adminCookie()).split('=', 2);
     // A __Host- cookie belongs to its host alone, so it is set by URL rather than domain, and it has to be Secure,
     // which Chromium takes only for an https URL. The browser sends it to the http site on localhost all the same.
     const url = new URL(E2E_ORIGIN);
     url.protocol = 'https:';
     await context.addCookies([{ name, value, url: url.origin, secure: true }]);
+}
+
+/**
+ * Creates the first year after the gallery's latest that no one has. Attempts running at once race for the same year,
+ * and the Worker, which never makes an album twice, gives it to one of them; the rest try the next. Starting past the
+ * latest spares a rerun asking after every year the runs before it took. A year has four digits.
+ */
+async function claimYear(origin: string): Promise<string> {
+    const years = (await readAlbum(origin, '/')).children?.map((year) => Number(year.itemName)) ?? [];
+    for (let year = Math.max(999, ...years) + 1; year <= 9999; year += 1) {
+        if (await createPublishedAlbum(origin, `/${year}/`)) {
+            return String(year);
+        }
+    }
+    throw new Error('every year up to 9999 is taken; restart the e2e server');
 }
 
 /**
