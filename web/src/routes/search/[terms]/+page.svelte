@@ -10,7 +10,7 @@
     let returnPath = $derived(data.returnPath);
     let query = $derived(data.query);
     let searchTerms = $derived(data.query.terms);
-    let search: Search | undefined = $derived(searchStore.searches.get(query));
+    let search: Search | undefined = $derived(searchStore.get(query));
     let status: SearchLoadStatus | undefined = $derived(search?.status);
     let results: SearchResults | undefined = $derived(search?.results);
 </script>

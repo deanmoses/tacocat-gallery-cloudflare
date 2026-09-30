@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { goto } from '$app/navigation';
 import { page } from 'vitest/browser';
 import { fakeServer, jsonResponse, serverError } from '$lib/test-support/http';
 import { imageRecord, mediaPath } from '$lib/test-support/records';
-import { render } from '$lib/test-support/render.svelte';
+import { type Rendered, render } from '$lib/test-support/render.svelte';
+import { searchStore } from '$lib/stores/SearchStore.svelte';
 import type { GalleryRecord } from '$lib/models/impl/server';
 import { load } from './+page';
 import Page from './+page.svelte';
@@ -18,6 +19,7 @@ vi.mock(import('$app/navigation'), () => ({ goto: vi.fn<typeof goto>() }));
 const SEARCH = '/api/search/felix';
 
 type LoadEvent = Parameters<typeof load>[0];
+type Props = Parameters<typeof Page>[1];
 
 function photos(from: number, count: number): GalleryRecord[] {
     return Array.from({ length: count }, (_unused, index) => {
@@ -30,12 +32,16 @@ function found(items: GalleryRecord[], total = items.length): Response {
     return jsonResponse({ total, items });
 }
 
-/** Opens `/search/felix` with the query string given. */
-function open(search = ''): void {
+/** What the router hands the page for `/search/felix` with the query string given. */
+function visit(search = ''): Props {
     const url = new URL(`/search/felix${search}`, location.origin);
     const params = { terms: 'felix' };
-    const data = load({ params, url } as LoadEvent);
-    render(Page, { data, params });
+    return { data: load({ params, url } as LoadEvent), params };
+}
+
+/** Opens `/search/felix` with the query string given. */
+function open(search = ''): Rendered<Props> {
+    return render(Page, visit(search));
 }
 
 /** Each request the page made of the server, as where it asked the results to start from. */
@@ -53,6 +59,10 @@ async function intersectionsReported(): Promise<void> {
 }
 
 describe('the search results page', () => {
+    beforeEach(() => {
+        searchStore.clear();
+    });
+
     it('links to each match, under how many there are in all', async () => {
         const server = fakeServer();
         server.get(
@@ -100,6 +110,22 @@ describe('the search results page', () => {
         open();
 
         await expect.element(page.getByText('There was an error searching')).toBeVisible();
+    });
+
+    it('searches again on coming back to a search that failed', async () => {
+        const server = fakeServer();
+        server.get(
+            SEARCH,
+            serverError(),
+            found([imageRecord({ path: mediaPath('felix'), itemName: 'felix', title: 'Felix' })]),
+        );
+        const shown = open();
+
+        await expect.element(page.getByText('There was an error searching')).toBeVisible();
+
+        shown.rerender(visit());
+
+        await expect.element(page.getByRole('link', { name: 'Felix', exact: true })).toBeVisible();
     });
 
     it('returns to the page the search was started from', async () => {
@@ -227,6 +253,24 @@ describe('the search results page', () => {
 
             await intersectionsReported();
 
+            expect(startsAskedFor(server)).toStrictEqual([null, '30']);
+        });
+
+        it('keeps every page the reader reached when the router loads the results again, without searching again', async () => {
+            const server = fakeServer();
+            server.get(SEARCH, found(photos(1, 30), 31), found(photos(31, 1), 31));
+            const shown = open();
+
+            await expect.element(page.getByRole('link', { name: 'Photo 1', exact: true })).toBeVisible();
+
+            page.getByRole('link', { name: 'Photo 30', exact: true }).element().scrollIntoView();
+
+            await expect.element(page.getByRole('link', { name: 'Photo 31', exact: true })).toBeVisible();
+
+            shown.rerender(visit());
+
+            await expect.element(page.getByRole('link', { name: 'Photo 1', exact: true })).toBeInTheDocument();
+            await expect.element(page.getByRole('link', { name: 'Photo 31', exact: true })).toBeInTheDocument();
             expect(startsAskedFor(server)).toStrictEqual([null, '30']);
         });
 

@@ -17,18 +17,9 @@ export function render<Props extends Record<string, unknown>>(
 ): Rendered<Props> {
     const target = document.createElement('div');
     document.body.append(target);
-    // Read through to raw state, so a rerender reaches the component the way a parent's changed props would, and a
-    // value arrives as the object the test gave rather than a deep proxy of it, which a component that looks something
-    // up by the object itself depends on.
-    let current = $state.raw(props);
-    const passed = new Proxy(props, {
-        get: (_initial, key): unknown => Reflect.get(current, key),
-        has: (_initial, key): boolean => Reflect.has(current, key),
-        ownKeys: (): (string | symbol)[] => Reflect.ownKeys(current),
-        getOwnPropertyDescriptor: (_initial, key): PropertyDescriptor | undefined =>
-            Reflect.getOwnPropertyDescriptor(current, key),
-    });
-    const instance = mount(component, { target, props: passed });
+    // Reactive, so that a rerender reaches the component the way a parent's changed props would.
+    const state = $state(props);
+    const instance = mount(component, { target, props: state });
     // mount() leaves effects pending, such as the title <svelte:head> sets, until the next microtask. Flushed here, a
     // plain expect() right after render sees what the component does on its first render.
     flushSync();
@@ -38,7 +29,7 @@ export function render<Props extends Record<string, unknown>>(
     });
     return {
         rerender: (next): void => {
-            current = { ...current, ...next };
+            Object.assign(state, next);
             flushSync();
         },
     };

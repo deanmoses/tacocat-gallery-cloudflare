@@ -35,15 +35,37 @@ test.describe('a reader looking for a photo', () => {
             await expect(page).toHaveTitle('Felix');
         });
 
-        await test.step('the browser goes back to the results, and the results back to the day', async () => {
+        await test.step('the browser goes back to the results it had, and the results back to the day', async () => {
+            const searches: string[] = [];
+            page.on('request', (request) => {
+                if (new URL(request.url()).pathname.startsWith('/api/search/')) searches.push(request.url());
+            });
+
             await page.goBack();
 
             await expect(page.getByText('(2 results)')).toBeVisible();
+            expect(searches).toStrictEqual([]);
 
             await page.getByRole('link', { name: 'Back', exact: true }).click();
 
             await expect(page).toHaveURL('/2001/06-15');
         });
+    });
+
+    // A phone held sideways shows little more than the search controls, so the matches are below the fold.
+    test('goes back from a match to where it was in the results', async ({ page }) => {
+        await page.setViewportSize({ width: 400, height: 300 });
+        await page.goto('/search/felix');
+        const match = page.getByRole('link', { name: 'Felix', exact: true });
+        await match.scrollIntoViewIfNeeded();
+        const scrolled = await page.evaluate(() => window.scrollY);
+        expect(scrolled).toBeGreaterThan(0);
+
+        await match.click();
+        await expect(page).toHaveTitle('Felix');
+        await page.goBack();
+
+        await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(scrolled);
     });
 
     test('narrows a search to years that hold no match, and is told there are none', async ({ page }) => {
