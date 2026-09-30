@@ -4,6 +4,11 @@
  */
 export function sameSitePath(value: string | null, origin: string): string {
     if (value === null) return '/';
-    const url = new URL(value, origin);
-    return url.origin === origin ? url.pathname + url.search : '/';
+    try {
+        const url = new URL(value, origin);
+        return url.origin === origin ? url.pathname + url.search : '/';
+    } catch {
+        // Not a URL at all, as `http://` is not
+        return '/';
+    }
 }

@@ -15,28 +15,27 @@
     let { onIntersect, disabled = false, rootMargin = '200px' }: Props = $props();
 
     let sentinel: HTMLElement;
-    let hasTriggered = $state(false);
-    let isCurrentlyIntersecting = $state(false);
-    let prevDisabled: boolean | undefined = $state();
+    let observer: IntersectionObserver | undefined;
+    let hasTriggered = false;
+    let wasDisabled = false;
 
-    // When disabled changes from true to false while intersecting, trigger again
-    // This handles the case where new results don't push sentinel out of viewport
+    // New results may or may not push the sentinel out of the viewport, and the observer reports only a change, after
+    // the browser has drawn them. Observing afresh makes it report where the sentinel is now, so a list that still
+    // ends on screen fetches again, and one that no longer does waits for the reader to scroll.
     $effect(() => {
-        if (prevDisabled === true && !disabled && isCurrentlyIntersecting) {
-            // Trigger immediately since we're already intersecting and now enabled
-            hasTriggered = true;
-            onIntersect();
+        if (wasDisabled && !disabled && observer) {
+            hasTriggered = false;
+            observer.unobserve(sentinel);
+            observer.observe(sentinel);
         }
-        prevDisabled = disabled;
+        wasDisabled = disabled;
     });
 
     onMount(() => {
-        const observer = new IntersectionObserver(
+        observer = new IntersectionObserver(
             (entries) => {
-                isCurrentlyIntersecting = entries[0]?.isIntersecting ?? false;
-
                 // Reset trigger flag when sentinel leaves viewport
-                if (!isCurrentlyIntersecting) {
+                if (entries.at(-1)?.isIntersecting !== true) {
                     hasTriggered = false;
                     return;
                 }
@@ -53,7 +52,7 @@
         );
         observer.observe(sentinel);
         return (): void => {
-            observer.disconnect();
+            observer?.disconnect();
         };
     });
 </script>

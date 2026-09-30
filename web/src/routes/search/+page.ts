@@ -1,9 +1,6 @@
 import type { PageLoad } from './$types';
+import { sameSitePath } from '$lib/utils/returnPath';
 
-export const load: PageLoad = ({ url }) => {
-    const returnPath = url.searchParams.get('returnPath') ?? undefined;
-
-    return {
-        returnPath,
-    };
-};
+export const load = (({ url }): { returnPath: string } => ({
+    returnPath: sameSitePath(url.searchParams.get('returnPath'), url.origin),
+})) satisfies PageLoad;

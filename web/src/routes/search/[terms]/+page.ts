@@ -1,8 +1,9 @@
 import type { PageLoad } from './$types';
 import { searchStore } from '$lib/stores/SearchStore.svelte';
 import type { SearchQuery } from '$lib/models/search';
+import { sameSitePath } from '$lib/utils/returnPath';
 
-export const load: PageLoad = ({ params, url }) => {
+export const load = (({ params, url }): { returnPath: string; query: SearchQuery } => {
     const query: SearchQuery = {
         terms: params.terms,
         oldestYear: toInt(url.searchParams.get('oldest')),
@@ -11,10 +12,10 @@ export const load: PageLoad = ({ params, url }) => {
     };
     searchStore.search(query);
     return {
-        returnPath: url.searchParams.get('returnPath') ?? undefined,
+        returnPath: sameSitePath(url.searchParams.get('returnPath'), url.origin),
         query,
     };
-};
+}) satisfies PageLoad;
 
 function toInt(value: string | null): number | undefined {
     return value !== null && value !== '' ? Math.trunc(Number(value)) : undefined;

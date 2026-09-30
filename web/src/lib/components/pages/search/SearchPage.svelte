@@ -12,12 +12,12 @@
 
     interface Props {
         searchTerms?: string | undefined;
-        returnPath?: string | undefined;
+        returnPath: string;
         title?: string | undefined;
         children?: Snippet | undefined;
     }
 
-    let { searchTerms = $bindable(''), returnPath = '', title = '', children }: Props = $props();
+    let { searchTerms = $bindable(''), returnPath, title = '', children }: Props = $props();
 
     let searchInput: HTMLInputElement | undefined = $state();
 
@@ -69,7 +69,7 @@
 
 <SiteLayout hideFooter>
     <header>
-        <a href={returnPath}><ReturnIcon /></a>
+        <a href={returnPath}><ReturnIcon title="Back" /></a>
         <form onsubmit={onSubmit}>
             <input
                 bind:this={searchInput}

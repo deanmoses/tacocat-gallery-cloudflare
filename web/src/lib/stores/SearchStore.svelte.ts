@@ -88,7 +88,8 @@ class SearchStore {
             console.log(`Transformed search results`, searchResults);
             // Calculate next offset based on server response size, not filtered size
             const serverItemCount = searchResults.items?.length ?? 0;
-            searchResults.nextStartAt = startAt + serverItemCount;
+            // An empty page is the end whatever the total says: asking again would get the same empty page, forever
+            searchResults.nextStartAt = serverItemCount === 0 ? searchResults.total : startAt + serverItemCount;
             if (startAt > 0) {
                 const read = this.#searches.get(query);
                 if (read) {
