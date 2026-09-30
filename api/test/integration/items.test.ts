@@ -3,9 +3,9 @@ import { eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import { callAsAdmin, putItem, storedItem } from '../helpers';
-import { testVersionId } from '../version-id';
+import { testVersionId, withVersionId } from '../version-id';
 
-const MEDIA = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
+const MEDIA = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 describe('saving an item', () => {
     const { item } = schema;
@@ -63,7 +63,13 @@ describe('saving an item', () => {
         {
             what: 'a video',
             stale: STALE_VIDEO,
-            saved: { itemName: 'b', ...MEDIA, mediaType: 'video', durationSeconds: 1 } as const,
+            saved: {
+                itemName: 'b',
+                ...MEDIA,
+                mediaType: 'video',
+                versionId: testVersionId('v1'),
+                durationSeconds: 1,
+            } as const,
         },
     ])(
         'leaves $what as a fresh insert of the same values would, clearing every field left out',
@@ -88,7 +94,7 @@ describe('saving an item', () => {
 
     it('keeps when an item was made and moves when it was changed', async () => {
         const database = orm(env.DB);
-        const saved = { parentPath: '/2001/06-15/', itemName: 'kept', ...MEDIA };
+        const saved = withVersionId({ parentPath: '/2001/06-15/', itemName: 'kept', ...MEDIA });
         await upsertItem(database, saved).run();
         const before = await storedItem(saved.parentPath, saved.itemName);
         // SQLite's clock has millisecond resolution, so the second save lands in a later millisecond.

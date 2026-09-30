@@ -6,6 +6,7 @@ import { expect } from 'vitest';
 import { orm, schema } from '../src/db';
 import worker from '../src/index';
 import { adminCookie } from './secrets';
+import { withVersionId } from './version-id';
 
 export const ORIGIN = 'http://localhost:8787';
 
@@ -52,9 +53,14 @@ export async function callAsAdmin(path: string, init: Init = {}, bindings: Parti
     return call(path, { ...init, headers }, bindings);
 }
 
+type MediaWrite = Extract<ItemWrite, { itemType: 'media' }>;
+
+/** An item to save, whose version id media may leave out to be given one of its own. */
+export type ItemFixture = Exclude<ItemWrite, MediaWrite> | (Omit<MediaWrite, 'versionId'> & { versionId?: string });
+
 /** Saves an item as an admin through the write API. */
-export async function putItem(item: ItemWrite): Promise<Response> {
-    return callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(item) });
+export async function putItem(item: ItemFixture): Promise<Response> {
+    return callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(withVersionId(item)) });
 }
 
 /** The item stored at `parentPath` under `itemName`, read straight from D1. */

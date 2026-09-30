@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { like } from 'drizzle-orm';
-import { type GalleryRecord, type ItemWrite, type SearchResponse, parseSearch } from '@tacocat-gallery/shared';
+import { type GalleryRecord, type SearchResponse, parseSearch } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { call, callAsAdmin, parseExactly, putItem } from '../helpers';
-import { testVersionId } from '../version-id';
+import { type ItemFixture, call, callAsAdmin, parseExactly, putItem } from '../helpers';
+import { testVersionId, withVersionId } from '../version-id';
 
-const MEDIA = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
+const MEDIA = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 /** Searches as the web app does, with its URL, as a guest or as an admin. */
 async function search(terms: string, params = '', asAdmin = false): Promise<SearchResponse> {
@@ -25,6 +25,7 @@ describe('search', () => {
             parentPath: '/2024/07-01/',
             itemName: 'quesadilla',
             ...MEDIA,
+            versionId: testVersionId('v1'),
             title: 'Quesadilla night',
             description: 'Quesadillas at home',
             tags: ['dinner'],
@@ -61,7 +62,7 @@ describe('search', () => {
             summary: 'Tostada',
             published: true,
         });
-        await putItem({ parentPath: '/2024/07-03/', itemName: 'a', ...MEDIA });
+        await putItem({ parentPath: '/2024/07-03/', itemName: 'a', ...MEDIA, versionId: testVersionId('v1') });
         await callAsAdmin('/api/album-thumb/2024/07-03/', {
             method: 'PATCH',
             body: JSON.stringify({ mediaPath: '/2024/07-03/a' }),
@@ -83,7 +84,7 @@ describe('search', () => {
     });
 
     it('follows an update to the title', async () => {
-        const item: ItemWrite = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal' };
+        const item: ItemFixture = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal' };
         await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
@@ -96,13 +97,7 @@ describe('search', () => {
     it('needs every word to match', async () => {
         await putItem({ parentPath: '/2024/', itemName: '07-04', itemType: 'album', published: true });
         await putItem({ parentPath: '/2024/07-04/', itemName: 'a', ...MEDIA, title: 'Felix on the beach' });
-        await putItem({
-            parentPath: '/2024/07-04/',
-            itemName: 'b',
-            ...MEDIA,
-            versionId: testVersionId('v2'),
-            title: 'Felix at home',
-        });
+        await putItem({ parentPath: '/2024/07-04/', itemName: 'b', ...MEDIA, title: 'Felix at home' });
         const [both, one] = await Promise.all([search('felix'), search('felix beach')]);
 
         expect(paths(both)).toStrictEqual(['/2024/07-04/a', '/2024/07-04/b']);
@@ -152,40 +147,15 @@ describe('search', () => {
         beforeEach(async () => {
             await putItem({ parentPath: '/2024/', itemName: '07-05', itemType: 'album', published: true });
             await Promise.all([
-                putItem({
-                    ...ITEM,
-                    itemName: 'a',
-                    versionId: testVersionId('a'),
-                    title: 'Felix on the beach',
-                    tags: ['sand'],
-                }),
-                putItem({ ...ITEM, itemName: 'b', versionId: testVersionId('b'), title: 'Beach Felix' }),
-                putItem({
-                    ...ITEM,
-                    itemName: 'c',
-                    versionId: testVersionId('c'),
-                    title: 'Milo at home',
-                    description: 'With Felix',
-                }),
-                putItem({
-                    ...ITEM,
-                    itemName: 'd',
-                    versionId: testVersionId('d'),
-                    mediaType: 'video',
-                    durationSeconds: 9,
-                    title: 'Felix swims',
-                }),
-                putItem({ ...ITEM, itemName: 'e', versionId: testVersionId('e'), title: 'Beach alone' }),
-                putItem({ ...ITEM, itemName: 'pat1', versionId: testVersionId('pat1') }),
-                putItem({ ...ITEM, itemName: 'img_0715', versionId: testVersionId('img_0715') }),
-                putItem({ ...ITEM, itemName: 'school', versionId: testVersionId('school'), title: 'École' }),
-                putItem({
-                    ...ITEM,
-                    itemName: 'trip',
-                    versionId: testVersionId('trip'),
-                    title: 'Vacation',
-                    description: 'A celebration',
-                }),
+                putItem({ ...ITEM, itemName: 'a', title: 'Felix on the beach', tags: ['sand'] }),
+                putItem({ ...ITEM, itemName: 'b', title: 'Beach Felix' }),
+                putItem({ ...ITEM, itemName: 'c', title: 'Milo at home', description: 'With Felix' }),
+                putItem({ ...ITEM, itemName: 'd', mediaType: 'video', durationSeconds: 9, title: 'Felix swims' }),
+                putItem({ ...ITEM, itemName: 'e', title: 'Beach alone' }),
+                putItem({ ...ITEM, itemName: 'pat1' }),
+                putItem({ ...ITEM, itemName: 'img_0715' }),
+                putItem({ ...ITEM, itemName: 'school', title: 'École' }),
+                putItem({ ...ITEM, itemName: 'trip', title: 'Vacation', description: 'A celebration' }),
             ]);
         });
 
@@ -261,20 +231,8 @@ describe('search', () => {
                         summary: 'Picnic',
                         published: true,
                     }),
-                    putItem({
-                        parentPath: `/${year}/${day}/`,
-                        itemName: 'a',
-                        ...MEDIA,
-                        versionId: testVersionId(`${year}${day}a`),
-                        title: 'Picnic',
-                    }),
-                    putItem({
-                        parentPath: `/${year}/${day}/`,
-                        itemName: 'b',
-                        ...MEDIA,
-                        versionId: testVersionId(`${year}${day}b`),
-                        title: 'Picnic',
-                    }),
+                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'a', ...MEDIA, title: 'Picnic' }),
+                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'b', ...MEDIA, title: 'Picnic' }),
                 ]),
             );
         });
@@ -371,20 +329,8 @@ describe('search', () => {
                     published: false,
                 }),
                 putItem({ parentPath: '/2024/07-10/', itemName: 'shown', ...MEDIA, title: 'Fajita' }),
-                putItem({
-                    parentPath: '/2024/07-11/',
-                    itemName: 'hidden',
-                    ...MEDIA,
-                    versionId: testVersionId('v2'),
-                    title: 'Fajita',
-                }),
-                putItem({
-                    parentPath: '/2024/07-12/',
-                    itemName: 'no_album',
-                    ...MEDIA,
-                    versionId: testVersionId('v3'),
-                    title: 'Fajita',
-                }),
+                putItem({ parentPath: '/2024/07-11/', itemName: 'hidden', ...MEDIA, title: 'Fajita' }),
+                putItem({ parentPath: '/2024/07-12/', itemName: 'no_album', ...MEDIA, title: 'Fajita' }),
             ]);
         });
 
@@ -417,15 +363,17 @@ describe('search', () => {
             ...['01-01', '01-02', '02-01'].flatMap((day, dayIndex) => [
                 upsertItem(database, { parentPath: '/2000/', itemName: day, itemType: 'album', published: true }),
                 ...words.map((word, index) =>
-                    upsertItem(database, {
-                        parentPath: `/2000/${day}/`,
-                        itemName: `img_${index}`,
-                        ...MEDIA,
-                        versionId: testVersionId(`${day}${index}`),
-                        title: `${word} ${dayIndex}`,
-                        description: `A photo about ${word}`,
-                        tags: [word],
-                    }),
+                    upsertItem(
+                        database,
+                        withVersionId({
+                            parentPath: `/2000/${day}/`,
+                            itemName: `img_${index}`,
+                            ...MEDIA,
+                            title: `${word} ${dayIndex}`,
+                            description: `A photo about ${word}`,
+                            tags: [word],
+                        }),
+                    ),
                 ),
             ]),
         ]);
