@@ -90,24 +90,24 @@ An `item` row is identified by `(parent_path, item_name)`, so `felix` in `/2001/
 
 Media is stored in Cloudflare R2, in a bucket per role, because an R2 API token is scoped to whole buckets: the key the Worker signs upload and transcode URLs with reaches `uploads` and `derived` and no other, so nothing a signed URL can do touches an original or a dump. Each environment's buckets are named for it, `production-originals` and so on.
 
-Take the photo `/2001/06-15/felix`, whose current version id is `0muhjn6yo3f9a1c07b2e4d58a`. Everything stored for it is keyed by that id:
+Take the photo `/2001/06-15/felix`, whose current version id is `01ARYZ6S41TSV4RRFFQ69G5FAV`. Everything stored for it is keyed by that id:
 
 ```text
 uploads bucket
-  inbox/0muhjn6yo3f9a1c07b2e4d58a                   the upload as it arrived, dropped once processed; a week at most
+  inbox/01ARYZ6S41TSV4RRFFQ69G5FAV                   the upload as it arrived, dropped once processed; a week at most
 
 originals bucket
-  originals/0muhjn6yo3f9a1c07b2e4d58a               the file as uploaded, written once
+  originals/01ARYZ6S41TSV4RRFFQ69G5FAV               the file as uploaded, written once
 
 derived bucket
-  derived/0muhjn6yo3f9a1c07b2e4d58a/200x200-webp    the album page's thumbnail
-  derived/0muhjn6yo3f9a1c07b2e4d58a/400x400-webp    the same for a 2x screen
-  derived/0muhjn6yo3f9a1c07b2e4d58a/1024            the media page's image, in the format its original calls for
-  derived/0muhjn6yo3f9a1c07b2e4d58a/…               any other size or crop, made the first time it is asked for
+  derived/01ARYZ6S41TSV4RRFFQ69G5FAV/200x200-webp    the album page's thumbnail
+  derived/01ARYZ6S41TSV4RRFFQ69G5FAV/400x400-webp    the same for a 2x screen
+  derived/01ARYZ6S41TSV4RRFFQ69G5FAV/1024            the media page's image, in the format its original calls for
+  derived/01ARYZ6S41TSV4RRFFQ69G5FAV/…               any other size or crop, made the first time it is asked for
   derived/<versionId>/video.mp4, poster.jpg         for a video: its transcode, and the still its images are cut from
 ```
 
-A version id is the moment it was minted, in base 36, followed by 64 random bits, so listings come out in upload order and an id cannot be guessed. `api/src/storage/keys.ts` builds every key. Each original also carries the path it was uploaded to as metadata, and `api/scripts/media.ts` prints an item's row and every object stored for it.
+A version id is a [ULID](https://github.com/ulid/spec), uppercase as its spec writes it: the millisecond it was minted, then 80 random bits, so listings come out in upload order, an id cannot be guessed, and any ULID tool reads its time. The database and the URL parser admit nothing but that shape. `api/src/storage/keys.ts` builds every key. Each original also carries the path it was uploaded to as metadata, and `api/scripts/media.ts` prints an item's row and every object stored for it.
 
 **Why no path is in a key.** An original is written once and never overwritten, and the `item` row says which version is current. So create, edit, publish, rename, set a thumbnail and delete are database writes that touch no object: renaming an album full of photos is one batch of row updates. A replacement is a new version, and a delete leaves the objects, so either can be undone by pointing a row back at the old version. Objects no row references any more stay where they are.
 
@@ -191,10 +191,10 @@ app                        Worker                          R2 / Queue / Workflow
 
 ## Serving images and video
 
-The album page asks for `/i/2001/06-15/felix/0muhjn6yo3f9a1c07b2e4d58a?size=200x200`, or `size=400x400` from a screen with two device pixels per CSS pixel, since each thumbnail offers both in its `srcset`:
+The album page asks for `/i/2001/06-15/felix/01ARYZ6S41TSV4RRFFQ69G5FAV?size=200x200`, or `size=400x400` from a screen with two device pixels per CSS pixel, since each thumbnail offers both in its `srcset`:
 
 1. **The colo's cache.** A hit is answered there.
-2. **The derived bucket**, under `derived/0muhjn6yo3f9a1c07b2e4d58a/200x200-webp`, the name spelled from the URL and the format it settles, and served as the type it was stored with.
+2. **The derived bucket**, under `derived/01ARYZ6S41TSV4RRFFQ69G5FAV/200x200-webp`, the name spelled from the URL and the format it settles, and served as the type it was stored with.
 3. **Made on the spot** with the Images binding, from the version's poster if it is a video, or else its original, then stored in the derived bucket and cached.
 
 Every image is cached for a year, since its URL names one version and a new upload has a new URL. The path in the URL is for people reading it, in the network panel or the logs; only the version finds the object, so an old URL keeps working after a rename.

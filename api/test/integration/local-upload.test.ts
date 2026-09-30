@@ -12,6 +12,7 @@ import type { R2EventMessage } from '../../src/gallery/upload';
 import handler from '../../src/index';
 import { inboxKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
 const DAY = '/2024/06-15/';
 const PATH = `${DAY}felix`;
@@ -43,7 +44,7 @@ describe('local uploads', () => {
 
     it('are not there unless switched on: the URL is signed and the route is missing', async () => {
         const { url } = await presignOne({});
-        const response = await callAsAdmin('/upload/v1', { method: 'PUT', body: jpg });
+        const response = await callAsAdmin(`/upload/${testVersionId('v1')}`, { method: 'PUT', body: jpg });
 
         expect(url).toMatch(/^https:\/\//v);
         expect(response.status).toBe(404);

@@ -4,8 +4,9 @@ import { type GalleryRecord, type ItemWrite, type SearchResponse, parseSearch } 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import { call, callAsAdmin, parseExactly, putItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
-const MEDIA = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
+const MEDIA = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
 
 /** Searches as the web app does, with its URL, as a guest or as an admin. */
 async function search(terms: string, params = '', asAdmin = false): Promise<SearchResponse> {
@@ -41,7 +42,7 @@ describe('search', () => {
                     parentPath: '/2024/07-01/',
                     itemName: 'quesadilla',
                     updatedOn: expect.any(String),
-                    versionId: 'v1',
+                    versionId: testVersionId('v1'),
                     dimensions: { width: 4, height: 3 },
                     thumbnail: { x: 0, y: 0, width: 3, height: 3 },
                     title: 'Quesadilla night',
@@ -76,7 +77,7 @@ describe('search', () => {
                 updatedOn: expect.any(String),
                 published: true,
                 summary: 'Tostada',
-                thumbnail: { path: '/2024/07-03/a', versionId: 'v1' },
+                thumbnail: { path: '/2024/07-03/a', versionId: testVersionId('v1') },
             },
         ]);
     });

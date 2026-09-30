@@ -22,6 +22,7 @@ import { presignUploads } from '../../src/gallery/presign';
 import { type MediaFacts, type Upload, insertItem, replaceItem } from '../../src/gallery/upload';
 import { inSequence } from '../../src/util/sequence';
 import { TEST_SECRETS } from '../secrets';
+import { testVersionId } from '../version-id';
 
 // D1 bills by rows read, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
 // Local D1 counts the rows a trigger reads in the meta of the statement that fired it, so a query that scans instead of
@@ -32,7 +33,13 @@ const OVERHEAD = 10;
 const VIEW_READ = 4;
 const DAYS = 100;
 const IMAGES_PER_DAY = 20;
-const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4032, height: 3024 } as const;
+const IMAGE = {
+    itemType: 'media',
+    mediaType: 'image',
+    versionId: testVersionId('v1'),
+    width: 4032,
+    height: 3024,
+} as const;
 
 /** The name of the index-th day album of 2001: 01-01, 01-02 and so on. */
 function dayName(index: number): string {
@@ -61,7 +68,7 @@ async function seedGallery(database: Orm): Promise<void> {
                         parentPath: day.path,
                         itemName: `img_${index}`,
                         ...IMAGE,
-                        versionId: `${day.name}-${index}`,
+                        versionId: testVersionId(`${day.name}-${index}`),
                         title: `Taco ${index}`,
                         description: 'Tacos on the beach',
                     }),
@@ -94,7 +101,7 @@ async function seedGallery(database: Orm): Promise<void> {
             .insert(schema.upload)
             .values(
                 Array.from({ length: IMAGES_PER_DAY / 2 }, (_, index) => ({
-                    versionId: `pending-${half + index}`,
+                    versionId: testVersionId(`pending-${half + index}`),
                     parentPath: dayPath(DAYS),
                     itemName: `pending_${half + index}`,
                     albumId: emptyDay?.id ?? null,
@@ -135,7 +142,7 @@ async function uploadRow(
     const [row] = await database
         .insert(schema.upload)
         .values({
-            versionId: `minted-${itemName}`,
+            versionId: testVersionId(`minted-${itemName}`),
             parentPath: dayPath(day),
             itemName,
             albumId: album?.id ?? null,
@@ -267,7 +274,7 @@ describe('rows read on a gallery-sized table', () => {
         const result = await database
             .select({ parentPath: item.parentPath, itemName: item.itemName })
             .from(item)
-            .where(eq(item.versionId, `${dayName(7)}-3`))
+            .where(eq(item.versionId, testVersionId(`${dayName(7)}-3`)))
             .run();
 
         expect(result.results).toStrictEqual([{ parent_path: dayPath(7), item_name: 'img_3' }]);
@@ -289,7 +296,7 @@ describe('rows read on a gallery-sized table', () => {
             write: () =>
                 database
                     .update(item)
-                    .set({ versionId: 'v2' })
+                    .set({ versionId: testVersionId('v2') })
                     .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_1'))),
         },
         {

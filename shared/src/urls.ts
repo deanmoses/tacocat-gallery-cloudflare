@@ -51,29 +51,32 @@ export function detailSize({ width, height }: Size): ImageSize {
         ? { width: Math.round(width * scale), height: null }
         : { width: null, height: Math.round(height * scale) };
 }
-const VERSION_ID = /^[\w\-.]+$/u;
+// A version id is a ULID (https://github.com/ulid/spec) as its spec encodes it: 26 characters of uppercase Crockford
+// base32, which leaves out I, L, O and U, the first ten a 48-bit millisecond timestamp, so the first can only be 0 to
+// 7, and the other sixteen 80 random bits. Any ULID tool decodes one, and every id has this one exact shape.
+const VERSION_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u;
 
-/** Letters, digits, dot, underscore and hyphen, which every version id is, the ids AWS assigned included. */
+/** A ULID as its spec encodes it: 26 characters of uppercase Crockford base32, the first 0 to 7. */
 export function isVersionId(text: string): boolean {
     return VERSION_ID.test(text);
 }
 
 /** `isVersionId` as SQL, for a check constraint: `column` is text the rule admits. */
 export function versionIdSql(column: string): string {
-    return `${column} IS NOT NULL AND ${column} <> '' AND ${column} NOT GLOB '*[^A-Za-z0-9._-]*'`;
+    return `${column} IS NOT NULL AND length(${column}) = 26 AND ${column} GLOB '[0-7]*' AND ${column} NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*'`;
 }
 
 const SIZE = /^(?<width>[1-9]\d*)?(?:x(?<height>[1-9]\d*))?$/u;
 const COORDINATE = /^(?:0|[1-9]\d*)(?:\.\d+)?$/u;
 
-/** `/i/2001/06-15/felix.jpg/v1?size=200x200&crop=10,20,300,300` */
+/** `/i/2001/06-15/felix/01ARYZ6S41TSV4RRFFQ69G5FAV?size=200x200&crop=10,20,300,300` */
 export function imageUrl({ path, versionId, size, crop }: ImageRequest): string {
     const cropped = crop === null ? '' : `&crop=${cropText(crop)}`;
     return `/i${path}/${versionId}?size=${sizeText(size)}${cropped}`;
 }
 
 /**
- * Reads an image URL, given its path after the route prefix (`/2001/06-15/felix.jpg/v1`) and its query. Null for
+ * Reads an image URL, given its path after the route prefix (`/2001/06-15/felix/<versionId>`) and its query. Null for
  * anything `imageUrl` would not have written, apart from a missing size, which is the default. A side past the detail
  * size is refused rather than served: nothing the app shows is larger, and each size asked for is a transformation
  * paid for and a derivative stored, so the route answers only sizes something asks for.
@@ -100,8 +103,8 @@ export function cropText({ x, y, width, height }: Rectangle): string {
 }
 
 /**
- * Reads `/2001/06-15/felix.jpg/v1`, the path after a route's prefix, as a version of a media item. Null unless the
- * path is a media path and the version is letters, digits, dot, underscore and hyphen, which every version id is.
+ * Reads `/2001/06-15/felix/01ARYZ6S41TSV4RRFFQ69G5FAV`, the path after a route's prefix, as a version of a media
+ * item. Null unless the path is a media path and the version is a ULID.
  */
 export function parseMediaVersion(rest: string): MediaVersion | null {
     const cut = rest.lastIndexOf('/');

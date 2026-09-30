@@ -3,8 +3,9 @@ import { getTableColumns } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import { callAsAdmin, putItem, storedItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
-const MEDIA = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
+const MEDIA = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
 
 describe('saving an item', () => {
     const { item } = schema;
@@ -41,7 +42,7 @@ describe('saving an item', () => {
         description: 'stale',
         summary: null,
         tags: ['stale'],
-        versionId: 'stale',
+        versionId: testVersionId('stale'),
         published: false,
         width: 7,
         height: 7,
@@ -105,7 +106,13 @@ describe('saving an item', () => {
 });
 
 describe('saving an item through the API', () => {
-    const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
+    const IMAGE = {
+        itemType: 'media',
+        mediaType: 'image',
+        versionId: testVersionId('v1'),
+        width: 4,
+        height: 3,
+    } as const;
     const ITEM = { ...IMAGE, parentPath: '/2024/09-01/', itemName: 'a' } as const;
 
     it('answers with a bookmark to read the write back with, and no body', async () => {

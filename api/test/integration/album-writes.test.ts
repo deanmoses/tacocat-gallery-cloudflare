@@ -4,8 +4,9 @@ import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
-const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
+const IMAGE = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
 
 type Init = Parameters<typeof call>[1];
 
@@ -240,7 +241,7 @@ describe('renaming a day album', () => {
             putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', summary: 'Picnic', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-16', itemType: 'album', published: true }),
             putItem({ parentPath: '/1990/06-15/', itemName: 'a', ...IMAGE, title: 'First' }),
-            putItem({ parentPath: '/1990/06-15/', itemName: 'b', ...IMAGE, versionId: 'v2' }),
+            putItem({ parentPath: '/1990/06-15/', itemName: 'b', ...IMAGE, versionId: testVersionId('v2') }),
         ]);
         await write('PATCH', '/api/album-thumb/1990/06-15/', { mediaPath: '/1990/06-15/b' });
         await write('PATCH', '/api/album-thumb/1990/', { mediaPath: '/1990/06-15/a' });
@@ -260,10 +261,10 @@ describe('renaming a day album', () => {
         expect(renamed).toMatchObject({
             path: '/1990/07-04/',
             summary: 'Picnic',
-            thumbnail: { path: '/1990/07-04/b', versionId: 'v2' },
+            thumbnail: { path: '/1990/07-04/b', versionId: testVersionId('v2') },
         });
         expect(renamed.children?.map((child) => child.path)).toStrictEqual(['/1990/07-04/a', '/1990/07-04/b']);
-        expect(year.thumbnail).toStrictEqual({ path: '/1990/07-04/a', versionId: 'v1' });
+        expect(year.thumbnail).toStrictEqual({ path: '/1990/07-04/a', versionId: testVersionId('v1') });
         expect(year.children?.map((child) => child.path)).toStrictEqual(['/1990/06-16/', '/1990/07-04/']);
         expect(old.status).toBe(404);
     });

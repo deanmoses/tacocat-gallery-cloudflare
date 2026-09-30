@@ -19,6 +19,7 @@ import worker from '../../src/index';
 import type { R2EventMessage } from '../../src/gallery/upload';
 import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
 // Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
 const handler: ExportedHandler<Env, R2EventMessage> = worker;
@@ -355,12 +356,12 @@ describe('upload pipeline', () => {
 
     it('becomes an upload error when another item took its name in the meantime', async () => {
         const versionId = await stage(`${DAY}taken`, jpg);
-        await putItem({ parentPath: DAY, itemName: 'taken', ...IMAGE, versionId: 'other' });
+        await putItem({ parentPath: DAY, itemName: 'taken', ...IMAGE, versionId: testVersionId('other') });
         await deliver(versionId);
         const [errors, item] = await Promise.all([uploadErrors([`${DAY}taken`]), storedItem(DAY, 'taken')]);
 
         expect(errors[`${DAY}taken`]).toBe(`A media item already exists at [${DAY}taken]`);
-        expect(item?.versionId).toBe('other');
+        expect(item?.versionId).toBe(testVersionId('other'));
     });
 
     it('leaves alone an inbox object nobody asked for', async () => {
@@ -413,7 +414,7 @@ describe('replacing a media item', () => {
             parentPath: DAY,
             itemName: 'felix',
             ...IMAGE,
-            versionId: 'old',
+            versionId: testVersionId('old'),
             title: 'Felix',
             thumbnailCrop: CROP,
         });
@@ -439,7 +440,13 @@ describe('replacing a media item', () => {
     });
 
     it("joins the file's tags to the row's, each once, so a tag given by hand survives the file", async () => {
-        await putItem({ parentPath: DAY, itemName: 'tagged', ...IMAGE, versionId: 'old', tags: ['felix', 'dog'] });
+        await putItem({
+            parentPath: DAY,
+            itemName: 'tagged',
+            ...IMAGE,
+            versionId: testVersionId('old'),
+            tags: ['felix', 'dog'],
+        });
 
         await upload(`${DAY}tagged`, jpg, { replace: true });
         const tagged = await storedItem(DAY, 'tagged');
@@ -448,7 +455,13 @@ describe('replacing a media item', () => {
     });
 
     it("keeps the row's tags when the file brings none", async () => {
-        await putItem({ parentPath: DAY, itemName: 'tagged', ...IMAGE, versionId: 'old', tags: ['felix'] });
+        await putItem({
+            parentPath: DAY,
+            itemName: 'tagged',
+            ...IMAGE,
+            versionId: testVersionId('old'),
+            tags: ['felix'],
+        });
 
         await upload(`${DAY}tagged`, noTags, { replace: true });
 
@@ -742,8 +755,12 @@ describe('upload errors', () => {
 
 describe('serving a video', () => {
     it('serves a byte range of the MP4 the transcoder wrote for the version, from the derived bucket', async () => {
-        await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call(videoUrl('/2024/06-15/clip', 'v1'), { headers: { range: 'bytes=10-19' } });
+        await env.DERIVED.put(videoKey(testVersionId('v1')), new Uint8Array(100), {
+            httpMetadata: { contentType: 'video/mp4' },
+        });
+        const response = await call(videoUrl('/2024/06-15/clip', testVersionId('v1')), {
+            headers: { range: 'bytes=10-19' },
+        });
         const body = await response.arrayBuffer();
 
         expect(response.status).toBe(206);
@@ -754,8 +771,12 @@ describe('serving a video', () => {
     });
 
     it('serves the last bytes for a suffix range, which a player asks for to find the index', async () => {
-        await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call(videoUrl('/2024/06-15/clip', 'v1'), { headers: { range: 'bytes=-10' } });
+        await env.DERIVED.put(videoKey(testVersionId('v1')), new Uint8Array(100), {
+            httpMetadata: { contentType: 'video/mp4' },
+        });
+        const response = await call(videoUrl('/2024/06-15/clip', testVersionId('v1')), {
+            headers: { range: 'bytes=-10' },
+        });
         const body = await response.arrayBuffer();
 
         expect(response.status).toBe(206);
@@ -764,8 +785,12 @@ describe('serving a video', () => {
     });
 
     it('refuses a range past the end of the MP4, saying how long it is', async () => {
-        await env.DERIVED.put(videoKey('v1'), new Uint8Array(100), { httpMetadata: { contentType: 'video/mp4' } });
-        const response = await call(videoUrl('/2024/06-15/clip', 'v1'), { headers: { range: 'bytes=100-199' } });
+        await env.DERIVED.put(videoKey(testVersionId('v1')), new Uint8Array(100), {
+            httpMetadata: { contentType: 'video/mp4' },
+        });
+        const response = await call(videoUrl('/2024/06-15/clip', testVersionId('v1')), {
+            headers: { range: 'bytes=100-199' },
+        });
         await response.body?.cancel();
 
         expect(response.status).toBe(416);
@@ -774,8 +799,8 @@ describe('serving a video', () => {
 
     it('is not found for a version with no MP4, and refuses a URL that names no version', async () => {
         const [missing, malformed] = await Promise.all([
-            call(videoUrl('/2024/06-15/clip', 'v2')),
-            call('/v/derived/2024/06-15/clip.mov/v1/video.mp4'),
+            call(videoUrl('/2024/06-15/clip', testVersionId('v2'))),
+            call(`/v/derived/2024/06-15/clip.mov/${testVersionId('v1')}/video.mp4`),
         ]);
         await Promise.all([missing.body?.cancel(), malformed.body?.cancel()]);
 
@@ -789,8 +814,8 @@ describe('serving an original', () => {
     const HEIC = '/2024/06-15/img_0001';
 
     it('serves the file as uploaded, named for a download by its name and stored type, and kept for a year', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
-        const response = await call(originalUrl(PHOTO, 'v1'));
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        const response = await call(originalUrl(PHOTO, testVersionId('v1')));
         const body = await response.arrayBuffer();
 
         expect(response.status).toBe(200);
@@ -805,8 +830,8 @@ describe('serving an original', () => {
     // Only Safari shows a HEIC. The bytes here are a JPEG under a HEIC's name, as some uploads are, which the binding
     // decodes anywhere; what is tested is the route's answer, not the binding's HEIC support.
     it('answers for a HEIC with a JPEG made on the way out', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/heic' } });
-        const response = await call(originalUrl(HEIC, 'v1'));
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg, { httpMetadata: { contentType: 'image/heic' } });
+        const response = await call(originalUrl(HEIC, testVersionId('v1')));
         const body = new Uint8Array(await response.arrayBuffer());
 
         expect(response.status).toBe(200);
@@ -816,8 +841,8 @@ describe('serving an original', () => {
     });
 
     it('serves a JPEG under a HEIC name as the JPEG it is, since the stored type is what the file is', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
-        const response = await call(originalUrl(HEIC, 'v1'));
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        const response = await call(originalUrl(HEIC, testVersionId('v1')));
         await response.body?.cancel();
 
         expect(response.status).toBe(200);
@@ -826,12 +851,12 @@ describe('serving an original', () => {
     });
 
     it('gives the HEIC itself when asked, and when the binding cannot decode it', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/heic' } });
-        const asked = await call(`${originalUrl(HEIC, 'v1')}?format=original`);
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg, { httpMetadata: { contentType: 'image/heic' } });
+        const asked = await call(`${originalUrl(HEIC, testVersionId('v1'))}?format=original`);
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
             throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
         });
-        const undecodable = await call(originalUrl(HEIC, 'v1'));
+        const undecodable = await call(originalUrl(HEIC, testVersionId('v1')));
         const bodies = await Promise.all([asked.arrayBuffer(), undecodable.arrayBuffer()]);
 
         expect([asked.status, undecodable.status]).toStrictEqual([200, 200]);
@@ -844,9 +869,9 @@ describe('serving an original', () => {
         await env.UPLOADS.put('inbox/2024/06-15/pending', jpg);
         await env.ORIGINALS.put('elsewhere/2024-06-15.json', new Uint8Array(10));
         const [pending, elsewhere, malformed] = await Promise.all([
-            call(originalUrl('/2024/06-15/pending', 'v1')),
-            call('/raw/elsewhere/2024-06-15.json/v1'),
-            call('/raw/originals/2024/06-15/pending/v1'),
+            call(originalUrl('/2024/06-15/pending', testVersionId('v1'))),
+            call(`/raw/elsewhere/2024-06-15.json/${testVersionId('v1')}`),
+            call(`/raw/originals/2024/06-15/pending/${testVersionId('v1')}`),
         ]);
         await Promise.all([pending, elsewhere, malformed].map(async (response) => response.body?.cancel()));
 
@@ -856,8 +881,8 @@ describe('serving an original', () => {
     });
 
     it('finds the version by its id alone, whatever path the URL gives it', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
-        const response = await call(originalUrl('/1999/01-01/renamed', 'v1'));
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        const response = await call(originalUrl('/1999/01-01/renamed', testVersionId('v1')));
         await response.body?.cancel();
 
         expect(response.status).toBe(200);
@@ -871,9 +896,9 @@ describe('serving media', () => {
     it.each(['/2024/06-15/clip', '/2024/06-15/renamed'])(
         'makes a video thumbnail from its poster, with the URL calling the file %s',
         async (path) => {
-            await env.DERIVED.put(posterKey('v1'), jpg);
-            const response = await call(`/i${path}/v1?size=200x200`);
-            const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-webp`);
+            await env.DERIVED.put(posterKey(testVersionId('v1')), jpg);
+            const response = await call(`/i${path}/${testVersionId('v1')}?size=200x200`);
+            const stored = await env.DERIVED.head(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`);
 
             expect(response.status).toBe(200);
             expect(response.headers.get('x-derived')).toBe('generated');
@@ -882,10 +907,10 @@ describe('serving media', () => {
     );
 
     it('generates a derivative once, then serves it from the cache', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg);
-        const first = await call('/i/2024/06-15/d/v1?size=200x200');
-        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/200x200-webp`);
-        const second = await call('/i/2024/06-15/d/v1?size=200x200');
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
+        const first = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=200x200`);
+        const stored = await env.DERIVED.head(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`);
+        const second = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=200x200`);
 
         expect(first.headers.get('x-derived')).toBe('generated');
         expect(first.headers.get('content-type')).toBe('image/webp');
@@ -900,12 +925,12 @@ describe('serving media', () => {
     ])(
         'serves the media page its image of $name as $served, whatever the browser accepts',
         async ({ file, source, served }) => {
-            await env.ORIGINALS.put(originalKey('v1'), file, { httpMetadata: { contentType: source } });
-            const response = await call('/i/2024/06-15/d/v1?size=20', {
+            await env.ORIGINALS.put(originalKey(testVersionId('v1')), file, { httpMetadata: { contentType: source } });
+            const response = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=20`, {
                 headers: { accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5' },
             });
             await response.body?.cancel();
-            const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/20`);
+            const stored = await env.DERIVED.head(`${derivedPrefix(testVersionId('v1'))}/20`);
 
             expect(response.headers.get('content-type')).toBe(served);
             expect(stored?.httpMetadata?.contentType).toBe(served);
@@ -913,10 +938,10 @@ describe('serving media', () => {
     );
 
     it('serves a media page image from the cache the second time, whatever format the URL names in vain', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), gif, { httpMetadata: { contentType: 'image/gif' } });
-        const first = await call('/i/2024/06-15/d/v1?size=20');
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), gif, { httpMetadata: { contentType: 'image/gif' } });
+        const first = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=20`);
         await first.body?.cancel();
-        const second = await call('/i/2024/06-15/d/v1?size=20&format=bmp');
+        const second = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=20&format=bmp`);
         await second.body?.cancel();
 
         expect(second.headers.get('x-derived')).toBe('cache-api-hit');
@@ -924,25 +949,25 @@ describe('serving media', () => {
     });
 
     it('stores a cropped thumbnail under the size and crop the web app asks for', async () => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg);
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
         const url = imageUrl({
             path: '/2024/06-15/d',
-            versionId: 'v1',
+            versionId: testVersionId('v1'),
             size: { width: 20, height: 20 },
             crop: { x: 1, y: 2, width: 30, height: 30 },
         });
         const response = await call(url);
-        const stored = await env.DERIVED.head(`${derivedPrefix('v1')}/20x20-1,2,30,30-webp`);
+        const stored = await env.DERIVED.head(`${derivedPrefix(testVersionId('v1'))}/20x20-1,2,30,30-webp`);
 
         expect(response.status).toBe(200);
         expect(stored).not.toBeNull();
     });
 
     it.each([
-        { name: 'a size the web app would not write', url: '/i/2024/06-15/d/v1?size=0200x200' },
-        { name: 'a crop of three numbers', url: '/i/2024/06-15/d/v1?crop=1,2,3' },
+        { name: 'a size the web app would not write', url: `/i/2024/06-15/d/${testVersionId('v1')}?size=0200x200` },
+        { name: 'a crop of three numbers', url: `/i/2024/06-15/d/${testVersionId('v1')}?crop=1,2,3` },
     ])('refuses $name, and stores nothing', async ({ url }) => {
-        await env.ORIGINALS.put(originalKey('v1'), jpg);
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
         const response = await call(url);
         await response.body?.cancel();
         const stored = await env.DERIVED.list({ prefix: 'derived/' });

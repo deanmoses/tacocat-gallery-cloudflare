@@ -5,9 +5,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { originalKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
 const DAY = '/1990/06-15/';
-const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 400, height: 300 } as const;
+const IMAGE = {
+    itemType: 'media',
+    mediaType: 'image',
+    versionId: testVersionId('v1'),
+    width: 400,
+    height: 300,
+} as const;
 
 type Init = Parameters<typeof call>[1];
 
@@ -41,13 +48,13 @@ describe('a media item', () => {
             putItem({ parentPath: '/', itemName: '1990', itemType: 'album', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', published: true }),
             putItem({ parentPath: DAY, itemName: 'felix', ...IMAGE, title: 'Felix', description: 'At one' }),
-            putItem({ parentPath: DAY, itemName: 'cake', ...IMAGE, versionId: 'v2' }),
+            putItem({ parentPath: DAY, itemName: 'cake', ...IMAGE, versionId: testVersionId('v2') }),
             putItem({
                 parentPath: DAY,
                 itemName: 'clip',
                 ...IMAGE,
                 mediaType: 'video',
-                versionId: 'v3',
+                versionId: testVersionId('v3'),
                 durationSeconds: 9,
             }),
         ]);
@@ -118,10 +125,10 @@ describe('a media item', () => {
         });
 
         it('leaves the objects for the purge', async () => {
-            await env.ORIGINALS.put(originalKey('v1'), new Uint8Array(3));
+            await env.ORIGINALS.put(originalKey(testVersionId('v1')), new Uint8Array(3));
             await write('DELETE', `/api/media${DAY}felix`);
 
-            await expect(env.ORIGINALS.head(originalKey('v1'))).resolves.not.toBeNull();
+            await expect(env.ORIGINALS.head(originalKey(testVersionId('v1')))).resolves.not.toBeNull();
         });
 
         it('is not found for a media item that is not there, and for an album', async () => {
@@ -153,8 +160,12 @@ describe('a media item', () => {
 
             expect(response.status).toBe(204);
             expect(day.children?.map((child) => child.itemName)).toStrictEqual(['cake', 'clip', 'felix_at_one']);
-            expect(day.children?.at(-1)).toMatchObject({ title: 'Felix', description: 'At one', versionId: 'v1' });
-            expect(day.thumbnail).toStrictEqual({ path: `${DAY}felix_at_one`, versionId: 'v1' });
+            expect(day.children?.at(-1)).toMatchObject({
+                title: 'Felix',
+                description: 'At one',
+                versionId: testVersionId('v1'),
+            });
+            expect(day.thumbnail).toStrictEqual({ path: `${DAY}felix_at_one`, versionId: testVersionId('v1') });
             expect(year.thumbnail?.path).toBe(`${DAY}felix_at_one`);
             expect(old).toBeUndefined();
         });
@@ -221,7 +232,7 @@ describe('a media item', () => {
             expect(felix).toMatchObject({ thumbnail: { x: 40, y: 60, width: 200, height: 150 } });
             expect(day.thumbnail).toStrictEqual({
                 path: `${DAY}felix`,
-                versionId: 'v1',
+                versionId: testVersionId('v1'),
                 crop: { x: 40, y: 60, width: 200, height: 150 },
             });
         });

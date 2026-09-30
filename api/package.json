@@ -6,6 +6,7 @@
     "type": "module",
     "exports": {
         "./test/secrets": "./test/secrets.ts",
+        "./test/version-id": "./test/version-id.ts",
         "./test/stack": "./test/stack/start.ts",
         "./fixtures/*": "./fixtures/*"
     },

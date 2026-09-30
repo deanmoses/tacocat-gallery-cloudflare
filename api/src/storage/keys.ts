@@ -41,12 +41,36 @@ export function inboxKey(versionId: string): string {
 }
 
 /**
- * A new version id: the moment it was minted, so a listing of originals is in upload order, then 64 random bits,
- * which are what make knowing the id knowing the photo. Letters and digits only, so it goes in a URL and a key as it is.
+ * A new version id: a ULID, the moment it was minted as a 48-bit millisecond timestamp, so a listing of originals is
+ * in upload order, then 80 random bits, which are what make knowing the id knowing the photo. Each id's random bits
+ * are its own: the spec's monotonic mode, which counts up from the last id within a millisecond, would make every
+ * sibling of one id from a batch upload guessable.
  */
 export function mintVersionId(now = Date.now()): string {
-    const random = crypto.getRandomValues(new Uint8Array(8));
-    return (
-        now.toString(36).padStart(9, '0') + Array.from(random, (byte) => byte.toString(16).padStart(2, '0')).join('')
-    );
+    const bytes = new Uint8Array(16);
+    let time = now;
+    for (let index = 5; index >= 0; index -= 1) {
+        bytes[index] = time % 256;
+        time = Math.floor(time / 256);
+    }
+    crypto.getRandomValues(bytes.subarray(6));
+    return crockford(bytes);
+}
+
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/** The 128 bits as the ULID spec writes them: 26 characters of five bits, the first two bits of the first being zero. */
+function crockford(bytes: Uint8Array): string {
+    let text = '';
+    let buffer = 0;
+    let buffered = 2;
+    for (const byte of bytes) {
+        buffer = (buffer << 8) | byte;
+        buffered += 8;
+        while (buffered >= 5) {
+            buffered -= 5;
+            text += CROCKFORD.charAt((buffer >>> buffered) & 31);
+        }
+    }
+    return text;
 }

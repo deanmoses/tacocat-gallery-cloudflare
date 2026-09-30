@@ -3,11 +3,12 @@ import { imageUrl } from '@tacocat-gallery/shared';
 import { describe, expect, it } from 'vitest';
 import { derivedPrefix } from '../../src/storage/keys';
 import { call } from '../helpers';
+import { testVersionId } from '../version-id';
 
 describe('derived images through the Cache API', () => {
     const path = imageUrl({
         path: '/2001/01-01/a',
-        versionId: 'v1',
+        versionId: testVersionId('v1'),
         size: { width: 200, height: 200 },
         crop: null,
     });
@@ -20,7 +21,7 @@ describe('derived images through the Cache API', () => {
     }
 
     it('reads its path percent-decoded, as the raw and video routes read theirs', async () => {
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        await env.DERIVED.put(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`, 'webp bytes');
         const response = await call(path.replace('/a/', '/%61/'));
         await response.body?.cancel();
 
@@ -29,7 +30,7 @@ describe('derived images through the Cache API', () => {
     });
 
     it('says how long the cache lookup and the R2 read took when the colo misses', async () => {
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        await env.DERIVED.put(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`, 'webp bytes');
         const response = await call(path);
         await response.body?.cancel();
 
@@ -38,7 +39,7 @@ describe('derived images through the Cache API', () => {
     });
 
     it('serves a thumbnail as WebP even to a browser whose Accept header does not name it, with no Vary', async () => {
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes', {
+        await env.DERIVED.put(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`, 'webp bytes', {
             httpMetadata: { contentType: 'image/webp' },
         });
         const response = await call(path, { headers: { accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5' } });
@@ -51,7 +52,7 @@ describe('derived images through the Cache API', () => {
     });
 
     it('serves every URL that names one derivative from one cache entry', async () => {
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        await env.DERIVED.put(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`, 'webp bytes');
         const first = await call(path);
         await first.body?.cancel();
         const renamed = await call(path.replace('/a/', '/renamed/'));
@@ -66,7 +67,7 @@ describe('derived images through the Cache API', () => {
     });
 
     it('says only how long the cache lookup took when the colo has it', async () => {
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        await env.DERIVED.put(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`, 'webp bytes');
         const first = await call(path);
         await first.body?.cancel();
         const response = await call(path);

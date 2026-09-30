@@ -103,7 +103,7 @@ export const item = sqliteTable(
         summary: text('summary'),
         /** A JSON array, so no delimiter can collide with a keyword; FTS5 reads the words out of the JSON text. */
         tags: text('tags', { mode: 'json' }).$type<string[]>(),
-        /** Which upload of a media item is current; its original is stored under this id. Null for an album. */
+        /** Which upload of a media item is current, a ULID; its original is stored under this id. Null for an album. */
         versionId: text('version_id'),
         /** Guests see published albums; media shows whenever its album does, so it is never published itself. */
         published: integer('published', { mode: 'boolean' }).notNull().default(false),

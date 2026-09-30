@@ -1,6 +1,6 @@
 {
-  "id": "305859c3-792f-4e78-9b72-4f983602bff5",
-  "prevId": "3168028c-e830-4d1e-9114-af06abe0da62",
+  "id": "cf16fde9-ee13-4328-9f7e-72696e146757",
+  "prevId": "f052871d-34f8-4bec-8921-b528af594c23",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -302,7 +302,7 @@
         },
         "item_file_check": {
           "name": "item_file_check",
-          "value": "CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END"
+          "value": "CASE item_type WHEN 'album' THEN version_id IS NULL AND width IS NULL AND height IS NULL ELSE version_id IS NOT NULL AND length(version_id) = 26 AND version_id GLOB '[0-7]*' AND version_id NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*' AND coalesce(width, 0) > 0 AND coalesce(height, 0) > 0 END"
         },
         "item_duration_check": {
           "name": "item_duration_check",
@@ -658,7 +658,7 @@
       "checkConstraints": {
         "upload_version_id_format": {
           "name": "upload_version_id_format",
-          "value": "version_id IS NOT NULL AND version_id <> '' AND version_id NOT GLOB '*[^A-Za-z0-9._-]*'"
+          "value": "version_id IS NOT NULL AND length(version_id) = 26 AND version_id GLOB '[0-7]*' AND version_id NOT GLOB '*[^0-9A-HJKMNP-TV-Z]*'"
         },
         "upload_path_check": {
           "name": "upload_path_check",

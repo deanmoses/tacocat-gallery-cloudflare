@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { MEDIA_HEADERS, SITE_HEADERS } from '../../src/http/headers';
 import { derivedPrefix } from '../../src/storage/keys';
 import { call } from '../helpers';
+import { testVersionId } from '../version-id';
 
 /** The response's values for the headers named in `expected`, keyed as `expected` is. */
 function headersOf(response: Response, expected: Record<string, string>): Record<string, string | null> {
@@ -24,11 +25,11 @@ describe("the site's headers", () => {
     it('are on an image, with the one that keeps other sites from embedding it', async () => {
         const path = imageUrl({
             path: '/2001/01-01/a',
-            versionId: 'v1',
+            versionId: testVersionId('v1'),
             size: { width: 200, height: 200 },
             crop: null,
         });
-        await env.DERIVED.put(`${derivedPrefix('v1')}/200x200-webp`, 'webp bytes');
+        await env.DERIVED.put(`${derivedPrefix(testVersionId('v1'))}/200x200-webp`, 'webp bytes');
 
         const response = await call(path);
         await response.body?.cancel();
@@ -64,7 +65,11 @@ describe('caching of what the Worker answers', () => {
         { name: 'the health check', path: '/api/health', method: 'GET' },
         { name: 'a route that is not there', path: '/api/nothing', method: 'GET' },
         { name: 'an album that is not there', path: '/api/album/1999/', method: 'GET' },
-        { name: 'a photo whose original is not there', path: '/raw/2001/01-01/a/v1', method: 'GET' },
+        {
+            name: 'a photo whose original is not there',
+            path: `/raw/2001/01-01/a/${testVersionId('v1')}`,
+            method: 'GET',
+        },
         { name: 'a write from someone not logged in', path: '/api/album/2001/', method: 'PUT' },
     ])('has a browser ask again before reusing $name, and no shared cache keep it', async ({ path, method }) => {
         const response = await call(path, { method });

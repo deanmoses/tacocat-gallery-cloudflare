@@ -13,24 +13,24 @@ import { searchItems } from '../../src/gallery/search';
 
 /**
  * Rows written once the named migration has run, in the shape the tables had then, since a migration never changes.
- * The first set is the baseline of 2026-09-27, with every foreign key pointing somewhere; each later set fills a column
- * a later migration added, so that a rebuild has something to lose in every column.
+ * The first set is the baseline of 2026-09-30, with every foreign key pointing somewhere; a later set fills a column
+ * a later migration adds, so that a rebuild has something to lose in every column.
  */
 const FIXTURES: Record<string, string[]> = {
-    '20260927002822_seed_users.sql': [
+    '20260930020905_seed_users.sql': [
         `INSERT INTO item (id, parent_path, item_name, item_type) VALUES (1, '/', '2001', 'album')`,
         `INSERT INTO item (id, parent_path, item_name, item_type) VALUES (2, '/2001/', '06-15', 'album')`,
-        `INSERT INTO item (id, parent_path, item_name, item_type, media_type, version_id, width, height, title, description, tags, thumbnail_crop) VALUES (3, '/2001/06-15/', 'felix', 'media', 'image', 'v1', 4032, 3024, 'Quesadilla', 'Lunch', '["food"]', '{"x":0,"y":0,"width":100,"height":100}')`,
-        `INSERT INTO item (id, parent_path, item_name, item_type, media_type, version_id, width, height, duration_seconds) VALUES (4, '/2001/06-15/', 'clip', 'media', 'video', 'v4', 1920, 1080, 9.5)`,
+        `INSERT INTO item (id, parent_path, item_name, item_type, media_type, version_id, width, height, title, description, tags, thumbnail_crop) VALUES (3, '/2001/06-15/', 'felix', 'media', 'image', '01ARYZ6S41TSV4RRFFQ69G5FAV', 4032, 3024, 'Quesadilla', 'Lunch', '["food"]', '{"x":0,"y":0,"width":100,"height":100}')`,
+        `INSERT INTO item (id, parent_path, item_name, item_type, media_type, version_id, width, height, duration_seconds) VALUES (4, '/2001/06-15/', 'clip', 'media', 'video', '01ARYZ6S41TSV4RRFFQ69G5FA4', 1920, 1080, 9.5)`,
         `UPDATE item SET thumbnail_id = 3 WHERE id IN (1, 2)`,
+        `UPDATE item SET position = 0 WHERE id = 3`,
         `UPDATE item SET summary = 'A day out', published = 1 WHERE id = 2`,
-        `INSERT INTO upload (version_id, parent_path, item_name, album_id, replacement, target_id, username, completed_at) VALUES ('v2', '/2001/06-15/', 'felix', 2, 1, 3, 'moses', '2026-09-27T00:00:00.000Z')`,
+        `INSERT INTO upload (version_id, parent_path, item_name, album_id, replacement, target_id, username, completed_at) VALUES ('01ARYZ6S41TSV4RRFFQ69G5FA2', '/2001/06-15/', 'felix', 2, 1, 3, 'moses', '2026-09-27T00:00:00.000Z')`,
         `INSERT INTO upload_error (path, message) VALUES ('/2001/06-15/broken', 'Not an image')`,
         `INSERT INTO passkey (credential_id, username, public_key, transports, last_used_at) VALUES ('credential', 'moses', 'key', '["internal"]', '2026-09-27T00:00:00.000Z')`,
         `INSERT INTO invite (token_hash, username, expires_at, used_at) VALUES ('${'a'.repeat(64)}', 'moses', '2999-01-01T00:00:00.000Z', '2026-09-27T00:00:00.000Z')`,
         `INSERT INTO spent_challenge (challenge, expires_at) VALUES ('challenge', '2999-01-01T00:00:00.000Z')`,
     ],
-    '20260927091626_media_position.sql': [`UPDATE item SET position = 0 WHERE id = 3`],
 };
 
 /** Applies the migrations through the last one with a fixture, writing each fixture in turn; returns the rest. */
@@ -111,7 +111,7 @@ describe('migrating a database in use', () => {
         await expect(env.DB.prepare('PRAGMA foreign_key_check').all()).resolves.toMatchObject({ results: [] });
     });
 
-    it('keeps the links the rebuild of item clears', async () => {
+    it('keeps the links a rebuild of item clears', async () => {
         await applyD1Migrations(env.DB, rest);
 
         const database = orm(env.DB);
@@ -135,7 +135,7 @@ describe('migrating a database in use', () => {
         await applyD1Migrations(env.DB, rest);
 
         await env.DB.prepare(
-            `INSERT INTO item (parent_path, item_name, item_type, media_type, version_id, width, height, title) VALUES ('/2001/06-15/', 'milo', 'media', 'image', 'v3', 4032, 3024, 'Taco')`,
+            `INSERT INTO item (parent_path, item_name, item_type, media_type, version_id, width, height, title) VALUES ('/2001/06-15/', 'milo', 'media', 'image', '01ARYZ6S41TSV4RRFFQ69G5FA3', 4032, 3024, 'Taco')`,
         ).run();
 
         await expect(found('quesadilla')).resolves.toStrictEqual(['/2001/06-15/felix']);

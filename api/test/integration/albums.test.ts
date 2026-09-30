@@ -1,6 +1,7 @@
 import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { call, callAsAdmin, callForJson, parseExactly, putItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
@@ -24,8 +25,8 @@ describe('HEAD, which the app asks before creating or renaming', () => {
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '01-01', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '02-02', itemType: 'album', published: false }),
-            putItem({ parentPath: '/1982/01-01/', itemName: 'shown', ...IMAGE, versionId: 'v1' }),
-            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE, versionId: 'v1' }),
+            putItem({ parentPath: '/1982/01-01/', itemName: 'shown', ...IMAGE, versionId: testVersionId('v1') }),
+            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE, versionId: testVersionId('v1') }),
         ]);
     });
 
@@ -93,7 +94,7 @@ describe('an album', () => {
                 mediaType: 'image',
                 title: 'Beach',
                 tags: ['sand', 'sea'],
-                versionId: 'v1',
+                versionId: testVersionId('v1'),
                 width: 4000,
                 height: 3000,
                 thumbnailCrop: CROP,
@@ -103,7 +104,7 @@ describe('an album', () => {
                 itemName: 'b',
                 itemType: 'media',
                 mediaType: 'video',
-                versionId: 'v2',
+                versionId: testVersionId('v2'),
                 width: 16,
                 height: 9,
                 durationSeconds: 9.5,
@@ -123,7 +124,7 @@ describe('an album', () => {
             itemName: '01-01',
             updatedOn: expect.any(String),
             published: true,
-            thumbnail: { path: '/1981/01-01/a', versionId: 'v1', crop: CROP },
+            thumbnail: { path: '/1981/01-01/a', versionId: testVersionId('v1'), crop: CROP },
             summary: 'New year',
             children: [
                 {
@@ -133,7 +134,7 @@ describe('an album', () => {
                     parentPath: DAY,
                     itemName: 'a',
                     updatedOn: expect.any(String),
-                    versionId: 'v1',
+                    versionId: testVersionId('v1'),
                     dimensions: { width: 4000, height: 3000 },
                     thumbnail: CROP,
                     title: 'Beach',
@@ -146,7 +147,7 @@ describe('an album', () => {
                     parentPath: DAY,
                     itemName: 'b',
                     updatedOn: expect.any(String),
-                    versionId: 'v2',
+                    versionId: testVersionId('v2'),
                     dimensions: { width: 16, height: 9 },
                     duration: 9.5,
                 },
@@ -264,15 +265,15 @@ describe('an album thumbnail', () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '05-05', itemType: 'album', published: true }),
-            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a', versionId: 'v1' }),
-            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b', versionId: 'v2' }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a', versionId: testVersionId('v1') }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b', versionId: testVersionId('v2') }),
         ]);
     });
 
     it('shows on the album and on its entry in the parent', async () => {
         const set = await setThumbnail('/1982/05-05/', '/1982/05-05/b');
         const [day, year] = await Promise.all([album('/1982/05-05/'), album('/1982/')]);
-        const thumbnail = { path: '/1982/05-05/b', versionId: 'v2' };
+        const thumbnail = { path: '/1982/05-05/b', versionId: testVersionId('v2') };
 
         expect(set.status).toBe(204);
         expect(day.thumbnail).toStrictEqual(thumbnail);

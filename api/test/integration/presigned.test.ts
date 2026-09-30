@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { inboxKey } from '../../src/storage/keys';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { testVersionId } from '../version-id';
 
 const DAY = '/2024/06-15/';
-const IMAGE = { itemType: 'media', mediaType: 'image', versionId: 'v1', width: 4, height: 3 } as const;
+const IMAGE = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
 
 async function presign(albumPath: string, body: unknown, asAdmin = true): Promise<Response> {
     return (asAdmin ? callAsAdmin : call)(`/api/presigned${albumPath}`, { method: 'POST', body: JSON.stringify(body) });
