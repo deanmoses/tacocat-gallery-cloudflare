@@ -26,12 +26,14 @@ import { testVersionId, withVersionId } from '../version-id';
 
 // D1 bills by rows read, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
 // Local D1 counts the rows a trigger reads in the meta of the statement that fired it, so a query that scans instead of
-// seeking reads thousands of rows here, where the table is gallery-sized.
+// seeking reads every row here. The gallery is only big enough that a scan reads more than any bound below allows: the
+// test database has no statistics, so SQLite plans the same at this size as at any other, and more rows only slow
+// every test.
 const OVERHEAD = 10;
 // What the search indexes' delete triggers read, selecting the changed row through the view the indexes are built on:
 // the row and its index entry, once per search index.
 const VIEW_READ = 4;
-const DAYS = 100;
+const DAYS = 10;
 const IMAGES_PER_DAY = 20;
 const IMAGE = {
     itemType: 'media',
@@ -156,7 +158,7 @@ async function uploadRow(
     return row;
 }
 
-describe('rows read on a gallery-sized table', () => {
+describe('rows read on a gallery', () => {
     const { item } = schema;
     let database: Orm;
 
