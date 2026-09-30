@@ -67,6 +67,12 @@ export async function errorMessage(response: Response): Promise<string> {
     return (await response.json<{ errorMessage: string }>()).errorMessage;
 }
 
+/** The errors the admin UI would be shown for `paths`. */
+export async function uploadErrors(paths: string[]): Promise<Record<string, string>> {
+    const listed = await write('POST', '/api/errors', { paths });
+    return (await listed.json<{ errors: Record<string, string> }>()).errors;
+}
+
 /** The album at `path` as a guest sees it. */
 export async function album(path: string): Promise<AlbumGalleryItem> {
     return parseExactly(await call(`/api/album${path}`), parseAlbum);
