@@ -12,6 +12,8 @@ describe(sameSitePath, () => {
         { name: 'a protocol-relative URL', value: '//evil.example/2001', path: '/' },
         { name: 'a backslash browsers read as a slash', value: String.raw`/\evil.example/2001`, path: '/' },
         { name: 'a data URL', value: 'data:text/html,hi', path: '/' },
+        { name: 'a scheme with no host', value: 'http://', path: '/' },
+        { name: 'a protocol-relative URL with no host', value: '//', path: '/' },
     ])('returns $path for $name', ({ value, path }) => {
         expect(sameSitePath(value, ORIGIN)).toBe(path);
     });

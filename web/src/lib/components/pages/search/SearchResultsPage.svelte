@@ -13,7 +13,7 @@
     import { searchStore } from '$lib/stores/SearchStore.svelte';
 
     interface Props {
-        returnPath: string | undefined;
+        returnPath: string;
         query: SearchQuery;
         status: SearchLoadStatus;
         results: SearchResults | undefined;
@@ -24,23 +24,16 @@
     let oldestYear = $derived(query.oldestYear);
     let newestYear = $derived(query.newestYear);
     let oldestFirst = $derived(query.oldestFirst);
-    let noResults = $derived(!results?.items);
+    let items = $derived(results?.items ?? []);
+    let noResults = $derived(items.length === 0);
     // Use nextStartAt to determine if more results exist (handles duplicate filtering correctly)
     let moreResultsOnServer = $derived(results?.nextStartAt !== undefined && results.nextStartAt < results.total);
     let loadingMore = $derived(SearchLoadStatus.LOADING_MORE_RESULTS === status);
     let errorLoadingMore = $derived(SearchLoadStatus.ERROR_LOADING_MORE_RESULTS === status);
 
-    // Debouncing to prevent rapid-fire requests
-    let lastRequestTime = 0;
-    const MIN_REQUEST_INTERVAL = 500; // ms
-
     function getMoreResults(): void {
-        const now = Date.now();
-        if (now - lastRequestTime < MIN_REQUEST_INTERVAL) return;
-        lastRequestTime = now;
-
         // Use nextStartAt (based on server response) to avoid infinite loop when duplicates are filtered
-        const startAt = results?.nextStartAt ?? results?.items?.length ?? 0;
+        const startAt = results?.nextStartAt ?? items.length;
         searchStore.getMore(query, startAt);
     }
 </script>
@@ -53,6 +46,7 @@
                 id="oldestYear"
                 name="oldestYear"
                 class="year-input"
+                aria-label="Oldest year"
                 max={new Date().getFullYear()}
                 min="1964"
                 placeholder="oldest year"
@@ -65,6 +59,7 @@
                 id="newestYear"
                 name="newestYear"
                 class="year-input"
+                aria-label="Newest year"
                 max={new Date().getFullYear()}
                 min="1964"
                 placeholder="newest year"
@@ -80,8 +75,10 @@
     <section class:no-results={noResults}>
         <h2 style:display="none">Search Results</h2>
         <Thumbnails>
-            {#if results?.items}
-                {#each results.items as item (item.path)}
+            {#if noResults}
+                <FullPageMessage>No results</FullPageMessage>
+            {:else}
+                {#each items as item (item.path)}
                     <Thumbnail
                         href={item.href}
                         isVideo={item.mediaType === 'video'}
@@ -100,8 +97,6 @@
                         {/if}
                     {/if}
                 {/if}
-            {:else}
-                <FullPageMessage>No results</FullPageMessage>
             {/if}
         </Thumbnails>
     </section>

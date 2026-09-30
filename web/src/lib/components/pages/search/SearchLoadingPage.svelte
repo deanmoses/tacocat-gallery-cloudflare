@@ -9,7 +9,7 @@
 
     interface Props {
         searchTerms: string;
-        returnPath: string | undefined;
+        returnPath: string;
     }
 
     let { searchTerms, returnPath }: Props = $props();

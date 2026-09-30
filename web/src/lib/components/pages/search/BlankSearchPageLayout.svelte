@@ -11,7 +11,7 @@
     interface Props {
         title?: string | undefined;
         searchTerms: string;
-        returnPath?: string | undefined;
+        returnPath: string;
         children?: Snippet | undefined;
     }
 
