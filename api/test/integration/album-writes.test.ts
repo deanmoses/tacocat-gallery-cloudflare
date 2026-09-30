@@ -6,7 +6,7 @@ import { orm, schema } from '../../src/db';
 import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
 import { testVersionId } from '../version-id';
 
-const IMAGE = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
+const IMAGE = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 type Init = Parameters<typeof call>[1];
 
@@ -240,7 +240,13 @@ describe('renaming a day album', () => {
             putItem({ parentPath: '/', itemName: '1990', itemType: 'album', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', summary: 'Picnic', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-16', itemType: 'album', published: true }),
-            putItem({ parentPath: '/1990/06-15/', itemName: 'a', ...IMAGE, title: 'First' }),
+            putItem({
+                parentPath: '/1990/06-15/',
+                itemName: 'a',
+                ...IMAGE,
+                versionId: testVersionId('v1'),
+                title: 'First',
+            }),
             putItem({ parentPath: '/1990/06-15/', itemName: 'b', ...IMAGE, versionId: testVersionId('v2') }),
         ]);
         await write('PATCH', '/api/album-thumb/1990/06-15/', { mediaPath: '/1990/06-15/b' });
@@ -347,13 +353,7 @@ describe('reordering a day album', () => {
             putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-16', itemType: 'album', published: true }),
             ...['img_1', 'img_2', 'img_3'].map(async (itemName) =>
-                putItem({
-                    parentPath: DAY,
-                    itemName,
-                    ...IMAGE,
-                    versionId: testVersionId(itemName),
-                    title: `Taco ${itemName}`,
-                }),
+                putItem({ parentPath: DAY, itemName, ...IMAGE, title: `Taco ${itemName}` }),
             ),
         ]);
     });
@@ -373,8 +373,8 @@ describe('reordering a day album', () => {
     it('puts media added afterwards at the end, in name order', async () => {
         await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_2', 'img_1'] });
         await Promise.all([
-            putItem({ parentPath: DAY, itemName: 'img_5', ...IMAGE, versionId: testVersionId('img_5') }),
-            putItem({ parentPath: DAY, itemName: 'img_0', ...IMAGE, versionId: testVersionId('img_0') }),
+            putItem({ parentPath: DAY, itemName: 'img_5', ...IMAGE }),
+            putItem({ parentPath: DAY, itemName: 'img_0', ...IMAGE }),
         ]);
 
         await expect(order(DAY)).resolves.toStrictEqual(['img_3', 'img_2', 'img_1', 'img_0', 'img_5']);

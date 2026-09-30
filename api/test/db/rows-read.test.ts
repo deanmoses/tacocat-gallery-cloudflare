@@ -22,7 +22,7 @@ import { presignUploads } from '../../src/gallery/presign';
 import { type MediaFacts, type Upload, insertItem, replaceItem } from '../../src/gallery/upload';
 import { inSequence } from '../../src/util/sequence';
 import { TEST_SECRETS } from '../secrets';
-import { testVersionId } from '../version-id';
+import { testVersionId, withVersionId } from '../version-id';
 
 // D1 bills by rows read, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
 // Local D1 counts the rows a trigger reads in the meta of the statement that fired it, so a query that scans instead of
@@ -36,7 +36,6 @@ const IMAGES_PER_DAY = 20;
 const IMAGE = {
     itemType: 'media',
     mediaType: 'image',
-    versionId: testVersionId('v1'),
     width: 4032,
     height: 3024,
 } as const;
@@ -170,7 +169,7 @@ describe('rows read on a gallery-sized table', () => {
         { what: 'inserting an item', values: { parentPath: '/2001/01-01/', itemName: 'new', title: 'Quesadilla' } },
         { what: 'updating an item', values: { parentPath: '/2001/01-01/', itemName: 'img_3', title: 'Burrito' } },
     ])('$what reads a few rows', async ({ values }) => {
-        const result = await upsertItem(database, { ...values, ...IMAGE }).run();
+        const result = await upsertItem(database, withVersionId({ ...values, ...IMAGE })).run();
 
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
     });
@@ -470,7 +469,10 @@ describe('rows read on a gallery-sized table', () => {
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
     ])('searching for a rare word as $who reads only its matches', async ({ admin }) => {
-        await upsertItem(database, { parentPath: dayPath(9), itemName: 'q', ...IMAGE, title: 'Quesadilla' }).run();
+        await upsertItem(
+            database,
+            withVersionId({ parentPath: dayPath(9), itemName: 'q', ...IMAGE, title: 'Quesadilla' }),
+        ).run();
         const found = await searchItems(database, { ...SEARCH, query: compiled('quesadilla') }, admin);
 
         expect(found.items).toHaveLength(1);
@@ -526,12 +528,10 @@ describe('rows read on a gallery-sized table', () => {
     it.each(['quesadilla photo', 'photo quesadilla', 'quesadilla -taco', '@title:quesadilla photo'])(
         'searching for %s reads the rare word',
         async (terms) => {
-            await upsertItem(database, {
-                parentPath: dayPath(9),
-                itemName: 'q',
-                ...IMAGE,
-                title: 'Quesadilla',
-            }).run();
+            await upsertItem(
+                database,
+                withVersionId({ parentPath: dayPath(9), itemName: 'q', ...IMAGE, title: 'Quesadilla' }),
+            ).run();
             const found = await searchItems(database, { ...SEARCH, query: compiled(terms) }, true);
 
             expect(found.total).toBe(1);
