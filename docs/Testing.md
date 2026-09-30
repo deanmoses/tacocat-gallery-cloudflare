@@ -50,7 +50,10 @@ Before each test, `api/test/setup.ts` calls `reset()`, which empties every bindi
 
 D1 bills by rows read, not rows returned, and an FTS trigger that scanned the whole index on every write once read 37.7M rows in a day. Local D1 counts the rows a trigger reads in the `meta.rows_read` of the statement that fired it.
 
-`api/test/db/rows-read.test.ts` fills a gallery-sized table and holds each write to a few rows, and each read or search to little more than it returns. A new query, trigger or index change gets a case there, and a query that scans instead of seeking fails it with thousands of rows.
+`api/test/db/rows-read.test.ts` fills a small gallery and holds each write to a few rows, and each read or search to little more than it returns. A new query, trigger or index change gets a case there, and a query that scans instead of seeking fails it with hundreds of rows.
+
+- The gallery only has to be big enough that a scan reads more than a case's bound allows. The test database has no statistics for SQLite's planner, so it picks the same plan at a few hundred rows as at many thousands, and more rows only slow every test.
+- A scan that stops at its first match reads the rows before it, whatever the table's size, so a case looks for a row far enough in that the rows before it pass the bound: in a later day, never the first.
 
 ## The web app
 
