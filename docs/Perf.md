@@ -1,6 +1,6 @@
 # Performance
 
-Whether pix.tacocat.com on Cloudflare would feel faster than it does on AWS today: the goal, how it is measured, what the measurements say, and what has been tried. The AWS side is written up in `docs/plans/EdgeCachedAlbums.md` in `tacocat-gallery-sam` and `docs/plans/Observability.md` in `tacocat-gallery-sveltekit`.
+Whether pix.tacocat.com on Cloudflare feels at least as fast as it does on AWS today: the goal, how it is measured, what the measurements say, and what has been tried. The AWS side is written up in `docs/plans/EdgeCachedAlbums.md` in `tacocat-gallery-sam` and `docs/plans/Observability.md` in `tacocat-gallery-sveltekit`.
 
 ## Where it stands
 
@@ -37,7 +37,7 @@ Browser runs of the email reader's visit to `/2026/09-13`, the four rounds from 
 
 ## Goal
 
-Perceived performance better than the AWS site in almost every case. A case is a scenario: a reader in California, Louisiana or France loading an album page, either cold, after an hour or more in which nobody has touched the site, the usual case at this traffic, or warm, just after someone else was there; in a fresh browser or, as most readers arrive, with the app's JS cached from the last email's album. Each scenario is judged on the whole page load as the reader sees it, not step by step: Cloudflare can lose one step, such as the album JSON, and still win the page. Timings of single steps explain a result; they do not decide it.
+Perceived performance no worse than the AWS site's. The goal was better in almost every case until the measurements showed the two sites on par and Cloudflare's developer ergonomics made that enough. A case is a scenario: a reader in California, Louisiana or France loading an album page, either cold, after an hour or more in which nobody has touched the site, the usual case at this traffic, or warm, just after someone else was there; in a fresh browser or, as most readers arrive, with the app's JS cached from the last email's album. Each scenario is judged on the whole page load as the reader sees it, not step by step: Cloudflare can lose one step, such as the album JSON, and still win the page. Timings of single steps explain a result; they do not decide it.
 
 The verdict is a page load in a real browser from a reader's region. Timings of single requests are for finding out why a page is slow, not whether it is: they miss what a browser does with connection hints, HTTP/3 and connection reuse, which is why the local `npm run perf` script in `tacocat-gallery-sveltekit` is not a verdict either (its bundled Chromium ignores `preconnect`).
 
@@ -122,6 +122,7 @@ What touched production during the current series, so a round is read against it
 - **2026-09-28, 08:11 to 09:01 UTC:** three releases carried the stable chunk names, the media-page prefetch and the bundle split, ahead of the 11:23 round.
 - **2026-09-28, 19:24 UTC:** every Cloudflare run from California was slow while AWS's were as usual, page TTFB 130 to 252 ms against 65 to 77 in other rounds: the path from DebugBear's machine, not the site. Kept in the table.
 - **2026-09-28, 21:06 UTC:** production moved to a Worker, database and buckets named for the environment, and only `/2025/09-29` was imported into it, so the 22:23 round's Cloudflare pages got a 404 and are left out. `/2026/09-13/` imported again at 00:33 UTC on the 29th.
+- **2026-09-30, 02:20 to 02:31 UTC:** production's database emptied and migrated from a new baseline for the ULID version ids, then both albums imported again, `/2025/09-29/` from 02:29 and `/2026/09-13/` finishing at 02:31, so every image URL and edge cache is new ahead of the 05:23 round.
 
 ## Appendix: the journey script
 

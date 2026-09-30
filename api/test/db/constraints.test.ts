@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
-import { type Orm, orm, schema, upsertItem } from '../../src/db';
-import { testVersionId } from '../version-id';
+import { type ItemUpsert, type Orm, orm, schema, upsertItem } from '../../src/db';
+import { testVersionId, withVersionId } from '../version-id';
 
 // Every rule about a single row is a constraint, so that no code path can write a row the rules forbid. These write
 // rows straight to the tables, past the shared schema, and expect the database to refuse each one by name. Drizzle
@@ -19,7 +19,6 @@ const IMAGE: schema.NewItem = {
     itemName: 'felix',
     itemType: 'media',
     mediaType: 'image',
-    versionId: testVersionId('v1'),
     width: 4032,
     height: 3024,
 };
@@ -30,6 +29,10 @@ const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/v;
 
 function database(): Orm {
     return orm(env.DB);
+}
+
+function insertItem(db: Orm, row: schema.NewItem): ItemUpsert {
+    return db.insert(schema.item).values(withVersionId(row));
 }
 
 describe('an item row', () => {
@@ -189,10 +192,7 @@ describe('an item row', () => {
         { name: 'media at a negative place', row: { ...IMAGE, position: -1 }, constraint: 'item_position_check' },
         { name: 'media at a fractional place', row: { ...IMAGE, position: 1.5 }, constraint: 'item_position_check' },
     ])('refuses $name', async ({ row, constraint }) => {
-        const insert = database()
-            .insert(schema.item)
-            .values(row as schema.NewItem)
-            .run();
+        const insert = insertItem(database(), row as schema.NewItem).run();
 
         await expect(insert).rejects.toMatchObject(refusedBy(constraint));
     });
@@ -212,13 +212,13 @@ describe('an item row', () => {
         { name: 'a published album with a summary', row: { ...DAY, summary: 'Felix turns one', published: true } },
         { name: 'media in the first place', row: { ...IMAGE, position: 0 } },
     ])('accepts $name', async ({ row }) => {
-        const insert = database().insert(schema.item).values(row).run();
+        const insert = insertItem(database(), row).run();
 
         await expect(insert).resolves.toMatchObject({ meta: { changes: expect.any(Number) } });
     });
 
     it('is made and changed at the same moment, in the format the checks expect', async () => {
-        const [row] = await database().insert(schema.item).values(IMAGE).returning();
+        const [row] = await insertItem(database(), IMAGE).returning();
 
         expect(row?.createdAt).toMatch(TIMESTAMP);
         expect(row?.updatedAt).toBe(row?.createdAt);
@@ -226,7 +226,7 @@ describe('an item row', () => {
 
     it('moves its update time on an update through the query builder', async () => {
         const { item } = schema;
-        const [before] = await database().insert(schema.item).values(IMAGE).returning();
+        const [before] = await insertItem(database(), IMAGE).returning();
         // SQLite's clock has millisecond resolution, so an update lands in a later millisecond soon enough.
         await vi.waitFor(async () => {
             await database()
@@ -250,7 +250,7 @@ describe('an item row', () => {
         const db = database();
         const media = { parentPath: `${DAY.parentPath}${DAY.itemName}/`, itemName: 'first' };
         await db.batch([
-            upsertItem(db, { ...IMAGE, ...media }),
+            upsertItem(db, withVersionId({ ...IMAGE, ...media })),
             upsertItem(db, DAY),
             db
                 .update(schema.item)
@@ -268,7 +268,7 @@ describe('an item row', () => {
     it('loses its thumbnail when the media it shows is deleted', async () => {
         const db = database();
         const { item } = schema;
-        const [media] = await db.insert(item).values(IMAGE).returning();
+        const [media] = await insertItem(db, IMAGE).returning();
         await db.insert(item).values({ ...DAY, thumbnailId: media?.id });
         await db
             .delete(item)
@@ -281,22 +281,33 @@ describe('an item row', () => {
 
     it('cannot share its place in the album with another media item', async () => {
         const db = database();
-        await db.insert(schema.item).values({ ...IMAGE, position: 3 });
-        const insert = db
-            .insert(schema.item)
-            .values({ ...IMAGE, itemName: 'milo', position: 3 })
-            .run();
+        await insertItem(db, { ...IMAGE, position: 3 });
+        const insert = insertItem(db, { ...IMAGE, itemName: 'milo', position: 3 }).run();
 
         await expect(insert).rejects.toMatchObject(refusedBy('item.parent_path, item.position'));
     });
 
     it('can take the place a media item in another album has', async () => {
         const db = database();
-        await db.insert(schema.item).values({ ...IMAGE, position: 3 });
-        const insert = db
-            .insert(schema.item)
-            .values({ ...IMAGE, parentPath: '/2001/06-16/', position: 3 })
-            .run();
+        await insertItem(db, { ...IMAGE, position: 3 });
+        const insert = insertItem(db, { ...IMAGE, parentPath: '/2001/06-16/', position: 3 }).run();
+
+        await expect(insert).resolves.toMatchObject({ success: true });
+    });
+
+    it('cannot share its file with another media item', async () => {
+        const db = database();
+        const shared = { ...IMAGE, versionId: testVersionId('v1') };
+        await insertItem(db, shared);
+        const insert = insertItem(db, { ...shared, parentPath: '/2001/06-16/' }).run();
+
+        await expect(insert).rejects.toMatchObject(refusedBy('item.version_id'));
+    });
+
+    it('can be one of many albums without a file', async () => {
+        const db = database();
+        await db.insert(schema.item).values(YEAR);
+        const insert = db.insert(schema.item).values(DAY).run();
 
         await expect(insert).resolves.toMatchObject({ success: true });
     });
@@ -373,7 +384,7 @@ describe('an upload row', () => {
 
     it('refuses a target id on an upload that is no replacement', async () => {
         const db = database();
-        const [media] = await db.insert(schema.item).values(IMAGE).returning();
+        const [media] = await insertItem(db, IMAGE).returning();
         const insert = db
             .insert(schema.upload)
             .values({ ...UPLOAD, targetId: media?.id })
@@ -401,7 +412,7 @@ describe('an upload row', () => {
 
     it('keeps saying it was a replacement after its target is deleted', async () => {
         const db = database();
-        const [media] = await db.insert(schema.item).values(IMAGE).returning();
+        const [media] = await insertItem(db, IMAGE).returning();
         await db
             .insert(schema.upload)
             .values({ ...UPLOAD, versionId: testVersionId('v2'), replacement: true, targetId: media?.id });

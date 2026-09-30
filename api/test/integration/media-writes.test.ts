@@ -11,7 +11,6 @@ const DAY = '/1990/06-15/';
 const IMAGE = {
     itemType: 'media',
     mediaType: 'image',
-    versionId: testVersionId('v1'),
     width: 400,
     height: 300,
 } as const;
@@ -47,16 +46,16 @@ describe('a media item', () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1990', itemType: 'album', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', published: true }),
-            putItem({ parentPath: DAY, itemName: 'felix', ...IMAGE, title: 'Felix', description: 'At one' }),
-            putItem({ parentPath: DAY, itemName: 'cake', ...IMAGE, versionId: testVersionId('v2') }),
             putItem({
                 parentPath: DAY,
-                itemName: 'clip',
+                itemName: 'felix',
                 ...IMAGE,
-                mediaType: 'video',
-                versionId: testVersionId('v3'),
-                durationSeconds: 9,
+                versionId: testVersionId('v1'),
+                title: 'Felix',
+                description: 'At one',
             }),
+            putItem({ parentPath: DAY, itemName: 'cake', ...IMAGE }),
+            putItem({ parentPath: DAY, itemName: 'clip', ...IMAGE, mediaType: 'video', durationSeconds: 9 }),
         ]);
         await write('PATCH', `/api/album-thumb${DAY}`, { mediaPath: `${DAY}felix` });
         await write('PATCH', '/api/album-thumb/1990/', { mediaPath: `${DAY}felix` });

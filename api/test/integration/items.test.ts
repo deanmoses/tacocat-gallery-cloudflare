@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { getTableColumns } from 'drizzle-orm';
+import { eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import { callAsAdmin, putItem, storedItem } from '../helpers';
-import { testVersionId } from '../version-id';
+import { testVersionId, withVersionId } from '../version-id';
 
-const MEDIA = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
+const MEDIA = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 describe('saving an item', () => {
     const { item } = schema;
@@ -63,7 +63,13 @@ describe('saving an item', () => {
         {
             what: 'a video',
             stale: STALE_VIDEO,
-            saved: { itemName: 'b', ...MEDIA, mediaType: 'video', durationSeconds: 1 } as const,
+            saved: {
+                itemName: 'b',
+                ...MEDIA,
+                mediaType: 'video',
+                versionId: testVersionId('v1'),
+                durationSeconds: 1,
+            } as const,
         },
     ])(
         'leaves $what as a fresh insert of the same values would, clearing every field left out',
@@ -75,19 +81,20 @@ describe('saving an item', () => {
             // Both stale rows together name every column, including ones added after this test.
             expect(Object.keys(stale).toSorted()).toStrictEqual(COLUMNS.toSorted());
 
+            // The fresh row goes first and is removed once read, since a file can belong to one item only.
+            await upsertItem(database, { ...saved, ...fresh }).run();
+            const expected = await read(fresh.parentPath, saved.itemName);
+            await database.delete(item).where(eq(item.parentPath, fresh.parentPath)).run();
             await upsertItem(database, { ...stale, ...saved, parentPath }).run();
             await upsertItem(database, { ...saved, parentPath }).run();
-            await upsertItem(database, { ...saved, ...fresh }).run();
 
-            await expect(read(parentPath, saved.itemName)).resolves.toStrictEqual(
-                await read(fresh.parentPath, saved.itemName),
-            );
+            await expect(read(parentPath, saved.itemName)).resolves.toStrictEqual(expected);
         },
     );
 
     it('keeps when an item was made and moves when it was changed', async () => {
         const database = orm(env.DB);
-        const saved = { parentPath: '/2001/06-15/', itemName: 'kept', ...MEDIA };
+        const saved = withVersionId({ parentPath: '/2001/06-15/', itemName: 'kept', ...MEDIA });
         await upsertItem(database, saved).run();
         const before = await storedItem(saved.parentPath, saved.itemName);
         // SQLite's clock has millisecond resolution, so the second save lands in a later millisecond.
@@ -176,6 +183,20 @@ describe('saving an item through the API', () => {
             errorMessage: `CHECK constraint failed: ${constraint}`,
         });
         await expect(storedItem(body.parentPath, body.itemName)).resolves.toBeUndefined();
+    });
+
+    it('is refused for a file another item already has, naming the columns', async () => {
+        await putItem({ ...ITEM, itemName: 'first' });
+        const response = await callAsAdmin('/api/item', {
+            method: 'PUT',
+            body: JSON.stringify({ ...ITEM, itemName: 'second' }),
+        });
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toStrictEqual({
+            errorMessage: 'UNIQUE constraint failed: item.version_id',
+        });
+        await expect(storedItem(ITEM.parentPath, 'second')).resolves.toBeUndefined();
     });
 
     it.each([

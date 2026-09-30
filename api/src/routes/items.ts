@@ -29,10 +29,14 @@ export async function putItem(request: Request, env: Env): Promise<Response> {
     }
 }
 
-/** D1's message when a constraint refused the row, found through the error Drizzle wraps it in; null for anything else. */
+/**
+ * D1's message when a constraint refused the row, found through the error Drizzle wraps it in; null for anything else.
+ * A check constraint is named, and a unique one is spelled as its columns, `item.parent_path, item.position`, so the
+ * whole list is kept.
+ */
 function constraintFailure(error: unknown): string | null {
     const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
     const message = cause instanceof Error ? cause.message : '';
-    const match = /(?:CHECK|FOREIGN KEY|UNIQUE) constraint failed(?::\s*\w+)?/v.exec(message);
+    const match = /(?:CHECK|FOREIGN KEY|UNIQUE) constraint failed(?::\s*[\w.]+(?:,\s*[\w.]+)*)?/v.exec(message);
     return match === null ? null : match[0];
 }

@@ -178,6 +178,36 @@ async function uploadRow(versionId: string): Promise<typeof schema.upload.$infer
     return orm(env.DB).select().from(schema.upload).where(eq(schema.upload.versionId, versionId)).get();
 }
 
+/**
+ * Has the pipeline's next write batch commit, then `between` run, then the step fail, so the step is retried after its
+ * write committed, as when the engine loses a step's result.
+ */
+function failingAfterTheWrite(between?: () => Promise<unknown>): void {
+    const batch = env.DB.batch.bind(env.DB);
+    vi.spyOn(env.DB, 'batch').mockImplementationOnce(async (statements) => {
+        await batch(statements);
+        await between?.();
+        throw new Error('the step result was lost');
+    });
+}
+
+/** Runs `between` just before the pipeline's next write batch, as an admin acting while a video transcodes would. */
+function interruptingTheWrite(between: () => Promise<unknown>): void {
+    const batch = env.DB.batch.bind(env.DB);
+    vi.spyOn(env.DB, 'batch').mockImplementationOnce(async (statements) => {
+        await between();
+        return batch(statements);
+    });
+}
+
+async function mediaNames(): Promise<{ itemName: string }[]> {
+    return orm(env.DB)
+        .select({ itemName: schema.item.itemName })
+        .from(schema.item)
+        .where(eq(schema.item.itemType, 'media'))
+        .all();
+}
+
 describe('upload pipeline', () => {
     beforeEach(seedDay);
 
@@ -403,6 +433,70 @@ describe('upload pipeline', () => {
         expect(item?.versionId).toBe(versionId);
         expect(inbox).toBeNull();
     });
+
+    it.each([
+        { name: 'nothing changed', between: undefined, items: [{ itemName: 'retried' }] },
+        {
+            name: 'the admin renamed the item',
+            between: async () =>
+                callAsAdmin(`/api/media-rename${DAY}retried`, {
+                    method: 'POST',
+                    body: JSON.stringify({ newName: 'renamed' }),
+                }),
+            items: [{ itemName: 'renamed' }],
+        },
+        {
+            name: 'the admin deleted the item',
+            between: async () => callAsAdmin(`/api/media${DAY}retried`, { method: 'DELETE' }),
+            items: [],
+        },
+    ])('succeeds once when the write is retried after it committed and $name', async ({ between, items }) => {
+        const versionId = await stage(`${DAY}retried`, jpg);
+        failingAfterTheWrite(between);
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const [media, errors, row, inbox] = await Promise.all([
+            mediaNames(),
+            uploadErrors([`${DAY}retried`]),
+            uploadRow(versionId),
+            env.UPLOADS.head(inboxKey(versionId)),
+        ]);
+
+        expect(media).toStrictEqual(items);
+        expect(errors).toStrictEqual({});
+        expect(row?.completedAt).not.toBeNull();
+        expect(inbox).toBeNull();
+    });
+
+    it('succeeds when the write is retried after it committed and its finished upload row was cleaned up', async () => {
+        const versionId = await stage(`${DAY}retried`, jpg);
+        failingAfterTheWrite(async () =>
+            orm(env.DB).delete(schema.upload).where(eq(schema.upload.versionId, versionId)).run(),
+        );
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const [media, errors] = await Promise.all([mediaNames(), uploadErrors([`${DAY}retried`])]);
+
+        expect(media).toStrictEqual([{ itemName: 'retried' }]);
+        expect(errors).toStrictEqual({});
+    });
+
+    it('becomes an upload error when its album was deleted and made again in flight, though the new one has its id', async () => {
+        const versionId = await stage(`${DAY}orphan`, jpg);
+        const before = await storedItem('/2024/', '06-15');
+        interruptingTheWrite(async () => {
+            await callAsAdmin(`/api/album${DAY}`, { method: 'DELETE' });
+            await putItem({ parentPath: '/2024/', itemName: '06-15', itemType: 'album' });
+        });
+        await deliver(versionId);
+        const [after, media, errors] = await Promise.all([
+            storedItem('/2024/', '06-15'),
+            mediaNames(),
+            uploadErrors([`${DAY}orphan`]),
+        ]);
+
+        expect(after?.id).toBe(before?.id);
+        expect(media).toStrictEqual([]);
+        expect(errors[`${DAY}orphan`]).toBe(`Album [${DAY}] was deleted before the upload finished`);
+    });
 });
 
 describe('replacing a media item', () => {
@@ -444,7 +538,7 @@ describe('replacing a media item', () => {
             parentPath: DAY,
             itemName: 'tagged',
             ...IMAGE,
-            versionId: testVersionId('old'),
+            versionId: testVersionId('tagged'),
             tags: ['felix', 'dog'],
         });
 
@@ -459,7 +553,7 @@ describe('replacing a media item', () => {
             parentPath: DAY,
             itemName: 'tagged',
             ...IMAGE,
-            versionId: testVersionId('old'),
+            versionId: testVersionId('tagged'),
             tags: ['felix'],
         });
 
@@ -514,6 +608,52 @@ describe('replacing a media item', () => {
         expect(errors[`${DAY}felix`]).toBe(`Media [${DAY}felix] was deleted before the upload finished`);
         expect(item).toBeUndefined();
         expect(row).toMatchObject({ targetId: null, replacement: true, completedAt: null });
+    });
+
+    it('leaves a later replacement in place when the write is retried after it committed', async () => {
+        const versionId = await stage(`${DAY}felix`, jpg, { replace: true });
+        // What a later replacement's write leaves on the row.
+        failingAfterTheWrite(async () =>
+            orm(env.DB)
+                .update(schema.item)
+                .set({ versionId: testVersionId('later') })
+                .where(eq(schema.item.itemName, 'felix'))
+                .run(),
+        );
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const [felix, errors] = await Promise.all([storedItem(DAY, 'felix'), uploadErrors([`${DAY}felix`])]);
+
+        expect(felix?.versionId).toBe(testVersionId('later'));
+        expect(errors).toStrictEqual({});
+    });
+
+    it('succeeds when the write is retried after it committed and the admin deleted the item', async () => {
+        const versionId = await stage(`${DAY}felix`, jpg, { replace: true });
+        failingAfterTheWrite(async () => callAsAdmin(`/api/media${DAY}felix`, { method: 'DELETE' }));
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const [media, errors, row] = await Promise.all([
+            mediaNames(),
+            uploadErrors([`${DAY}felix`]),
+            uploadRow(versionId),
+        ]);
+
+        expect(media).toStrictEqual([]);
+        expect(errors).toStrictEqual({});
+        expect(row?.completedAt).not.toBeNull();
+    });
+
+    it('becomes an upload error when the item was deleted in flight, and leaves the new item that took its id', async () => {
+        const versionId = await stage(`${DAY}felix`, jpg, { replace: true });
+        const before = await storedItem(DAY, 'felix');
+        interruptingTheWrite(async () => {
+            await callAsAdmin(`/api/media${DAY}felix`, { method: 'DELETE' });
+            await putItem({ parentPath: DAY, itemName: 'milo', ...IMAGE, versionId: testVersionId('milo') });
+        });
+        await deliver(versionId);
+        const [milo, errors] = await Promise.all([storedItem(DAY, 'milo'), uploadErrors([`${DAY}felix`])]);
+
+        expect(milo).toMatchObject({ id: before?.id, versionId: testVersionId('milo') });
+        expect(errors[`${DAY}felix`]).toBe(`Media [${DAY}felix] was deleted before the upload finished`);
     });
 
     it('turns a photo into a video, with the transcoder', async () => {

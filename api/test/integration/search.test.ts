@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { like } from 'drizzle-orm';
-import { type GalleryRecord, type ItemWrite, type SearchResponse, parseSearch } from '@tacocat-gallery/shared';
+import { type GalleryRecord, type SearchResponse, parseSearch } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { call, callAsAdmin, parseExactly, putItem } from '../helpers';
-import { testVersionId } from '../version-id';
+import { type ItemFixture, call, callAsAdmin, parseExactly, putItem } from '../helpers';
+import { testVersionId, withVersionId } from '../version-id';
 
-const MEDIA = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
+const MEDIA = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 /** Searches as the web app does, with its URL, as a guest or as an admin. */
 async function search(terms: string, params = '', asAdmin = false): Promise<SearchResponse> {
@@ -25,6 +25,7 @@ describe('search', () => {
             parentPath: '/2024/07-01/',
             itemName: 'quesadilla',
             ...MEDIA,
+            versionId: testVersionId('v1'),
             title: 'Quesadilla night',
             description: 'Quesadillas at home',
             tags: ['dinner'],
@@ -61,7 +62,7 @@ describe('search', () => {
             summary: 'Tostada',
             published: true,
         });
-        await putItem({ parentPath: '/2024/07-03/', itemName: 'a', ...MEDIA });
+        await putItem({ parentPath: '/2024/07-03/', itemName: 'a', ...MEDIA, versionId: testVersionId('v1') });
         await callAsAdmin('/api/album-thumb/2024/07-03/', {
             method: 'PATCH',
             body: JSON.stringify({ mediaPath: '/2024/07-03/a' }),
@@ -83,7 +84,7 @@ describe('search', () => {
     });
 
     it('follows an update to the title', async () => {
-        const item: ItemWrite = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal' };
+        const item: ItemFixture = { ...MEDIA, parentPath: '/2024/07-02/', itemName: 'meal' };
         await putItem({ parentPath: '/2024/', itemName: '07-02', itemType: 'album', published: true });
         await putItem({ ...item, title: 'Enchilada night' });
         await putItem({ ...item, title: 'Burrito night' });
@@ -362,14 +363,17 @@ describe('search', () => {
             ...['01-01', '01-02', '02-01'].flatMap((day, dayIndex) => [
                 upsertItem(database, { parentPath: '/2000/', itemName: day, itemType: 'album', published: true }),
                 ...words.map((word, index) =>
-                    upsertItem(database, {
-                        parentPath: `/2000/${day}/`,
-                        itemName: `img_${index}`,
-                        ...MEDIA,
-                        title: `${word} ${dayIndex}`,
-                        description: `A photo about ${word}`,
-                        tags: [word],
-                    }),
+                    upsertItem(
+                        database,
+                        withVersionId({
+                            parentPath: `/2000/${day}/`,
+                            itemName: `img_${index}`,
+                            ...MEDIA,
+                            title: `${word} ${dayIndex}`,
+                            description: `A photo about ${word}`,
+                            tags: [word],
+                        }),
+                    ),
                 ),
             ]),
         ]);

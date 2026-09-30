@@ -25,8 +25,8 @@ describe('HEAD, which the app asks before creating or renaming', () => {
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '01-01', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '02-02', itemType: 'album', published: false }),
-            putItem({ parentPath: '/1982/01-01/', itemName: 'shown', ...IMAGE, versionId: testVersionId('v1') }),
-            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE, versionId: testVersionId('v1') }),
+            putItem({ parentPath: '/1982/01-01/', itemName: 'shown', ...IMAGE }),
+            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE }),
         ]);
     });
 
@@ -265,7 +265,7 @@ describe('an album thumbnail', () => {
         await Promise.all([
             putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '05-05', itemType: 'album', published: true }),
-            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a', versionId: testVersionId('v1') }),
+            putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a' }),
             putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b', versionId: testVersionId('v2') }),
         ]);
     });
