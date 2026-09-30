@@ -41,7 +41,7 @@ Counts and checksums are checked against the source, then the import bucket is d
 
 ### Videos
 
-The 52 videos' originals are copied like any other. Their playable form is not regenerated: the AWS derived bucket holds MediaConvert's H.264 MP4 and poster frame for each at `i/<path>/<versionId>/video-transcoded` and `video-poster`, and the copy puts them at `derived/<newVersionId>/video.mp4` and `poster.jpg`, which is all the `/v/` route and the poster-based thumbnails read; the row's width, height and duration come from DynamoDB as they do for a photo. That is 104 objects, few enough to move by key list with rclone. Pushing a video through the transcoder instead is the fallback for any that plays wrong; 34 minutes of video is inside the month's container allowance either way.
+The 52 videos' originals are copied like any other. Their playable form is not regenerated: the AWS derived bucket holds MediaConvert's H.264 MP4 and poster frame for each at `i/<path>/<versionId>/video-transcoded` and `video-poster`, and the copy puts them at `derived/<newVersionId>/video.mp4` and `poster.jpg`, which is all the `/v/` route and the poster-based thumbnails read; the row's width, height and duration come from DynamoDB as they do for a photo. That is 104 objects, 540 MB, the largest 98 MB, which `copy-video-derivatives.ts` copies from S3 through the laptop, under the same guard rails as the rename pass. It finds each by the row's own AWS version id, which named the derived files, and writes it under the id minted for the video's original, with the content type the transcoder gives its own. Pushing a video through the transcoder instead is the fallback for any that plays wrong; 34 minutes of video is inside the month's container allowance either way.
 
 ## Copy database
 
@@ -49,11 +49,11 @@ The rows come from a DynamoDB export written through `PUT /api/item`, with `item
 
 Two things the rows lose, decided rather than discovered later: AWS's `createdOn` and `updatedOn`, since the item write has no timestamp fields and the app shows neither, and keeping them would mean a field on the import body; and `position` only where the new names would reorder an album. AWS showed an album in its names' order by code point, and sanitizing moves some items, since a hyphen sorted before the extension's dot and a capital before any lowercase letter; captions that tell a story need their photos where they were, as in `/2010/10-10/`, whose `eiffel` follows nine `eiffel-tower` photos. So each of the 34 albums sanitizing reorders gets AWS's order through `PUT /api/album-order` (`awsOrder` in `aws-names.ts`), and every other album sorts by name, which is already AWS's order.
 
-The derived bucket is not copied: derivatives regenerate on request. The observed rate, about 7,700 distinct variants a month and 7,100 without bots, is above the 5,000 the Images allowance includes, so expect about $1 to $1.35 a month at $0.50 per 1,000 after the copy, which the Spending rules want said out loud; a backfill of the newest albums, if the first readers should not wait, is more of the same. `docs/Migrations.md` in the AWS repo has the lessons that apply: idempotent, resumable, newest albums first, diagnose before fix.
+Derived images are not copied, only the videos' transcodes ([Videos](#videos)): images regenerate on request. The observed rate, about 7,700 distinct variants a month and 7,100 without bots, is above the 5,000 the Images allowance includes, so expect about $1 to $1.35 a month at $0.50 per 1,000 after the copy, which the Spending rules want said out loud; a backfill of the newest albums, if the first readers should not wait, is more of the same. `docs/Migrations.md` in the AWS repo has the lessons that apply: idempotent, resumable, newest albums first, diagnose before fix.
 
 ## Verify
 
-- **Counts.** Rows per item type against the export, and objects in the originals bucket against media rows: every media row's original exists under its version id, and none is there without a row.
+- **Counts.** Rows per item type against the export, and objects in the originals bucket against media rows: every media row's original exists under its version id, and none is there without a row. Every video row has its `video.mp4` and `poster.jpg` in the derived bucket.
 - **Orphans.** An original copied under an id that a later minting replaced, for a photo replaced or moved on AWS, or dropped, for one deleted there, belongs to no row. The mintings list them, and the counts above find them; they are listed with their ids and deleted by hand once Moses has said yes, since a delete cannot be undone.
 - **Bytes.** Each original's size against S3's listing, and its ETag where the object was written in one part, which is every object under 100 MiB by Super Slurper's rule; the rename pass's `CopyObject` keeps a one-part object's ETag. An object Super Slurper wrote in parts, the 7 originals over 100 MiB, comes out of the rename pass with the MD5 of the whole file as its ETag, which S3's multipart ETag cannot be compared with, so those 7 are checked against the MD5 of Moses' own copies. The rclone sample verified 830 objects identical the same way.
 - **Decoding.** The bulk copy never opens a file, so nothing proves the Images binding can decode every file, scans of the 1800s included, where the pipeline would have refused one. Either the first reader finds a bad file as a broken image, or a sweep asks for one thumbnail per item, about 33,000 paid transformations at $0.50 per 1,000, about $17 once, newest albums first, and every refusal is a row to look at. The sweep is the choice this plan leans to; it needs a yes under the Spending rules before it runs.
@@ -63,7 +63,7 @@ The derived bucket is not copied: derivatives regenerate on request. The observe
 
 ## Freezing AWS
 
-AWS stays live while the copy is prepared, so the final run starts by freezing it: from the final scan until the hostname moves, Moses uploads, edits and deletes nothing on AWS, since a change made after the scan would not reach Cloudflare. The final run is, in order: the freeze; a fresh DynamoDB scan and S3 listing; the two checks over them; a minting `--from` the rehearsal's id file, which keeps every id the rehearsal minted for an unchanged original; the copy of whatever is new; the rename pass, which skips every original already there; the import; the verification; and the move of the hostname.
+AWS stays live while the copy is prepared, so the final run starts by freezing it: from the final scan until the hostname moves, Moses uploads, edits and deletes nothing on AWS, since a change made after the scan would not reach Cloudflare. The final run is, in order: the freeze; a fresh DynamoDB scan and S3 listing; the two checks over them; a minting `--from` the rehearsal's id file, which keeps every id the rehearsal minted for an unchanged original; the copy of whatever is new; the rename pass, which skips every original already there; the copy of the videos' MP4s and posters, which does the same; the import; the verification; and the move of the hostname.
 
 ## Rehearsal
 
@@ -107,57 +107,28 @@ After the Zenphoto recovery, that system's albums and photos are listed from its
 
 ### 2026-09-30
 
-#### Second review of the copy scripts
-
-The second review found four more things, and each is changed:
-
-- **The copy checks what it copies.** A second Super Slurper run with overwrite off leaves a photo replaced on AWS with its old bytes in the import bucket. The minting now records each file's size and ETag from the listing, and `copy-originals.ts` refuses a source whose size differs, or whose ETag differs where the source is one part, which is every object under 100 MiB. S3's listing has no multipart ETag today.
-- **A moved path gets a new id.** A new upload can move which of two same-named photos gets `_2`; an item whose path moved now gets a new id, so its copy's metadata names the path it has.
-- **Orphans are deleted by hand** after the counts ([Verify](#verify)).
-- **Comment lines over 120 characters**, which Prettier does not rewrap, are rewrapped.
-
-#### Review of the copy scripts
-
-A second session reviewed the copy scripts, and these changed:
-
-- **A later scan keeps the ids.** `mint-version-ids.ts` takes `--from` an earlier id file and mints only for new or replaced originals, where it had minted every id afresh each run, which after a fresh scan near cutover would have meant copying all 145 GB again under new ids. Minted from the first test file with the same scan, it kept all 37,975.
-- **The metadata names the file copied.** Each original's `aws-version-id` is now the version S3's listing shows as current, which is the one Super Slurper copies, where it was the version the row named: `/2026/01-23/jim13.jpg` now records `xD_IF9…`, the file it holds, not the expired `h.QQqWw…`.
-- **AWS freezes for the final run** ([Freezing AWS](#freezing-aws)), which the plan had not said.
-- **Two checks that pass on today's data:** the copy plan refuses a day album that would move onto an existing one, since `/1991/11-31/` moving onto a `/1991/11-30/` would merge the two, and an item whose name sanitizes to nothing gets no id, so its row is refused rather than written under its album's path.
-
-#### Version ids stamped with when they are minted
-
-A review of the copy scripts questioned stamping migrated ids with their album's date, and the ids now carry the moment they are minted, as an upload's do ([IDs](#ids)). The album-date stamps bought a listing of the originals bucket in album order, at the price of a timestamp that meant one thing for uploads and another for 38,000 migrated files, a special case for albums before 1970 and a refusal of any album dated 1970-01-01. The copy's newest-albums-first order now comes from the album paths. The entries below that mention stamping by album date describe the scripts as they were then.
-
 #### Copy scripts built and tried locally
 
-`mint-version-ids.ts` wrote 37,975 ids to a test file, the first `01C2JBFP00…`, midnight UTC on 2017-12-30, and a second run refused to overwrite it. `import-gallery.ts --to local` with that file wrote `/2010/10-10/` alone with `--only`, its year album included, AWS's order and both thumbnails, then all of it with `--all`: 39,829 rows, 1,854 thumbnails and 34 orders, none refused, in 80 seconds. `copy-originals.ts` has not copied anything yet, since there is no import bucket; a dry run of `/2010/10-10/` against staging from a bucket that does not exist stopped at the fifth failure, and the three already under way when it stopped failed after it, as they should.
+Nothing has been written to staging or production yet: there is no import bucket.
+
+- **`mint-version-ids.ts`** wrote 37,975 ids to a test file, and a second run refused to overwrite it. Minted `--from` that file with the same scan, it kept all 37,975.
+- **`import-gallery.ts --to local`** with that file wrote `/2010/10-10/` alone with `--only`, its year album included, AWS's order and both thumbnails, then all of it with `--all`: 39,829 rows, 1,854 thumbnails and 34 orders, none refused, in 80 seconds. The copy plan refuses a day album that would move onto an existing one and an item whose name sanitizes to nothing; today's data has neither.
+- **`copy-originals.ts`**, dry run of `/2010/10-10/` against staging from a bucket that does not exist, stopped at the fifth failure, and the three already under way when it stopped failed after it.
+- **`copy-video-derivatives.ts`**, dry run against staging with the test file, read the first bytes of `video-transcoded` and `video-poster` for all 52 videos and would copy all 104. All 52 of MediaConvert's MP4s declare M4V as their major brand, which the Worker's sniffer reads as `video/x-m4v`; they are H.264 MP4s all the same, and are copied as `video/mp4`.
 
 #### Two-bucket R2 copy test
 
-A throwaway script, with the OpenTofu token as S3 credentials, made two buckets, put a 200 KB object typed `image/jpeg` in one, and built a 300 MiB `video/quicktime` object there from thirty 10 MiB `UploadPartCopy`s, then copied each into the other bucket under an `originals/` key with its metadata replaced. Both buckets were deleted afterwards. What it showed:
-
-- **A copy crosses buckets**, and one copy takes 300 MiB, more than the gallery's largest original, `2019/03-17/match_5419.mov` at 281 MiB. So Super Slurper fills an import bucket, and no original needs `UploadPartCopy`.
-- **Size and one-part ETag are kept**: the small object's ETag was the same after the copy.
-- **A multipart source comes out as one part**: the 300 MiB object's ETag went from `da88…-30`, S3's form for thirty parts, to `58720d58…`, which is the MD5 of the whole file, computed locally.
-- **`x-amz-metadata-directive: REPLACE` drops the content type** unless the copy sends it; with `Content-Type` sent, it is kept, and the new metadata is all there is.
-- **`If-None-Match: *` on a copy is ignored**: a second copy onto an existing key answered 200 and overwrote.
-
-#### The missing albums are real
-
-The 11 albums the S3 version check found with files and no rows are real albums, which the 2023 move from Zenphoto to AWS lost, and Moses has their photos and Zenphoto's MySQL database, hosted on Dreamhost.
-
-Bringing them back is [its own step](#recover-lost-zenphoto-albums), after the copy.
+A throwaway script copied a 200 KB object and a 300 MiB one built from thirty parts between two throwaway buckets, with the OpenTofu token, then deleted both buckets. A copy crosses buckets and takes 300 MiB, past the gallery's largest original of 281 MiB; it keeps a one-part object's size and ETag, and gives a multipart one the MD5 of the whole file as its ETag; `x-amz-metadata-directive: REPLACE` drops the content type unless the copy sends it; and `If-None-Match: *` is ignored, so a second copy overwrites.
 
 #### S3 version check
 
 `aws s3api list-object-versions` of `tacocat-gallery-sam-prod-original-images`: 39,926 versions and 43 delete markers of 39,920 keys, complete. The delete markers are all single photos deleted in September 2026. `api/scripts/check-s3-versions.ts` compared it with the scan:
 
-- **37,974 of 37,975 rows are on their key's current version.** The other, `/2026/01-23/jim13.jpg`, names a version that has expired. S3 holds one version of the key, written at 04:34:17 on 2026-01-24, and the row was made a second later naming another: most likely the photo was uploaded twice within a second and its processing recorded the first upload after the second had replaced it. The only file there is is that one. AWS's page still shows it, from the derived images made from the expired version at 04:34:25 and 04:34:44, before it expired; the derived bucket also holds a 1024 made from the current one at 04:34:24. **Decided: the copy pairs the row with the current file**, and Moses looks at it afterwards ([Verify](#verify)).
+- **37,974 of 37,975 rows are on their key's current version.** The other, `/2026/01-23/jim13.jpg`, names a version that has expired. S3 holds one version of the key, written a second before the row, most likely the same photo uploaded twice; AWS's page still shows the expired one, from derived images made before it expired. **Decided: the copy pairs the row with the current file**, and Moses looks at it afterwards ([Verify](#verify)).
 - **1,903 current files no row names**, which the copy leaves behind:
     - 1,544 folder markers, keys ending in `/`.
     - About 190 files that are not photos: 81 `.xmp` sidecars, 78 beside a JPEG of the same name and 3 named for an album, mostly in `2014/10-31/`, `2014/12-21/` and `2014/12-28/`; 90 dotfiles and files with no extension; 17 `.txt` files; `.picasa.ini`, `Thumbs.db` and `.BridgeSort`. Left behind, sidecars included, without looking inside.
-    - 147 photos in 11 albums that have no row, which are real albums the 2023 move lost ([above](#the-missing-albums-are-real)).
+    - 147 photos in 11 albums that have no row, which are real albums the 2023 move lost ([Recover lost Zenphoto albums](#recover-lost-zenphoto-albums)).
     - 18 more files in albums that do exist: 9 TIFFs in `2008/08-21/`, a Sony `.arw`, a Nikon `.nef`, a `.heic`, 4 PNGs in `2025/04-27/`, `2015/01-11/a4-aceeyah-laughing.jpg` and a file named `.jpg` in `2019/07-15/`. **Decided: left behind**, and revisited in the Zenphoto comparison ([Recover lost Zenphoto albums](#recover-lost-zenphoto-albums)).
 
 #### check-gallery.ts #4
@@ -175,11 +146,11 @@ With crops trimmed and dropped: 39,809 rows written, 20 refused, the 13 empty ti
 - 112 thumbnail crops that start below 0 or run past the image. 104 run at most 10 pixels past, all within 1% of the photo's short side: AWS's crop tool made squares a few pixels larger than the short side, such as 3653×3653 on the 5472×3648 `/2023/05-07/horse_race5.jpg`, and its image Lambda trimmed them when cutting the thumbnail, which looks right on the site. The copy trims them the same way (`copiedCrop` in `api/scripts/aws-crops.ts`). The other 8 run exactly 1,008 pixels past, 4032 less 3024: each was cut while AWS stored the photo's raw pixel size with width and height swapped, since uploads ignored the EXIF orientation until commit 00dea18 of the AWS repo on 2026-01-14, and each was last updated on 2026-01-15 by that repo's Fix Dimensions & Tags migration, which corrected the size and left the crop. Their thumbnails on AWS are not what was chosen, as `/2025/12-28/uc_campus1.jpg` shows, so the copy drops those crops for the default and Moses cuts them again afterwards ([Afterwards](#afterwards)).
 - 13 titles, all in `/2025/12-12/`, and 7 album summaries that AWS stored as empty strings, which the caption rule refuses so that no caption is always written one way. The copy leaves them out.
 
-What the copy changes: `/1991/11-31/`, an impossible date, goes to `/1991/11-30/` ([Afterwards](#afterwards)). 3,640 names change beyond losing their extension, mostly hyphens to underscores, and one collides, `/2026/09-21/o_the_flip08.png` becoming `o_the_flip08_2`. Sanitizing would reorder 34 albums, which get AWS's order back, all 34 accepted. 201 caption links are rewritten, none unresolved. 100 media are in albums before 1970 and are stamped from 1970-01-01.
+What the copy changes: `/1991/11-31/`, an impossible date, goes to `/1991/11-30/` ([Afterwards](#afterwards)). 3,640 names change beyond losing their extension, mostly hyphens to underscores, and one collides, `/2026/09-21/o_the_flip08.png` becoming `o_the_flip08_2`. Sanitizing would reorder 34 albums, which get AWS's order back, all 34 accepted. 201 caption links are rewritten, none unresolved.
 
 #### check-gallery.ts #1
 
-`check-gallery.ts` against `wrangler dev` refused 37,842 rows on `item_file_check`, because it sent S3's version ids, which the ULID constraint refuses. The check now mints each id as the copy will, stamped by album date ([IDs](#ids)).
+`check-gallery.ts` against `wrangler dev` refused 37,842 rows on `item_file_check`, because it sent S3's version ids, which the ULID constraint refuses. The check now mints each id as the copy will ([IDs](#ids)).
 
 #### DynamoDB scan
 
