@@ -244,7 +244,7 @@ describe('rows read on a gallery-sized table', () => {
 
     it('placing a new upload under its album reads a few rows', async () => {
         const upload = await uploadRow(database, 4, 'new');
-        const result = await database.run(insertItem(database, upload.albumId ?? 0, upload, FACTS));
+        const result = await database.run(insertItem(database, upload, FACTS));
 
         expect(result.meta.changes).toBeGreaterThan(0);
         expect(result.meta.rows_read).toBeLessThanOrEqual(OVERHEAD);
@@ -257,7 +257,7 @@ describe('rows read on a gallery-sized table', () => {
             .where(and(eq(item.parentPath, dayPath(4)), eq(item.itemName, 'img_3')))
             .get();
         const upload = await uploadRow(database, 4, 'img_3', target?.id ?? null);
-        const result = await database.run(replaceItem(database, target?.id ?? 0, upload, FACTS));
+        const result = await database.run(replaceItem(database, upload, FACTS));
         const replaced = await database
             .select({ itemName: item.itemName, versionId: item.versionId })
             .from(item)

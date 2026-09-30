@@ -67,7 +67,8 @@ export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, s
     }
     const key = inboxKey(versionId);
     const database = orm(env.DB);
-    // Read outside the steps: whether the row is there and what it is named never change once presign wrote it. Its
+    // Read outside the steps: whether the row is there, what it is named and whether it is a replacement never change
+    // once presign wrote it. Its album and target, which the database clears, are read by the write itself. Its
     // completion, which the write step changes, is judged inside the first step, so an instance resumed after that
     // step judges it as it was.
     const upload = await database.select().from(schema.upload).where(eq(schema.upload.versionId, versionId)).get();
@@ -316,49 +317,76 @@ type Recorded = { ok: true } | { ok: false; error: string };
  * from the album's row inside the insert; a replacement changes its target's file, type and size, keeping the name,
  * the captions and the crop where it still fits. Each is conditional on what it needs being there and, for a new
  * item, its name being free, and the completion on the item having been written, so a batch in which the item cannot
- * be written marks nothing complete and the read afterwards says why.
+ * be written marks nothing complete and the read afterwards says why. Every statement is also conditional on the
+ * upload not being complete yet: a step can be retried after its batch committed, and by then the admin may have
+ * renamed, deleted or replaced the item, which the retry must leave as they are.
  */
 async function recordUpload(database: Orm, upload: Upload, facts: MediaFacts): Promise<Recorded> {
     const { item } = schema;
     const path = mediaPath(upload.parentPath, upload.itemName);
-    if (upload.replacement && upload.targetId === null) {
-        return { ok: false, error: `Media [${path}] was deleted before the upload finished` };
-    }
-    if (upload.albumId === null) {
-        return { ok: false, error: `Album [${upload.parentPath}] was deleted before the upload finished` };
-    }
+    const pending = uploadPending(database, upload.versionId);
     const itemWritten = exists(
         database.select({ id: OTHER.id }).from(OTHER).where(eq(OTHER.versionId, upload.versionId)),
     );
     const [written] = await database.batch([
-        upload.replacement && upload.targetId !== null
-            ? replaceItem(database, upload.targetId, upload, facts)
-            : insertItem(database, upload.albumId, upload, facts),
+        upload.replacement ? replaceItem(database, upload, facts) : insertItem(database, upload, facts),
         // The first upload into a day becomes its thumbnail; an admin can pick another later.
         database
             .update(item)
             .set({
                 thumbnailId: sql`(${database.select({ id: OTHER.id }).from(OTHER).where(eq(OTHER.versionId, upload.versionId))})`,
             })
-            .where(and(eq(item.id, upload.albumId), eq(item.itemType, 'album'), isNull(item.thumbnailId), itemWritten)),
-        uploadErrorDelete(database, path),
+            .where(
+                and(
+                    eq(item.id, uploadColumn(database, upload.versionId, schema.upload.albumId)),
+                    eq(item.itemType, 'album'),
+                    isNull(item.thumbnailId),
+                    itemWritten,
+                    pending,
+                ),
+            ),
+        uploadErrorDelete(database, path, pending),
         database
             .update(schema.upload)
             .set({ completedAt: NOW })
-            .where(and(eq(schema.upload.versionId, upload.versionId), itemWritten)),
+            .where(and(eq(schema.upload.versionId, upload.versionId), isNull(schema.upload.completedAt), itemWritten)),
     ]);
-    return written.length > 0 ? { ok: true } : { ok: false, error: await explain(database, upload) };
+    return written.length > 0 ? { ok: true } : explain(database, upload);
+}
+
+/** Whether the upload is still to be written, which the batch that writes it ends. */
+function uploadPending(database: Orm, versionId: string): SQL {
+    const { upload } = schema;
+    return exists(
+        database
+            .select({ versionId: upload.versionId })
+            .from(upload)
+            .where(and(eq(upload.versionId, versionId), isNull(upload.completedAt))),
+    );
+}
+
+/**
+ * The upload's album or target as the statement runs. An id read when the instance started may since have been
+ * cleared by the database, or, once cleared, given to a new item, since SQLite reuses the highest row id.
+ */
+function uploadColumn(
+    database: Orm,
+    versionId: string,
+    column: typeof schema.upload.albumId | typeof schema.upload.targetId,
+): SQL {
+    const { upload } = schema;
+    return sql`(${database.select({ id: column }).from(upload).where(eq(upload.versionId, versionId))})`;
 }
 
 /** A statement that writes the item and returns its id if it did. */
 type ItemWrite = RunnableQuery<{ id: number }[], 'sqlite'> & SQLWrapper;
 
 /**
- * A new item under the album's current path, unless the album is gone or the name is taken there. Drizzle's insert
- * from a select wants every column of the table, in the table's order, so the ones the file does not fill are here as
- * what the defaults would give them.
+ * A new item under the album's current path, unless the album is gone, the name is taken there or the upload is
+ * already complete. Drizzle's insert from a select wants every column of the table, in the table's order, so the ones
+ * the file does not fill are here as what the defaults would give them.
  */
-export function insertItem(database: Orm, albumId: number, upload: Upload, facts: MediaFacts): ItemWrite {
+export function insertItem(database: Orm, upload: Upload, facts: MediaFacts): ItemWrite {
     const { item } = schema;
     const albumPath = sql<string>`${ALBUM.parentPath} || ${ALBUM.itemName} || '/'`;
     const taken = database
@@ -391,17 +419,25 @@ export function insertItem(database: Orm, albumId: number, upload: Upload, facts
                     updatedAt: sql<string>`${NOW}`.as('updated_at'),
                 })
                 .from(ALBUM)
-                .where(and(eq(ALBUM.id, albumId), eq(ALBUM.itemType, 'album'), notExists(taken))),
+                .where(
+                    and(
+                        eq(ALBUM.id, uploadColumn(database, upload.versionId, schema.upload.albumId)),
+                        eq(ALBUM.itemType, 'album'),
+                        notExists(taken),
+                        uploadPending(database, upload.versionId),
+                    ),
+                ),
         )
         .returning({ id: item.id });
 }
 
 /**
- * The target row pointed at the new file, under the name it has now, whatever the upload was issued for. The captions
- * stay, and the file's fill in where the row has none; the file's tags join the row's, since a tag is never wrong for
- * being on the old file too. The crop is pixels of the old image, so it survives only a file of exactly the old size.
+ * The target row pointed at the new file, under the name it has now, whatever the upload was issued for, unless the
+ * upload is already complete, since the row may have been replaced again since. The captions stay, and the file's
+ * fill in where the row has none; the file's tags join the row's, since a tag is never wrong for being on the old file
+ * too. The crop is pixels of the old image, so it survives only a file of exactly the old size.
  */
-export function replaceItem(database: Orm, targetId: number, upload: Upload, facts: MediaFacts): ItemWrite {
+export function replaceItem(database: Orm, upload: Upload, facts: MediaFacts): ItemWrite {
     const { item } = schema;
     return database
         .update(item)
@@ -416,7 +452,13 @@ export function replaceItem(database: Orm, targetId: number, upload: Upload, fac
             tags: mergedTags(item.tags, tagsJson(facts)),
             thumbnailCrop: sql`CASE WHEN ${item.width} = ${facts.width} AND ${item.height} = ${facts.height} THEN ${item.thumbnailCrop} ELSE NULL END`,
         })
-        .where(and(eq(item.id, targetId), eq(item.itemType, 'media')))
+        .where(
+            and(
+                eq(item.id, uploadColumn(database, upload.versionId, schema.upload.targetId)),
+                eq(item.itemType, 'media'),
+                uploadPending(database, upload.versionId),
+            ),
+        )
         .returning({ id: item.id });
 }
 
@@ -435,29 +477,46 @@ function mergedTags(existing: SQLWrapper, incoming: string | null): SQL {
     ))`;
 }
 
-const EXPLANATION = valibot.array(valibot.object({ album: valibot.nullable(valibot.number()) }));
+const EXPLANATION = valibot.array(
+    valibot.object({ done: valibot.number(), album: valibot.nullable(valibot.number()) }),
+);
 
 /**
- * Why the item was not written: one read of what the batch's conditions looked at. A replacement's only condition is
- * its target's row, which the database clears from the upload when the row goes.
+ * Why the item was not written, or that it already was: one read of what the batch's conditions looked at. An upload
+ * no longer pending was written by an earlier run; its row is taken as finished when it is gone too, since only a
+ * finished row is ever disposable. A replacement's only other condition is its target's row, which the database clears
+ * from the upload when the row goes.
  */
-async function explain(database: Orm, upload: Upload): Promise<string> {
+async function explain(database: Orm, upload: Upload): Promise<Recorded> {
     const { item } = schema;
     const path = mediaPath(upload.parentPath, upload.itemName);
-    if (upload.replacement) {
-        return `Media [${path}] was deleted before the upload finished`;
-    }
     const result = await database.run(
         sql`SELECT
+            NOT ${uploadPending(database, upload.versionId)} AS done,
             (${database
                 .select({ id: item.id })
                 .from(item)
-                .where(and(eq(item.id, upload.albumId ?? -1), eq(item.itemType, 'album')))}) AS album`,
+                .where(
+                    and(
+                        eq(item.id, uploadColumn(database, upload.versionId, schema.upload.albumId)),
+                        eq(item.itemType, 'album'),
+                    ),
+                )}) AS album`,
     );
     const [facts] = valibot.parse(EXPLANATION, result.results);
-    return facts?.album === null || facts?.album === undefined
-        ? `Album [${upload.parentPath}] was deleted before the upload finished`
-        : `A media item already exists at [${path}]`;
+    if (facts?.done !== 0) {
+        return { ok: true };
+    }
+    if (upload.replacement) {
+        return { ok: false, error: `Media [${path}] was deleted before the upload finished` };
+    }
+    return {
+        ok: false,
+        error:
+            facts.album === null
+                ? `Album [${upload.parentPath}] was deleted before the upload finished`
+                : `A media item already exists at [${path}]`,
+    };
 }
 
 /** Records why the file could not become an item, for the admin to see, and drops it. */

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
+import { type SQL, and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { SQLiteInsertBase } from 'drizzle-orm/sqlite-core';
 import { NOW, type Orm, orm, schema } from '../db';
@@ -22,9 +22,9 @@ export function uploadErrorUpsert(
         });
 }
 
-export function uploadErrorDelete(database: Orm, path: string): BatchItem<'sqlite'> {
+export function uploadErrorDelete(database: Orm, path: string, when: SQL): BatchItem<'sqlite'> {
     const { uploadError } = schema;
-    return database.delete(uploadError).where(eq(uploadError.path, path));
+    return database.delete(uploadError).where(and(eq(uploadError.path, path), when));
 }
 
 // D1 binds at most 100 parameters to one statement: one is the cutoff, and each path asked about is another.
