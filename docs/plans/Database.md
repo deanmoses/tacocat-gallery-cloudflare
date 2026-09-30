@@ -80,7 +80,7 @@ So the constraints are insurance, not a response to damage. A rule also need not
 
 ### Transactions
 
-D1's one atomic unit is a batch of statements fixed before any runs, and Drizzle's `transaction()` sends a `BEGIN` that D1 refuses. The pattern that follows, conditions inside each statement and a second read to explain a write that changed nothing, is in `docs/plans/AwsMigration.md`; six routes use it. It works and is tested, but it is more thought per write than `BEGIN … COMMIT`.
+D1's one atomic unit is a batch of statements fixed before any runs, and Drizzle's `transaction()` sends a `BEGIN` that D1 refuses. The pattern that follows, conditions inside each statement and a second read to explain a write that changed nothing, is in `docs/plans/AwsPort.md`; six routes use it. It works and is tested, but it is more thought per write than `BEGIN … COMMIT`.
 
 Postgres has interactive transactions. From a Worker far from the database each statement in one is a round trip, about 150 ms from Paris to Oregon, so they would have to stay short, or run in a Worker placed beside the database.
 

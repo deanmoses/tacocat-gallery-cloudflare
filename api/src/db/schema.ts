@@ -208,8 +208,8 @@ export const user = sqliteTable(
 );
 
 /**
- * Every version id the Worker mints, one row per presigned URL: what the upload is for, who asked, and whether the
- * pipeline has made it an item. A row is read once, when its file lands; completed rows stay.
+ * Uploads in progress, one row per presigned URL: what the upload is for, who asked, and whether the pipeline has made
+ * it an item. A row is read when its file lands, and once the upload is done it is disposable.
  */
 export const upload = sqliteTable(
     'upload',
