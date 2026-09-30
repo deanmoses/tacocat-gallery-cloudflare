@@ -65,7 +65,7 @@ Cloudflare D1 (SQLite) holds everything but the media files. Tables:
 
 - `item`: every album and media item, one row each
 - `item_fts` and `item_fts_exact`: the search indexes, stemmed and as typed, built over `item_indexed`, a view of `item` that splits letters from digits in every name and caption and adds the words photo, image and picture to an image's tags and movie, video and clip to a video's
-- `upload`: every upload the Worker has handed out a URL for, and whether it finished
+- `upload`: uploads in progress, one row per URL the Worker has handed out
 - `upload_error`: errors during async media upload/processing, for the admin UI to show
 - `user`: admins
 - `passkey`: passkeys for admins
