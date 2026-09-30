@@ -649,6 +649,16 @@ describe('a batch of uploads', () => {
             await Promise.all(instances.map(async (instance) => instance.dispose()));
         }
     });
+
+    it('leaves an event unacked when its pipeline cannot start, so the queue delivers it again', async () => {
+        vi.spyOn(env.UPLOAD_PIPELINE, 'createBatch').mockRejectedValueOnce(new Error('Workflows unavailable'));
+        const batch = uploadBatch([testVersionId('v1')]);
+        const ctx = createExecutionContext();
+        const consumed = handler.queue?.(batch, env, ctx);
+
+        await expect(consumed).rejects.toThrow('Workflows unavailable');
+        await expect(getQueueResult(batch, ctx)).resolves.toHaveProperty('explicitAcks', []);
+    });
 });
 
 describe('video uploads', () => {
