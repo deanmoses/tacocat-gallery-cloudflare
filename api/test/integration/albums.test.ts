@@ -26,7 +26,7 @@ describe('HEAD, which the app asks before creating or renaming', () => {
             putItem({ parentPath: '/1982/', itemName: '01-01', itemType: 'album', published: true }),
             putItem({ parentPath: '/1982/', itemName: '02-02', itemType: 'album', published: false }),
             putItem({ parentPath: '/1982/01-01/', itemName: 'shown', ...IMAGE, versionId: testVersionId('v1') }),
-            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE, versionId: testVersionId('v1') }),
+            putItem({ parentPath: '/1982/02-02/', itemName: 'hidden', ...IMAGE, versionId: testVersionId('v2') }),
         ]);
     });
 

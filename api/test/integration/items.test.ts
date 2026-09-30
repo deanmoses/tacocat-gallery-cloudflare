@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getTableColumns } from 'drizzle-orm';
+import { eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
 import { callAsAdmin, putItem, storedItem } from '../helpers';
@@ -75,13 +75,14 @@ describe('saving an item', () => {
             // Both stale rows together name every column, including ones added after this test.
             expect(Object.keys(stale).toSorted()).toStrictEqual(COLUMNS.toSorted());
 
+            // The fresh row goes first and is removed once read, since a file can belong to one item only.
+            await upsertItem(database, { ...saved, ...fresh }).run();
+            const expected = await read(fresh.parentPath, saved.itemName);
+            await database.delete(item).where(eq(item.parentPath, fresh.parentPath)).run();
             await upsertItem(database, { ...stale, ...saved, parentPath }).run();
             await upsertItem(database, { ...saved, parentPath }).run();
-            await upsertItem(database, { ...saved, ...fresh }).run();
 
-            await expect(read(parentPath, saved.itemName)).resolves.toStrictEqual(
-                await read(fresh.parentPath, saved.itemName),
-            );
+            await expect(read(parentPath, saved.itemName)).resolves.toStrictEqual(expected);
         },
     );
 
@@ -176,6 +177,20 @@ describe('saving an item through the API', () => {
             errorMessage: `CHECK constraint failed: ${constraint}`,
         });
         await expect(storedItem(body.parentPath, body.itemName)).resolves.toBeUndefined();
+    });
+
+    it('is refused for a file another item already has, naming the columns', async () => {
+        await putItem({ ...ITEM, itemName: 'first' });
+        const response = await callAsAdmin('/api/item', {
+            method: 'PUT',
+            body: JSON.stringify({ ...ITEM, itemName: 'second' }),
+        });
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toStrictEqual({
+            errorMessage: 'UNIQUE constraint failed: item.version_id',
+        });
+        await expect(storedItem(ITEM.parentPath, 'second')).resolves.toBeUndefined();
     });
 
     it.each([
