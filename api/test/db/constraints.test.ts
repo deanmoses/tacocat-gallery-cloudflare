@@ -284,7 +284,7 @@ describe('an item row', () => {
         await db.insert(schema.item).values({ ...IMAGE, position: 3 });
         const insert = db
             .insert(schema.item)
-            .values({ ...IMAGE, itemName: 'milo', position: 3 })
+            .values({ ...IMAGE, itemName: 'milo', versionId: testVersionId('v2'), position: 3 })
             .run();
 
         await expect(insert).rejects.toMatchObject(refusedBy('item.parent_path, item.position'));
@@ -295,8 +295,27 @@ describe('an item row', () => {
         await db.insert(schema.item).values({ ...IMAGE, position: 3 });
         const insert = db
             .insert(schema.item)
-            .values({ ...IMAGE, parentPath: '/2001/06-16/', position: 3 })
+            .values({ ...IMAGE, parentPath: '/2001/06-16/', versionId: testVersionId('v2'), position: 3 })
             .run();
+
+        await expect(insert).resolves.toMatchObject({ success: true });
+    });
+
+    it('cannot share its file with another media item', async () => {
+        const db = database();
+        await db.insert(schema.item).values(IMAGE);
+        const insert = db
+            .insert(schema.item)
+            .values({ ...IMAGE, parentPath: '/2001/06-16/' })
+            .run();
+
+        await expect(insert).rejects.toMatchObject(refusedBy('item.version_id'));
+    });
+
+    it('can be one of many albums without a file', async () => {
+        const db = database();
+        await db.insert(schema.item).values(YEAR);
+        const insert = db.insert(schema.item).values(DAY).run();
 
         await expect(insert).resolves.toMatchObject({ success: true });
     });

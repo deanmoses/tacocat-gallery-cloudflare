@@ -238,7 +238,14 @@ describe('a media item', () => {
         });
 
         it('rounds each edge on its own, so the rectangle always fits and is never empty', async () => {
-            await putItem({ parentPath: DAY, itemName: 'tiny', ...IMAGE, width: 10, height: 10 });
+            await putItem({
+                parentPath: DAY,
+                itemName: 'tiny',
+                ...IMAGE,
+                versionId: testVersionId('v4'),
+                width: 10,
+                height: 10,
+            });
             const [edge, sliver] = await Promise.all([
                 write('PATCH', `/api/thumb${DAY}tiny`, { x: 0.6, y: 0, width: 99.4, height: 100 }),
                 write('PATCH', `/api/thumb${DAY}cake`, { x: 99.9, y: 99.9, width: 0.1, height: 0.1 }),

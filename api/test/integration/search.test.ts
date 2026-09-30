@@ -96,7 +96,13 @@ describe('search', () => {
     it('needs every word to match', async () => {
         await putItem({ parentPath: '/2024/', itemName: '07-04', itemType: 'album', published: true });
         await putItem({ parentPath: '/2024/07-04/', itemName: 'a', ...MEDIA, title: 'Felix on the beach' });
-        await putItem({ parentPath: '/2024/07-04/', itemName: 'b', ...MEDIA, title: 'Felix at home' });
+        await putItem({
+            parentPath: '/2024/07-04/',
+            itemName: 'b',
+            ...MEDIA,
+            versionId: testVersionId('v2'),
+            title: 'Felix at home',
+        });
         const [both, one] = await Promise.all([search('felix'), search('felix beach')]);
 
         expect(paths(both)).toStrictEqual(['/2024/07-04/a', '/2024/07-04/b']);
@@ -146,15 +152,40 @@ describe('search', () => {
         beforeEach(async () => {
             await putItem({ parentPath: '/2024/', itemName: '07-05', itemType: 'album', published: true });
             await Promise.all([
-                putItem({ ...ITEM, itemName: 'a', title: 'Felix on the beach', tags: ['sand'] }),
-                putItem({ ...ITEM, itemName: 'b', title: 'Beach Felix' }),
-                putItem({ ...ITEM, itemName: 'c', title: 'Milo at home', description: 'With Felix' }),
-                putItem({ ...ITEM, itemName: 'd', mediaType: 'video', durationSeconds: 9, title: 'Felix swims' }),
-                putItem({ ...ITEM, itemName: 'e', title: 'Beach alone' }),
-                putItem({ ...ITEM, itemName: 'pat1' }),
-                putItem({ ...ITEM, itemName: 'img_0715' }),
-                putItem({ ...ITEM, itemName: 'school', title: 'École' }),
-                putItem({ ...ITEM, itemName: 'trip', title: 'Vacation', description: 'A celebration' }),
+                putItem({
+                    ...ITEM,
+                    itemName: 'a',
+                    versionId: testVersionId('a'),
+                    title: 'Felix on the beach',
+                    tags: ['sand'],
+                }),
+                putItem({ ...ITEM, itemName: 'b', versionId: testVersionId('b'), title: 'Beach Felix' }),
+                putItem({
+                    ...ITEM,
+                    itemName: 'c',
+                    versionId: testVersionId('c'),
+                    title: 'Milo at home',
+                    description: 'With Felix',
+                }),
+                putItem({
+                    ...ITEM,
+                    itemName: 'd',
+                    versionId: testVersionId('d'),
+                    mediaType: 'video',
+                    durationSeconds: 9,
+                    title: 'Felix swims',
+                }),
+                putItem({ ...ITEM, itemName: 'e', versionId: testVersionId('e'), title: 'Beach alone' }),
+                putItem({ ...ITEM, itemName: 'pat1', versionId: testVersionId('pat1') }),
+                putItem({ ...ITEM, itemName: 'img_0715', versionId: testVersionId('img_0715') }),
+                putItem({ ...ITEM, itemName: 'school', versionId: testVersionId('school'), title: 'École' }),
+                putItem({
+                    ...ITEM,
+                    itemName: 'trip',
+                    versionId: testVersionId('trip'),
+                    title: 'Vacation',
+                    description: 'A celebration',
+                }),
             ]);
         });
 
@@ -230,8 +261,20 @@ describe('search', () => {
                         summary: 'Picnic',
                         published: true,
                     }),
-                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'a', ...MEDIA, title: 'Picnic' }),
-                    putItem({ parentPath: `/${year}/${day}/`, itemName: 'b', ...MEDIA, title: 'Picnic' }),
+                    putItem({
+                        parentPath: `/${year}/${day}/`,
+                        itemName: 'a',
+                        ...MEDIA,
+                        versionId: testVersionId(`${year}${day}a`),
+                        title: 'Picnic',
+                    }),
+                    putItem({
+                        parentPath: `/${year}/${day}/`,
+                        itemName: 'b',
+                        ...MEDIA,
+                        versionId: testVersionId(`${year}${day}b`),
+                        title: 'Picnic',
+                    }),
                 ]),
             );
         });
@@ -328,8 +371,20 @@ describe('search', () => {
                     published: false,
                 }),
                 putItem({ parentPath: '/2024/07-10/', itemName: 'shown', ...MEDIA, title: 'Fajita' }),
-                putItem({ parentPath: '/2024/07-11/', itemName: 'hidden', ...MEDIA, title: 'Fajita' }),
-                putItem({ parentPath: '/2024/07-12/', itemName: 'no_album', ...MEDIA, title: 'Fajita' }),
+                putItem({
+                    parentPath: '/2024/07-11/',
+                    itemName: 'hidden',
+                    ...MEDIA,
+                    versionId: testVersionId('v2'),
+                    title: 'Fajita',
+                }),
+                putItem({
+                    parentPath: '/2024/07-12/',
+                    itemName: 'no_album',
+                    ...MEDIA,
+                    versionId: testVersionId('v3'),
+                    title: 'Fajita',
+                }),
             ]);
         });
 
@@ -366,6 +421,7 @@ describe('search', () => {
                         parentPath: `/2000/${day}/`,
                         itemName: `img_${index}`,
                         ...MEDIA,
+                        versionId: testVersionId(`${day}${index}`),
                         title: `${word} ${dayIndex}`,
                         description: `A photo about ${word}`,
                         tags: [word],

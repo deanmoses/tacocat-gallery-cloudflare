@@ -127,8 +127,9 @@ export const item = sqliteTable(
     },
     (table) => [
         unique().on(table.parentPath, table.itemName),
-        // An object's row is one lookup, and clearing a deleted thumbnail from the albums that show it is a seek.
-        index('item_version_id').on(table.versionId),
+        // A file belongs to one item: the writer that gives a second row an id already in use is refused.
+        uniqueIndex('item_version_id').on(table.versionId),
+        // Clearing a deleted thumbnail from the albums that show it is a seek.
         index('item_thumbnail_id').on(table.thumbnailId),
         // No two media items of an album in one place.
         uniqueIndex('item_album_position')

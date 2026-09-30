@@ -347,7 +347,13 @@ describe('reordering a day album', () => {
             putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', published: true }),
             putItem({ parentPath: '/1990/', itemName: '06-16', itemType: 'album', published: true }),
             ...['img_1', 'img_2', 'img_3'].map(async (itemName) =>
-                putItem({ parentPath: DAY, itemName, ...IMAGE, title: `Taco ${itemName}` }),
+                putItem({
+                    parentPath: DAY,
+                    itemName,
+                    ...IMAGE,
+                    versionId: testVersionId(itemName),
+                    title: `Taco ${itemName}`,
+                }),
             ),
         ]);
     });
@@ -367,8 +373,8 @@ describe('reordering a day album', () => {
     it('puts media added afterwards at the end, in name order', async () => {
         await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_2', 'img_1'] });
         await Promise.all([
-            putItem({ parentPath: DAY, itemName: 'img_5', ...IMAGE }),
-            putItem({ parentPath: DAY, itemName: 'img_0', ...IMAGE }),
+            putItem({ parentPath: DAY, itemName: 'img_5', ...IMAGE, versionId: testVersionId('img_5') }),
+            putItem({ parentPath: DAY, itemName: 'img_0', ...IMAGE, versionId: testVersionId('img_0') }),
         ]);
 
         await expect(order(DAY)).resolves.toStrictEqual(['img_3', 'img_2', 'img_1', 'img_0', 'img_5']);

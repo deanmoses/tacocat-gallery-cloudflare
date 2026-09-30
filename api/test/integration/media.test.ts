@@ -444,7 +444,7 @@ describe('replacing a media item', () => {
             parentPath: DAY,
             itemName: 'tagged',
             ...IMAGE,
-            versionId: testVersionId('old'),
+            versionId: testVersionId('tagged'),
             tags: ['felix', 'dog'],
         });
 
@@ -459,7 +459,7 @@ describe('replacing a media item', () => {
             parentPath: DAY,
             itemName: 'tagged',
             ...IMAGE,
-            versionId: testVersionId('old'),
+            versionId: testVersionId('tagged'),
             tags: ['felix'],
         });
 
