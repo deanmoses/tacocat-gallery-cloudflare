@@ -1,6 +1,5 @@
 import {
     createExecutionContext,
-    createMessageBatch,
     getQueueResult,
     introspectWorkflowInstance,
     waitOnExecutionContext,
@@ -12,93 +11,30 @@ import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import noTagsDataUrl from '../../fixtures/NoTags.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { eq } from 'drizzle-orm';
-import { imageUrl, originalUrl, parseAlbum, parsePresigned, videoUrl } from '@tacocat-gallery/shared';
+import { imageUrl, originalUrl, parsePresigned, videoUrl } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
-import worker from '../../src/index';
-import type { R2EventMessage } from '../../src/gallery/upload';
 import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
-import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { fixtureBytes } from '../gallery';
+import { albumAsAdmin, call, callAsAdmin, handler, putDay, putItem, storedItem, write } from '../helpers';
+import { deliver, uploadBatch } from '../pipeline';
 import { testVersionId } from '../version-id';
 
-// Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
-const handler: ExportedHandler<Env, R2EventMessage> = worker;
-
-function bytes(dataUrl: string): Uint8Array {
-    return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1));
-}
-
-const jpg = bytes(jpgDataUrl);
+const jpg = fixtureBytes(jpgDataUrl);
 const JPG_TAGS = ['halloween', 'dog', 'parade'];
-const heic = bytes(heicDataUrl);
+const heic = fixtureBytes(heicDataUrl);
 // A captioned JPEG with no keywords.
-const noTags = bytes(noTagsDataUrl);
+const noTags = fixtureBytes(noTagsDataUrl);
 // 220 by 212, so it is not the size of the JPEG, which is 300 by 225.
-const png = bytes(pngDataUrl);
+const png = fixtureBytes(pngDataUrl);
 // Two frames, 32 by 24.
-const gif = bytes(gifDataUrl);
+const gif = fixtureBytes(gifDataUrl);
 
 // A QuickTime movie's first box, which is all the sniffer reads and all the stand-in transcoder needs.
 const mov = Uint8Array.from([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 0, 0]);
 
 const DAY = '/2024/06-15/';
 const IMAGE = { itemType: 'media', mediaType: 'image', width: 300, height: 225 } as const;
-
-/** The year and the day album uploads go into; presign refuses an album that is not there. */
-async function seedDay(): Promise<void> {
-    await putItem({ parentPath: '/', itemName: '2024', itemType: 'album' });
-    await putItem({ parentPath: '/2024/', itemName: '06-15', itemType: 'album' });
-}
-
-function uploadEvent(versionId: string): R2EventMessage {
-    return {
-        action: 'PutObject',
-        bucket: 'staging-uploads',
-        object: { key: inboxKey(versionId) },
-        eventTime: new Date().toISOString(),
-    };
-}
-
-/** One batch of upload events, as the queue delivers them, with ids counting from 1. */
-function uploadBatch(versionIds: string[]): MessageBatch<R2EventMessage> {
-    return createMessageBatch<R2EventMessage>(
-        'staging-uploads',
-        versionIds.map((versionId, index) => ({
-            id: String(index + 1),
-            timestamp: new Date(),
-            attempts: 1,
-            body: uploadEvent(versionId),
-        })),
-    );
-}
-
-type Introspector = Awaited<ReturnType<typeof introspectWorkflowInstance>>;
-type Modify = Parameters<Introspector['modify']>[0];
-
-interface Delivery {
-    /** The status the pipeline instance is expected to end in. */
-    until?: 'complete' | 'errored';
-    /** Changes to the instance's behaviour, applied before it starts. */
-    modify?: Modify;
-}
-
-/**
- * Delivers one upload event through the queue, waits for the pipeline instance it starts to end, and reports whether
- * the consumer acked the event.
- */
-async function deliver(versionId: string, { until = 'complete', modify }: Delivery = {}): Promise<string[]> {
-    await using instance = await introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId);
-    if (modify !== undefined) {
-        await instance.modify(modify);
-    }
-    const batch = uploadBatch([versionId]);
-    const ctx = createExecutionContext();
-    await handler.queue?.(batch, env, ctx);
-    await waitOnExecutionContext(ctx);
-    await instance.waitForStatus(until);
-    const result = await getQueueResult(batch, ctx);
-    return result.explicitAcks;
-}
 
 interface Staged {
     replace?: boolean;
@@ -110,10 +46,9 @@ interface Staged {
  * id the upload was minted, ready for its event to be delivered.
  */
 async function stage(path: string, file: Uint8Array, { replace, contentType }: Staged = {}): Promise<string> {
-    const response = await callAsAdmin(`/api/presigned${DAY}`, {
-        method: 'POST',
-        body: JSON.stringify([{ path, ...(replace === undefined ? {} : { replace }) }]),
-    });
+    const response = await write('POST', `/api/presigned${DAY}`, [
+        { path, ...(replace === undefined ? {} : { replace }) },
+    ]);
     if (!response.ok) {
         throw new Error(`presign refused: ${await response.text()}`);
     }
@@ -170,7 +105,7 @@ function decodingAnyImage(): void {
 
 /** The errors the admin UI would be shown for `paths`. */
 async function uploadErrors(paths: string[]): Promise<Record<string, string>> {
-    const listed = await callAsAdmin('/api/errors', { method: 'POST', body: JSON.stringify({ paths }) });
+    const listed = await write('POST', '/api/errors', { paths });
     return (await listed.json<{ errors: Record<string, string> }>()).errors;
 }
 
@@ -209,7 +144,7 @@ async function mediaNames(): Promise<{ itemName: string }[]> {
 }
 
 describe('upload pipeline', () => {
-    beforeEach(seedDay);
+    beforeEach(async () => putDay(DAY));
 
     it('moves an inbox upload to its version key, labelled with its path, and records its IPTC caption and keywords', async () => {
         const versionId = await stage(`${DAY}full_metadata`, jpg);
@@ -343,7 +278,7 @@ describe('upload pipeline', () => {
     it('records the XMP caption of a HEIC, which has no IPTC, and the album lists its tags', async () => {
         decodingAnyImage();
         await upload(`${DAY}photo`, heic, { contentType: 'image/heic' });
-        const album = await parseExactly(await callAsAdmin(`/api/album${DAY}`), parseAlbum);
+        const album = await albumAsAdmin(DAY);
 
         expect(album.children).toStrictEqual([
             expect.objectContaining({
@@ -358,10 +293,7 @@ describe('upload pipeline', () => {
 
     it('lands under the album as it is named when the upload finishes, not when the URL was issued', async () => {
         const versionId = await stage(`${DAY}late`, jpg);
-        await callAsAdmin('/api/album-rename/2024/06-15/', {
-            method: 'POST',
-            body: JSON.stringify({ newName: '06-16' }),
-        });
+        await write('POST', '/api/album-rename/2024/06-15/', { newName: '06-16' });
         await deliver(versionId);
         const [moved, stale] = await Promise.all([storedItem('/2024/06-16/', 'late'), storedItem(DAY, 'late')]);
 
@@ -438,11 +370,7 @@ describe('upload pipeline', () => {
         { name: 'nothing changed', between: undefined, items: [{ itemName: 'retried' }] },
         {
             name: 'the admin renamed the item',
-            between: async () =>
-                callAsAdmin(`/api/media-rename${DAY}retried`, {
-                    method: 'POST',
-                    body: JSON.stringify({ newName: 'renamed' }),
-                }),
+            between: async () => write('POST', `/api/media-rename${DAY}retried`, { newName: 'renamed' }),
             items: [{ itemName: 'renamed' }],
         },
         {
@@ -503,7 +431,7 @@ describe('replacing a media item', () => {
     const CROP = { x: 10, y: 10, width: 50, height: 50 };
 
     beforeEach(async () => {
-        await seedDay();
+        await putDay(DAY);
         await putItem({
             parentPath: DAY,
             itemName: 'felix',
@@ -512,10 +440,7 @@ describe('replacing a media item', () => {
             title: 'Felix',
             thumbnailCrop: CROP,
         });
-        await callAsAdmin(`/api/album-thumb${DAY}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ mediaPath: `${DAY}felix` }),
-        });
+        await write('PATCH', `/api/album-thumb${DAY}`, { mediaPath: `${DAY}felix` });
     });
 
     it('points the row at the new file, keeping its caption, its crop when the size is unchanged, and its place as the thumbnail', async () => {
@@ -567,7 +492,7 @@ describe('replacing a media item', () => {
         const [felix, original, album] = await Promise.all([
             storedItem(DAY, 'felix'),
             env.ORIGINALS.head(originalKey(versionId)),
-            parseExactly(await callAsAdmin(`/api/album${DAY}`), parseAlbum),
+            albumAsAdmin(DAY),
         ]);
 
         expect(felix).toMatchObject({
@@ -584,10 +509,7 @@ describe('replacing a media item', () => {
 
     it('keeps a name the item was given while the upload was in flight', async () => {
         const versionId = await stage(`${DAY}felix`, png, { replace: true, contentType: 'image/png' });
-        await callAsAdmin(`/api/media-rename${DAY}felix`, {
-            method: 'POST',
-            body: JSON.stringify({ newName: 'cat' }),
-        });
+        await write('POST', `/api/media-rename${DAY}felix`, { newName: 'cat' });
         await deliver(versionId);
         const [cat, felix] = await Promise.all([storedItem(DAY, 'cat'), storedItem(DAY, 'felix')]);
 
@@ -675,7 +597,7 @@ describe('replacing a media item', () => {
 });
 
 describe('image uploads', () => {
-    beforeEach(seedDay);
+    beforeEach(async () => putDay(DAY));
 
     it('records a file in no format the gallery takes instead of an item, and drops it', async () => {
         const versionId = await upload(`${DAY}notes`, new TextEncoder().encode('just some notes'));
@@ -707,7 +629,7 @@ describe('image uploads', () => {
 });
 
 describe('a batch of uploads', () => {
-    beforeEach(seedDay);
+    beforeEach(async () => putDay(DAY));
 
     it('starts a pipeline instance per event and acks each, so the uploads run side by side', async () => {
         const versionIds = await Promise.all(
@@ -736,7 +658,7 @@ describe('a batch of uploads', () => {
 });
 
 describe('video uploads', () => {
-    beforeEach(seedDay);
+    beforeEach(async () => putDay(DAY));
 
     it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
         standInTranscoder(rejecting);
@@ -772,7 +694,7 @@ describe('video uploads', () => {
 });
 
 describe('video upload retries', () => {
-    beforeEach(seedDay);
+    beforeEach(async () => putDay(DAY));
 
     it('leaves the upload in the inbox when the transcoder cannot be reached, once the retries are spent', async () => {
         standInTranscoder(async () => {
@@ -870,7 +792,7 @@ describe('upload errors', () => {
     });
 
     it('rejects a body without paths', async () => {
-        const response = await callAsAdmin('/api/errors', { method: 'POST', body: JSON.stringify({}) });
+        const response = await write('POST', '/api/errors', {});
 
         expect(response.status).toBe(400);
     });

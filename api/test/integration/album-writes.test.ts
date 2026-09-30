@@ -1,27 +1,21 @@
 import { env } from 'cloudflare:workers';
 import { asc, eq } from 'drizzle-orm';
-import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
+import { parseAlbum } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
-import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { IMAGE } from '../gallery';
+import {
+    album,
+    albumAsAdmin,
+    call,
+    callAsAdmin,
+    errorMessage,
+    parseExactly,
+    putItem,
+    storedItem,
+    write,
+} from '../helpers';
 import { testVersionId } from '../version-id';
-
-const IMAGE = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
-
-type Init = Parameters<typeof call>[1];
-
-/** Sends an admin write as the web app does, with a JSON body unless there is none. */
-async function write(method: string, path: string, body?: unknown, init: Init = {}): Promise<Response> {
-    return callAsAdmin(path, { ...init, method, ...(body !== undefined && { body: JSON.stringify(body) }) });
-}
-
-async function album(path: string, asAdmin = true): Promise<AlbumGalleryItem> {
-    return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/album${path}`), parseAlbum);
-}
-
-async function errorMessage(response: Response): Promise<string> {
-    return (await response.json<{ errorMessage: string }>()).errorMessage;
-}
 
 describe('creating an album', () => {
     beforeEach(async () => {
@@ -47,7 +41,7 @@ describe('creating an album', () => {
             published: true,
         });
         const withoutBody = await write('PUT', '/api/album/1990/06-16/');
-        const [day, other] = await Promise.all([album('/1990/06-15/'), album('/1990/06-16/')]);
+        const [day, other] = await Promise.all([albumAsAdmin('/1990/06-15/'), albumAsAdmin('/1990/06-16/')]);
 
         expect([withFields.status, withoutBody.status]).toStrictEqual([204, 204]);
         expect(day).toMatchObject({ summary: 'Felix turns one', description: '<p>At the beach</p>', published: true });
@@ -68,7 +62,7 @@ describe('creating an album', () => {
 
         expect(response.status).toBe(400);
         await expect(errorMessage(response)).resolves.toBe('Album already exists: [/1990/06-15/]');
-        expect((await album('/1990/06-15/')).summary).toBe('First');
+        expect((await albumAsAdmin('/1990/06-15/')).summary).toBe('First');
     });
 
     it.each([
@@ -117,7 +111,7 @@ describe('updating an album', () => {
 
     it('changes the fields the body holds and leaves the rest', async () => {
         const response = await write('PATCH', '/api/album/1990/06-15/', { description: '<p>Beach</p>' });
-        const day = await album('/1990/06-15/');
+        const day = await albumAsAdmin('/1990/06-15/');
 
         expect(response.status).toBe(204);
         expect(day).toMatchObject({ summary: 'Kept', description: '<p>Beach</p>', published: false });
@@ -125,7 +119,7 @@ describe('updating an album', () => {
 
     it('clears a caption the editor emptied', async () => {
         await write('PATCH', '/api/album/1990/06-15/', { summary: '  ' });
-        const day = await album('/1990/06-15/');
+        const day = await albumAsAdmin('/1990/06-15/');
 
         expect(day.summary).toBeUndefined();
     });
@@ -137,13 +131,13 @@ describe('updating an album', () => {
         ]);
 
         expect([day.status, year.status]).toStrictEqual([204, 204]);
-        expect((await album('/1990/06-15/', false)).published).toBe(true);
-        expect((await album('/1991/', false)).published).toBe(true);
+        expect((await album('/1990/06-15/')).published).toBe(true);
+        expect((await album('/1991/')).published).toBe(true);
     });
 
     it('refuses to publish a day under an unpublished year, and leaves it as it was', async () => {
         const response = await write('PATCH', '/api/album/1991/06-15/', { published: true, summary: 'Changed' });
-        const day = await album('/1991/06-15/');
+        const day = await albumAsAdmin('/1991/06-15/');
 
         expect(response.status).toBe(400);
         await expect(errorMessage(response)).resolves.toBe('Cannot publish until parent is published');
@@ -213,7 +207,7 @@ describe('deleting an album', () => {
         await expect(errorMessage(response)).resolves.toBe(
             `Album [${path}] contains child photos or child albums, and thus cannot be deleted.`,
         );
-        await expect(album(path)).resolves.toMatchObject({ path });
+        await expect(albumAsAdmin(path)).resolves.toMatchObject({ path });
     });
 
     it('is not found for an album that is not there', async () => {
@@ -258,7 +252,7 @@ describe('renaming a day album', () => {
         const [cookie = ''] = (response.headers.get('set-cookie') ?? '').split(';', 1);
         const [renamed, year, old] = await Promise.all([
             parseExactly(await callAsAdmin('/api/album/1990/07-04/', { headers: { cookie } }), parseAlbum),
-            album('/1990/'),
+            albumAsAdmin('/1990/'),
             call('/api/album/1990/06-15/'),
         ]);
         await old.body?.cancel();
@@ -295,7 +289,7 @@ describe('renaming a day album', () => {
         expect(response.status).toBe(400);
         await expect(errorMessage(response)).resolves.toBe('Album already exists [/1990/06-16/]');
         expect(rows).toHaveLength(2);
-        await expect(album('/1990/06-16/')).resolves.toMatchObject({ children: [] });
+        await expect(albumAsAdmin('/1990/06-16/')).resolves.toMatchObject({ children: [] });
     });
 
     it('is not found for an album that is not there', async () => {
@@ -359,7 +353,7 @@ describe('reordering a day album', () => {
     });
 
     async function order(path: string): Promise<string[] | undefined> {
-        return (await album(path, false)).children?.map((child) => child.itemName);
+        return (await album(path)).children?.map((child) => child.itemName);
     }
 
     it('shows the media in the order given, to guests as well', async () => {
@@ -367,7 +361,7 @@ describe('reordering a day album', () => {
 
         expect(response.status).toBe(204);
         await expect(order(DAY)).resolves.toStrictEqual(['img_3', 'img_1', 'img_2']);
-        await expect(album(DAY)).resolves.toMatchObject({ order: true });
+        await expect(albumAsAdmin(DAY)).resolves.toMatchObject({ order: true });
     });
 
     it('puts media added afterwards at the end, in name order', async () => {
@@ -406,7 +400,7 @@ describe('reordering a day album', () => {
     it('puts the media back in name order when the order is reset', async () => {
         await write('PUT', `/api/album-order${DAY}`, { itemNames: ['img_3', 'img_1', 'img_2'] });
         const response = await write('DELETE', `/api/album-order${DAY}`);
-        const reset = await album(DAY);
+        const reset = await albumAsAdmin(DAY);
 
         expect(response.status).toBe(204);
         expect(reset.children?.map((child) => child.itemName)).toStrictEqual(['img_1', 'img_2', 'img_3']);

@@ -98,7 +98,7 @@ run_staged shared \
 
 api_status=0
 run_staged api \
-    "$SHARED|^api/(package\.json|vitest\.config\.ts|wrangler\.jsonc|worker-configuration\.d\.ts|tsconfig\.json|(src|test)/tsconfig\.json|migrations/|test/(setup|helpers|secrets|env\.d)\.ts|fixtures/|transcoder/|test/transcoder/bin/)" \
+    "$SHARED|^api/(package\.json|vitest\.config\.ts|wrangler\.jsonc|worker-configuration\.d\.ts|tsconfig\.json|(src|test)/tsconfig\.json|migrations/|test/(setup|secrets|env\.d)\.ts|fixtures/|transcoder/|test/transcoder/bin/)" \
     '^api/(src|test)/.*\.ts$' || api_status=$?
 web_status=0
 run_staged web \

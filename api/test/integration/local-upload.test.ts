@@ -1,24 +1,18 @@
-import {
-    createExecutionContext,
-    createMessageBatch,
-    introspectWorkflowInstance,
-    waitOnExecutionContext,
-} from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
-import type { R2EventMessage } from '../../src/gallery/upload';
-import handler from '../../src/index';
 import { inboxKey } from '../../src/storage/keys';
-import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { fixtureBytes } from '../gallery';
+import { call, callAsAdmin, parseExactly, putDay, storedItem } from '../helpers';
+import { deliver } from '../pipeline';
 import { testVersionId } from '../version-id';
 
 const DAY = '/2024/06-15/';
 const PATH = `${DAY}felix`;
 const LOCAL = { UPLOAD_MODE: 'local' } as const;
 
-const jpg = Uint8Array.fromBase64(jpgDataUrl.slice(jpgDataUrl.indexOf(',') + 1));
+const jpg = fixtureBytes(jpgDataUrl);
 
 /** Asks for one upload URL as the app does, under the given bindings. */
 async function presignOne(bindings: Partial<Env>): Promise<{ url: string; versionId: string }> {
@@ -38,8 +32,7 @@ async function presignOne(bindings: Partial<Env>): Promise<{ url: string; versio
 // the Worker takes the PUT itself and raises the event; deployed, neither the URL nor the route exists.
 describe('local uploads', () => {
     beforeEach(async () => {
-        await putItem({ parentPath: '/', itemName: '2024', itemType: 'album' });
-        await putItem({ parentPath: '/2024/', itemName: '06-15', itemType: 'album' });
+        await putDay(DAY);
     });
 
     it('are not there unless switched on: the URL is signed and the route is missing', async () => {
@@ -75,20 +68,7 @@ describe('local uploads', () => {
             eventTime: expect.any(String),
         });
 
-        const event: R2EventMessage = {
-            action: 'PutObject',
-            bucket: env.UPLOADS_BUCKET,
-            object: { key: inboxKey(versionId) },
-            eventTime: new Date().toISOString(),
-        };
-        const batch = createMessageBatch<R2EventMessage>('staging-uploads', [
-            { id: '1', timestamp: new Date(), attempts: 1, body: event },
-        ]);
-        await using instance = await introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId);
-        const ctx = createExecutionContext();
-        await handler.queue(batch, { ...env, ...LOCAL });
-        await waitOnExecutionContext(ctx);
-        await instance.waitForStatus('complete');
+        await deliver(versionId, { bindings: LOCAL });
 
         await expect(storedItem(DAY, 'felix')).resolves.toMatchObject({ versionId, title: 'My Image Title' });
     });

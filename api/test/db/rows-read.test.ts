@@ -15,12 +15,12 @@ import {
 } from '../../src/gallery/albums';
 import { purgeSpentChallenges, spendChallenge } from '../../src/auth/passkeys';
 import { type Orm, orm, schema, upsertItem } from '../../src/db';
-import { type Query, ftsQuery } from '../../src/gallery/query';
 import { searchItems } from '../../src/gallery/search';
 import { deleteMedia, describeMedia, recutThumbnail, renameMedia, updateMedia } from '../../src/gallery/media';
 import { presignUploads } from '../../src/gallery/presign';
 import { type MediaFacts, type Upload, insertItem, replaceItem } from '../../src/gallery/upload';
 import { inSequence } from '../../src/util/sequence';
+import { compiledQuery } from '../gallery';
 import { TEST_SECRETS } from '../secrets';
 import { testVersionId, withVersionId } from '../version-id';
 
@@ -505,7 +505,7 @@ describe('rows read on a gallery', () => {
             database,
             withVersionId({ parentPath: dayPath(9), itemName: 'q', ...IMAGE, title: 'Quesadilla' }),
         ).run();
-        const found = await searchItems(database, { ...SEARCH, query: compiled('quesadilla') }, admin);
+        const found = await searchItems(database, { ...SEARCH, query: compiledQuery('quesadilla') }, admin);
 
         expect(found.items).toHaveLength(1);
         expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
@@ -521,7 +521,7 @@ describe('rows read on a gallery', () => {
         { who: 'a guest', admin: false },
         { who: 'an admin', admin: true },
     ])('searching for a common word as $who reads a few rows per match', async ({ admin }) => {
-        const found = await searchItems(database, { ...SEARCH, query: compiled('taco') }, admin);
+        const found = await searchItems(database, { ...SEARCH, query: compiledQuery('taco') }, admin);
         const matches = DAYS * IMAGES_PER_DAY;
 
         expect(found.total).toBe(matches);
@@ -545,7 +545,7 @@ describe('rows read on a gallery', () => {
         { terms: 'taco ta*', lookups: 2 },
         { terms: 'taco -qu*', lookups: 2 },
     ])('searching for $terms reads a few rows per match per lookup', async ({ terms, lookups }) => {
-        const found = await searchItems(database, { ...SEARCH, query: compiled(terms) }, true);
+        const found = await searchItems(database, { ...SEARCH, query: compiledQuery(terms) }, true);
         const matches = found.total;
 
         expect(matches).toBeGreaterThan(0);
@@ -564,7 +564,7 @@ describe('rows read on a gallery', () => {
                 database,
                 withVersionId({ parentPath: dayPath(9), itemName: 'q', ...IMAGE, title: 'Quesadilla' }),
             ).run();
-            const found = await searchItems(database, { ...SEARCH, query: compiled(terms) }, true);
+            const found = await searchItems(database, { ...SEARCH, query: compiledQuery(terms) }, true);
 
             expect(found.total).toBe(1);
             expect(found.meta.map((meta) => meta.rows_read)).toStrictEqual([
@@ -574,12 +574,6 @@ describe('rows read on a gallery', () => {
         },
     );
 });
-
-function compiled(terms: string): Query {
-    const result = ftsQuery(terms);
-    if ('error' in result) throw new Error(result.error);
-    return result.query;
-}
 
 describe('rows read on spent login challenges', () => {
     const EXPIRED = 5;

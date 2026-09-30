@@ -13,10 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { transcodeJob } from '../../src/gallery/upload';
 import { mintVersionId } from '../../src/storage/keys';
 import { readImage } from '../../src/media/exif';
-
-function bytes(dataUrl: string): ArrayBuffer {
-    return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1)).buffer;
-}
+import { fixtureBytes } from '../gallery';
 
 /** Crockford base32 as a number; exact only up to 53 bits, which is more than the comparison needs. */
 function crockfordValue(text: string): number {
@@ -142,7 +139,7 @@ describe(readImage, () => {
             },
         },
     ])('reads $name', async ({ file, facts }) => {
-        await expect(readImage(bytes(file))).resolves.toStrictEqual({ ok: true, facts });
+        await expect(readImage(fixtureBytes(file).buffer)).resolves.toStrictEqual({ ok: true, facts });
     });
 
     it('says why a file that is no image cannot be one', async () => {

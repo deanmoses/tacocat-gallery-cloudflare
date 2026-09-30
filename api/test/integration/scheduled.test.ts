@@ -3,11 +3,7 @@ import { env } from 'cloudflare:workers';
 import { asc } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
-import worker from '../../src/index';
-import type { R2EventMessage } from '../../src/gallery/upload';
-
-// Through the platform's handler type, which passes the execution context the Worker's own methods ignore.
-const handler: ExportedHandler<Env, R2EventMessage> = worker;
+import { handler } from '../helpers';
 
 function hoursAgo(hours: number): string {
     const at = new Date(Date.now() - hours * 3_600_000);

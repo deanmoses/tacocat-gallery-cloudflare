@@ -2,10 +2,9 @@ import { env } from 'cloudflare:workers';
 import { eq, getTableColumns } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { orm, schema, upsertItem } from '../../src/db';
-import { callAsAdmin, putItem, storedItem } from '../helpers';
+import { IMAGE } from '../gallery';
+import { callAsAdmin, putItem, storedItem, write } from '../helpers';
 import { testVersionId, withVersionId } from '../version-id';
-
-const MEDIA = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 describe('saving an item', () => {
     const { item } = schema;
@@ -65,9 +64,11 @@ describe('saving an item', () => {
             stale: STALE_VIDEO,
             saved: {
                 itemName: 'b',
-                ...MEDIA,
+                itemType: 'media',
                 mediaType: 'video',
                 versionId: testVersionId('v1'),
+                width: 4,
+                height: 3,
                 durationSeconds: 1,
             } as const,
         },
@@ -94,7 +95,7 @@ describe('saving an item', () => {
 
     it('keeps when an item was made and moves when it was changed', async () => {
         const database = orm(env.DB);
-        const saved = withVersionId({ parentPath: '/2001/06-15/', itemName: 'kept', ...MEDIA });
+        const saved = withVersionId({ parentPath: '/2001/06-15/', itemName: 'kept', ...IMAGE });
         await upsertItem(database, saved).run();
         const before = await storedItem(saved.parentPath, saved.itemName);
         // SQLite's clock has millisecond resolution, so the second save lands in a later millisecond.
@@ -113,14 +114,8 @@ describe('saving an item', () => {
 });
 
 describe('saving an item through the API', () => {
-    const IMAGE = {
-        itemType: 'media',
-        mediaType: 'image',
-        versionId: testVersionId('v1'),
-        width: 4,
-        height: 3,
-    } as const;
-    const ITEM = { ...IMAGE, parentPath: '/2024/09-01/', itemName: 'a' } as const;
+    const VERSIONED = { ...IMAGE, versionId: testVersionId('v1') } as const;
+    const ITEM = { ...VERSIONED, parentPath: '/2024/09-01/', itemName: 'a' } as const;
 
     it('answers with a bookmark to read the write back with, and no body', async () => {
         const response = await putItem({ ...ITEM, title: 'Saved', thumbnailCrop: { x: 1, y: 1, width: 2, height: 2 } });
@@ -160,7 +155,7 @@ describe('saving an item through the API', () => {
         },
         { name: 'a crop with no area', body: { ...ITEM, thumbnailCrop: { x: 1, y: 2, width: 0, height: 1 } } },
     ])('is refused with $name, and writes nothing', async ({ body }) => {
-        const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
+        const response = await write('PUT', '/api/item', body);
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: expect.any(String) });
@@ -176,7 +171,7 @@ describe('saving an item through the API', () => {
             constraint: 'item_duration_check',
         },
     ])('is refused for $name, naming the constraint', async ({ body, constraint }) => {
-        const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
+        const response = await write('PUT', '/api/item', body);
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toStrictEqual({
@@ -187,10 +182,7 @@ describe('saving an item through the API', () => {
 
     it('is refused for a file another item already has, naming the columns', async () => {
         await putItem({ ...ITEM, itemName: 'first' });
-        const response = await callAsAdmin('/api/item', {
-            method: 'PUT',
-            body: JSON.stringify({ ...ITEM, itemName: 'second' }),
-        });
+        const response = await write('PUT', '/api/item', { ...ITEM, itemName: 'second' });
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toStrictEqual({
@@ -207,22 +199,22 @@ describe('saving an item through the API', () => {
         { name: 'an album name holding a path', body: { parentPath: '/', itemName: '2024/09-01', itemType: 'album' } },
         {
             name: 'media in a year album',
-            body: { ...IMAGE, parentPath: '/2024/', itemName: 'a' },
+            body: { ...VERSIONED, parentPath: '/2024/', itemName: 'a' },
         },
         {
             name: 'a parent path with no slash',
-            body: { ...IMAGE, parentPath: '/2024/09-01', itemName: 'a' },
+            body: { ...VERSIONED, parentPath: '/2024/09-01', itemName: 'a' },
         },
         {
             name: 'a media name holding a path',
-            body: { ...IMAGE, parentPath: '/2024/', itemName: '09-01/a' },
+            body: { ...VERSIONED, parentPath: '/2024/', itemName: '09-01/a' },
         },
         {
             name: 'a day the calendar does not have',
-            body: { ...IMAGE, parentPath: '/2024/02-30/', itemName: 'a' },
+            body: { ...VERSIONED, parentPath: '/2024/02-30/', itemName: 'a' },
         },
     ])('is refused for $name, which no album page could show', async ({ body }) => {
-        const response = await callAsAdmin('/api/item', { method: 'PUT', body: JSON.stringify(body) });
+        const response = await write('PUT', '/api/item', body);
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toStrictEqual({ errorMessage: expect.stringContaining('day album') });

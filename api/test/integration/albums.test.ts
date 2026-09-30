@@ -1,22 +1,18 @@
-import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
+import { parseAlbum } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { call, callAsAdmin, callForJson, parseExactly, putItem } from '../helpers';
+import { IMAGE } from '../gallery';
+import { album, albumAsAdmin, call, callAsAdmin, callForJson, parseExactly, putDay, putItem } from '../helpers';
 import { testVersionId } from '../version-id';
 
 const YEAR = '/1981/';
 const DAY = '/1981/01-01/';
 const CROP = { x: 10, y: 20, width: 300, height: 300 };
-const IMAGE = { itemType: 'media', mediaType: 'image', width: 4, height: 3 } as const;
 
 async function setThumbnail(albumPath: string, mediaPath: string, asAdmin = true): Promise<Response> {
     return (asAdmin ? callAsAdmin : call)(`/api/album-thumb${albumPath}`, {
         method: 'PATCH',
         body: JSON.stringify({ mediaPath }),
     });
-}
-
-async function album(path: string, asAdmin = false): Promise<AlbumGalleryItem> {
-    return parseExactly(await (asAdmin ? callAsAdmin : call)(`/api/album${path}`), parseAlbum);
 }
 
 describe('HEAD, which the app asks before creating or renaming', () => {
@@ -156,14 +152,14 @@ describe('an album', () => {
     });
 
     it('hides unpublished albums from guests and shows them to admins', async () => {
-        const [guest, admin] = await Promise.all([album(YEAR), album(YEAR, true)]);
+        const [guest, admin] = await Promise.all([album(YEAR), albumAsAdmin(YEAR)]);
 
         expect(guest.children?.map((child) => child.itemName)).toStrictEqual(['01-01', '03-03']);
         expect(admin.children?.map((child) => child.itemName)).toStrictEqual(['01-01', '02-02', '03-03']);
     });
 
     it('is not found for a guest while unpublished', async () => {
-        const [guest, admin] = await Promise.all([call('/api/album/1981/02-02/'), album('/1981/02-02/', true)]);
+        const [guest, admin] = await Promise.all([call('/api/album/1981/02-02/'), albumAsAdmin('/1981/02-02/')]);
         await guest.body?.cancel();
 
         expect(guest.status).toBe(404);
@@ -263,8 +259,7 @@ describe('an album', () => {
 describe('an album thumbnail', () => {
     beforeEach(async () => {
         await Promise.all([
-            putItem({ parentPath: '/', itemName: '1982', itemType: 'album', published: true }),
-            putItem({ parentPath: '/1982/', itemName: '05-05', itemType: 'album', published: true }),
+            putDay('/1982/05-05/', { published: true }),
             putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'a' }),
             putItem({ ...IMAGE, parentPath: '/1982/05-05/', itemName: 'b', versionId: testVersionId('v2') }),
         ]);
