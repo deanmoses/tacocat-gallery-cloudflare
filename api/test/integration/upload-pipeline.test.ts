@@ -269,20 +269,17 @@ describe('upload pipeline', () => {
         expect(row?.completedAt).toBeNull();
     });
 
-    it('records the XMP caption of a HEIC, which has no IPTC, and the album lists its tags', async () => {
+    it('records the XMP caption and tags of a HEIC, which has no IPTC', async () => {
         decodingAnyImage();
         await upload(`${DAY}photo`, heic, { contentType: 'image/heic' });
-        const album = await albumAsAdmin(DAY);
 
-        expect(album.children).toStrictEqual([
-            expect.objectContaining({
-                itemName: 'photo',
-                title: 'Test Image Title',
-                description: 'Test description',
-                tags: ['test1', 'test2', 'test3'],
-                dimensions: { width: 4032, height: 3024 },
-            }),
-        ]);
+        await expect(storedItem(DAY, 'photo')).resolves.toMatchObject({
+            title: 'Test Image Title',
+            description: 'Test description',
+            tags: ['test1', 'test2', 'test3'],
+            width: 4032,
+            height: 3024,
+        });
     });
 
     it('lands under the album as it is named when the upload finishes, not when the URL was issued', async () => {

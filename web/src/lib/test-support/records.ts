@@ -30,7 +30,6 @@ const BASE_MEDIA = {
     path: mediaPath('item'),
     parentPath: DAY_ALBUM_PATH,
     itemName: 'item',
-    updatedOn: '2001-12-31T00:00:00.000Z',
     versionId: 'version-1',
     dimensions: { width: 4032, height: 3024 },
 };
@@ -40,7 +39,6 @@ const BASE_ALBUM: AlbumGalleryItem = {
     path: YEAR_ALBUM_PATH,
     parentPath: ROOT_ALBUM_PATH,
     itemName: '2001',
-    updatedOn: '2001-12-31T00:00:00.000Z',
 };
 
 export function imageRecord(fields: Partial<ImageRecord> = {}): ImageRecord {
