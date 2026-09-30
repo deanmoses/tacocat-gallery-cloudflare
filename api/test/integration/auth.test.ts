@@ -10,6 +10,7 @@ describe('session', () => {
 
         await expect(response.json()).resolves.toStrictEqual({ admin: null });
         expect(response.headers.get('x-auth-status')).toBe('guest');
+        expect(response.headers.get('set-cookie')).toBeNull();
     });
 
     it('reports the admin with a signed cookie', async () => {
@@ -36,16 +37,69 @@ describe('session', () => {
     });
 
     it('rejects an expired cookie', async () => {
-        const cookie = await adminCookie('Old', Date.now() - 1);
+        const cookie = await adminCookie('Old', Date.now() - 31 * 86_400_000, Date.now() - 1);
         const response = await call('/api/auth/status', { headers: { cookie } });
 
         await expect(response.json()).resolves.toStrictEqual({ admin: null });
+        expect(response.headers.get('set-cookie')).toBeNull();
     });
 
     it('clears the cookie on logout', async () => {
         const response = await call('/api/auth/logout', { method: 'POST', headers: { origin: ORIGIN } });
 
         expect(response.headers.get('set-cookie')).toMatch(/^__Host-admin_session=; Max-Age=0;/v);
+    });
+});
+
+describe('session renewal', () => {
+    const DAY = 86_400_000;
+
+    it('leaves a session signed less than a day ago alone', async () => {
+        const cookie = await adminCookie('moses', Date.now() - DAY / 2);
+        const response = await call('/api/auth/status', { headers: { cookie } });
+
+        expect(response.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('answers a session signed more than a day ago with a fresh 30-day one', async () => {
+        const cookie = await adminCookie('moses', Date.now() - DAY - 60_000);
+        const response = await call('/api/auth/status', { headers: { cookie } });
+        const renewed = response.headers.get('set-cookie') ?? '';
+        const [value = ''] = renewed.split(';', 1);
+        const { body = '' } = /^__Host-admin_session=(?<body>[^.]+)\./v.exec(value)?.groups ?? {};
+        const { exp } = JSON.parse(atob(body.replaceAll('-', '+').replaceAll('_', '/'))) as { exp: number };
+        const status = await call('/api/auth/status', { headers: { cookie: value } });
+
+        expect(renewed).toMatch(
+            /^__Host-admin_session=[^;]+; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Strict$/v,
+        );
+        expect(exp).toBeGreaterThan(Date.now() + 30 * DAY - 60_000);
+        await expect(status.json()).resolves.toStrictEqual({ admin: 'moses' });
+    });
+
+    it('goes by when the session was signed, whatever expiry it was signed with', async () => {
+        const cookie = await adminCookie('moses', Date.now() - 2 * DAY, Date.now() + 60 * DAY);
+        const response = await call('/api/auth/status', { headers: { cookie } });
+
+        expect(response.headers.get('set-cookie')).toMatch(/^__Host-admin_session=/v);
+    });
+
+    it('renews alongside the cookies a write sets', async () => {
+        const cookie = await adminCookie('moses', Date.now() - 28 * DAY);
+        const response = await call('/api/album/2001/', { method: 'PUT', headers: { cookie }, body: '{}' });
+        const names = response.headers.getSetCookie().map((header) => header.split('=', 1)[0]);
+
+        expect(response.status).toBe(204);
+        expect(new Set(names)).toStrictEqual(new Set(['__Host-admin_session', '__Host-d1_bookmark']));
+    });
+
+    it('lets logout clear an old session rather than renew it', async () => {
+        const cookie = await adminCookie('moses', Date.now() - 28 * DAY);
+        const response = await call('/api/auth/logout', { method: 'POST', headers: { origin: ORIGIN, cookie } });
+
+        expect(response.headers.getSetCookie()).toStrictEqual([
+            expect.stringMatching(/^__Host-admin_session=; Max-Age=0;/v),
+        ]);
     });
 });
 

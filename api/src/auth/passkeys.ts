@@ -23,13 +23,15 @@ const SESSION_COOKIE = '__Host-admin_session';
 const CHALLENGE_COOKIE = 'pk_challenge';
 const SESSION = {
     name: SESSION_COOKIE,
-    payload: valibot.object({ name: valibot.string() }),
+    payload: valibot.object({ name: valibot.string(), iat: valibot.number() }),
 } satisfies SignedCookie<valibot.GenericSchema>;
 const CHALLENGE = {
     name: CHALLENGE_COOKIE,
     payload: valibot.object({ challenge: valibot.string() }),
 } satisfies SignedCookie<valibot.GenericSchema>;
-const SESSION_DAYS = 30;
+const SESSION_MS = 30 * 86_400_000;
+// A session renewed on every request would set a cookie on every response; once a day is as good for staying logged in.
+const RENEW_AFTER_MS = 86_400_000;
 const INVALID_INVITE = 'This invite link is invalid, used or expired.';
 const CHALLENGE_MS = 5 * 60_000;
 const NOW = sql`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
@@ -90,6 +92,27 @@ export async function purgeSpentChallenges(database: Orm): Promise<D1Result> {
 export async function currentAdmin(request: Request, env: AuthEnv): Promise<string | null> {
     const session = await readSigned(request, env, SESSION);
     return session?.name ?? null;
+}
+
+/**
+ * The logged-in admin's name, and once their session is a day old, a fresh one to set in its place, so an admin who
+ * keeps visiting stays logged in. Null for a guest.
+ */
+export async function adminSession(
+    request: Request,
+    env: AuthEnv,
+): Promise<{ name: string; renewal: string | null } | null> {
+    const session = await readSigned(request, env, SESSION);
+    if (session === null) {
+        return null;
+    }
+    const renewal = Date.now() - session.iat < RENEW_AFTER_MS ? null : await sessionCookie(env, session.name);
+    return { name: session.name, renewal };
+}
+
+/** Whether the response sets or clears the session cookie itself, as logging in and out do. */
+export function setsSession(response: Response): boolean {
+    return response.headers.getSetCookie().some((header) => header.startsWith(`${SESSION_COOKIE}=`));
 }
 
 /** Whose passkey an invite would create, or a 404 once it is used, expired or never existed. */
@@ -261,12 +284,16 @@ function transportsOf(stored: string[] | null): { transports?: string[] } {
 }
 
 async function loggedIn(env: AuthEnv, name: string): Promise<Response> {
-    const maxAge = SESSION_DAYS * 86_400;
-    const session = await sign(env, { name, exp: Date.now() + maxAge * 1000 });
     const headers = new Headers();
-    headers.append('set-cookie', cookie(SESSION_COOKIE, session, { maxAge, path: '/' }));
+    headers.append('set-cookie', await sessionCookie(env, name));
     headers.append('set-cookie', cookie(CHALLENGE_COOKIE, '', { maxAge: 0, path: `${AUTH_PREFIX}/` }));
     return Response.json({ admin: name }, { headers });
+}
+
+async function sessionCookie(env: AuthEnv, name: string): Promise<string> {
+    const now = Date.now();
+    const session = await sign(env, { name, iat: now, exp: now + SESSION_MS });
+    return cookie(SESSION_COOKIE, session, { maxAge: SESSION_MS / 1000, path: '/' });
 }
 
 async function findInvite(env: AuthEnv, token: string): Promise<{ tokenHash: string; username: string } | null> {

@@ -2,6 +2,7 @@ import { API, AUTH_PREFIX, type Endpoint } from '@tacocat-gallery/shared';
 import { type Handler, Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import {
+    adminSession,
     currentAdmin,
     inviteStatus,
     loginOptions,
@@ -10,6 +11,7 @@ import {
     registerOptions,
     registerVerify,
     requestSite,
+    setsSession,
 } from '../auth/passkeys';
 import { MEDIA_HEADERS, SITE_HEADERS } from '../http/headers';
 import { failure, json, notFound } from '../http/responses';
@@ -73,10 +75,16 @@ export function createApp(): Hono<App> {
             context.res.headers.set(name, value);
         }
     });
+    // Renewing here, where every API request passes, keeps an admin logged in on each device they keep using. API
+    // responses are private, so no shared cache hands one admin's renewed cookie to anyone else.
     app.use('/api/*', async (context, next) => {
         await next();
-        const admin = await currentAdmin(context.req.raw, context.env);
-        context.res.headers.set('x-auth-status', admin === null ? 'guest' : 'admin');
+        const session = await adminSession(context.req.raw, context.env);
+        context.res.headers.set('x-auth-status', session === null ? 'guest' : 'admin');
+        const renewal = session?.renewal ?? null;
+        if (renewal !== null && !setsSession(context.res)) {
+            context.res.headers.append('set-cookie', renewal);
+        }
     });
     app.notFound(() => notFound());
     app.onError((error, context) => {
