@@ -109,8 +109,9 @@ describe('an album', () => {
         await setThumbnail(DAY, '/1981/01-01/a');
     });
 
-    // The records the AWS API sent, which the web app parses unchanged: what a record has none of is left out.
-    it('is the AWS API record with its media', async () => {
+    // A record carries only what the web app reads, and leaves out what it has none of: the row's timestamps and a
+    // photo's tags stay in the database.
+    it('is the album record with its media', async () => {
         const day = await album(DAY);
 
         expect(day).toStrictEqual({
@@ -118,7 +119,6 @@ describe('an album', () => {
             path: DAY,
             parentPath: YEAR,
             itemName: '01-01',
-            updatedOn: expect.any(String),
             published: true,
             thumbnail: { path: '/1981/01-01/a', versionId: testVersionId('v1'), crop: CROP },
             summary: 'New year',
@@ -129,12 +129,10 @@ describe('an album', () => {
                     path: '/1981/01-01/a',
                     parentPath: DAY,
                     itemName: 'a',
-                    updatedOn: expect.any(String),
                     versionId: testVersionId('v1'),
                     dimensions: { width: 4000, height: 3000 },
                     thumbnail: CROP,
                     title: 'Beach',
-                    tags: ['sand', 'sea'],
                 },
                 {
                     itemType: 'media',
@@ -142,7 +140,6 @@ describe('an album', () => {
                     path: '/1981/01-01/b',
                     parentPath: DAY,
                     itemName: 'b',
-                    updatedOn: expect.any(String),
                     versionId: testVersionId('v2'),
                     dimensions: { width: 16, height: 9 },
                     duration: 9.5,
@@ -189,7 +186,6 @@ describe('an album', () => {
                     path: YEAR,
                     parentPath: '/',
                     itemName: '1981',
-                    updatedOn: expect.any(String),
                     published: true,
                 },
             ],

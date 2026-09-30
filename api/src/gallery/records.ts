@@ -25,7 +25,6 @@ function jsonColumn<T extends valibot.GenericSchema>(shape: T): valibot.GenericS
 }
 
 const CROP = jsonColumn(rectangleSchema);
-const TAGS = jsonColumn(valibot.array(valibot.string()));
 
 // As D1 returns the row under SQL column names: run() is the query method that returns D1's meta, and its rows are
 // untyped.
@@ -35,10 +34,8 @@ const ROW_FIELDS = {
     title: valibot.nullable(valibot.string()),
     description: valibot.nullable(valibot.string()),
     summary: valibot.nullable(valibot.string()),
-    tags: valibot.nullable(TAGS),
     version_id: valibot.nullable(valibot.string()),
     published: valibot.number(),
-    updated_at: valibot.string(),
     width: valibot.nullable(valibot.number()),
     height: valibot.nullable(valibot.number()),
     duration_seconds: valibot.nullable(valibot.number()),
@@ -123,7 +120,6 @@ export function toAlbumRecord(row: AlbumRow): AlbumRecord {
         path: albumPath(row.parent_path, row.item_name),
         parentPath: row.parent_path,
         itemName: row.item_name,
-        updatedOn: row.updated_at,
         ...(row.description !== null && { description: row.description }),
         published: row.published === 1,
         ...(thumbnail !== undefined && { thumbnail }),
@@ -137,14 +133,12 @@ function toMediaRecord(row: MediaRow): MediaRecord {
         path: mediaPath(row.parent_path, row.item_name),
         parentPath: row.parent_path,
         itemName: row.item_name,
-        updatedOn: row.updated_at,
         ...(row.description !== null && { description: row.description }),
         // A media item comes with its file and its size; rows from before that was required say nothing of either.
         versionId: row.version_id ?? '',
         dimensions: { width: row.width ?? 0, height: row.height ?? 0 },
         ...(row.thumbnail_crop !== null && { thumbnail: row.thumbnail_crop }),
         ...(row.title !== null && { title: row.title }),
-        ...(row.tags !== null && { tags: row.tags }),
     };
     return row.media_type === 'video'
         ? { ...record, mediaType: 'video', duration: row.duration_seconds ?? 0 }

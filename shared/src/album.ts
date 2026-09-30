@@ -1,7 +1,7 @@
 import * as valibot from 'valibot';
 
-// What `GET /api/album/<path>` returns: the records of the AWS API the web app was written against, so it parses
-// them unchanged. A value the record has none of is left out rather than sent as null, as the AWS API left it.
+// What `GET /api/album/<path>` returns: the AWS API's record shapes, which the web app was written against, less the
+// fields it never reads. A value the record has none of is left out rather than sent as null, as the AWS API left it.
 
 /** A rectangle in an image's EXIF-oriented pixels. */
 export const rectangleSchema = valibot.object({
@@ -33,8 +33,6 @@ const albumThumbnail = valibot.object({
 const albumRecord = valibot.object({
     itemType: valibot.literal('album'),
     ...galleryRecord,
-    // The root album is not a row, so it has no timestamp.
-    updatedOn: valibot.optional(valibot.string()),
     published: valibot.optional(valibot.boolean()),
     thumbnail: valibot.optional(albumThumbnail),
     summary: valibot.optional(valibot.string()),
@@ -43,12 +41,10 @@ const albumRecord = valibot.object({
 const mediaRecord = {
     itemType: valibot.literal('media'),
     ...galleryRecord,
-    updatedOn: valibot.string(),
     versionId: valibot.string(),
     dimensions: sizeSchema,
     thumbnail: valibot.optional(rectangleSchema),
     title: valibot.optional(valibot.string()),
-    tags: valibot.optional(valibot.array(valibot.string())),
 };
 
 const imageRecord = valibot.object({ ...mediaRecord, mediaType: valibot.literal('image') });
