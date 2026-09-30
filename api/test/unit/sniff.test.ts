@@ -4,10 +4,11 @@ import mp4 from '../../fixtures/test_video.mp4?inline';
 import png from '../../fixtures/pngFormat.png?inline';
 import { describe, expect, it } from 'vitest';
 import { SNIFF_LENGTH, isHeicType, sniffMedia } from '../../src/media/sniff';
+import { fixtureBytes } from '../gallery';
 
 /** The first bytes of a fixture, as the pipeline reads them. */
 function head(dataUrl: string): Uint8Array {
-    return Uint8Array.fromBase64(dataUrl.slice(dataUrl.indexOf(',') + 1)).subarray(0, SNIFF_LENGTH);
+    return fixtureBytes(dataUrl).subarray(0, SNIFF_LENGTH);
 }
 
 /** An ISO base media file's first box: its length, `ftyp`, the major brand, a version, and the compatible brands. */

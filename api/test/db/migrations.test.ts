@@ -3,8 +3,8 @@ import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
-import { ftsQuery } from '../../src/gallery/query';
 import { searchItems } from '../../src/gallery/search';
+import { compiledQuery } from '../gallery';
 
 // A database that has been in use is migrated forward with rows in every table, so these start that way: apply the
 // migrations one by one, writing rows at the points below until every column holds a value, then apply the rest and
@@ -74,11 +74,9 @@ async function valuesHeld(): Promise<Map<string, number>> {
 }
 
 async function found(terms: string): Promise<string[]> {
-    const compiled = ftsQuery(terms);
-    if ('error' in compiled) throw new Error(compiled.error);
     const result = await searchItems(
         orm(env.DB),
-        { query: compiled.query, oldestFirst: false, startAt: 0, pageSize: 50 },
+        { query: compiledQuery(terms), oldestFirst: false, startAt: 0, pageSize: 50 },
         true,
     );
     return result.items.map((item) => item.path);

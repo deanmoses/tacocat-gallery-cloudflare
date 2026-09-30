@@ -4,24 +4,18 @@ import { parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { inboxKey } from '../../src/storage/keys';
-import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
-import { testVersionId } from '../version-id';
+import { IMAGE } from '../gallery';
+import { call, callAsAdmin, errorMessage, parseExactly, putDay, putItem, storedItem } from '../helpers';
 
 const DAY = '/2024/06-15/';
-const IMAGE = { itemType: 'media', mediaType: 'image', versionId: testVersionId('v1'), width: 4, height: 3 } as const;
 
 async function presign(albumPath: string, body: unknown, asAdmin = true): Promise<Response> {
     return (asAdmin ? callAsAdmin : call)(`/api/presigned${albumPath}`, { method: 'POST', body: JSON.stringify(body) });
 }
 
-async function errorMessage(response: Response): Promise<string> {
-    return (await response.json<{ errorMessage: string }>()).errorMessage;
-}
-
 describe('asking for upload URLs', () => {
     beforeEach(async () => {
-        await putItem({ parentPath: '/', itemName: '2024', itemType: 'album' });
-        await putItem({ parentPath: '/2024/', itemName: '06-15', itemType: 'album' });
+        await putDay(DAY);
         await putItem({ parentPath: DAY, itemName: 'existing', ...IMAGE });
     });
 

@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
-import { type AlbumGalleryItem, parseAlbum } from '@tacocat-gallery/shared';
+import type { AlbumGalleryItem } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { originalKey } from '../../src/storage/keys';
-import { call, callAsAdmin, parseExactly, putItem, storedItem } from '../helpers';
+import { albumAsAdmin, call, callAsAdmin, errorMessage, putDay, putItem, storedItem, write } from '../helpers';
 import { testVersionId } from '../version-id';
 
 const DAY = '/1990/06-15/';
@@ -15,25 +15,11 @@ const IMAGE = {
     height: 300,
 } as const;
 
-type Init = Parameters<typeof call>[1];
-
-async function write(method: string, path: string, body?: unknown, init: Init = {}): Promise<Response> {
-    return callAsAdmin(path, { ...init, method, ...(body !== undefined && { body: JSON.stringify(body) }) });
-}
-
-async function album(path: string): Promise<AlbumGalleryItem> {
-    return parseExactly(await callAsAdmin(`/api/album${path}`), parseAlbum);
-}
-
-async function errorMessage(response: Response): Promise<string> {
-    return (await response.json<{ errorMessage: string }>()).errorMessage;
-}
-
 /** The day's media record at `name`, as the album page shows it. */
 async function mediaRecord(
     name: string,
 ): Promise<AlbumGalleryItem['children'] extends (infer T)[] | undefined ? T : never> {
-    const day = await album(DAY);
+    const day = await albumAsAdmin(DAY);
     const found = day.children?.find((child) => child.itemName === name);
     if (found === undefined) {
         throw new Error(`no ${name} in ${DAY}`);
@@ -44,8 +30,7 @@ async function mediaRecord(
 describe('a media item', () => {
     beforeEach(async () => {
         await Promise.all([
-            putItem({ parentPath: '/', itemName: '1990', itemType: 'album', published: true }),
-            putItem({ parentPath: '/1990/', itemName: '06-15', itemType: 'album', published: true }),
+            putDay(DAY, { published: true }),
             putItem({
                 parentPath: DAY,
                 itemName: 'felix',
@@ -115,7 +100,7 @@ describe('a media item', () => {
     describe('deleting a media item', () => {
         it('drops the row and clears it from the albums it was the thumbnail of', async () => {
             const response = await write('DELETE', `/api/media${DAY}felix`);
-            const [day, year] = await Promise.all([album(DAY), album('/1990/')]);
+            const [day, year] = await Promise.all([albumAsAdmin(DAY), albumAsAdmin('/1990/')]);
 
             expect(response.status).toBe(204);
             expect(day.children?.map((child) => child.itemName)).toStrictEqual(['cake', 'clip']);
@@ -140,7 +125,7 @@ describe('a media item', () => {
             expect(missing.status).toBe(404);
             await expect(errorMessage(missing)).resolves.toBe(`Media not found: [${DAY}nope]`);
             expect(asAlbum.status).toBe(404);
-            await expect(album(DAY)).resolves.toMatchObject({ path: DAY });
+            await expect(albumAsAdmin(DAY)).resolves.toMatchObject({ path: DAY });
         });
 
         it('needs an admin', async () => {
@@ -155,7 +140,11 @@ describe('a media item', () => {
     describe('renaming a media item', () => {
         it("changes the name, keeps everything else and stays every album's thumbnail", async () => {
             const response = await write('POST', `/api/media-rename${DAY}felix`, { newName: 'felix_at_one' });
-            const [day, year, old] = await Promise.all([album(DAY), album('/1990/'), storedItem(DAY, 'felix')]);
+            const [day, year, old] = await Promise.all([
+                albumAsAdmin(DAY),
+                albumAsAdmin('/1990/'),
+                storedItem(DAY, 'felix'),
+            ]);
 
             expect(response.status).toBe(204);
             expect(day.children?.map((child) => child.itemName)).toStrictEqual(['cake', 'clip', 'felix_at_one']);
@@ -225,7 +214,7 @@ describe('a media item', () => {
     describe('recutting a thumbnail', () => {
         it('stores the rectangle in pixels of the image, and the albums that show the item cut it there', async () => {
             const response = await write('PATCH', `/api/thumb${DAY}felix`, { x: 10, y: 20, width: 50, height: 50 });
-            const [felix, day] = await Promise.all([mediaRecord('felix'), album(DAY)]);
+            const [felix, day] = await Promise.all([mediaRecord('felix'), albumAsAdmin(DAY)]);
 
             expect(response.status).toBe(204);
             expect(felix).toMatchObject({ thumbnail: { x: 40, y: 60, width: 200, height: 150 } });
