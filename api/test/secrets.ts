@@ -13,14 +13,15 @@ const ENCODER = new TextEncoder();
 
 /**
  * A session cookie signed the way the Worker signs one, built independently of src/auth/session.ts so a change to the
- * cookie format fails a test.
+ * cookie format fails a test. By default a session just logged in, which the Worker has no reason to renew.
  */
 export async function adminCookie(
     name = 'moses',
-    expiresAt = Date.now() + 60_000,
+    signedAt = Date.now(),
+    expiresAt = signedAt + 30 * 86_400_000,
     secret = TEST_SECRETS.SESSION_SECRET,
 ): Promise<string> {
-    const body = base64url(ENCODER.encode(JSON.stringify({ name, exp: expiresAt })));
+    const body = base64url(ENCODER.encode(JSON.stringify({ name, iat: signedAt, exp: expiresAt })));
     const key = await crypto.subtle.importKey('raw', ENCODER.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
         'sign',
     ]);
