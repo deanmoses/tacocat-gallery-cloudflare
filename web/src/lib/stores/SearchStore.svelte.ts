@@ -14,33 +14,43 @@ import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
 import { SvelteMap } from 'svelte/reactivity';
 
 /**
- * Store of search results
+ * Store of search results. A search is kept for as long as the page is open, so going back to the results from a match
+ * shows them as the reader left them, every page they scrolled through included. Unlike an album, a search is not
+ * fetched again when it is shown again: that would drop the later pages and the reader's place in them. Nor is it
+ * dropped when an admin changes the gallery, so it can miss the change: admins edit from albums, not from search
+ * results.
  */
 class SearchStore {
-    /**
-     * Private writable store of search results
-     */
-    readonly #searches = new SvelteMap<SearchQuery, Search>();
+    /** Keyed by the URL of a search's first page, so two queries that ask the server the same thing are one search */
+    readonly #searches = new SvelteMap<string, Search>();
+
+    /** Moves on at each clear(), so an answer on its way to a search forgotten meanwhile is dropped */
+    #generation = 0;
+
+    get(query: SearchQuery): Search | undefined {
+        return this.#searches.get(keyOf(query));
+    }
 
     /**
-     * Public read-only version of store
-     */
-    readonly searches: ReadonlyMap<SearchQuery, Search> = $derived(this.#searches);
-
-    /**
-     * Do the search
+     * Do the search, unless it is held. A failure is not kept: a search that failed is made again, and one whose next
+     * page failed goes back to asking for it.
      */
     search(query: SearchQuery): void {
-        this.#removeUndefinedKeys(query);
-        // Get or create the writable version of the search
-        const searchEntry = this.#getOrCreateWritableStore(query);
-        // I don't have a copy in memory.  Go get it
-        if (SearchLoadStatus.NOT_LOADED !== searchEntry.status) {
-            return;
+        switch (this.get(query)?.status) {
+            case undefined:
+            case SearchLoadStatus.NOT_LOADED:
+            case SearchLoadStatus.ERROR_LOADING:
+                this.#setLoadStatus(query, SearchLoadStatus.LOADING);
+                void this.#fetchFromServer(query);
+                break;
+            case SearchLoadStatus.ERROR_LOADING_MORE_RESULTS:
+                this.#setLoadStatus(query, SearchLoadStatus.LOADED);
+                break;
+            case SearchLoadStatus.LOADING:
+            case SearchLoadStatus.LOADING_MORE_RESULTS:
+            case SearchLoadStatus.LOADED:
+                break;
         }
-
-        this.#setLoadStatus(query, SearchLoadStatus.LOADING);
-        void this.#fetchFromServer(query);
     }
 
     /**
@@ -49,23 +59,15 @@ class SearchStore {
      * @param startAt The number result from which to start fetching
      */
     getMore(query: SearchQuery, startAt: number): void {
-        this.#removeUndefinedKeys(query);
         console.log(`Getting more results...`, query, startAt);
-        this.#getOrCreateWritableStore(query);
         this.#setLoadStatus(query, SearchLoadStatus.LOADING_MORE_RESULTS);
         void this.#fetchFromServer(query, startAt);
     }
 
-    /**
-     * Drop keys that are present but undefined, simply to make logging cleaner.
-     *
-     * Mutates in place rather than returning a copy: the query object itself is
-     * the key a search is stored under, so a copy would never find the search again.
-     */
-    #removeUndefinedKeys(query: SearchQuery): void {
-        if (query.oldestYear === undefined) delete query.oldestYear;
-        if (query.newestYear === undefined) delete query.newestYear;
-        if (query.oldestFirst === undefined) delete query.oldestFirst;
+    /** Forgets every search, and the answers still on their way to them */
+    clear(): void {
+        this.#generation += 1;
+        this.#searches.clear();
     }
 
     /**
@@ -75,13 +77,18 @@ class SearchStore {
      */
     async #fetchFromServer(query: SearchQuery, startAt = 0): Promise<void> {
         const pageSize = 30;
+        const generation = this.#generation;
         try {
             const response = await fetch(searchUrl(query, startAt, pageSize));
             if (!response.ok) {
-                this.#handleFetchError(query, new Error(response.statusText), await refusal(response));
+                const message = await refusal(response);
+                if (generation === this.#generation) {
+                    this.#handleFetchError(query, new Error(response.statusText), message);
+                }
                 return;
             }
             const json: unknown = await response.json();
+            if (generation !== this.#generation) return;
             console.log(`Search`, query, `fetched from server`, json);
             if (!isServerSearchResults(json)) throw new Error('Expected a total and a list of items');
             const searchResults = this.#toSearchResults(json);
@@ -91,30 +98,27 @@ class SearchStore {
             // An empty page is the end whatever the total says: asking again would get the same empty page, forever
             searchResults.nextStartAt = serverItemCount === 0 ? searchResults.total : startAt + serverItemCount;
             if (startAt > 0) {
-                const read = this.#searches.get(query);
-                if (read) {
-                    const prev = read;
-                    if (prev.results?.items && searchResults.items) {
-                        // Filter out duplicates by path (handles edge case of data changing between requests)
-                        const existingPaths = new Set(prev.results.items.map((item) => item.path));
-                        const newItems = searchResults.items.filter((item) => !existingPaths.has(item.path));
-                        console.log(
-                            `Adding ${newItems.length} new results to ${prev.results.items.length} existing results (${searchResults.items.length - newItems.length} duplicates filtered)`,
-                        );
-                        searchResults.items = prev.results.items.concat(newItems);
-                    }
+                const prev = this.get(query);
+                if (prev?.results?.items && searchResults.items) {
+                    // Filter out duplicates by path (handles edge case of data changing between requests)
+                    const existingPaths = new Set(prev.results.items.map((item) => item.path));
+                    const newItems = searchResults.items.filter((item) => !existingPaths.has(item.path));
+                    console.log(
+                        `Adding ${newItems.length} new results to ${prev.results.items.length} existing results (${searchResults.items.length - newItems.length} duplicates filtered)`,
+                    );
+                    searchResults.items = prev.results.items.concat(newItems);
                 }
             }
             this.#setSearch(query, searchResults); // Put search results in Svelte store
         } catch (error) {
-            this.#handleFetchError(query, error);
+            if (generation === this.#generation) this.#handleFetchError(query, error);
         }
     }
 
     /** `message` is what the server said when it refused the search. */
     #handleFetchError(query: SearchQuery, error: unknown, message?: string): void {
         console.error(`Search error fetching from server:`, query, error);
-        const status = this.#getLoadStatus(query);
+        const status = this.get(query)?.status ?? SearchLoadStatus.NOT_LOADED;
         switch (status) {
             case SearchLoadStatus.LOADING:
             case SearchLoadStatus.NOT_LOADED:
@@ -142,7 +146,7 @@ class SearchStore {
             draftState.status = SearchLoadStatus.LOADED;
             draftState.results = searchResults;
         });
-        this.#searches.set(query, newState);
+        this.#searches.set(keyOf(query), newState);
     }
 
     /**
@@ -154,35 +158,12 @@ class SearchStore {
             draftState.status = loadStatus;
             draftState.error = error;
         });
-        this.#searches.set(query, newState);
+        this.#searches.set(keyOf(query), newState);
     }
 
-    #getLoadStatus(query: SearchQuery): SearchLoadStatus {
-        const search = this.#searches.get(query);
-        return search ? search.status : SearchLoadStatus.NOT_LOADED;
-    }
-
-    /**
-     * Get the #read-write version of the search,
-     * creating a stand-in if it doesn't exist.
-     *
-     * @param query the search terms
-     */
+    /** The search, or a stand-in for one not yet made */
     #getOrCreateWritableStore(query: SearchQuery): Search {
-        let searchEntry = this.#searches.get(query);
-
-        // If the search wasn't found in memory
-        if (!searchEntry) {
-            console.log(`Search not found in memory`, query);
-            // Create blank entry so that consumers have some object
-            // to which they can subscribe to changes
-            searchEntry = {
-                status: SearchLoadStatus.NOT_LOADED,
-            };
-            this.#searches.set(query, searchEntry);
-        }
-
-        return searchEntry;
+        return this.get(query) ?? { status: SearchLoadStatus.NOT_LOADED };
     }
 
     /**
@@ -226,6 +207,10 @@ class SearchStore {
     }
 }
 export const searchStore: SearchStore = new SearchStore();
+
+function keyOf(query: SearchQuery): string {
+    return searchUrl(query, 0, 0);
+}
 
 interface ServerSearchResults {
     total: number;

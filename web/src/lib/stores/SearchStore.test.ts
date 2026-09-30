@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { searchStore } from './SearchStore.svelte';
 import { SearchLoadStatus, type SearchQuery } from '$lib/models/search';
 import { fakeServer, jsonResponse, serverError } from '$lib/test-support/http';
@@ -6,10 +6,7 @@ import { albumRecord, imageRecord, mediaPath, videoRecord } from '$lib/test-supp
 import { albumTitle } from '$lib/utils/date-utils';
 import type { GalleryRecord } from '$lib/models/impl/server';
 
-/**
- * The API is answered by a fake server; nothing here reaches the network. The store keeps a search under the query
- * object itself, so each test's query is a search of its own, whatever the tests before it searched for.
- */
+/** The API is answered by a fake server; nothing here reaches the network. */
 const SEARCH = '/api/search/felix';
 
 function photo(name: string): GalleryRecord {
@@ -23,15 +20,19 @@ function found(items: GalleryRecord[], total = items.length): Response {
 
 async function reaches(query: SearchQuery, status: SearchLoadStatus): Promise<void> {
     await vi.waitFor(() => {
-        expect(searchStore.searches.get(query)?.status).toBe(status);
+        expect(searchStore.get(query)?.status).toBe(status);
     });
 }
 
 function pathsOf(query: SearchQuery): string[] | undefined {
-    return searchStore.searches.get(query)?.results?.items?.map((item) => item.path);
+    return searchStore.get(query)?.results?.items?.map((item) => item.path);
 }
 
 describe('searchStore', () => {
+    beforeEach(() => {
+        searchStore.clear();
+    });
+
     describe('search', () => {
         it('is loading until the server answers, then holds the matches and how many there are in all', async () => {
             const server = fakeServer();
@@ -40,12 +41,12 @@ describe('searchStore', () => {
 
             searchStore.search(query);
 
-            expect(searchStore.searches.get(query)?.status).toBe(SearchLoadStatus.LOADING);
+            expect(searchStore.get(query)?.status).toBe(SearchLoadStatus.LOADING);
 
             await reaches(query, SearchLoadStatus.LOADED);
 
             expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b')]);
-            expect(searchStore.searches.get(query)?.results?.total).toBe(40);
+            expect(searchStore.get(query)?.results?.total).toBe(40);
         });
 
         it('asks for the first thirty matches, within the years and in the order the query gives', async () => {
@@ -71,8 +72,59 @@ describe('searchStore', () => {
             await reaches(query, SearchLoadStatus.LOADED);
             searchStore.search(query);
 
-            expect(searchStore.searches.get(query)?.status).toBe(SearchLoadStatus.LOADED);
+            expect(searchStore.get(query)?.status).toBe(SearchLoadStatus.LOADED);
             expect(server.calls).toHaveLength(1);
+        });
+
+        // The router builds the query afresh on every visit to the results, going back to them included.
+        it('holds a search for any query that asks the server the same thing', async () => {
+            const server = fakeServer();
+            server.get(SEARCH, found([photo('a')]));
+
+            searchStore.search({ terms: 'felix', oldestYear: undefined, oldestFirst: false });
+            await reaches({ terms: 'felix' }, SearchLoadStatus.LOADED);
+            searchStore.search({ terms: 'felix' });
+
+            expect(server.calls).toHaveLength(1);
+            expect(pathsOf({ terms: 'felix', newestYear: undefined })).toStrictEqual([mediaPath('a')]);
+        });
+
+        it('holds a search that found nothing', async () => {
+            const server = fakeServer();
+            server.get(SEARCH, found([]));
+            const query = { terms: 'felix' };
+
+            searchStore.search(query);
+            await reaches(query, SearchLoadStatus.LOADED);
+            searchStore.search(query);
+
+            expect(server.calls).toHaveLength(1);
+        });
+
+        it('keeps each search apart', async () => {
+            const server = fakeServer();
+            server.get(SEARCH, found([photo('a')]), found([photo('b')]));
+
+            searchStore.search({ terms: 'felix' });
+            await reaches({ terms: 'felix' }, SearchLoadStatus.LOADED);
+            searchStore.search({ terms: 'felix', oldestYear: 2001 });
+            await reaches({ terms: 'felix', oldestYear: 2001 }, SearchLoadStatus.LOADED);
+
+            expect(pathsOf({ terms: 'felix' })).toStrictEqual([mediaPath('a')]);
+            expect(pathsOf({ terms: 'felix', oldestYear: 2001 })).toStrictEqual([mediaPath('b')]);
+        });
+
+        it('searches again for a search that failed', async () => {
+            const server = fakeServer();
+            server.get(SEARCH, serverError(), found([photo('a')]));
+            const query = { terms: 'felix' };
+            searchStore.search(query);
+            await reaches(query, SearchLoadStatus.ERROR_LOADING);
+
+            searchStore.search(query);
+            await reaches(query, SearchLoadStatus.LOADED);
+
+            expect(pathsOf(query)).toStrictEqual([mediaPath('a')]);
         });
 
         it('captions a photo or a video with the day it is from, and an album with its own summary', async () => {
@@ -95,7 +147,7 @@ describe('searchStore', () => {
             searchStore.search(query);
             await reaches(query, SearchLoadStatus.LOADED);
 
-            const shown = searchStore.searches.get(query)?.results?.items?.map((item) => ({
+            const shown = searchStore.get(query)?.results?.items?.map((item) => ({
                 href: item.href,
                 mediaType: item.mediaType,
                 title: item.title,
@@ -134,7 +186,7 @@ describe('searchStore', () => {
             searchStore.search(query);
             await reaches(query, SearchLoadStatus.ERROR_LOADING);
 
-            expect(searchStore.searches.get(query)?.error).toBe(message);
+            expect(searchStore.get(query)?.error).toBe(message);
         });
 
         it('keeps no message from a failure that carried none', async () => {
@@ -145,7 +197,7 @@ describe('searchStore', () => {
             searchStore.search(query);
             await reaches(query, SearchLoadStatus.ERROR_LOADING);
 
-            expect(searchStore.searches.get(query)?.error).toBeUndefined();
+            expect(searchStore.get(query)?.error).toBeUndefined();
         });
 
         it.each([
@@ -160,7 +212,7 @@ describe('searchStore', () => {
             searchStore.search(query);
             await reaches(query, SearchLoadStatus.ERROR_LOADING);
 
-            expect(searchStore.searches.get(query)?.results).toBeUndefined();
+            expect(searchStore.get(query)?.results).toBeUndefined();
         });
 
         it('fails when the server cannot be reached', async () => {
@@ -173,7 +225,7 @@ describe('searchStore', () => {
             searchStore.search(query);
             await reaches(query, SearchLoadStatus.ERROR_LOADING);
 
-            expect(searchStore.searches.get(query)?.results).toBeUndefined();
+            expect(searchStore.get(query)?.results).toBeUndefined();
         });
     });
 
@@ -194,14 +246,14 @@ describe('searchStore', () => {
 
             searchStore.getMore(query, 2);
 
-            expect(searchStore.searches.get(query)?.status).toBe(SearchLoadStatus.LOADING_MORE_RESULTS);
+            expect(searchStore.get(query)?.status).toBe(SearchLoadStatus.LOADING_MORE_RESULTS);
             expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b')]);
 
             await reaches(query, SearchLoadStatus.LOADED);
 
             expect(fetched).toHaveBeenLastCalledWith('/api/search/felix?oldest=2001&startAt=2&pageSize=30');
             expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b'), mediaPath('c')]);
-            expect(searchStore.searches.get(query)?.results?.nextStartAt).toBe(3);
+            expect(searchStore.get(query)?.results?.nextStartAt).toBe(3);
         });
 
         /**
@@ -213,7 +265,7 @@ describe('searchStore', () => {
 
             searchStore.getMore(query, 2);
             await vi.waitFor(() => {
-                expect(searchStore.searches.get(query)?.results?.nextStartAt).toBe(4);
+                expect(searchStore.get(query)?.results?.nextStartAt).toBe(4);
             });
 
             expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b'), mediaPath('c')]);
@@ -225,7 +277,7 @@ describe('searchStore', () => {
 
             searchStore.getMore(query, 2);
             await vi.waitFor(() => {
-                expect(searchStore.searches.get(query)?.results?.nextStartAt).toBe(5);
+                expect(searchStore.get(query)?.results?.nextStartAt).toBe(5);
             });
 
             expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b')]);
@@ -238,7 +290,19 @@ describe('searchStore', () => {
             await reaches(query, SearchLoadStatus.ERROR_LOADING_MORE_RESULTS);
 
             expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b')]);
-            expect(searchStore.searches.get(query)?.results?.total).toBe(3);
+            expect(searchStore.get(query)?.results?.total).toBe(3);
+        });
+
+        it('keeps the matches it has, and no longer says the next page failed, when the search is made again', async () => {
+            const query = await firstPageOf(3, serverError());
+            searchStore.getMore(query, 2);
+            await reaches(query, SearchLoadStatus.ERROR_LOADING_MORE_RESULTS);
+
+            searchStore.search(query);
+
+            expect(searchStore.get(query)?.status).toBe(SearchLoadStatus.LOADED);
+            expect(pathsOf(query)).toStrictEqual([mediaPath('a'), mediaPath('b')]);
+            expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
         });
     });
 });
