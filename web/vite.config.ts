@@ -4,7 +4,7 @@ import path from 'node:path';
 import browserslistToEsbuild from 'browserslist-to-esbuild';
 import { ESLint } from 'eslint';
 import esx from 'eslint-plugin-es-x';
-import type { Plugin, ProxyOptions } from 'vite';
+import type { Plugin, ProxyOptions, UserConfig } from 'vite';
 import { defaultExclude, defineConfig } from 'vitest/config';
 import { BROWSER_FLOOR_RULES_UNTYPED } from '../browser-floor.ts';
 import { guestBundle } from './guest-bundle.ts';
@@ -24,22 +24,26 @@ const workerProxy: Record<string, ProxyOptions> = Object.fromEntries(
 );
 
 /**
- * The media URLs a rendered <img> or <video> asks for are the Worker's, so nothing serves them under test. SvelteKit's
- * dev fallback would render them on the server instead, loading its SSR runtime as Vitest shuts down and printing
- * "transport was disconnected". Listed before sveltekit() so this runs ahead of that fallback.
+ * Under test nothing is passed to the Worker, since a test's media would then load from whatever runs on its port, or
+ * log a connection error when nothing does. A URL nothing else serves, such as the media a rendered <img> or <video>
+ * asks for, gets a 404 instead: SvelteKit's dev fallback would otherwise render it on the server, loading its SSR
+ * runtime as Vitest shuts down and printing "transport was disconnected". The proxy would take those requests before
+ * the 404 saw them, so one plugin decides both. Listed before sveltekit() so the 404 runs ahead of that fallback.
  */
-function notFoundUnderTest(): Plugin {
+function workerRoutes(): Plugin {
     return {
-        name: 'not-found-under-test',
-        apply: (_config, { mode }) => mode === 'test',
-        configureServer(server) {
-            return () => {
-                server.middlewares.use((_request, response) => {
-                    response.statusCode = 404;
-                    response.end();
-                });
-            };
-        },
+        name: 'worker-routes',
+        config: (_config, { mode }): UserConfig =>
+            mode === 'test' ? {} : { server: { proxy: workerProxy }, preview: { proxy: workerProxy } },
+        configureServer: (server) =>
+            server.config.mode === 'test'
+                ? (): void => {
+                      server.middlewares.use((_request, response) => {
+                          response.statusCode = 404;
+                          response.end();
+                      });
+                  }
+                : undefined,
     };
 }
 
@@ -93,7 +97,7 @@ export async function browserFloorFindings(code: string, fileName: string): Prom
 }
 
 export default defineConfig({
-    plugins: [notFoundUnderTest(), sveltekit(), browserFloor(), guestBundle()],
+    plugins: [workerRoutes(), sveltekit(), browserFloor(), guestBundle()],
     // The browsers in .browserslistrc: Rolldown lowers the syntax they lack and Lightning CSS the CSS, media query
     // ranges included.
     build: { target: browserslistToEsbuild() },
@@ -160,6 +164,4 @@ export default defineConfig({
     // `vite dev` finds a dependency that is only imported dynamically when the page first imports it, then bundles it
     // under a new version hash, and the import the page already asked for fails. Bundled at startup instead.
     optimizeDeps: { include: ['@simplewebauthn/browser'] },
-    server: { proxy: workerProxy },
-    preview: { proxy: workerProxy },
 });
