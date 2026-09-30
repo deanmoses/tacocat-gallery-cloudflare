@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isAwsMediaPath, renamedMedia, rewriteLinks, sanitizedPath } from '../../scripts/aws-names.ts';
+import {
+    awsOrder,
+    copiedAlbumPath,
+    isAwsMediaPath,
+    renamedMedia,
+    rewriteLinks,
+    sanitizedPath,
+} from '../../scripts/aws-names.ts';
 
 describe(renamedMedia, () => {
     it('drops the extension and sanitizes, keeping the order it was given', () => {
@@ -41,13 +48,37 @@ describe(renamedMedia, () => {
     });
 });
 
+describe(awsOrder, () => {
+    // A hyphen sorts before the extension's dot, so the story's opening photo came last on AWS
+    it('is the new names in AWS name order where sanitizing would reorder them', () => {
+        expect(
+            awsOrder(
+                renamedMedia([{ itemName: 'eiffel.jpg' }, { itemName: 'eiffel-tower1.jpg' }, { itemName: 'Arc.jpg' }]),
+            ),
+        ).toStrictEqual(['arc', 'eiffel_tower1', 'eiffel']);
+    });
+
+    it('is null where the new names already sort as the AWS names did', () => {
+        expect(awsOrder(renamedMedia([{ itemName: 'b.jpg' }, { itemName: 'a.jpg' }]))).toBeNull();
+    });
+});
+
+describe(copiedAlbumPath, () => {
+    it('moves the album dated November 31st to the 30th, and leaves a real date where it is', () => {
+        expect(copiedAlbumPath('/1991/11-31/')).toBe('/1991/11-30/');
+        expect(copiedAlbumPath('/1991/11-15/')).toBe('/1991/11-15/');
+    });
+});
+
 describe(isAwsMediaPath, () => {
-    it.each(['/2016/12-18/dept_state1b.jpg', '/2001/06-15/My Photo.JPG', '/2001/06-15/felix.mov'])(
-        'is true of %s',
-        (path) => {
-            expect(isAwsMediaPath(path)).toBe(true);
-        },
-    );
+    it.each([
+        '/2016/12-18/dept_state1b.jpg',
+        '/2001/06-15/My Photo.JPG',
+        '/2001/06-15/felix.mov',
+        '/1991/11-31/1991_nov1.jpg',
+    ])('is true of %s', (path) => {
+        expect(isAwsMediaPath(path)).toBe(true);
+    });
 
     it.each([
         '/2016/12-18/',
@@ -108,5 +139,9 @@ describe(sanitizedPath, () => {
     it('is the path under the name the sanitizer gives, or null when nothing is left of the name', () => {
         expect(sanitizedPath('/2001/06-15/My Photo.JPG')).toBe('/2001/06-15/my_photo');
         expect(sanitizedPath('/2001/06-15/.jpg')).toBeNull();
+    });
+
+    it('is in the day the album moved to', () => {
+        expect(sanitizedPath('/1991/11-31/1991_nov1.jpg')).toBe('/1991/11-30/1991_nov1');
     });
 });
