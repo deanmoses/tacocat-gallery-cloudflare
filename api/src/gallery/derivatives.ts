@@ -63,12 +63,13 @@ export async function warmDerivatives(
 }
 
 /**
- * The Images binding's codes for a file it will never decode: not an image (9412), over 100 megapixels (9413), a
- * format it does not take (9520, 9523), and 9516, which its docs call internal but which a HEIC written by macOS
- * `sips` gets every time. Any other code is the binding failing to run: 9502, 9522, 9527 and 9529 all came from it
- * while it was busy, and images that had failed with 9527 were made on a later request.
+ * The Images binding's codes its docs give for a fault in the file: not an image (9412), over 100 megapixels (9413),
+ * and a format it does not take (9520). A refusal drops the upload, so any other code is taken as the binding failing
+ * to run and is retried, the costlier mistake being the other way round: 9502, 9522, 9527 and 9529 all came from it
+ * while it was busy, and images that had failed with 9527 were made on a later request. A HEIC written by macOS
+ * `sips` gets 9516, which the docs call internal, every time, so it becomes an upload error once the retries are spent.
  */
-const FILE_FAULTS: ReadonlySet<number> = new Set([9412, 9413, 9516, 9520, 9523]);
+const FILE_FAULTS: ReadonlySet<number> = new Set([9412, 9413, 9520]);
 
 /** Whether the Images binding refused the image itself, as against failing to run, which the step's retry is for. */
 function isRefusal(error: unknown): error is Error {

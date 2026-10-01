@@ -131,15 +131,6 @@ const TRANSCODE_STEP = {
     timeout: '30 minutes',
 } as const;
 
-/**
- * Each call in the photo step gives up within a minute, so an attempt ends within a few, and the timeout only catches
- * what those limits miss. Four attempts tell the admin of a failure within about a quarter of an hour.
- */
-const PHOTO_STEP = {
-    retries: { limit: 3, delay: '10 seconds', backoff: 'exponential' },
-    timeout: '5 minutes',
-} as const;
-
 type Prepared =
     | { outcome: 'redelivered' | 'gone' }
     | { outcome: 'rejected'; error: string }
@@ -165,11 +156,8 @@ async function prepare(
     path: string,
 ): Promise<Prepared> {
     const { versionId } = upload;
-    const read = await step.do(
-        'read the file, and store a photo and make its derivatives',
-        PHOTO_STEP,
-        async ({ attempt }) =>
-            staged(path, versionId, attempt, async (steps) => preparePhoto(env, key, upload, path, steps)),
+    const read = await step.do('read the file, and store a photo and make its derivatives', async ({ attempt }) =>
+        staged(path, versionId, attempt, async (steps) => preparePhoto(env, key, upload, path, steps)),
     );
     if (read.outcome !== 'video') {
         return read;

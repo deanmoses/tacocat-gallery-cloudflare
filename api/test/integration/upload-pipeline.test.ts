@@ -303,9 +303,13 @@ describe('upload pipeline', () => {
         });
     });
 
-    it('records a HEIC the Images binding cannot decode as an upload error, not an item', async () => {
+    it.each([
+        { name: 'not an image', error: 'IMAGES_TRANSFORM_ERROR 9412: Unsupported image type' },
+        { name: 'too many pixels', error: 'IMAGES_TRANSFORM_ERROR 9413: Image exceeds the maximum image area' },
+        { name: 'in no format it takes', error: 'IMAGES_TRANSFORM_ERROR 9520: Unsupported image format' },
+    ])('records a HEIC the Images binding says is $name as an upload error, not an item', async ({ error }) => {
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
-            throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
+            throw new Error(error);
         });
         const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
         const [item, inbox, errors, row] = await Promise.all([
@@ -317,9 +321,7 @@ describe('upload pipeline', () => {
 
         expect(item).toBeUndefined();
         expect(inbox).toBeNull();
-        expect(errors[`${DAY}tenbit`]).toBe(
-            'the image cannot be decoded: IMAGES_TRANSFORM_ERROR 9412: Unsupported image type',
-        );
+        expect(errors[`${DAY}tenbit`]).toBe(`the image cannot be decoded: ${error}`);
         expect(row?.completedAt).toBeNull();
     });
 
@@ -327,6 +329,7 @@ describe('upload pipeline', () => {
         { name: 'an internal error', error: 'IMAGES_TRANSFORM_ERROR 9527: Could not resize the image: internal error' },
         { name: 'a busy colo', error: 'IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy' },
         { name: 'a lost connection', error: 'IMAGES_TRANSFORM_ERROR 9502: Images binding connection error' },
+        { name: 'the internal error a sips HEIC gets', error: 'IMAGES_TRANSFORM_ERROR 9516: Internal error' },
     ])(
         'retries the step when the Images binding fails with $name, which is no fault of the file',
         async ({ error }) => {
@@ -391,7 +394,7 @@ describe('upload pipeline', () => {
         });
     });
 
-    it('tries the photo four times while the Images binding keeps failing, then tells the admin why', async () => {
+    it('tries the photo six times while the Images binding keeps failing, then tells the admin why', async () => {
         const warned = vi.spyOn(console, 'warn');
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
             throw new Error('IMAGES_TRANSFORM_ERROR 9529: The image timed out while processing');
@@ -400,7 +403,7 @@ describe('upload pipeline', () => {
         await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
         const attempts = warned.mock.calls.filter(([logged]) => isFailedAttempt(logged, versionId));
 
-        expect(attempts).toHaveLength(4);
+        expect(attempts).toHaveLength(6);
         await expect(uploadErrors([`${DAY}busy`])).resolves.toStrictEqual({
             [`${DAY}busy`]: 'IMAGES_TRANSFORM_ERROR 9529: The image timed out while processing',
         });
