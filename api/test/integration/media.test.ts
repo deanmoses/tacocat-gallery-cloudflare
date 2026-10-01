@@ -13,6 +13,17 @@ const jpg = fixtureBytes(jpgDataUrl);
 const png = fixtureBytes(pngDataUrl);
 const gif = fixtureBytes(gifDataUrl);
 
+/** A transformation that fails where the binding's own failures arise: once its output is asked for. */
+function failingTransformation(error: string): ImageTransformer {
+    const failing = {
+        transform: (): ImageTransformer => failing,
+        output: async (): Promise<ImageTransformationResult> => {
+            throw new Error(error);
+        },
+    } as unknown as ImageTransformer;
+    return failing;
+}
+
 describe('serving a video', () => {
     it('serves a byte range of the MP4 the transcoder wrote for the version, from the derived bucket', async () => {
         await env.DERIVED.put(videoKey(testVersionId('v1')), new Uint8Array(100), {
@@ -176,6 +187,37 @@ describe('serving media', () => {
         expect(first.headers.get('content-type')).toBe('image/webp');
         expect(stored).not.toBeNull();
         expect(second.headers.get('x-derived')).toBe('cache-api-hit');
+    });
+
+    it.each([
+        { name: 'its connection', error: 'Network connection lost.' },
+        { name: 'its colo too busy', error: 'IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy' },
+    ])('makes a derivative on a second try when the binding first finds $name', async ({ error }) => {
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
+        const input = env.IMAGES.input.bind(env.IMAGES);
+        const inputs = vi
+            .spyOn(env.IMAGES, 'input')
+            .mockReturnValueOnce(failingTransformation(error))
+            .mockImplementation(input);
+        const response = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=200x200`);
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-derived')).toBe('generated');
+        expect(inputs).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+        { name: 'fails twice', error: 'Network connection lost.', tries: 2 },
+        { name: 'cannot decode the image', error: 'IMAGES_TRANSFORM_ERROR 9412: Unsupported image type', tries: 1 },
+    ])('fails after $tries tries when the binding $name', async ({ error, tries }) => {
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
+        const inputs = vi.spyOn(env.IMAGES, 'input').mockReturnValue(failingTransformation(error));
+        const response = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=200x200`);
+        await response.body?.cancel();
+
+        expect(response.status).toBe(500);
+        expect(inputs).toHaveBeenCalledTimes(tries);
     });
 
     it.each([
