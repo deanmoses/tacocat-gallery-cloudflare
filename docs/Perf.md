@@ -130,6 +130,7 @@ What touched production during the current series, so a round is read against it
 - **2026-09-29, 17:48 UTC to 2026-09-30, 08:02:** twenty-two releases, the quality-75 thumbnails among them. The app's file names changed ahead of the 22:24 round on the 29th and the 05:23 and 11:23 rounds on the 30th; the 19:24 round on the 29th ran 17 minutes after a release, the 22:24 round 14 minutes after one, and one landed during the 05:38 round on the 30th. Only the 11:23 round on the 29th found a site seven hours quiet.
 - **2026-09-30, 16:25 to 18:22 UTC:** five releases after the series' last round, the smaller album records among them.
 - **2026-09-30, 02:20 to 02:31 UTC:** production's database emptied and migrated from a new baseline for the ULID version ids, then both albums imported again, `/2025/09-29/` from 02:29 and `/2026/09-13/` finishing at 02:31, so every image URL and edge cache is new ahead of the 05:23 round.
+- **2026-10-01, 02:33 to 03:42 UTC:** the whole AWS gallery copied into production (`docs/plans/AwsDataMigration.md`), writing over both albums with new version ids, so every image URL and edge cache is new again ahead of the 05:23 round, and the year albums now hold every day album the AWS site's do.
 
 ## Appendix: the journey script
 

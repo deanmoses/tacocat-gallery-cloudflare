@@ -22,7 +22,7 @@ This project is a re-imagining of the Tacocat photo gallery (<https://pix.tacoca
 
 We will make the go/no go decision by closing down all the items in `docs/Risks.md`.
 
-No albums or media have been migrated from AWS yet. For now there is only one admin, moses, only logged in to staging. The staging and production databases hold nothing that matters and can be deleted. So now is the time to do any destructive changes that would result in a better, simpler, more hardened system.
+Production holds the real gallery, copied from AWS on 2026-09-30 and verified (`docs/plans/AwsDataMigration.md`), and is being tested before moving the `pix.tacocat.com` domain to it. Until then AWS stays live and editing is paused. Production's data now matters: never empty it or make a destructive change to it without asking in triplicate.
 
 ## This repo
 
