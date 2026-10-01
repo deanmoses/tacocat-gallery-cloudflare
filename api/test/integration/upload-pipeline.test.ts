@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { imageUrl, parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
+import { CALL_LIMIT_MS } from '../../src/gallery/derivatives';
 import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
 import { fixtureBytes } from '../gallery';
 import { albumAsAdmin, call, callAsAdmin, handler, putDay, putItem, storedItem, uploadErrors, write } from '../helpers';
@@ -101,6 +102,59 @@ function decodingAnyImage(): void {
         output: async (): Promise<ImageTransformationResult> => result,
     } as unknown as ImageTransformer;
     vi.spyOn(env.IMAGES, 'input').mockReturnValue(transformer);
+}
+
+/** A promise nothing ever settles, as a call that hangs returns. */
+async function never<T>(): Promise<T> {
+    return Promise.withResolvers<T>().promise;
+}
+
+/** Has the pipeline's first read of a whole inbox object hang, and every later read go through. */
+function stallingTheFirstWholeRead(): void {
+    const get = env.UPLOADS.get.bind(env.UPLOADS);
+    let stalled = false;
+    vi.spyOn(env.UPLOADS, 'get').mockImplementation(async (key: string, options?: R2GetOptions) => {
+        if (options === undefined && !stalled) {
+            stalled = true;
+            return never();
+        }
+        return get(key, options);
+    });
+}
+
+/** Has the first transformation, the thumbnail's, hang, and every later one go through to the local binding. */
+function stallingTheFirstTransformation(): void {
+    const stuck = {
+        transform: (): ImageTransformer => stuck,
+        output: never,
+    } as unknown as ImageTransformer;
+    const input = env.IMAGES.input.bind(env.IMAGES);
+    vi.spyOn(env.IMAGES, 'input').mockReturnValueOnce(stuck).mockImplementation(input);
+}
+
+/**
+ * Has each call's limit run out after a second rather than a minute, by shortening every timer of exactly that length;
+ * the pipeline runs in this isolate, so it sees the spy. A second is still far more than any local call takes.
+ */
+function shorteningCallLimits(): void {
+    const wait = setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: () => void, ms?: number) =>
+        wait(callback, ms === CALL_LIMIT_MS ? 1000 : ms),
+    );
+}
+
+/** Whether a log line is the pipeline's word that one attempt at `versionId` threw. */
+function isFailedAttempt(logged: unknown, versionId: string): boolean {
+    return (
+        typeof logged === 'object' &&
+        logged !== null &&
+        'event' in logged &&
+        logged.event === 'upload_stages' &&
+        'versionId' in logged &&
+        logged.versionId === versionId &&
+        'outcome' in logged &&
+        logged.outcome === 'threw'
+    );
 }
 
 async function uploadRow(versionId: string): Promise<typeof schema.upload.$inferSelect | undefined> {
@@ -249,9 +303,13 @@ describe('upload pipeline', () => {
         });
     });
 
-    it('records a HEIC the Images binding cannot decode as an upload error, not an item', async () => {
+    it.each([
+        { name: 'not an image', error: 'IMAGES_TRANSFORM_ERROR 9412: Unsupported image type' },
+        { name: 'too many pixels', error: 'IMAGES_TRANSFORM_ERROR 9413: Image exceeds the maximum image area' },
+        { name: 'in no format it takes', error: 'IMAGES_TRANSFORM_ERROR 9520: Unsupported image format' },
+    ])('records a HEIC the Images binding says is $name as an upload error, not an item', async ({ error }) => {
         vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
-            throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
+            throw new Error(error);
         });
         const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
         const [item, inbox, errors, row] = await Promise.all([
@@ -263,10 +321,93 @@ describe('upload pipeline', () => {
 
         expect(item).toBeUndefined();
         expect(inbox).toBeNull();
-        expect(errors[`${DAY}tenbit`]).toBe(
-            'the image cannot be decoded: IMAGES_TRANSFORM_ERROR 9412: Unsupported image type',
-        );
+        expect(errors[`${DAY}tenbit`]).toBe(`the image cannot be decoded: ${error}`);
         expect(row?.completedAt).toBeNull();
+    });
+
+    it.each([
+        { name: 'an internal error', error: 'IMAGES_TRANSFORM_ERROR 9527: Could not resize the image: internal error' },
+        { name: 'a busy colo', error: 'IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy' },
+        { name: 'a lost connection', error: 'IMAGES_TRANSFORM_ERROR 9502: Images binding connection error' },
+        { name: 'the internal error a sips HEIC gets', error: 'IMAGES_TRANSFORM_ERROR 9516: Internal error' },
+    ])(
+        'retries the step when the Images binding fails with $name, which is no fault of the file',
+        async ({ error }) => {
+            const input = env.IMAGES.input.bind(env.IMAGES);
+            vi.spyOn(env.IMAGES, 'input')
+                .mockImplementationOnce(() => {
+                    throw new Error(error);
+                })
+                .mockImplementation(input);
+            const versionId = await stage(`${DAY}busy`, jpg);
+            await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+            const [item, errors] = await Promise.all([storedItem(DAY, 'busy'), uploadErrors([`${DAY}busy`])]);
+
+            expect(item?.versionId).toBe(versionId);
+            expect(errors).toStrictEqual({});
+        },
+    );
+
+    it.each([
+        { stage: 'read', hang: stallingTheFirstWholeRead },
+        { stage: 'thumbnail', hang: stallingTheFirstTransformation },
+    ])(
+        'gives up on a $stage that never answers, says so, and finishes on the retry',
+        async ({ stage: stalled, hang }) => {
+            const warned = vi.spyOn(console, 'warn');
+            hang();
+            shorteningCallLimits();
+            const versionId = await stage(`${DAY}stuck`, jpg);
+            await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+            const [item, errors] = await Promise.all([storedItem(DAY, 'stuck'), uploadErrors([`${DAY}stuck`])]);
+
+            expect(warned).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    event: 'upload_stages',
+                    versionId,
+                    attempt: 1,
+                    outcome: 'threw',
+                    error: `Error: ${stalled} did not finish within 60 s`,
+                }),
+            );
+            expect(item?.versionId).toBe(versionId);
+            expect(errors).toStrictEqual({});
+        },
+    );
+
+    it('logs how long each stage of the photo took', async () => {
+        const logged = vi.spyOn(console, 'info');
+        const versionId = await upload(`${DAY}full_metadata`, jpg);
+
+        expect(logged).toHaveBeenCalledWith({
+            event: 'upload_stages',
+            path: `${DAY}full_metadata`,
+            versionId,
+            attempt: 1,
+            outcome: 'ready',
+            ...Object.fromEntries(
+                ['sniff', 'read', 'exif', 'original', 'thumbnail', 'thumbnail2x', 'detail'].map((name) => [
+                    name,
+                    expect.any(Number) as number,
+                ]),
+            ),
+        });
+    });
+
+    it('tries the photo six times while the Images binding keeps failing, then tells the admin why', async () => {
+        const warned = vi.spyOn(console, 'warn');
+        vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
+            throw new Error('IMAGES_TRANSFORM_ERROR 9529: The image timed out while processing');
+        });
+        const versionId = await stage(`${DAY}busy`, jpg);
+        await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
+        const attempts = warned.mock.calls.filter(([logged]) => isFailedAttempt(logged, versionId));
+
+        expect(attempts).toHaveLength(6);
+        await expect(uploadErrors([`${DAY}busy`])).resolves.toStrictEqual({
+            [`${DAY}busy`]: 'IMAGES_TRANSFORM_ERROR 9529: The image timed out while processing',
+        });
+        await expect(env.UPLOADS.head(inboxKey(versionId))).resolves.not.toBeNull();
     });
 
     it('records the XMP caption and tags of a HEIC, which has no IPTC', async () => {

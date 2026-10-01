@@ -179,13 +179,13 @@ app                        Worker                          R2 / Queue / Workflow
 
 **Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions and every album showing it are kept, and the file's tags join the row's. The thumbnail crop is kept only if the new image has exactly the old size.
 
-**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row, and the inbox object stays for a replay.
+**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row, and the inbox object stays for a replay. A busy Images binding is not the file's fault, so only the codes its docs give for a fault in the file reject one. In the photo step, reading the file, storing the original and making each derivative each give up after a minute with an error naming the stage, and each attempt of a step logs `upload_stages`: how long each stage took and how the attempt ended, so a slow upload or a failed attempt says where.
 
 **Locally**, a Worker cannot consume a real queue, so with `UPLOAD_MODE=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file and raises the event R2 would. The pipeline runs unchanged.
 
 **Why presign judges first.** Presign applies the rules the pipeline applies again when the file lands, so what would fail is refused while the admin is still watching, and the pipeline refuses an object nobody presigned.
 
-**Why a Workflow instance per upload.** A queue adds consumers slowly and only as a backlog builds, so fifty photos processed by the consumer run nearly one at a time; as fifty Workflow instances they run at once, each with a Worker's memory to itself and each step retried on its own. R2 may announce an upload twice, and an instance name can be used once, so a second announcement starts nothing.
+**Why a Workflow instance per upload.** A queue adds consumers slowly and only as a backlog builds, so fifty photos processed by the consumer run nearly one at a time; as fifty Workflow instances they run at once, each step retried on its own. Instances are not given an isolate each: like any Worker's invocations, several can share one and its 128 MB. R2 may announce an upload twice, and an instance name can be used once, so a second announcement starts nothing.
 
 **Why these steps.** A step boundary persists its result and costs time, so a step ends only where a retry must respect a change of state. A step never hands the file to the next, since its result is stored. The images are made before the item is written, so a file the Images binding cannot decode becomes an upload error instead of a broken image in an album. The item is written by the album's id, so an album renamed during the upload still receives it.
 
@@ -195,7 +195,7 @@ The album page asks for `/i/2001/06-15/felix/01ARYZ6S41TSV4RRFFQ69G5FAV?size=200
 
 1. **The colo's cache.** A hit is answered there.
 2. **The derived bucket**, under `derived/01ARYZ6S41TSV4RRFFQ69G5FAV/200x200-webp`, the name spelled from the URL and the format it settles, and served as the type it was stored with.
-3. **Made on the spot** with the Images binding, from the version's poster if it is a video, or else its original, then stored in the derived bucket and cached.
+3. **Made on the spot** with the Images binding, from the version's poster if it is a video, or else its original, then stored in the derived bucket and cached. A busy binding fails some of a burst of first-time transformations, as an album's first reader asks for, so a failure is tried once more after a short pause, unless the binding said the file cannot be decoded.
 
 Every image is cached for a year, since its URL names one version and a new upload has a new URL. The path in the URL is for people reading it, in the network panel or the logs; only the version finds the object, so an old URL keeps working after a rename.
 
