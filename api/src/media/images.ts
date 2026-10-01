@@ -57,6 +57,27 @@ export async function derivedImage(
         return { body: stored.body, contentType, how: 'stored' };
     }
 
+    try {
+        return await generated(env, wanted);
+    } catch (error) {
+        if (isRefusal(error)) {
+            throw error;
+        }
+        // A busy binding fails a burst of first-time thumbnails, as an album's first reader asks for, and passes on
+        // a later try. The pause is spread, so a page's failures do not all come back at once.
+        console.warn({ event: 'derivative_retried', key: wanted.key, error: String(error) });
+        await scheduler.wait(RETRY_PAUSE_MS * (1 + Math.random()));
+        return generated(env, wanted);
+    }
+}
+
+/** How long a failed transformation waits before its one more try, at least. */
+const RETRY_PAUSE_MS = 250;
+
+async function generated(
+    env: Pick<Env, 'ORIGINALS' | 'DERIVED' | 'IMAGES'>,
+    wanted: Derivation,
+): Promise<Derivative | { missing: string }> {
     // A video's stills come from the poster the transcoder wrote beside its MP4, and only a video has one, so looking
     // for it first is what tells a video from a photo: the file name in the URL decides nothing.
     const source = (await env.DERIVED.get(wanted.poster)) ?? (await env.ORIGINALS.get(wanted.original));
@@ -65,6 +86,27 @@ export async function derivedImage(
     }
     const made = await generateDerivative(env, wanted, source.body, source.httpMetadata?.contentType);
     return { body: made.bytes, contentType: made.format, how: 'generated' };
+}
+
+/**
+ * The Images binding's codes its docs give for a fault in the file: not an image (9412), over 100 megapixels (9413),
+ * and a format it does not take (9520). A refusal drops an upload, so any other code is taken as the binding failing
+ * to run and is tried again, the costlier mistake being the other way round: 9502, 9522, 9527 and 9529 all came from
+ * it while it was busy, and images that had failed with 9527 were made on a later request. A HEIC written by macOS
+ * `sips` gets 9516, which the docs call internal, every time.
+ */
+const FILE_FAULTS: ReadonlySet<number> = new Set([9412, 9413, 9520]);
+
+/** Whether the Images binding refused the image itself, as against failing to run, which a later try may get past. */
+export function isRefusal(error: unknown): error is Error {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const code =
+        'code' in error && typeof error.code === 'number'
+            ? error.code
+            : Number(/^IMAGES_TRANSFORM_ERROR (?<code>\d+)/v.exec(error.message)?.groups?.['code']);
+    return FILE_FAULTS.has(code);
 }
 
 /**

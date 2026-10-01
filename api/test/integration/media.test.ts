@@ -179,6 +179,38 @@ describe('serving media', () => {
     });
 
     it.each([
+        { name: 'its connection', error: 'Network connection lost.' },
+        { name: 'its colo too busy', error: 'IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy' },
+    ])('makes a derivative on a second try when the binding first finds $name', async ({ error }) => {
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
+        const input = env.IMAGES.input.bind(env.IMAGES);
+        const inputs = vi
+            .spyOn(env.IMAGES, 'input')
+            .mockImplementationOnce(() => {
+                throw new Error(error);
+            })
+            .mockImplementation(input);
+        const response = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=200x200`);
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-derived')).toBe('generated');
+        expect(inputs).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not try again an image the binding cannot decode', async () => {
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg);
+        const inputs = vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
+            throw new Error('IMAGES_TRANSFORM_ERROR 9412: Unsupported image type');
+        });
+        const response = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=200x200`);
+        await response.body?.cancel();
+
+        expect(response.status).toBe(500);
+        expect(inputs).toHaveBeenCalledExactlyOnceWith(expect.any(ReadableStream));
+    });
+
+    it.each([
         { name: 'a JPEG', file: jpg, source: 'image/jpeg', served: 'image/jpeg' },
         { name: 'a PNG', file: png, source: 'image/png', served: 'image/webp' },
         { name: 'a GIF', file: gif, source: 'image/gif', served: 'image/webp' },
