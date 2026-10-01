@@ -1,6 +1,6 @@
 # History of the Tacocat Gallery
 
-The gallery has run on seven systems in 25 years, and each move left something behind. This is what each one was, when, and where its remains are, as worked out in September 2026 from what is still at DreamHost, the Internet Archive's index of `tacocat.com`, Moses' Dropbox and his memory. What each move lost, and what comes back, is in `docs/plans/AwsDataMigration.md`.
+The gallery has run on seven systems in 25 years, and each move left something behind. This is what each one was, when, and where its remains are, as worked out in September 2026 from what is still at DreamHost, the Internet Archive's index of `tacocat.com`, Moses' Dropbox and his memory. What each move lost, and what comes back, is in [Recovering lost content from pre-AWS galleries](plans/RecoverPreAwsGalleries.md).
 
 | Years                 | System                 | Address                                                                | Where it is now                                                    |
 | --------------------- | ---------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -44,7 +44,7 @@ On 2023-12-13 the files were copied from Zenphoto into S3 and every published al
 
 ## Cloudflare, 2026
 
-This repo, which [Migrating the AWS gallery data](plans/AwsDataMigration.md) fills from AWS and from what the earlier moves left behind.
+This repo, filled from AWS by [Migrating the AWS gallery data](plans/AwsDataMigration.md) and from what the earlier moves left behind by [Recovering lost content from pre-AWS galleries](plans/RecoverPreAwsGalleries.md).
 
 ## What each move left behind
 
