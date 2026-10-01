@@ -31,7 +31,7 @@ const USAGE =
     'Usage: node api/scripts/copy-originals.ts version-ids.json --from <import bucket> --to staging|production (--only <album path> ... | --all) [--go]';
 const BUCKETS = { staging: 'staging-originals', production: 'production-originals' };
 const ENDPOINT = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
-const AT_ONCE = 8;
+const AT_ONCE = 32;
 const MAX_FAILURES = 5;
 const PROGRESS_EVERY = 500;
 
