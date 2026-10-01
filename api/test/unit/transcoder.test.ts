@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../../src/media/transcoder';
+import {
+    type ContainerControl,
+    type TranscodeEnv,
+    type TranscodeJob,
+    forwardToContainer,
+    transcodeVideo,
+} from '../../src/media/transcoder';
 
 /** A transcoder that answers every request with `respond`, recording what it was sent and which instance took it. */
 function transcoderEnv(respond: () => Response): { env: TranscodeEnv; requests: Request[]; instances: string[] } {
@@ -99,5 +105,122 @@ describe(transcodeVideo, () => {
         const { env } = transcoderEnv(() => new Response('starting up', { status: 503 }));
 
         await expect(transcodeVideo(env, JOB)).rejects.toThrow('transcode failed 503: starting up');
+    });
+});
+
+/**
+ * A container whose server starts answering after `failedPings` refused connections and then `hungPings` accepted
+ * ones it never answers, recording what it was started with, the inactivity timeouts set, and every request that
+ * reached its port.
+ */
+function fakeContainer({ running = false, failedPings = 0, hungPings = 0 } = {}): {
+    container: ContainerControl;
+    starts: ContainerStartupOptions[];
+    timeouts: number[];
+    received: Request[];
+} {
+    const starts: ContainerStartupOptions[] = [];
+    const timeouts: number[] = [];
+    const received: Request[] = [];
+    let refusals = failedPings;
+    let hangs = hungPings;
+    let isRunning = running;
+    const container: ContainerControl = {
+        get running() {
+            return isRunning;
+        },
+        images: { transcoder: 'registry.example/transcoder@sha256:abc' },
+        start: (options) => {
+            starts.push(options);
+            isRunning = true;
+        },
+        setInactivityTimeout: async (durationMs) => {
+            timeouts.push(durationMs);
+        },
+        getTcpPort: () => ({
+            fetch: async (input, init): Promise<Response> => {
+                if (refusals > 0) {
+                    refusals--;
+                    throw new Error('connection refused');
+                }
+                if (hangs > 0) {
+                    hangs--;
+                    const { signal } = new Request(input, init);
+                    return new Promise((_resolve, reject) => {
+                        if (signal.aborted) {
+                            reject(new Error('timed out', { cause: signal.reason }));
+                        }
+                        signal.addEventListener('abort', () => {
+                            reject(new Error('timed out', { cause: signal.reason }));
+                        });
+                    });
+                }
+                received.push(new Request(input, init));
+                return new Response('ok');
+            },
+        }),
+    };
+    return { container, starts, timeouts, received };
+}
+
+const TRANSCODE = new Request('http://transcoder/transcode', { method: 'POST', body: '{"src":"x"}' });
+
+describe(forwardToContainer, () => {
+    it('starts a stopped container on the transcoder image, on the largest instance, with Internet access', async () => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const { container, starts } = fakeContainer();
+        await forwardToContainer(container, TRANSCODE.clone());
+
+        expect(starts).toStrictEqual([
+            { image: 'registry.example/transcoder@sha256:abc', instance: 'standard-4', enableInternet: true },
+        ]);
+    });
+
+    it('hands the request over only once the server answers', async () => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const { container, received } = fakeContainer({ failedPings: 3 });
+        await forwardToContainer(container, TRANSCODE.clone());
+        const [ping, forwarded] = received;
+
+        expect(received).toHaveLength(2);
+        expect(ping?.method).toBe('GET');
+        expect(forwarded?.method).toBe('POST');
+        await expect(forwarded?.text()).resolves.toBe('{"src":"x"}');
+    });
+
+    it('gives up on a check the server accepts but never answers, and checks again', async () => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+        const { container, received } = fakeContainer({ hungPings: 1 });
+        await forwardToContainer(container, TRANSCODE.clone());
+
+        expect(timeout).toHaveBeenCalledWith(5000);
+        expect(received.map(({ method }) => method)).toStrictEqual(['GET', 'POST']);
+    });
+
+    it('leaves a running container as it is', async () => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const { container, starts } = fakeContainer({ running: true });
+        await forwardToContainer(container, TRANSCODE.clone());
+
+        expect(starts).toStrictEqual([]);
+    });
+
+    it.each([false, true])('stops the container 10 s after it goes idle, running before: %s', async (running) => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const { container, timeouts } = fakeContainer({ running });
+        await forwardToContainer(container, TRANSCODE.clone());
+
+        expect(timeouts).toStrictEqual([10_000]);
+    });
+
+    it('throws, so the step retries, when the server never answers, and sends it nothing', async () => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const { container, received } = fakeContainer({ failedPings: Infinity });
+
+        await expect(forwardToContainer(container, TRANSCODE.clone())).rejects.toThrow(
+            'container not answering on port 8080',
+        );
+        expect(received).toStrictEqual([]);
     });
 });

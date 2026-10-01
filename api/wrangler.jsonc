@@ -26,7 +26,10 @@
     },
     // Adding `routes` switches workers.dev off unless this is set, and preview URLs only exist on workers.dev.
     "workers_dev": true,
-    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+    "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["Transcoder"] },
+        { "tag": "v2", "new_sqlite_classes": ["VideoTranscoder"] },
+    ],
     // `wrangler dev` builds the transcoder's image as it starts, which needs Docker up, and only a video upload uses it.
     // `npm run dev:video` turns it on.
     "dev": { "enable_containers": false },
@@ -105,22 +108,18 @@
     ],
     "containers": [
         {
-            "class_name": "Transcoder",
-            "image": "./transcoder/Dockerfile",
-            // The largest there is, since the admin waits through the encode and a video comes about once a month. An
-            // instance per video sleeps 10 s after its encode; ten at 4 vCPU each keep both
-            // environments together inside the account's 100 vCPU of live instances.
-            "instance_type": "standard-4",
-            "max_instances": 10,
-            // A deploy's rollout stops a running instance, killing its encode, unless the instance started this many
-            // seconds ago or fewer: the transcode step's timeout, so no encode is cut off.
-            "rollout_active_grace_period": 1800,
-            // One step. Wrangler's default above one instance is 10% first, which protects a fleet of long-lived
-            // servers; an instance here lives for one video, so a first step would only hold the rollout back.
-            "rollout_step_percentage": 100,
+            // The Worker version carries the image, so the code and the container it starts always ship together, and a
+            // deploy leaves a running instance on the image it started with. The Durable Object picks the instance type
+            // as it starts one (src/media/transcoder.ts). An instance per video with no cap of its own: the account's
+            // 100 vCPU of live instances, 25 at 4 vCPU across both environments, is the limit, past which a start
+            // fails and the upload's step retries.
+            "class_name": "VideoTranscoder",
+            "name": "staging-video-transcoder",
+            "scheduling_policy": "durable_object",
+            "images": { "transcoder": { "dockerfile": "./transcoder/Dockerfile" } },
         },
     ],
-    "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
+    "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "VideoTranscoder" }] },
     "env": {
         "production": {
             "name": "production",
@@ -181,18 +180,14 @@
             ],
             "containers": [
                 {
-                    "class_name": "Transcoder",
-                    // Wrangler's default name appends the environment's under --env, which would make this one
-                    // production-transcoder-production; the top level, with no environment, gets staging-transcoder.
-                    "name": "production-transcoder",
-                    "image": "./transcoder/Dockerfile",
-                    "instance_type": "standard-4",
-                    "max_instances": 10,
-                    "rollout_active_grace_period": 1800,
-                    "rollout_step_percentage": 100,
+                    "class_name": "VideoTranscoder",
+                    // Wrangler's default name appends the environment's under --env.
+                    "name": "production-video-transcoder",
+                    "scheduling_policy": "durable_object",
+                    "images": { "transcoder": { "dockerfile": "./transcoder/Dockerfile" } },
                 },
             ],
-            "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
+            "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "VideoTranscoder" }] },
         },
     },
 }

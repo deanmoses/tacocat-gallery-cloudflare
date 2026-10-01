@@ -10,3 +10,4 @@ web/.vitest/
 coverage/
 playwright-report/
 test-results/
+api/.wrangler-release.jsonc

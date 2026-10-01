@@ -275,7 +275,7 @@ A release (`scripts/release.sh`) is blue/green:
 4. Switch it to 100%, check again, and roll back if that fails.
 5. Apply the config's triggers, the crons and the custom domain, which a version release leaves as they were.
 
-Traffic is never split between versions, since a split would serve one version's `index.html` with the other's files. A version release cannot ship a Durable Object change, a new Workflow or a queue consumer's settings; those need a plain `wrangler deploy`. Nor does a version carry the container's image or settings, so the release sets those on the container application itself, through the Containers API, before it uploads the version.
+Traffic is never split between versions, since a split would serve one version's `index.html` with the other's files. A version release cannot ship a Durable Object change, a new Workflow or a queue consumer's settings; those need a plain `wrangler deploy`. A version does carry the transcoder's image, so the container a version starts is the one it was built with.
 
 ## Jobs
 

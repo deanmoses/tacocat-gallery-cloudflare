@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Releases the Worker to one environment without a moment in which readers can reach a version nothing has checked.
 #
-#   0. Ship the transcoder's image and container settings with api/scripts/ship-transcoder.ts, when either has changed
-#      since the commit the container last shipped from. A Worker version carries neither, and nothing checks or rolls back the container, so an
-#      image has to work with both the version serving and the one being released, as a migration does; its rollout
-#      leaves an instance still encoding on the old image for up to its grace period anyway.
-#   1. Build the web app and upload a version. It serves no traffic.
+#   1. Resolve the transcoder's image in the account's registry with api/scripts/release-config.ts, building and pushing
+#      it only when its sources have changed, then build the web app and upload a version, which carries the image. The
+#      version serves no traffic.
 #   2. Note the database's Time Travel bookmark, then apply the migrations. They are additive by rule (see
 #      scripts/lint.sh), so the version still serving should keep working on the new schema. It is checked, since a
 #      migration that breaks it has broken the site already. The release then goes on, because the new version was
@@ -164,9 +162,9 @@ if ! [[ "$previous" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 fi
 echo "serving now: $previous"
 
-step "Shipping the transcoder"
-# First, so that a failure here comes before anything else has changed.
-(cd api && node scripts/ship-transcoder.ts "$1" "$short")
+step "Resolving the transcoder's image"
+# First, so that a failed build comes before anything else has changed.
+(cd api && node scripts/release-config.ts)
 
 step "Building the web app"
 npm run --silent build --workspace web
@@ -175,7 +173,7 @@ newest_migration=$(basename "$(find api/migrations -maxdepth 1 -name '*.sql' | L
 
 step "Uploading the version"
 # The output holds the new version's id; shown as it comes, and kept to read the id out of.
-upload=$(wrangler versions upload --tag "$short" --message "${subject:0:100}" 2>&1 | tee /dev/stderr)
+upload=$(wrangler versions upload --config .wrangler-release.jsonc --tag "$short" --message "${subject:0:100}" 2>&1 | tee /dev/stderr)
 new=$(grep 'Worker Version ID:' <<<"$upload" | awk '{ print $NF }')
 if [ -z "$new" ]; then
     echo "could not find the uploaded version's id in Wrangler's output" >&2

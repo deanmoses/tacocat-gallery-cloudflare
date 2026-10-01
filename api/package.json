@@ -28,7 +28,6 @@
         "logs:production": "wrangler tail --env production"
     },
     "dependencies": {
-        "@cloudflare/containers": "^0.3.7",
         "@simplewebauthn/server": "^14.0.2",
         "@tacocat-gallery/shared": "*",
         "@xmldom/xmldom": "^0.9.12",

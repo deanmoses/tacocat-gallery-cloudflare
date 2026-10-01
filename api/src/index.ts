@@ -7,7 +7,7 @@ import { startBrowserRuns } from './ops/browser-runs';
 import { createApp } from './routes/app';
 
 export { UploadPipeline } from './gallery/pipeline';
-export { Transcoder } from './media/transcoder';
+export { Transcoder, VideoTranscoder } from './media/transcoder';
 
 const app = createApp();
 
