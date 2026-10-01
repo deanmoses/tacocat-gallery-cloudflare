@@ -40,7 +40,11 @@ This project is a re-imagining of the Tacocat photo gallery (<https://pix.tacoca
 - **Feature improvements**: we've found we can improve capabilities. For example:
     - Switching to SQLite's built-in search allows for accent-insensitive search.
     - Switching to SQLite and improved localhost support made it easier to add a users table and a photo re-ordering feature, things that I had been intimidated by on the DynamoDB based AWS system.
-- **Simplicity**: the Cloudflare stack is simpler: no subdomains (eliminating whole classes of domain management issues) and very little CORS, no API Gateway, no CloudFront, no Cognito, no Redis. We simplified media storage by making it truly immutable, meaning when we replace or rename an image, it's purely adding a new file under a new ID such that the only other things that change are in the database, which greatly simplified and speeded up renames and replaces.
+- **Simplicity**: the Cloudflare stack is simpler:
+    - **No subdomains**. This eliminated whole classes of domain management hassles and issues, and our CORS surface area is tiny.
+    - **Many less services**. No API Gateway, no CloudFront, no Cognito, no Redis.
+    - **Simpler storage**. We simplified media storage by making it truly immutable, meaning when we replace or rename an image, it's purely adding a new file under a new ID such that the only other things that change are in the database, which greatly simplified and speeded up renames and replaces.
+    - **No DuckDB analytics stack**. Our DuckDB stack for AWS existed because AWS logs were hard to query. CloudFront wrote TSV files into S3, CloudWatch Insights was clumsy, and you needed three providers to see one page load. DuckDB was the only place a question could be asked at all. Cloudflare's observability MCP and the query builder handle most of that.
 - **More robust**: it feels like the Cloudflare stack can be more easily made robust than AWS. Examples:
     - Because Cloudflare is a monorepo we're able to easily share code between the front end and back end, making whole classes of errors impossible by construction.
     - Because it's easier to write and run integration tests, we are writing more tests, and I feel more comfortable doing things like enabling Dependabot.
