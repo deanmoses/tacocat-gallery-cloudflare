@@ -1,4 +1,5 @@
 import { type ImageRequest, type ImageSize, THUMBNAIL_SIZE_2X, cropText, sizeText } from '@tacocat-gallery/shared';
+import { type Steps, timed } from '../util/stages';
 import { withoutMetadata } from './jpeg';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
@@ -22,9 +23,6 @@ const DEFAULT_FOCUS = { x: 0.5, y: 1 / 3, mode: 'box-center' } as const;
 
 const WEBP_SOURCES: ReadonlySet<string> = new Set(['image/gif', 'image/png']);
 
-/** How long each step of serving a derivative took, in milliseconds, keyed by its Server-Timing name. */
-export type Steps = Record<string, number>;
-
 /** What an image URL asks for, the format it gets, and where its derivative and the sources it is made from are. */
 export interface Derivation {
     request: ImageRequest;
@@ -42,15 +40,6 @@ export interface Derivative {
     body: Uint8Array<ArrayBuffer> | ReadableStream;
     contentType: string;
     how: 'stored' | 'generated';
-}
-
-export async function timed<T>(steps: Steps, name: string, work: () => Promise<T>): Promise<T> {
-    const started = performance.now();
-    try {
-        return await work();
-    } finally {
-        steps[name] = performance.now() - started;
-    }
 }
 
 /**

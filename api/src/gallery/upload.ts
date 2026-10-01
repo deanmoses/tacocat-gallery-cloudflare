@@ -10,7 +10,8 @@ import { SNIFF_LENGTH, type SniffedMedia, sniffMedia } from '../media/sniff';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../media/transcoder';
 import { inboxKey, originalKey, posterKey, videoKey } from '../storage/keys';
 import { type S3Credentials, presign } from '../storage/s3';
-import { warmDerivatives } from './derivatives';
+import { type Steps, bounded, timed } from '../util/stages';
+import { CALL_LIMIT_MS, warmDerivatives } from './derivatives';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 
 /** Shape of an R2 event notification delivered through a Queue. */
@@ -130,6 +131,15 @@ const TRANSCODE_STEP = {
     timeout: '30 minutes',
 } as const;
 
+/**
+ * Each call in the photo step gives up within a minute, so an attempt ends within a few, and the timeout only catches
+ * what those limits miss. Four attempts tell the admin of a failure within about a quarter of an hour.
+ */
+const PHOTO_STEP = {
+    retries: { limit: 3, delay: '10 seconds', backoff: 'exponential' },
+    timeout: '5 minutes',
+} as const;
+
 type Prepared =
     | { outcome: 'redelivered' | 'gone' }
     | { outcome: 'rejected'; error: string }
@@ -155,8 +165,11 @@ async function prepare(
     path: string,
 ): Promise<Prepared> {
     const { versionId } = upload;
-    const read = await step.do('read the file, and store a photo and make its derivatives', async () =>
-        preparePhoto(env, key, upload, path),
+    const read = await step.do(
+        'read the file, and store a photo and make its derivatives',
+        PHOTO_STEP,
+        async ({ attempt }) =>
+            staged(path, versionId, attempt, async (steps) => preparePhoto(env, key, upload, path, steps)),
     );
     if (read.outcome !== 'video') {
         return read;
@@ -173,31 +186,64 @@ async function prepare(
     }
     // Read afresh for the copy, since the transcode may have run for minutes. ExifReader has nothing to say about a
     // video container, so the caption stays empty.
-    return step.do('store the original and make its derivatives', async () => {
-        const fresh = await env.UPLOADS.get(key);
-        if (!fresh) {
-            return { outcome: 'rejected', error: 'the upload vanished during the transcode' };
-        }
-        await storeOriginal(env, versionId, fresh.body, contentType, path);
-        const { width, height, durationSeconds } = transcoded;
-        const facts: MediaFacts = {
-            mediaType: 'video',
-            title: null,
-            description: null,
-            tags: null,
-            width,
-            height,
-            durationSeconds,
-        };
-        // The binding cannot read the video itself, so a video whose transcoder wrote no poster, which only a test's
-        // stand-in does, is left for its first reader.
-        const poster = await env.DERIVED.get(posterKey(versionId));
-        if (poster === null) {
-            console.warn({ event: 'derivative_not_warmed', versionId, missing: posterKey(versionId) });
-            return { outcome: 'ready', facts };
-        }
-        return deriving(env, path, versionId, facts, await poster.blob(), poster.httpMetadata?.contentType);
-    });
+    return step.do('store the original and make its derivatives', async ({ attempt }) =>
+        staged(path, versionId, attempt, async (steps): Promise<Prepared> => {
+            const fresh = await env.UPLOADS.get(key);
+            if (!fresh) {
+                return { outcome: 'rejected', error: 'the upload vanished during the transcode' };
+            }
+            // A video can be gigabytes, so its copy has no limit of its own and is bounded by the step's timeout.
+            await timed(steps, 'original', async () => storeOriginal(env, versionId, fresh.body, contentType, path));
+            const { width, height, durationSeconds } = transcoded;
+            const facts: MediaFacts = {
+                mediaType: 'video',
+                title: null,
+                description: null,
+                tags: null,
+                width,
+                height,
+                durationSeconds,
+            };
+            // The binding cannot read the video itself, so a video whose transcoder wrote no poster, which only a test's
+            // stand-in does, is left for its first reader.
+            const poster = await env.DERIVED.get(posterKey(versionId));
+            if (poster === null) {
+                console.warn({ event: 'derivative_not_warmed', versionId, missing: posterKey(versionId) });
+                return { outcome: 'ready', facts };
+            }
+            return deriving(env, path, versionId, facts, await poster.blob(), poster.httpMetadata?.contentType, steps);
+        }),
+    );
+}
+
+/**
+ * Runs one attempt of a step, then logs how long each of its stages took and how the attempt ended, so a slow upload
+ * shows where its time went and a failed attempt, which the step retries without a word of its own, shows where it
+ * stopped.
+ */
+async function staged<T extends { outcome: string }>(
+    path: string,
+    versionId: string,
+    attempt: number,
+    work: (steps: Steps) => Promise<T>,
+): Promise<T> {
+    const steps: Steps = {};
+    try {
+        const result = await work(steps);
+        console.info({ event: 'upload_stages', path, versionId, attempt, outcome: result.outcome, ...steps });
+        return result;
+    } catch (error) {
+        console.warn({
+            event: 'upload_stages',
+            path,
+            versionId,
+            attempt,
+            outcome: 'threw',
+            error: String(error),
+            ...steps,
+        });
+        throw error;
+    }
 }
 
 /**
@@ -209,8 +255,9 @@ async function preparePhoto(
     key: string,
     upload: Upload,
     path: string,
+    steps: Steps,
 ): Promise<Prepared | { outcome: 'video'; contentType: string }> {
-    const kind = await sniff(env, key, upload);
+    const kind = await bounded(steps, 'sniff', CALL_LIMIT_MS, async () => sniff(env, key, upload));
     if (kind.outcome !== 'sniffed') {
         return kind;
     }
@@ -218,20 +265,21 @@ async function preparePhoto(
     if (kind.mediaType === 'video') {
         return { outcome: 'video', contentType };
     }
-    const object = await env.UPLOADS.get(key);
-    if (!object) {
+    const bytes = await bounded(steps, 'read', CALL_LIMIT_MS, async () => (await env.UPLOADS.get(key))?.arrayBuffer());
+    if (bytes === undefined) {
         return { outcome: 'gone' };
     }
-    const bytes = await object.arrayBuffer();
-    const read = await readImage(bytes);
+    const read = await timed(steps, 'exif', async () => readImage(bytes));
     if (!read.ok) {
         return { outcome: 'rejected', error: read.error };
     }
     const file = new Blob([bytes]);
     const facts: MediaFacts = { mediaType: 'image', ...read.facts, durationSeconds: null };
     const [, prepared] = await Promise.all([
-        storeOriginal(env, upload.versionId, file, contentType, path),
-        deriving(env, path, upload.versionId, facts, file, contentType),
+        bounded(steps, 'original', CALL_LIMIT_MS, async () =>
+            storeOriginal(env, upload.versionId, file, contentType, path),
+        ),
+        deriving(env, path, upload.versionId, facts, file, contentType, steps),
     ]);
     return prepared;
 }
@@ -268,8 +316,9 @@ async function deriving(
     facts: MediaFacts,
     source: Blob,
     sourceType: string | undefined,
+    steps: Steps,
 ): Promise<Prepared> {
-    const warmed = await warmDerivatives(env, path, versionId, facts, source, sourceType);
+    const warmed = await warmDerivatives(env, path, versionId, facts, source, sourceType, steps);
     return warmed.ok ? { outcome: 'ready', facts } : { outcome: 'rejected', error: warmed.error };
 }
 
