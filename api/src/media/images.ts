@@ -1,4 +1,5 @@
 import { type ImageRequest, type ImageSize, THUMBNAIL_SIZE_2X, cropText, sizeText } from '@tacocat-gallery/shared';
+import { withoutMetadata } from './jpeg';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
 // Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets the
@@ -38,7 +39,7 @@ export interface Derivation {
 }
 
 export interface Derivative {
-    body: ArrayBuffer | ReadableStream;
+    body: Uint8Array<ArrayBuffer> | ReadableStream;
     contentType: string;
     how: 'stored' | 'generated';
 }
@@ -79,14 +80,14 @@ export async function derivedImage(
 
 /**
  * The derivative `wanted` names, made from `source` with the Images binding and stored in the derived bucket. Mirrors
- * generateDerivedImage's crop-then-cover semantics.
+ * generateDerivedImage's crop-then-cover semantics, and as its Sharp does, writes a JPEG with no metadata.
  */
 export async function generateDerivative(
     env: Pick<Env, 'DERIVED' | 'IMAGES'>,
     { request, format: asked, key }: Derivation,
     source: ReadableStream,
     sourceType: string | undefined,
-): Promise<{ bytes: ArrayBuffer; format: ImageOutputOptions['format'] }> {
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; format: ImageOutputOptions['format'] }> {
     const format = asked ?? formatForSource(sourceType);
     let transformer = env.IMAGES.input(byteStream(source));
     if (request.crop !== null) {
@@ -94,7 +95,8 @@ export async function generateDerivative(
         transformer = transformer.transform({ trim: { left, top, width: cropWidth, height: cropHeight } });
     }
     const output = await transformer.transform(resize(request)).output(outputOptions(format, request.size));
-    const bytes = await output.response().arrayBuffer();
+    const encoded = new Uint8Array(await output.response().arrayBuffer());
+    const bytes = format === 'image/jpeg' ? withoutMetadata(encoded) : encoded;
     await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
     return { bytes, format };
 }
@@ -143,8 +145,8 @@ export async function asJpeg(env: Pick<Env, 'IMAGES'>, bytes: ArrayBuffer): Prom
  * The format a URL settles: the one its `format` parameter asks for, when the binding can write it, and otherwise WebP
  * for a thumbnail, which asks for both sides, since every browser the app supports shows it; null for an image asked
  * for by one side, the media page's, since its source decides. A JPEG from the binding carries the original's IPTC and
- * XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is set to, and on a
- * thumbnail that is three quarters of the bytes; its WebP carries nothing.
+ * XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is set to, until
+ * `generateDerivative` strips them; its WebP carries nothing.
  */
 export function outputFormat(requested: string | null, size: ImageSize): ImageOutputOptions['format'] | null {
     const asked = OUTPUT_FORMATS.find((known) => known === requested);

@@ -5,7 +5,7 @@ import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { imageUrl, originalUrl, videoUrl } from '@tacocat-gallery/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { derivedPrefix, originalKey, posterKey, videoKey } from '../../src/storage/keys';
-import { fixtureBytes } from '../gallery';
+import { fixtureBytes, jpegParts } from '../gallery';
 import { call } from '../helpers';
 import { testVersionId } from '../version-id';
 
@@ -197,6 +197,22 @@ describe('serving media', () => {
         },
     );
 
+    // The real binding writes the original's XMP and IPTC into a JPEG, `tiff:Orientation` included, after turning the
+    // pixels upright, so Safari turns them again; the local one writes no metadata at all. The stand-in hands the
+    // original back, every block of it.
+    it('stores and serves the media page JPEG without the EXIF, XMP and IPTC the binding leaves in it', async () => {
+        vi.spyOn(env.IMAGES, 'input').mockImplementation(passingMetadataThrough);
+        await env.ORIGINALS.put(originalKey(testVersionId('v1')), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
+        const response = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=20`);
+        const served = new Uint8Array(await response.arrayBuffer());
+        const stored = await env.DERIVED.get(`${derivedPrefix(testVersionId('v1'))}/20`);
+        const kept = jpegParts(jpg).segments.filter((segment) => !['APP1', 'APP13'].includes(segment));
+
+        expect(response.headers.get('content-type')).toBe('image/jpeg');
+        expect(jpegParts(served).segments).toStrictEqual(kept);
+        expect(jpegParts(new Uint8Array((await stored?.arrayBuffer()) ?? [])).segments).toStrictEqual(kept);
+    });
+
     it('serves a media page image from the cache the second time, whatever format the URL names in vain', async () => {
         await env.ORIGINALS.put(originalKey(testVersionId('v1')), gif, { httpMetadata: { contentType: 'image/gif' } });
         const first = await call(`/i/2024/06-15/d/${testVersionId('v1')}?size=20`);
@@ -309,3 +325,17 @@ describe('derived images through the Cache API', () => {
         expect(timingNames(response)).toStrictEqual(['cache', 'worker']);
     });
 });
+
+/** An Images binding that hands back the image it was given, whatever it is asked to make of it. */
+function passingMetadataThrough(stream: ReadableStream<Uint8Array>): ImageTransformer {
+    const transformer: ImageTransformer = {
+        transform: () => transformer,
+        draw: () => transformer,
+        output: async () => ({
+            response: () => new Response(stream),
+            contentType: () => 'image/jpeg',
+            image: () => stream,
+        }),
+    };
+    return transformer;
+}
