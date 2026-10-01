@@ -23,7 +23,9 @@ export interface Gallery {
     cookie: string;
 }
 
-const PROCESSING_TIMEOUT_MS = 5 * 60_000;
+// Long enough for an upload whose pipeline step hangs until the Workflow's 10-minute timeout and then succeeds on its
+// retry, which production has done.
+const PROCESSING_TIMEOUT_MS = 15 * 60_000;
 // R2 answers the odd PUT with a 503 that a second try does not see.
 const PUT_ATTEMPTS = 3;
 const PUT_RETRY_MS = 2000;
