@@ -28,11 +28,11 @@ The comparison of Zenphoto with DynamoDB found nothing else the move lost ([Log]
 
 **Decided: all 11 albums come back unpublished**, and Moses publishes each by hand once he has looked at it. The AWS copy is done and verified, so the recovery is an addition to it. Each photo goes in through the Worker's own upload, so the pipeline reads its size from the file. The files come from `Photos/albums`, which holds all 147 under their own names in the album folder of the same date and `a4-aceeyah-laughing.jpg` too, but for `2015/03-25/`, whose 11 are only in `Photos/raw`. Each of the 147 is the same size in Dropbox as in S3, so they are the same files and either serves. The titles and captions come from Zenphoto as the 2023 move took them: PHP-serialized values unpacked to their `en_US` text, entities decoded, and `href="#2008/01-10"` links rewritten to `/2008/01-10`. The album summaries come from Zenphoto's `custom_data`, and the names and order come from the copy's rules (`aws-names.ts`). Zenphoto's test albums, `1993/08-15/test1/` and `2022/11-01/not_for_tacocat/` with what they hold, stay behind.
 
-**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself. Left: the two decisions below.
+**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself. Left: the 12 stale rows below.
 
 Decided when the recovery runs, by Moses looking at each photo, since a name and a caption cannot settle them:
 
-- **`2015/01-11/a4-aceeyah-laughing.jpg`**, the unpublished photo in a published album. A photo shows whenever its album does and has no published flag of its own, so it would be seen in `/2015/01-11/` as soon as it is imported. So the script leaves it out of `--all` and adds it only when told `--only /2015/01-11/`; it is on neither staging nor production.
+- **`2015/01-11/a4-aceeyah-laughing.jpg`**, the unpublished photo in a published album. A photo shows whenever its album does and has no published flag of its own, so it would be seen in `/2015/01-11/` as soon as it is imported. So the script leaves it out of `--all` and adds it only when told `--only /2015/01-11/`. **Added on 2026-10-01**, to staging and production, as `/2015/01-11/a4_aceeyah_laughing`: Moses deletes it if he does not want it.
 - **12 stale Zenphoto rows with no photo on AWS** ([Log](#log), 2026-09-30, Zenphoto comparison): `ofranda1.jpg`, `ofranda2.jpg`, `zalva2.jpg`, `fancy.jpg` and `bird_watchers9.jpg`, and 7 of `academynext1.jpg` to `academynext9.jpg`, which have only two AcademyNEXT photos on AWS between them. Each is either a draft Moses dropped or a photo the gallery lacks. Dropbox has `academynext1.jpg` in `Photos/albums/2018/06-29/`, and raws named `ofrenda`, not `ofranda`, in `Photos/raw/2018/10-14/` and `10-23/`; it has no `zalva2`, `fancy` or `bird_watchers9`, whose `raw/2022/01-17/` runs to `bird_watchers8`.
 
 ## Gallery 2
@@ -46,7 +46,7 @@ What the gallery lacks:
     - `2008/04-13/`: Felix's class play, _Le Petit Chaperon Rouge_. 22 photos.
     - `2012/06-22/`: "Holy Allowance, Batman!". 7 of its 8 photos; `batman.jpg` is in `2011/02-27/`.
 - **Single photos from albums that did come across**:
-    - `2008/01-21/tatou/`: `piano.jpg`, `zzzz.jpg`, `croissants.jpg` and `totland6.jpg`.
+    - `2008/01-21/tatou/`: `piano.jpg`, `zzzz.jpg`, `croissants.jpg` and `totland6.jpg`. **This undercounts: the whole sub-album is lost**, "Tatou's Weekend with Felix", 13 photos, which `/2008/01-21/`'s description still links as `tatou/`. The comparison matched its other nine by name to unrelated photos, as `tatou/totland1.jpg` to `2002/11-17/totland1.jpg`, whose captions differ. Dropbox has all 13 originals in `Photos/albums/2008/01-22/`, three under the names `1bikes.jpg`, `3croissants.jpg` and `4breakfast.jpg`, and the gallery has no `/2008/01-22/`. So the comparison's other matches by name alone need checking against their captions before the Gallery 2 recovery runs.
     - `2007/07-01/kingswim4_001.jpg`, `2008/07-06/motrip/petronas2.jpg` and `2011/01-23/a-comment-system.png`.
     - `2011/05-08/vincennes2.jpg` and `zzzmothersday.jpg`, which were not public in Gallery 2.
     - `2013/07-01/046.JPG` and `056.JPG`, unless they are `paris14.jpg` and `paris16.jpg` in `/2013/07-01/`, which have their captions and size.
