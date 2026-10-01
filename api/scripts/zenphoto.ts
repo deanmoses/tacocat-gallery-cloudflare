@@ -9,6 +9,7 @@
 import { deduplicateNames, mediaPath, parsePath } from '@tacocat-gallery/shared';
 import { type Rectangle, copiedCrop } from './aws-crops.ts';
 import { type Renamed, awsOrder, renamedMedia, rewriteLinks, sanitizedPath } from './aws-names.ts';
+import type { RecoveredAlbum } from './recovered-album.ts';
 
 /** An album row of Zenphoto's, as far as the recovery reads it. `folder` is its path without the outer slashes. */
 export interface ZenphotoAlbum {
@@ -35,40 +36,6 @@ export interface ZenphotoImage {
     thumbH: number | null;
     filesize: number | null;
     tags: string[] | null;
-}
-
-/** One photo to bring over. */
-export interface RecoveredMedia {
-    /** Where Zenphoto kept the file under its albums folder, such as `2008/01-10/galette02-recette.jpg`. */
-    file: string;
-    /** The gallery path it gets, such as `/2008/01-10/galette02_recette`. */
-    path: string;
-    name: string;
-    title: string | null;
-    description: string | null;
-    /** The thumbnail an admin cut in Zenphoto, in pixels of the image. */
-    crop: Rectangle | null;
-    size: { width: number; height: number };
-    /** The file's size as Zenphoto recorded it, which it did for some. */
-    bytes: number | null;
-    tags: string[];
-}
-
-/** One day album's share of the recovery. */
-export interface RecoveredAlbum {
-    path: string;
-    /**
-     * Whether the album itself is recovered, unpublished, with its words, thumbnail and order. When false the album
-     * is one the gallery has, and only photos hidden inside it are added.
-     */
-    draft: boolean;
-    summary: string | null;
-    description: string | null;
-    /** The gallery path of the photo the album is shown by. */
-    thumbnail: string | null;
-    /** The names in the order AWS would have shown them, or null where the names already sort that way. */
-    order: string[] | null;
-    media: RecoveredMedia[];
 }
 
 // Zenphoto's own test albums, which hold nothing of the gallery's.
