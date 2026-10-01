@@ -97,13 +97,24 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 Each recovery is its own script in `api/scripts/`. What they share is writing to the gallery, in `gallery-upload.ts`, which `import-album.ts` runs on too: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
-`recover-zenphoto.ts` is the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again. It writes an album's thumbnail and order until the album is published.
+`recover-gallery2.ts` brings back the albums `gallery2.ts` names, so far Tatou's alone, and `recovery.ts` holds what the scripts share. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
+
+`recover-zenphoto.ts` was the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again. It writes an album's thumbnail and order until the album is published.
 
 The Gallery 2 script also writes onto rows the copy made, the two captions and 13 summaries, and adds single photos to published albums. The static gallery's script runs once Moses has watched the videos.
 
 ## Log
 
 ### 2026-10-01
+
+#### Tatou's Weekend with Felix
+
+Moses found the link: `/2008/01-21/`'s description points at `tatou/`, Gallery 2's sub-album `2008/01-21/tatou`, "Tatou's Weekend with Felix", which no later gallery has. `recover-gallery2.ts` brought it back as `/2008/01-22/`, where Moses said it belongs and where Dropbox keeps its 13 originals, on staging and then production, unpublished, and pointed the link in `/2008/01-21/` at it.
+
+- **Words and order from Gallery 2**: its album title as the summary, as the 2014 move made the others, each photo's title and caption unescaped, and the photos in the order of Gallery 2's weights, which is not the order of their names. The album's own "Return to January 21, 2008" link, `../`, became `/2008/01-21`.
+- **Files from Dropbox**, 44.5 MB, each the full-size original of Gallery 2's 1024-pixel copy: every one has its copy's shape, which is the check that `1bikes.jpg`, `3croissants.jpg` and `4breakfast.jpg` are `bikes.jpg`, `croissants.jpg` and `breakfast.jpg`. `breakfast` and `piano` are 640×480 in both, taken by Felix.
+- **Verified through the API** on both: unpublished, a guest's read a 404, 13 photos in Gallery 2's order with its words.
+- **An upload was dropped on production.** `breakfast`, 79 KB, reached the inbox at 17:15 UTC and no Workflow instance was ever made for it: the Worker logged `upload_redelivered` for its version id, which is what it logs when creating the instance returns nothing, taken to mean the id exists already, and acked the message. No instance has that id, and no error was recorded, so the upload would never have been processed. The script uploaded the photo again under a new id on its next run; the first file is still in the inbox. With `hail16` that is two of about 161 uploads to production failing today, in two ways, and none of about 161 to staging.
 
 #### Zenphoto drafts on production
 
