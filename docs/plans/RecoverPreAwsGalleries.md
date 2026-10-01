@@ -4,8 +4,8 @@ The AWS gallery database and media files have been copied to Cloudflare ([Migrat
 
 Order of work:
 
-- [Zenphoto](#zenphoto)
-- [Gallery 2](#gallery-2)
+- ✅ [Zenphoto](#zenphoto): done, 11 albums and one photo recovered
+- [Gallery 2](#gallery-2): one album recovered, the rest next
 - Lost photos and videos from the [static gallery](#pix) prior to Zenphoto and Gallery 2, which is more labor-intensive because Moses needs to review each video
 - [Compare originals in Dropbox with the gallery](#dropbox), which may add more; and last
 - Once everything is in, perhaps [pre-generate the derived images](AwsDataMigration.md#pre-generate-derived-images).
@@ -22,22 +22,27 @@ The older systems' files are at DreamHost, read over SSH as `deanmoses@tacocat.c
 
 ## Zenphoto
 
+✅ This is DONE: the 11 unpublished albums and the one hidden photo are on staging and production, the 12 stale rows turned out to be photos the gallery has, and Zenphoto held no sub-albums. Moses publishes the albums himself.
+
 Before AWS the gallery ran at DreamHost, on Gallery 2 from about 2007 to 2014 and on Zenphoto from late 2014 to 2023, and both databases are still there ([Log](#log), 2026-09-30, DreamHost databases). The 2023 move to AWS copied Zenphoto's files into S3 on 2023-12-13 and wrote a DynamoDB row for each published album and photo, and none for an unpublished one. That left 11 albums as files in S3 with no rows, which the [S3 version check](AwsDataMigration.md#s3-version-check) found: `1977/12-31/`, `2007/01-07/`, `2008/01-10/`, `2008/12-07/`, `2009/05-16/`, `2015/03-25/`, `2015/07-12/`, `2016/08-01/`, `2019/09-14/`, `2019/09-21/` and `2023/01-10/`. Each is unpublished in Zenphoto, and their photos add up to exactly the check's 147. They are drafts, then, and some may have been held back on purpose: the caption of `/2008/01-13/` links readers to `/2008/01-10`, "Felix's class bake a king cake", yet that album stayed unpublished, and its captions name about a dozen of Felix's classmates. The move left behind the one unpublished photo in a published album the same way, `2015/01-11/a4-aceeyah-laughing.jpg`.
 
 The comparison of Zenphoto with DynamoDB found nothing else the move lost ([Log](#log), 2026-09-30, Zenphoto comparison). Every published album and photo is on AWS with the same words in its title and caption, or was renamed, moved or replaced there since. Of the 18 other files the S3 check left behind, `a4-aceeyah-laughing.jpg` is the only one Zenphoto ever listed.
 
 **Decided: all 11 albums come back unpublished**, and Moses publishes each by hand once he has looked at it. The AWS copy is done and verified, so the recovery is an addition to it. Each photo goes in through the Worker's own upload, so the pipeline reads its size from the file. The files come from `Photos/albums`, which holds all 147 under their own names in the album folder of the same date and `a4-aceeyah-laughing.jpg` too, but for `2015/03-25/`, whose 11 are only in `Photos/raw`. Each of the 147 is the same size in Dropbox as in S3, so they are the same files and either serves. The titles and captions come from Zenphoto as the 2023 move took them: PHP-serialized values unpacked to their `en_US` text, entities decoded, and `href="#2008/01-10"` links rewritten to `/2008/01-10`. The album summaries come from Zenphoto's `custom_data`, and the names and order come from the copy's rules (`aws-names.ts`). Zenphoto's test albums, `1993/08-15/test1/` and `2022/11-01/not_for_tacocat/` with what they hold, stay behind.
 
-**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself. Left: the 12 stale rows below.
+**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself.
 
-Decided when the recovery runs, by Moses looking at each photo, since a name and a caption cannot settle them:
+What a name and a caption could not settle, settled on 2026-10-01:
 
-- **`2015/01-11/a4-aceeyah-laughing.jpg`**, the unpublished photo in a published album. A photo shows whenever its album does and has no published flag of its own, so it would be seen in `/2015/01-11/` as soon as it is imported. So the script leaves it out of `--all` and adds it only when told `--only /2015/01-11/`. **Added on 2026-10-01**, to staging and production, as `/2015/01-11/a4_aceeyah_laughing`: Moses deletes it if he does not want it.
-- **12 stale Zenphoto rows with no photo on AWS** ([Log](#log), 2026-09-30, Zenphoto comparison): `ofranda1.jpg`, `ofranda2.jpg`, `zalva2.jpg`, `fancy.jpg` and `bird_watchers9.jpg`, and 7 of `academynext1.jpg` to `academynext9.jpg`, which have only two AcademyNEXT photos on AWS between them. Each is either a draft Moses dropped or a photo the gallery lacks. Dropbox has `academynext1.jpg` in `Photos/albums/2018/06-29/`, and raws named `ofrenda`, not `ofranda`, in `Photos/raw/2018/10-14/` and `10-23/`; it has no `zalva2`, `fancy` or `bird_watchers9`, whose `raw/2022/01-17/` runs to `bird_watchers8`.
+- ✅ **`2015/01-11/a4-aceeyah-laughing.jpg`**, the unpublished photo in a published album. A photo shows whenever its album does and has no published flag of its own, so the script leaves such a photo out of `--all` and adds it only when told `--only /2015/01-11/`. Moses said to add it, and it is on staging and production as `/2015/01-11/a4_aceeyah_laughing`; he looked at it and keeps it.
+- ✅ **12 stale Zenphoto rows with no photo on AWS**: none is a lost photo ([Log](#log), 2026-10-01, The 12 stale Zenphoto rows). Each was renamed or re-saved in Zenphoto before the 2023 move, and the gallery has it under its later name. Moses called them closed.
+- ✅ **Sub-albums**: Zenphoto could nest an album inside a day album, and held none but its two test trees, in its database or on its disk ([Log](#log), 2026-10-01, Zenphoto has no sub-albums).
 
 ## Gallery 2
 
 Gallery 2's database, `pictures`, holds 447 albums and 10,665 photos, the albums created from 2006-12-26 to 2014-12-28. The gallery was copied into Zenphoto in November and December 2014, the dates of Zenphoto's photo files. Comparing Gallery 2 with Zenphoto, and what Zenphoto lacks with the gallery as it is now, found that move lost three albums, a dozen photos and some text, and brought everything else across ([Log](#log), 2026-09-30, Gallery 2 comparison). Gallery 2's 35 sub-albums, such as `2009/05-17/yosemite`, became day albums of their own in Zenphoto, often a day or two off, as `2009/11-01/party` became `2009/10-30/`.
+
+**That comparison missed a fourth album**, the sub-album `2008/01-21/tatou`, which is recovered ([Log](#log), 2026-10-01, Tatou's Weekend with Felix). It had matched nine of the album's 13 photos by name alone to unrelated photos, as `tatou/totland1.jpg` to `2002/11-17/totland1.jpg`, whose captions differ. **So the next step is to check the comparison's other matches by name alone against their captions**, sub-albums first, before the list below is trusted and the rest of the recovery runs.
 
 What the gallery lacks:
 
@@ -46,7 +51,7 @@ What the gallery lacks:
     - `2008/04-13/`: Felix's class play, _Le Petit Chaperon Rouge_. 22 photos.
     - `2012/06-22/`: "Holy Allowance, Batman!". 7 of its 8 photos; `batman.jpg` is in `2011/02-27/`.
 - **Single photos from albums that did come across**:
-    - `2008/01-21/tatou/`: `piano.jpg`, `zzzz.jpg`, `croissants.jpg` and `totland6.jpg`. **This undercounts: the whole sub-album is lost**, "Tatou's Weekend with Felix", 13 photos, which `/2008/01-21/`'s description still links as `tatou/`. The comparison matched its other nine by name to unrelated photos, as `tatou/totland1.jpg` to `2002/11-17/totland1.jpg`, whose captions differ. Dropbox has all 13 originals in `Photos/albums/2008/01-22/`, three under the names `1bikes.jpg`, `3croissants.jpg` and `4breakfast.jpg`, and the gallery has no `/2008/01-22/`. So the comparison's other matches by name alone need checking against their captions before the Gallery 2 recovery runs.
+    - ✅ `2008/01-21/tatou/`: listed here as four photos, `piano.jpg`, `zzzz.jpg`, `croissants.jpg` and `totland6.jpg`, and in fact the whole sub-album, 13 photos, now `/2008/01-22/` on staging and production, unpublished.
     - `2007/07-01/kingswim4_001.jpg`, `2008/07-06/motrip/petronas2.jpg` and `2011/01-23/a-comment-system.png`.
     - `2011/05-08/vincennes2.jpg` and `zzzmothersday.jpg`, which were not public in Gallery 2.
     - `2013/07-01/046.JPG` and `056.JPG`, unless they are `paris14.jpg` and `paris16.jpg` in `/2013/07-01/`, which have their captions and size.
@@ -55,7 +60,7 @@ What the gallery lacks:
 
 The three albums are added unpublished, for Moses to look over and publish, and the single photos are added to their albums, each through the Worker's upload with its title and caption from Gallery 2. The two captions and 13 summaries are written onto the copied rows. Gallery 2 stores its text entity-escaped, sometimes twice, so it is decoded until nothing changes.
 
-Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them, mostly 1024 pixels on the long side and about 150 KB. Dropbox has no folder for any of the three albums and none of their photos by name, so for those Gallery 2's copies are the only ones found. Of the single photos, Dropbox has `piano.jpg`, `zzzz.jpg` and `totland6.jpg` in `Photos/albums/2008/01-22/`, and `lincoln2.jpg` to `lincoln4.jpg` from `2012/06-22/` in `Photos/albums/2017/03-04/`; its `2013/07-01/` holds `paris` photos, not `046.JPG` and `056.JPG`, which makes `paris14.jpg` and `paris16.jpg` likelier to be them.
+Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them, mostly 1024 pixels on the long side and about 150 KB. Dropbox has no folder for any of the three albums and none of their photos by name, so for those Gallery 2's copies are the only ones found. Of the single photos, Dropbox has `lincoln2.jpg` to `lincoln4.jpg` from `2012/06-22/` in `Photos/albums/2017/03-04/`; its `2013/07-01/` holds `paris` photos, not `046.JPG` and `056.JPG`, which makes `paris14.jpg` and `paris16.jpg` likelier to be them.
 
 Left behind: the nine TIFFs in `2008/08-21/`, Gallery 2's `2008/08-24/photoshoot/couple01.tif` to `milo01.tif`, which the [S3 version check](AwsDataMigration.md#s3-version-check) also found. The gallery has never served a TIFF, and Moses takes them for raw originals pushed to DreamHost by mistake. The other text that differs reads as Moses' later edits in Zenphoto, "Happy Birthday, America!" becoming "4th of July", or as spacing and punctuation.
 
@@ -97,15 +102,29 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 Each recovery is its own script in `api/scripts/`. What they share is writing to the gallery, in `gallery-upload.ts`, which `import-album.ts` runs on too: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
-`recover-gallery2.ts` brings back the albums `gallery2.ts` names, so far Tatou's alone, and `recovery.ts` holds what the scripts share. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
+`recover-gallery2.ts` brings back the albums `gallery2.ts` names, so far Tatou's alone, each as the day album it is told, with the link its parent's description held pointed there, and `recovery.ts` holds what the scripts share. A sub-album's photos are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
 
 `recover-zenphoto.ts` was the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again. It writes an album's thumbnail and order until the album is published.
 
-The Gallery 2 script also writes onto rows the copy made, the two captions and 13 summaries, and adds single photos to published albums. The static gallery's script runs once Moses has watched the videos.
+The Gallery 2 script has yet to write onto rows the copy made, the two captions and 13 summaries, and to add single photos to published albums. The static gallery's script runs once Moses has watched the videos.
 
 ## Log
 
 ### 2026-10-01
+
+#### Zenphoto has no sub-albums
+
+Moses asked whether Zenphoto had sub-albums, such as `/2010/12-31/some_sub_album`, that the recovery never looked for. It could nest an album folder inside another, and builds its albums from the folders on disk, so both were checked. Of its 1,549 album rows, five lie below a day album, and of the 31,993 files under its `albums/`, seven lie deeper than `year/day/file`: all in the test albums `1993/08-15/test1/` and `2022/11-01/not_for_tacocat/`, which stay behind. The sub-albums that matter are Gallery 2's, which the 2014 move flattened into day albums, losing Tatou's.
+
+#### The 12 stale Zenphoto rows
+
+Each of the 12 rows the Zenphoto comparison could not place is a photo the gallery has under a later name. Their albums' rows were left behind when Moses renamed the album folders in Zenphoto, and these photos were renamed or re-saved at the same time, so no name matched. The nine `academynext` rows rest on identical file sizes; the other five rest on pixel sizes and times alone, and none on looking at a photo. Moses called all twelve closed.
+
+- **`academynext1.jpg` to `academynext9.jpg` are `/2018/07-05/camp01` to `camp09`**, byte for byte: each `Photos/albums/2018/06-29/academynextN.jpg` is the size of S3's `2018/07-05/camp0N.jpg`, eight at 1600×1200 and the ninth at 1280×960, with the same tags. The eight `stanford` photos of `/2018/06-26/` are others, 1280×960 and from two days earlier.
+- **`ofranda1.jpg` and `ofranda2.jpg` are `/2018/11-05/ofranda1a` and `ofranda2a`**, 3648×5472 like them, written to Zenphoto on 2018-11-06, the day of the stale rows.
+- **`zalva2.jpg` gave way to `/2020/05-18/zalva2b`**, taken at 17:23:56 on 2020-05-17 where `zalva2` was taken at 17:24:25: the next frame of the same moment, chosen instead.
+- **`bird_watchers9.jpg` is `/2022/01-17/bird_watchers9_birds`**, cropped from 2251 to 2141 pixels wide and written to Zenphoto 80 minutes after the stale row.
+- **`fancy.jpg` is `/2022/01-09/caviar`**: the stale row says it was taken on 2022-01-05 at 19:24:41, and `Photos/raw/2022/01-09/caviar.arw` was written at 2022-01-06 03:24 UTC, the same minute in California. `/2022/02-07/fancy1` is another photo, taken on 2022-01-28.
 
 #### Tatou's Weekend with Felix
 
