@@ -97,7 +97,7 @@
     "workflows": [
         {
             // Each upload's processing runs as its own instance, so a drop of fifty photos is fifty pipelines at once,
-            // each with a Worker's memory to itself and each step retried on its own.
+            // each step retried on its own. Instances can share an isolate and its 128 MB, as any Worker's requests can.
             "name": "staging-uploads",
             "binding": "UPLOAD_PIPELINE",
             "class_name": "UploadPipeline",

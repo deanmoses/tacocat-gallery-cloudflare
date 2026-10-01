@@ -2,7 +2,8 @@ import { parseImageRequest, parseMediaVersion } from '@tacocat-gallery/shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
 import { derivationFor } from '../gallery/derivatives';
-import { type Derivation, IMMUTABLE, type Steps, asJpeg, derivedImage, timed } from '../media/images';
+import { type Derivation, IMMUTABLE, asJpeg, derivedImage } from '../media/images';
+import { type Steps, timed } from '../util/stages';
 import { extensionForType, isHeicType } from '../media/sniff';
 import { originalKey } from '../storage/keys';
 
