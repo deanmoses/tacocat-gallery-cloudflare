@@ -10,31 +10,26 @@
 //
 // --resume finishes an import that stopped partway: it uploads only the photos the target album does not list yet and
 // then writes the words and thumbnails for all of them, where a plain run uploads every photo again as a new version.
-//
-// The session cookie is signed with the target Worker's SESSION_SECRET, which api/.dev.vars holds for each: as
-// SESSION_SECRET for local, and as SESSION_SECRET_STAGING and SESSION_SECRET_PRODUCTION the values `wrangler secret
-// put` gave the deployed Workers.
-import { setTimeout as sleep } from 'node:timers/promises';
 import * as valibot from 'valibot';
 import { mediaPath, parsePath } from '@tacocat-gallery/shared';
-import { adminCookie } from './admin-cookie.ts';
 import { renamedMedia, rewriteLinks, sanitizedPath } from './aws-names.ts';
-import { devVars } from './dev-vars.ts';
+import {
+    type SITES,
+    createAlbum,
+    galleryAt,
+    inParallel,
+    listedVersions,
+    percentOf,
+    untilProcessed,
+    upload,
+    write,
+} from './gallery-upload.ts';
 
-const TARGETS = {
-    staging: 'https://staging-pix.deanmoses.com',
-    production: 'https://pix.deanmoses.com',
-    local: 'http://localhost:8787',
-};
 const SOURCES = {
     staging: { api: 'https://api.staging-pix.tacocat.com', images: 'https://img.staging-pix.tacocat.com' },
     prod: { api: 'https://api.pix.tacocat.com', images: 'https://img.pix.tacocat.com' },
 };
 const UPLOADS_AT_ONCE = 4;
-const PROCESSING_TIMEOUT_MS = 5 * 60_000;
-// R2 answers the odd PUT with a 503 that a second try does not see.
-const PUT_ATTEMPTS = 3;
-const PUT_RETRY_MS = 2000;
 
 // The AWS API's album, as far as this script reads it. 'image' there means any media item; a video says so in
 // mediaType. A photo's thumbnail is its crop, in pixels of the image.
@@ -65,22 +60,13 @@ const AWS_ALBUM = valibot.looseObject({
 });
 type AwsMedia = valibot.InferOutput<typeof AWS_MEDIA>;
 
-// This Worker's album, as far as the wait for the uploads reads it: an upload is done when the album lists its name
-// under the version presign minted for it.
-const LISTED = valibot.object({
-    children: valibot.optional(valibot.array(valibot.object({ itemName: TEXT, versionId: valibot.optional(TEXT) }))),
-});
-const PRESIGNED = valibot.record(TEXT, valibot.object({ url: TEXT, versionId: TEXT }));
-const ERRORS = valibot.object({ errors: valibot.record(TEXT, TEXT) });
-
 const albumPath = process.argv[2] ?? '';
 const source = process.argv.includes('--from') ? SOURCES.prod : SOURCES.staging;
 const targetName = targetOf(argument('--to') ?? 'staging');
-const site = TARGETS[targetName];
 const year = yearOf(albumPath);
 
 // The Worker records who asked for each upload, so the name has to be one of its users.
-const cookie = await adminCookie(await sessionSecret(targetName), argument('--user') ?? 'moses');
+const gallery = await galleryAt(targetName, argument('--user') ?? 'moses');
 const album = valibot.parse(AWS_ALBUM, await (await fetch(`${source.api}/album${albumPath}`)).json());
 const media = (album.children ?? []).filter((child) => child.itemType === 'image');
 const [photos, videos] = [media.filter((item) => !isVideo(item)), media.filter(isVideo)];
@@ -101,17 +87,17 @@ await ensureAlbum(albumPath, {
     description: album.description === undefined ? null : withLinksRewritten(album.description, albumPath),
 });
 
-const existing = await existingNames();
+const existing = new Set((await listedVersions(gallery, albumPath))?.keys());
 const toUpload = process.argv.includes('--resume') ? photos.filter((photo) => !existing.has(nameOf(photo))) : photos;
 if (toUpload.length < photos.length) {
     console.log(`resuming: ${photos.length - toUpload.length} already there, ${toUpload.length} to upload`);
 }
 const versions = new Map<string, string>();
 await inParallel(toUpload, UPLOADS_AT_ONCE, async (photo) => {
-    versions.set(nameOf(photo), await upload(photo));
+    versions.set(nameOf(photo), await uploaded(photo));
     console.log(`uploaded ${photo.path} as ${pathOf(photo)}`);
 });
-await untilProcessed(versions);
+await untilProcessed(gallery, albumPath, versions);
 
 // What an admin wrote about each photo, over what its file said, and which one shows the album.
 for (const photo of photos) {
@@ -120,17 +106,17 @@ for (const photo of photos) {
         description: photo.description === undefined ? null : withLinksRewritten(photo.description, pathOf(photo)),
     };
     if (words.title !== null || words.description !== null) {
-        await write('PATCH', `/api/media${pathOf(photo)}`, words);
+        await write(gallery, 'PATCH', `/api/media${pathOf(photo)}`, words);
     }
     if (photo.thumbnail !== undefined && photo.dimensions !== undefined) {
-        await write('PATCH', `/api/thumb${pathOf(photo)}`, percentOf(photo.thumbnail, photo.dimensions));
+        await write(gallery, 'PATCH', `/api/thumb${pathOf(photo)}`, percentOf(photo.thumbnail, photo.dimensions));
     }
 }
 const thumbnail = photos.find((photo) => photo.path === album.thumbnail?.path);
 if (thumbnail !== undefined) {
-    await write('PATCH', `/api/album-thumb${albumPath}`, { mediaPath: pathOf(thumbnail) });
+    await write(gallery, 'PATCH', `/api/album-thumb${albumPath}`, { mediaPath: pathOf(thumbnail) });
 }
-console.log(`done: ${site}${albumPath.slice(0, -1)}`);
+console.log(`done: ${gallery.site}${albumPath.slice(0, -1)}`);
 
 /** The name a media item of this album gets here. */
 function nameOf(item: AwsMedia): string {
@@ -171,7 +157,7 @@ function argument(flag: string): string | undefined {
     return at === -1 ? undefined : process.argv[at + 1];
 }
 
-function targetOf(name: string): keyof typeof TARGETS {
+function targetOf(name: string): keyof typeof SITES {
     if (name === 'staging' || name === 'production' || name === 'local') {
         return name;
     }
@@ -187,172 +173,27 @@ function yearOf(candidate: string): string {
     return String(parsed.date.getFullYear());
 }
 
-/** The secret the target Worker signs sessions with. */
-async function sessionSecret(target: keyof typeof TARGETS): Promise<string> {
-    const name = target === 'local' ? 'SESSION_SECRET' : `SESSION_SECRET_${target.toUpperCase()}`;
-    const secret = (await devVars())[name] ?? '';
-    if (secret === '') {
-        throw new Error(`${name} is not set in api/.dev.vars`);
-    }
-    return secret;
-}
-
 function isVideo(item: AwsMedia): boolean {
     return item.mediaType === 'video';
 }
 
 /** Creates the album with `fields`, or sets them on the album that is already there. */
 async function ensureAlbum(path: string, fields: Record<string, unknown>): Promise<void> {
-    const created = await fetch(`${site}/api/album${path}`, {
-        method: 'PUT',
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify(fields),
-    });
-    await created.body?.cancel();
-    if (created.ok) {
-        return;
+    if (!(await createAlbum(gallery, path, fields))) {
+        await write(gallery, 'PATCH', `/api/album${path}`, fields);
     }
-    if (created.status !== 400) {
-        throw new Error(`creating ${path} failed: ${created.status}`);
-    }
-    await write('PATCH', `/api/album${path}`, fields);
-}
-
-/** One admin write, which the Worker answers 204 or with the reason it refused. */
-async function write(method: string, path: string, body: unknown): Promise<void> {
-    const response = await fetch(`${site}${path}`, {
-        method,
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-        throw new Error(`${method} ${path} failed: ${response.status} ${await response.text()}`);
-    }
-    await response.body?.cancel();
 }
 
 /**
- * Downloads the original by its AWS path and sends it to R2's inbox as the browser does: asks the Worker for a
- * presigned URL under the item's new path, as a replacement if the album already lists the name, and PUTs the file
- * to it. Returns the version id the item will carry once the Worker has processed the upload.
+ * Downloads the original by its AWS path and uploads it under the item's new path, as a replacement if the album
+ * already lists the name. Returns the version id the item will carry once the Worker has processed the upload.
  */
-async function upload(photo: AwsMedia): Promise<string> {
+async function uploaded(photo: AwsMedia): Promise<string> {
     const response = await fetch(`${source.images}${photo.path}`);
     if (!response.ok) {
-        throw new Error(`downloading ${photo.path} failed: ${response.status}`);
+        throw new Error(`downloading ${photo.path} failed: ${String(response.status)}`);
     }
     const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
     const body = await response.arrayBuffer();
-    const galleryPath = pathOf(photo);
-    const presigned = await fetch(`${site}/api/presigned${albumPath}`, {
-        method: 'POST',
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify([
-            existing.has(nameOf(photo)) ? { path: galleryPath, replace: true } : { path: galleryPath },
-        ]),
-    });
-    if (!presigned.ok) {
-        throw new Error(`presigning ${galleryPath} failed: ${presigned.status} ${await presigned.text()}`);
-    }
-    const target = valibot.parse(PRESIGNED, await presigned.json())[galleryPath];
-    if (target === undefined) {
-        throw new Error(`presigning ${galleryPath} answered without it`);
-    }
-    // Under wrangler dev the URL is a path on the Worker, which a browser resolves against the site and sends its
-    // cookie to; a presigned URL is R2's and gets no cookie.
-    const url = new URL(target.url, site);
-    for (let attempt = 1; ; attempt++) {
-        const put = await fetch(url, {
-            method: 'PUT',
-            headers: { 'content-type': contentType, ...(url.origin === site && { cookie }) },
-            body,
-        });
-        if (put.ok) {
-            await put.body?.cancel();
-            return target.versionId;
-        }
-        const reason = `${put.status} ${await put.text()}`;
-        if (put.status < 500 || attempt === PUT_ATTEMPTS) {
-            throw new Error(`uploading ${photo.path} failed: ${reason}`);
-        }
-        console.log(`retrying ${photo.path} after ${reason.slice(0, 40)}`);
-        await sleep(PUT_RETRY_MS);
-    }
-}
-
-/** The names the target album already lists, which an upload of the same name has to say it replaces. */
-async function existingNames(): Promise<Set<string>> {
-    const response = await fetch(`${site}/api/album${albumPath}?consistency=primary`, { headers: { cookie } });
-    if (!response.ok) {
-        await response.body?.cancel();
-        return new Set();
-    }
-    const listed = valibot.parse(LISTED, await response.json());
-    return new Set((listed.children ?? []).map((child) => child.itemName));
-}
-
-/**
- * Waits until the album lists every name under the version its upload was presigned with, which is the upload
- * processed, and gives up as soon as the Worker reports an upload failed.
- */
-async function untilProcessed(expected: Map<string, string>): Promise<void> {
-    const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
-    let missing = [...expected.keys()];
-    while (Date.now() < deadline) {
-        const response = await fetch(`${site}/api/album${albumPath}?consistency=primary`, { headers: { cookie } });
-        if (response.ok) {
-            const listed = valibot.parse(LISTED, await response.json());
-            const done = new Map((listed.children ?? []).map((child) => [child.itemName, child.versionId]));
-            missing = missing.filter((name) => done.get(name) !== expected.get(name));
-            if (missing.length === 0) {
-                return;
-            }
-        } else {
-            await response.body?.cancel();
-        }
-        const failed = await uploadErrors(missing);
-        if (Object.keys(failed).length > 0) {
-            throw new Error(`the Worker refused: ${JSON.stringify(failed)}`);
-        }
-        console.log(`waiting for ${missing.length} uploads to be processed`);
-        await sleep(3000);
-    }
-    throw new Error(`not processed in time: ${missing.join(', ')}`);
-}
-
-/** The last day's upload errors for `names` in the album, by path. */
-async function uploadErrors(missing: string[]): Promise<Record<string, string>> {
-    const response = await fetch(`${site}/api/errors`, {
-        method: 'POST',
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ paths: missing.map((name) => `${albumPath}${name}`) }),
-    });
-    if (!response.ok) {
-        await response.body?.cancel();
-        return {};
-    }
-    return valibot.parse(ERRORS, await response.json()).errors;
-}
-
-/** A crop in pixels of an image as the recut route takes it, in percent of the image. */
-function percentOf(
-    crop: valibot.InferOutput<typeof RECTANGLE>,
-    size: { width: number; height: number },
-): Record<string, number> {
-    return {
-        x: (crop.x / size.width) * 100,
-        y: (crop.y / size.height) * 100,
-        width: (crop.width / size.width) * 100,
-        height: (crop.height / size.height) * 100,
-    };
-}
-
-async function inParallel<T>(items: T[], atOnce: number, work: (item: T) => Promise<void>): Promise<void> {
-    const queue = [...items];
-    const lanes = Array.from({ length: atOnce }, async () => {
-        for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
-            await work(next);
-        }
-    });
-    await Promise.all(lanes);
+    return upload(gallery, albumPath, pathOf(photo), { body, contentType }, existing.has(nameOf(photo)));
 }

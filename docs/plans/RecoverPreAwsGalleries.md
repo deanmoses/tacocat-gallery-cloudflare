@@ -28,9 +28,11 @@ The comparison of Zenphoto with DynamoDB found nothing else the move lost ([Log]
 
 **Decided: all 11 albums come back unpublished**, and Moses publishes each by hand once he has looked at it. The AWS copy is done and verified, so the recovery is an addition to it. Each photo goes in through the Worker's own upload, so the pipeline reads its size from the file. The files come from `Photos/albums`, which holds all 147 under their own names in the album folder of the same date and `a4-aceeyah-laughing.jpg` too, but for `2015/03-25/`, whose 11 are only in `Photos/raw`. Each of the 147 is the same size in Dropbox as in S3, so they are the same files and either serves. The titles and captions come from Zenphoto as the 2023 move took them: PHP-serialized values unpacked to their `en_US` text, entities decoded, and `href="#2008/01-10"` links rewritten to `/2008/01-10`. The album summaries come from Zenphoto's `custom_data`, and the names and order come from the copy's rules (`aws-names.ts`). Zenphoto's test albums, `1993/08-15/test1/` and `2022/11-01/not_for_tacocat/` with what they hold, stay behind.
 
+**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself. Left: the two decisions below.
+
 Decided when the recovery runs, by Moses looking at each photo, since a name and a caption cannot settle them:
 
-- **`2015/01-11/a4-aceeyah-laughing.jpg`**, the unpublished photo in a published album. A photo shows whenever its album does and has no published flag of its own, so it would be seen in `/2015/01-11/` as soon as it is imported.
+- **`2015/01-11/a4-aceeyah-laughing.jpg`**, the unpublished photo in a published album. A photo shows whenever its album does and has no published flag of its own, so it would be seen in `/2015/01-11/` as soon as it is imported. So the script leaves it out of `--all` and adds it only when told `--only /2015/01-11/`; it is on neither staging nor production.
 - **12 stale Zenphoto rows with no photo on AWS** ([Log](#log), 2026-09-30, Zenphoto comparison): `ofranda1.jpg`, `ofranda2.jpg`, `zalva2.jpg`, `fancy.jpg` and `bird_watchers9.jpg`, and 7 of `academynext1.jpg` to `academynext9.jpg`, which have only two AcademyNEXT photos on AWS between them. Each is either a draft Moses dropped or a photo the gallery lacks. Dropbox has `academynext1.jpg` in `Photos/albums/2018/06-29/`, and raws named `ofrenda`, not `ofranda`, in `Photos/raw/2018/10-14/` and `10-23/`; it has no `zalva2`, `fancy` or `bird_watchers9`, whose `raw/2022/01-17/` runs to `bird_watchers8`.
 
 ## Gallery 2
@@ -93,11 +95,34 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 ## How the recoveries are built
 
-Each recovery will be its own script in `api/scripts/`. What they share is writing to the gallery: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. `import-album.ts` already does all of that for an album read from the AWS API, so consider pulling it out into a module the recovery scripts share, and `import-album.ts` keeps working on top of it. Each script should have the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each should run on staging before production.
+Each recovery is its own script in `api/scripts/`. What they share is writing to the gallery, in `gallery-upload.ts`, which `import-album.ts` runs on too: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
+
+`recover-zenphoto.ts` is the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again. It writes an album's thumbnail and order until the album is published.
 
 The Gallery 2 script also writes onto rows the copy made, the two captions and 13 summaries, and adds single photos to published albums. The static gallery's script runs once Moses has watched the videos.
 
 ## Log
+
+### 2026-10-01
+
+#### Zenphoto drafts on production
+
+Moses looked the albums over on staging and said to run production. A dry run, `/1977/12-31/` alone with `--go`, then `--all --go`, from 08:07 to 08:12 UTC, clear of the DebugBear runs: the same 11 albums and 147 photos, unpublished, about 440 Images transformations and 669 MB of R2. Verified through the API as staging was, with the same results.
+
+- **One upload took 12 minutes.** `/2023/01-10/hail16`, 12 MB and 6000×4000, was in the inbox and its Workflow instance started within a second, but the step that stores the photo and makes its derived images ran until the Workflow's 10-minute step timeout, with no error of its own, and the retry took 2 minutes more, where the album's other photos took seconds. The Worker recorded no upload error, since the step had not spent its retries. Nothing says which call inside the step hung.
+- **The script gave up first.** It waits 5 minutes for an album's uploads, so it stopped on `hail16` before writing the album's titles, thumbnail and order. A rerun for `/2023/01-10/` once the photo was in wrote them. The first rerun rule would have left the thumbnail unwritten, since it wrote one only for an album the run made or added to; the script now writes an album's thumbnail and order until the album is published.
+
+#### Zenphoto drafts on staging
+
+`recover-zenphoto.ts` ran against `wrangler dev` for `/2007/01-07/` and `/2019/09-14/`, then `--to staging`: `/1977/12-31/` alone with `--go`, looked at through the API, then `--all --go`. The 11 albums and their 147 photos, 669 MB, went from Dropbox through the laptop in 4 minutes, 4 uploads at a time, none refused.
+
+- **Files.** 136 from `Photos/albums` and the 11 of `2015/03-25/` from `Photos/raw`, each read with `rclone cat` and checked against the size Dropbox lists. About 440 Images transformations on staging, the pipeline's three for each photo.
+- **Verified through the API.** Every album is unpublished, a guest's read of it is a 404 and a guest's search does not find its photos; each has Zenphoto's summary, description and thumbnail, and its photos in name order, which is the order AWS would have shown. All 147 photos have Zenphoto's title and caption, and 145 its size. `/2023/01-10/hail09` and `hail17` are 4000×6000 here and 6000×4000 in Zenphoto, which recorded the raw pixels of a photo its EXIF orientation turns upright.
+- **Text.** Translated as the 2023 move had: against the 30,608 photos and 1,426 albums AWS has not edited since, the move turned `&apos;` and `&nbsp;` into their characters in captions and left the other entities, decoded `&amp;` too in titles, and made `#` links paths.
+- **Tags** are not written by the script: the pipeline reads them from each file's XMP keywords, and on `wrangler dev` those were Zenphoto's tags for all 6 photos of `/2019/09-14/`. On staging an admin's search for "turo" finds the 15 photos of the two 2019 albums.
+- **One crop.** `/2007/01-07/thejoyces` is the only photo of the 147 with a thumbnail cut in Zenphoto, which the script writes; Zenphoto's crops are in pixels of the image, as 375 photos the move took show.
+- **Thumbnails.** Six albums name theirs. The other five hold `1` in Zenphoto, for whichever photo comes first, and are shown by their first photo.
+- **Low resolution.** The 12 photos of `2008/12-07/` are 1024 pixels wide, `2007/01-07/torin.jpg` 1280×960, and `2009/05-16/yosemite03.jpg` and `yosemite14.jpg` 1600×1200. `Photos/raw` has nothing from 2006 to 2012, and no larger file of those names is in either folder near their dates; `Photos/albums/2006/11-01/torin.jpg`, 2.9 MB, may be the same photo or another.
 
 ### 2026-09-30
 

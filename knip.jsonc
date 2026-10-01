@@ -21,6 +21,7 @@
         "markdownlint-cli2",
     ],
 
-    // System tools, deliberately not npm dependencies (npm run format runs these two)
-    "ignoreBinaries": ["shfmt", "tofu"],
+    // System tools, deliberately not npm dependencies: npm run format runs shfmt and tofu, and the recovery scripts
+    // read Dropbox through rclone
+    "ignoreBinaries": ["shfmt", "tofu", "rclone"],
 }
