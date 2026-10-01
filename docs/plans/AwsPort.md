@@ -91,7 +91,7 @@ Things a fresh session would otherwise find out the hard way:
 
 ## Afterwards: copying the gallery
 
-Copying the real gallery over, its rows and its originals, has its own plan: `docs/plans/AwsDataMigration.md`.
+The real gallery, its rows and its originals, was copied into production on 2026-09-30 and verified, as `docs/plans/AwsDataMigration.md` describes.
 
 ## Afterwards: taking over the hostname
 
