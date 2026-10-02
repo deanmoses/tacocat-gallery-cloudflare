@@ -33,6 +33,12 @@ async function presignOne(bindings: Partial<Env>): Promise<{ url: string; versio
 describe('local uploads', () => {
     beforeEach(async () => {
         await putDay(DAY);
+        // Sent for real, the event reaches the local queue's consumer a second later, outside any test: there it can
+        // meet another test's reset, fail, and leave a redelivery a minute out that the run waits on and never exits.
+        // A test delivers the event itself, with `deliver`.
+        vi.spyOn(env.UPLOAD_EVENTS, 'send').mockResolvedValue({
+            metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+        });
     });
 
     it('are not there unless switched on: the URL is signed and the route is missing', async () => {
