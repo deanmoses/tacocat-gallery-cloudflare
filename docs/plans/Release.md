@@ -21,4 +21,4 @@ Live since 2026-09-24. The token was made from the Edit Cloudflare Workers templ
 
 ## After that
 
-- An alert when production starts failing after a release: a Cloudflare notification on the Worker's error rate, or a DebugBear alert, since it visits four times a day.
+- An alert when production starts failing after a release: a Cloudflare notification on the Worker's error rate.

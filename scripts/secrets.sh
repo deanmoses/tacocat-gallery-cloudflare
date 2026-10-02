@@ -6,8 +6,8 @@
 # else. Rotating one is `scripts/tofu.sh apply -replace=<its address>`, then this again.
 #
 #   staging | production   the Worker's secrets, in one bulk upload: the environment's R2 pair from OpenTofu, and its
-#                          SESSION_SECRET_<ENVIRONMENT> and DEBUGBEAR_API_KEY from api/.dev.vars. Wrangler creates a
-#                          Worker that does not exist yet as a draft, so this can run before the first deploy.
+#                          SESSION_SECRET_<ENVIRONMENT> from api/.dev.vars. Wrangler creates a Worker that does not
+#                          exist yet as a draft, so this can run before the first deploy.
 #   backup                 the repository secrets the Backup workflow reads: the R2 pair, the D1 token and the target.
 #   dev                    api/.dev.vars's R2 pair, set to staging's, for `wrangler dev`.
 #
@@ -66,11 +66,9 @@ staging | production)
     access_key_id=$(credential "$target" access_key_id)
     secret_access_key=$(credential "$target" secret_access_key)
     session_secret=$(dev_var "SESSION_SECRET_$environment_upper")
-    debugbear_api_key=$(dev_var DEBUGBEAR_API_KEY)
     # Through the environment and stdin, never as arguments, which `ps` shows; nothing is written to disk.
-    R2_ACCESS_KEY_ID=$access_key_id R2_SECRET_ACCESS_KEY=$secret_access_key SESSION_SECRET=$session_secret \
-        DEBUGBEAR_API_KEY=$debugbear_api_key node -e "
-        const names = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'SESSION_SECRET', 'DEBUGBEAR_API_KEY'];
+    R2_ACCESS_KEY_ID=$access_key_id R2_SECRET_ACCESS_KEY=$secret_access_key SESSION_SECRET=$session_secret node -e "
+        const names = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'SESSION_SECRET'];
         process.stdout.write(JSON.stringify(Object.fromEntries(names.map((name) => [name, process.env[name]]))));
     " | (cd api && npx wrangler secret bulk "${env_flag[@]}")
     ;;

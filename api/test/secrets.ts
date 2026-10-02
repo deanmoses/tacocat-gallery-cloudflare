@@ -6,7 +6,6 @@ export const TEST_SECRETS = {
     SESSION_SECRET: 'test-session-secret',
     R2_ACCESS_KEY_ID: 'test-access-key',
     R2_SECRET_ACCESS_KEY: 'test-secret-key',
-    DEBUGBEAR_API_KEY: 'test-debugbear-key',
 };
 
 const ENCODER = new TextEncoder();
