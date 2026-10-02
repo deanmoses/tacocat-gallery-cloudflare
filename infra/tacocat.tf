@@ -11,8 +11,9 @@ resource "cloudflare_zone" "tacocat" {
   name    = "tacocat.com"
 }
 
-# The same edge settings as deanmoses.com, where infra/main.tf gives the reason for each. They apply to the proxied
-# hostnames, which are the gallery's; every record below is DNS-only.
+# The edge settings apply to the proxied hostnames, which are the gallery's; every record below is DNS-only.
+#
+# Plain HTTP is answered with a redirect and TLS below 1.2 is refused.
 resource "cloudflare_zone_setting" "tacocat_always_use_https" {
   zone_id    = cloudflare_zone.tacocat.id
   setting_id = "always_use_https"
@@ -25,12 +26,15 @@ resource "cloudflare_zone_setting" "tacocat_min_tls_version" {
   value      = "1.2"
 }
 
+# The Link headers an album page sends (web/static/_headers) go out as a 103 Early Hints before the page itself, so the
+# browser starts the album JSON request on the first bytes back from the edge.
 resource "cloudflare_zone_setting" "tacocat_early_hints" {
   zone_id    = cloudflare_zone.tacocat.id
   setting_id = "early_hints"
   value      = "on"
 }
 
+# Smart Tiered Cache needs both: tiered caching on, and the smart topology that picks upper tiers near the origin.
 resource "cloudflare_argo_tiered_caching" "tacocat" {
   zone_id = cloudflare_zone.tacocat.id
   value   = "on"
@@ -49,8 +53,10 @@ resource "cloudflare_bot_management" "tacocat" {
   ai_bots_protection          = "block"
   bot_preference_sync_enabled = true
   cf_robots_variant           = "policy_only"
-  fight_mode                  = false
+  # Bot Fight Mode would challenge the Globalping probes the latency measurements depend on.
+  fight_mode = false
   lifecycle {
+    # Provider v5.25.0 does not read these two back, so they would show a diff on every plan.
     ignore_changes = [bot_preference_sync_enabled, cf_robots_variant]
   }
 }
