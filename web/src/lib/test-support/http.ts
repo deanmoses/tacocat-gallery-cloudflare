@@ -19,8 +19,11 @@ export function serverError(statusText = 'Internal Server Error'): Response {
     return new Response(null, { status: 500, statusText });
 }
 
-/** A reply, or a function that produces one -- a thrown error stands for the network being down */
-type Reply = Response | (() => Response);
+/**
+ * A reply, or a function that produces one, at once or later, as a slow upload does -- a thrown error stands for the
+ * network being down
+ */
+type Reply = Response | (() => Response | Promise<Response>);
 
 interface Call {
     method: string;

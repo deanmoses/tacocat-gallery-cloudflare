@@ -52,8 +52,7 @@ describe(findProcessedUploads, () => {
     ])('$description: $processed', ({ upload: entry, albumVersions, processed }) => {
         const result = findProcessedUploads([entry], (versionId) => albumVersions.includes(versionId));
 
-        expect(result.processed).toStrictEqual(processed ? [entry.path] : []);
-        expect(result.allProcessed).toBe(processed);
+        expect(result).toStrictEqual(processed ? [entry.path] : []);
     });
 
     it('reports nothing to do for an empty batch', () => {
@@ -61,11 +60,10 @@ describe(findProcessedUploads, () => {
             throw new Error(`Looked up ${versionId} with nothing to look for`);
         });
 
-        expect(result.processed).toStrictEqual([]);
-        expect(result.allProcessed).toBe(true);
+        expect(result).toStrictEqual([]);
     });
 
-    // The album is polled until allProcessed, with different items finished on each pass, so every entry is
+    // The album is polled until every upload is done, with different items finished on each pass, so every entry is
     // considered on every pass: an unfinished one must not hide the finished ones behind it
     it('reports the finished uploads in order, wherever the unfinished ones sit', () => {
         const uploads = [
@@ -78,8 +76,7 @@ describe(findProcessedUploads, () => {
 
         const result = findProcessedUploads(uploads, (versionId) => album.has(versionId));
 
-        expect(result.processed).toStrictEqual(['/2024/01-01/done1.jpg', '/2024/01-01/done2.jpg']);
-        expect(result.allProcessed).toBe(false);
+        expect(result).toStrictEqual(['/2024/01-01/done1.jpg', '/2024/01-01/done2.jpg']);
     });
 
     // A replacement in another format lands under a new name, so the path says nothing about whether it is done
@@ -88,8 +85,7 @@ describe(findProcessedUploads, () => {
 
         const result = findProcessedUploads([entry], (versionId) => versionId === 'v1');
 
-        expect(result.processed).toStrictEqual(['/2024/01-01/photo.png']);
-        expect(result.allProcessed).toBe(true);
+        expect(result).toStrictEqual(['/2024/01-01/photo.png']);
     });
 });
 
