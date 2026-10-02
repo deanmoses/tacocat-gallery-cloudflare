@@ -91,11 +91,11 @@ describe(readImage, () => {
             },
         },
     ])('reads $name', async ({ file, facts }) => {
-        await expect(readImage(fixtureBytes(file).buffer)).resolves.toStrictEqual({ ok: true, facts });
+        await expect(readImage(fixtureBytes(file))).resolves.toStrictEqual({ ok: true, facts });
     });
 
     it('says why a file that is no image cannot be one', async () => {
-        await expect(readImage(new Uint8Array(10).buffer)).resolves.toStrictEqual({
+        await expect(readImage(new Uint8Array(10))).resolves.toStrictEqual({
             ok: false,
             error: expect.stringContaining('not a readable image'),
         });

@@ -406,7 +406,7 @@ export default defineConfig(
     ),
     workerLayer('http', [], 'http/ shapes responses and reads requests; it imports only shared/.'),
     workerLayer('db', [], 'db/ is the schema and the ORM; it imports only shared/.'),
-    workerLayer('storage', [], 'storage/ is R2 keys and presigning; it imports only shared/.'),
+    workerLayer('storage', [], 'storage/ is R2 keys, presigning and reading; it imports only shared/.'),
     workerLayer(
         'media',
         [],

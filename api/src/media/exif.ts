@@ -19,10 +19,12 @@ const XML_PARSER = new DOMParser({ onError: onErrorStopParsing });
  * all a HEIC or PNG has. Adobe Bridge writes both, the same text in each. The fields and their order are the AWS
  * Lambda's, so a file captioned once reads the same on either site. An error for a file ExifReader cannot read.
  */
-export async function readImage(bytes: ArrayBuffer): Promise<ImageOutcome> {
+export async function readImage(bytes: Uint8Array<ArrayBuffer>): Promise<ImageOutcome> {
+    // ExifReader reads a whole ArrayBuffer, so a view of part of one is copied out first.
+    const whole = bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.slice().buffer;
     let tags: ExifReader.ExpandedTags;
     try {
-        tags = await ExifReader.load(bytes, { expanded: true, async: true, domParser: XML_PARSER });
+        tags = await ExifReader.load(whole, { expanded: true, async: true, domParser: XML_PARSER });
     } catch (error) {
         return { ok: false, error: `not a readable image: ${String(error)}` };
     }
