@@ -1,6 +1,6 @@
 // What a script that adds photos to the gallery shares: the writes an admin's browser makes, through the Worker's own
-// routes. An album is made with its words, each file is presigned and PUT to R2 as a browser upload is, so the
-// pipeline sizes it and makes its item, and the wait reads the album until it lists every upload. A write the Worker
+// routes. An album is made with its words, each file is presigned, PUT to R2 and announced as a browser upload is, so
+// the pipeline sizes it and makes its item, and the wait reads the album until it lists every upload. A write the Worker
 // refuses throws with its reason.
 //
 // The session cookie is signed with the target Worker's SESSION_SECRET, which api/.dev.vars holds for each: as
@@ -26,7 +26,8 @@ export interface Gallery {
 // Long enough for an upload whose pipeline step hangs until the Workflow's 10-minute timeout and then succeeds on its
 // retry, which production has done.
 const PROCESSING_TIMEOUT_MS = 15 * 60_000;
-// R2 answers the odd PUT with a 503 that a second try does not see.
+// R2 answers the odd PUT with a 503 that a second try does not see, and the Worker can fail to start an upload's
+// processing the same way.
 const PUT_ATTEMPTS = 3;
 const PUT_RETRY_MS = 2000;
 
@@ -128,6 +129,7 @@ export async function upload(
         });
         if (put.ok) {
             await put.body?.cancel();
+            await announce(gallery, galleryPath, target.versionId);
             return target.versionId;
         }
         const reason = `${String(put.status)} ${await put.text()}`;
@@ -135,6 +137,29 @@ export async function upload(
             throw new Error(`uploading ${galleryPath} failed: ${reason}`);
         }
         console.log(`retrying ${galleryPath} after ${reason.slice(0, 40)}`);
+        await sleep(PUT_RETRY_MS);
+    }
+}
+
+/**
+ * Tells the Worker the upload's PUT succeeded, so it starts processing the file at once rather than when R2's event
+ * arrives. A 503 is the Worker failing to start it, which is worth another try.
+ */
+async function announce(gallery: Gallery, galleryPath: string, versionId: string): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+        const announced = await fetch(`${gallery.site}/api/uploaded/${versionId}`, {
+            method: 'POST',
+            headers: { cookie: gallery.cookie },
+        });
+        if (announced.ok) {
+            await announced.body?.cancel();
+            return;
+        }
+        const reason = `${String(announced.status)} ${await announced.text()}`;
+        if (announced.status < 500 || attempt === PUT_ATTEMPTS) {
+            throw new Error(`starting ${galleryPath}'s processing failed: ${reason}`);
+        }
+        console.log(`retrying the start of ${galleryPath} after ${reason.slice(0, 40)}`);
         await sleep(PUT_RETRY_MS);
     }
 }

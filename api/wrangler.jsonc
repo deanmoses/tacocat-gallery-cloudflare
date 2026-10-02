@@ -82,8 +82,9 @@
                 "max_batch_size": 1,
                 "max_batch_timeout": 1,
                 "max_retries": 5,
-                // Seconds, so a short D1 or R2 outage can pass before the next attempt.
-                "retry_delay": 60,
+                // Seconds. The uploader starts the pipeline itself, so an event that has to be retried is a backstop
+                // already late, and the admin is waiting on it.
+                "retry_delay": 10,
                 // Messages that run out of retries go here, where a consumer of their own reports them to the admin.
                 "dead_letter_queue": "staging-uploads-dlq",
             },
@@ -168,7 +169,7 @@
                         "max_batch_size": 1,
                         "max_batch_timeout": 1,
                         "max_retries": 5,
-                        "retry_delay": 60,
+                        "retry_delay": 10,
                         "dead_letter_queue": "production-uploads-dlq",
                     },
                     {

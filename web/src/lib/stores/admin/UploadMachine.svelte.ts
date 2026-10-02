@@ -5,7 +5,7 @@ import { albumState, getUploadsForAlbum } from '../AlbumState.svelte';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
-import { fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
+import { announceUpload, fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
 import {
     type PresignRequest,
     type PresignedUpload,
@@ -198,6 +198,8 @@ class UploadMachine {
                 this.#uploadEnqueued(mediaItemToUpload.path, mediaItemToUpload.file);
             }
 
+            const polling = this.#pollForProcessedMediaItems(albumPath);
+
             // Put every file to its URL in parallel
             const mediaUploads: Promise<void>[] = [];
             for (const mediaItemToUpload of itemsToUpload) {
@@ -209,7 +211,7 @@ class UploadMachine {
                 mediaUploads.push(this.#uploadMediaItemViaPresignedUrl(mediaItemToUpload, presigned));
             }
             await Promise.allSettled(mediaUploads);
-            await this.#pollForProcessedMediaItems(albumPath);
+            await polling;
         } catch (error) {
             // Clean up any uploads that were enqueued before the failure
             for (const mediaItemToUpload of itemsToUpload) {
@@ -225,16 +227,22 @@ class UploadMachine {
     ): Promise<void> {
         this.#uploadStarted(mediaItemToUpload.path);
         const result = await uploadToBucket(mediaItemToUpload.file, presigned);
-        if (result.success) {
-            console.log(`Uploaded [${mediaItemToUpload.path}] as versionId [${presigned.versionId}]`);
-            this.#uploadProcessing(mediaItemToUpload.path, presigned.versionId);
-        } else {
+        if (!result.success) {
             this.#uploadErrored(mediaItemToUpload.path, result.error);
+            return;
         }
+        console.log(`Uploaded [${mediaItemToUpload.path}] as versionId [${presigned.versionId}]`);
+        const announced = await announceUpload(presigned.versionId);
+        if (!announced.success) {
+            this.#uploadErrored(mediaItemToUpload.path, `uploaded, but processing did not start: ${announced.error}`);
+            return;
+        }
+        this.#uploadProcessing(mediaItemToUpload.path, presigned.versionId);
     }
 
     /**
-     * Poll the server, checking to see if the media have made it into the album
+     * Poll the server while the files are still going up, so each item shows once the server has made it, not once the
+     * slowest file of the drop has finished uploading. The server is asked only while some upload is processing.
      */
     async #pollForProcessedMediaItems(albumPath: string): Promise<void> {
         // A photo is usually an item a few seconds after its PUT, so the first checks come quickly, and the wait between
@@ -242,38 +250,45 @@ class UploadMachine {
         const FIRST_POLL_MS = 500;
         const MAX_POLL_MS = 3000;
 
-        // Watch for as long as the slowest-processing file type takes
+        // Watch for as long as the slowest-processing file type takes, counted from when the last file is up, so a
+        // long upload never runs the wait out
         const uploads = getUploadsForAlbum(albumPath);
         const maxTimeoutMs = Math.max(...uploads.map((upload) => processingTimeout(upload.file.name)));
-        const deadline = Date.now() + maxTimeoutMs;
+        let deadline = Date.now() + maxTimeoutMs;
 
-        let processingComplete: boolean;
         let pollAttemptCount = 0;
         let pollDelayMs = FIRST_POLL_MS;
-        do {
+        for (;;) {
             await sleep(pollDelayMs);
-            pollDelayMs = Math.min(pollDelayMs * 1.25, MAX_POLL_MS);
-            processingComplete = await this.#areMediaProcessed(albumPath);
-            pollAttemptCount++;
-        } while (!processingComplete && Date.now() < deadline);
-        console.log(`Media have been processed. Loop count: [${pollAttemptCount}]`);
+            const pending = getUploadsForAlbum(albumPath);
+            if (pending.length === 0) {
+                console.log(`Media have been processed. Loop count: [${pollAttemptCount}]`);
+                return;
+            }
+            if (pending.some((upload) => upload.status !== UploadState.PROCESSING)) {
+                deadline = Date.now() + maxTimeoutMs;
+            } else if (Date.now() >= deadline) {
+                break;
+            }
+            if (pending.some((upload) => upload.status === UploadState.PROCESSING)) {
+                pollDelayMs = Math.min(pollDelayMs * 1.25, MAX_POLL_MS);
+                await this.#checkProcessed(albumPath);
+                pollAttemptCount++;
+            }
+        }
 
-        // If polling timed out with media still processing, clear them from UI and notify user
-        if (processingComplete) return;
-        const remaining = getUploadsForAlbum(albumPath);
-        for (const upload of remaining) {
+        // Polling timed out with media still processing: clear them from UI and notify user
+        for (const upload of getUploadsForAlbum(albumPath)) {
             this.#uploadComplete(upload.path);
         }
         toast.push('Some media are still processing. Refresh to see them when ready.');
     }
 
-    async #areMediaProcessed(albumPath: string): Promise<boolean> {
-        const uploads = getUploadsForAlbum(albumPath);
-        if (uploads.length === 0) return true;
+    async #checkProcessed(albumPath: string): Promise<void> {
+        const uploads = getUploadsForAlbum(albumPath).filter((upload) => upload.status === UploadState.PROCESSING);
         try {
             // Check for processing errors (e.g., video transcoding failures)
-            const paths = uploads.map((upload) => upload.path);
-            const errorResult = await checkMediaErrors(paths);
+            const errorResult = await checkMediaErrors(uploads.map((upload) => upload.path));
             if (errorResult.success && errorResult.errors) {
                 for (const [path, errorMessage] of Object.entries(errorResult.errors)) {
                     this.#uploadProcessingFailed(path, errorMessage);
@@ -286,16 +301,11 @@ class UploadMachine {
             if (!album) throw new Error('album not loaded');
 
             const versions = new Set(album.media.map((media) => media.versionId));
-            const { processed, allProcessed } = findProcessedUploads(uploads, (versionId) => versions.has(versionId));
-
-            for (const path of processed) {
+            for (const path of findProcessedUploads(uploads, (versionId) => versions.has(versionId))) {
                 this.#uploadComplete(path);
             }
-
-            return allProcessed;
         } catch (error) {
             console.error(`Error checking if media are processed`, error);
-            return false;
         }
     }
 }

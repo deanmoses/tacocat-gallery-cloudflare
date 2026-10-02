@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeServer, jsonResponse } from '$lib/test-support/http';
-import { fetchPresignedUrls, uploadToBucket } from './mediaUpload';
+import { announceUpload, fetchPresignedUrls, uploadToBucket } from './mediaUpload';
 
 const ALBUM = '/2024/06-15/';
 const ROUTE = `/api/presigned${ALBUM}`;
@@ -68,5 +68,67 @@ describe(uploadToBucket, () => {
         const result = await uploadToBucket(new File([], 'photo.heic'), PRESIGNED);
 
         expect(result).toStrictEqual({ success: false, error: 'Forbidden' });
+    });
+});
+
+describe(announceUpload, () => {
+    const ANNOUNCE = '/api/uploaded/v9';
+    const UNSTARTED = { errorMessage: "The upload's processing did not start: Error: Workflows unavailable" };
+
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['setTimeout'] });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('tells the server the upload has arrived', async () => {
+        const server = fakeServer();
+        server.post(ANNOUNCE, new Response(null, { status: 202 }));
+
+        const result = await announceUpload('v9');
+
+        expect(result).toStrictEqual({ success: true });
+        expect(server.calls).toStrictEqual([{ method: 'POST', pathname: ANNOUNCE, body: undefined }]);
+    });
+
+    it('tries again when the server could not start the processing, or could not be reached', async () => {
+        const server = fakeServer();
+        server.post(
+            ANNOUNCE,
+            jsonResponse(UNSTARTED, 503),
+            () => {
+                throw new TypeError('Failed to fetch');
+            },
+            new Response(null, { status: 202 }),
+        );
+
+        const result = announceUpload('v9');
+        await vi.runAllTimersAsync();
+
+        await expect(result).resolves.toStrictEqual({ success: true });
+        expect(server.calls).toHaveLength(3);
+    });
+
+    it("gives up after three tries with the server's reason", async () => {
+        const server = fakeServer();
+        server.post(ANNOUNCE, jsonResponse(UNSTARTED, 503));
+
+        const result = announceUpload('v9');
+        await vi.runAllTimersAsync();
+
+        await expect(result).resolves.toStrictEqual({ success: false, error: UNSTARTED.errorMessage });
+        expect(server.calls).toHaveLength(3);
+    });
+
+    it('does not try again when the server refuses the upload', async () => {
+        const server = fakeServer();
+        server.post(ANNOUNCE, jsonResponse({ errorMessage: 'The file of upload [v9] has not arrived' }, 409));
+
+        const result = await announceUpload('v9');
+
+        expect(result).toStrictEqual({ success: false, error: 'The file of upload [v9] has not arrived' });
+        expect(server.calls).toHaveLength(1);
     });
 });

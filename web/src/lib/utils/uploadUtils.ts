@@ -2,34 +2,22 @@ import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/mode
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { isVideoFile } from '@tacocat-gallery/shared';
 
-export interface ProcessedUploadsResult {
-    /** The paths of the uploads the album now holds */
-    processed: string[];
-    allProcessed: boolean;
-}
-
 /**
- * Which uploads the server has made into items: the ones whose version id the album now carries. The version is what
- * is looked for, never the path, since an item may be renamed while its upload is in flight.
+ * The paths of the uploads the server has made into items: the ones whose version id the album now carries. The
+ * version is what is looked for, never the path, since an item may be renamed while its upload is in flight.
  */
 export function findProcessedUploads(
     uploads: UploadEntry[],
     albumHasVersion: (versionId: string) => boolean,
-): ProcessedUploadsResult {
-    const processed: string[] = [];
-    let allProcessed = true;
-    for (const upload of uploads) {
-        if (
-            upload.status === UploadState.PROCESSING &&
-            upload.versionId !== undefined &&
-            albumHasVersion(upload.versionId)
-        ) {
-            processed.push(upload.path);
-        } else {
-            allProcessed = false;
-        }
-    }
-    return { processed, allProcessed };
+): string[] {
+    return uploads
+        .filter(
+            (upload) =>
+                upload.status === UploadState.PROCESSING &&
+                upload.versionId !== undefined &&
+                albumHasVersion(upload.versionId),
+        )
+        .map((upload) => upload.path);
 }
 
 /**
