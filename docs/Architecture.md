@@ -28,7 +28,7 @@ The whole site is one Worker per environment, serving the web app and everything
 | **`infra/` (OpenTofu)**          | Creates everything outside the Worker: the zone, the database, the buckets, the queues      |
 | **Cloudflare D1**                | The database: every album and media item, the search index, uploads, login                  |
 | **Cloudflare R2, three buckets** | `originals`, `uploads` as they arrive, `derived` images and video                           |
-| **Cloudflare Images binding**    | Resizes and crops images, HEIC included                                                     |
+| **Image Transformations**        | Resizes and crops images, HEIC included, fetched by a URL the Worker signs                  |
 | **Cloudflare Queue**             | Carries R2's event for each finished upload to the Worker                                   |
 | **Cloudflare Workflow**          | Runs one upload pipeline per uploaded file                                                  |
 | **Cloudflare Container**         | ffmpeg, for transcoding video                                                               |
@@ -173,21 +173,21 @@ app                        Worker                          R2 / Queue / Workflow
 
 1. **Presign** (`api/src/gallery/presign.ts`) checks the album exists, the name is one the gallery takes, and nothing is already there, then mints the version id, records it in `upload` with the album's id, and answers with a presigned PUT into the inbox.
 2. **The browser PUTs** the file straight to R2. R2 announces it on the queue, and the consumer starts a Workflow instance named by the version id.
-3. **The pipeline** (`api/src/gallery/upload.ts`) looks up the upload row, reads the file's size, caption and keywords, stores the original, and makes the thumbnail and the media page's image, so the first reader never waits.
+3. **The pipeline** (`api/src/gallery/upload.ts`) looks up the upload row, reads the file's size, caption and keywords, makes the thumbnail and the media page's image, so the first reader never waits, and then copies the file to its original's key.
 4. **One batch** inserts the item into the album and marks the upload complete; the first photo in a day becomes its thumbnail. Then the inbox object is dropped.
 5. **The app** sees the new version in the album and shows it.
 
 **Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions and every album showing it are kept, and the file's tags join the row's. The thumbnail crop is kept only if the new image has exactly the old size.
 
-**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row, and the inbox object stays for a replay. A busy Images binding is not the file's fault, so only the codes its docs give for a fault in the file reject one. In the photo step, reading the file, storing the original and making each derivative each give up after a minute with an error naming the stage, and each attempt of a step logs `upload_stages`: how long each stage took and how the attempt ended, so a slow upload or a failed attempt says where.
+**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row, and the inbox object stays for a replay. A busy image service is not the file's fault, so only the codes Cloudflare's docs give for a fault in the file reject one. Reading the file, making each derivative and storing the original each give up after a minute with an error naming the stage, and each attempt of a step logs `upload_stages`: how long each stage took and how the attempt ended, so a slow upload or a failed attempt says where.
 
-**Locally**, a Worker cannot consume a real queue, so with `UPLOAD_MODE=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file and raises the event R2 would. The pipeline runs unchanged.
+**Locally**, a Worker cannot consume a real queue, so with `UPLOAD_MODE=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file and raises the event R2 would. The pipeline runs unchanged, except that its images come from the local Images binding (`IMAGE_MODE=binding`), since Image Transformations run only on Cloudflare's edge.
 
 **Why presign judges first.** Presign applies the rules the pipeline applies again when the file lands, so what would fail is refused while the admin is still watching, and the pipeline refuses an object nobody presigned.
 
 **Why a Workflow instance per upload.** A queue adds consumers slowly and only as a backlog builds, so fifty photos processed by the consumer run nearly one at a time; as fifty Workflow instances they run at once, each step retried on its own. Instances are not given an isolate each: like any Worker's invocations, several can share one and its 128 MB. R2 may announce an upload twice, and an instance name can be used once, so a second announcement starts nothing.
 
-**Why these steps.** A step boundary persists its result and costs time, so a step ends only where a retry must respect a change of state. A step never hands the file to the next, since its result is stored. The images are made before the item is written, so a file the Images binding cannot decode becomes an upload error instead of a broken image in an album. The item is written by the album's id, so an album renamed during the upload still receives it.
+**Why these steps.** A step boundary persists its result and costs time, so a step ends only where a retry must respect a change of state. A step never hands the file to the next, since its result is stored. The images are made first, so a file that cannot be decoded becomes an upload error instead of a broken image in an album, and leaves nothing among the originals. The original is copied in a step of its own, after them, so a derivative's retry never copies it again, and the copy is skipped when an attempt that failed after it already made it, since an original is never written twice. The item is written by the album's id, so an album renamed during the upload still receives it.
 
 ## Serving images and video
 
@@ -195,21 +195,21 @@ The album page asks for `/i/2001/06-15/felix/01ARYZ6S41TSV4RRFFQ69G5FAV?size=200
 
 1. **The colo's cache.** A hit is answered there.
 2. **The derived bucket**, under `derived/01ARYZ6S41TSV4RRFFQ69G5FAV/200x200-webp`, the name spelled from the URL and the format it settles, and served as the type it was stored with.
-3. **Made on the spot** with the Images binding, from the version's poster if it is a video, or else its original, then stored in the derived bucket and cached. A busy binding fails some of a burst of first-time transformations, as an album's first reader asks for, so a failure is tried once more after a short pause, unless the binding said the file cannot be decoded.
+3. **Made on the spot** by Image Transformations, from the version's poster if it is a video, or else its original, then stored in the derived bucket and cached. The Worker fetches the source through a URL it signed for that one object, with `cf.image` options, so the image never passes through the Worker and an original can be up to 100 MB, where the Images binding takes 20. A failure is tried once more after a short pause, unless the code in its `cf-resized` header says the file cannot be decoded, and a response the transformation did not mark is a failure, so an original is never stored as its own derivative. Transformations stay disabled on both zones in the dashboard: a Worker's `cf.image` works without them, as staging showed on 2026-10-01, and enabling them would turn on `/cdn-cgi/image/` URLs, through which anyone could transform images on the account's bill.
 
 Every image is cached for a year, since its URL names one version and a new upload has a new URL. The path in the URL is for people reading it, in the network panel or the logs; only the version finds the object, so an old URL keeps working after a rename.
 
-- **Thumbnails are WebP; the media page's image is WebP for a GIF or a PNG and JPEG for anything else**, as on AWS. The Images binding leaves the original's IPTC and XMP blocks and most of its EXIF, GPS position included, in a JPEG whatever its `metadata` option says, three quarters of a thumbnail's bytes, and the XMP's orientation after it has turned the pixels by the EXIF one, which Safari then applies again; so the Worker drops those blocks from every JPEG it stores, as AWS's derivatives carry none of them; a photo dragged into another app therefore arrives without its capture date or caption. Its WebP carries nothing. A GIF's WebP keeps its frames and a PNG's its transparency. The media page's image of a photo stays JPEG because readers drag it into other apps, most of which cannot open a WebP. Its format comes from the original's content type, sniffed from its bytes at upload, so its derivative's name carries no format. Every browser the app supports shows WebP, so no `Accept` header is read and responses carry no `Vary`. The colo cache keys an image by its derived bucket name rather than its URL, so a renamed item's old and new URLs, and a URL with a stray query parameter, share one entry.
+- **Thumbnails are WebP; the media page's image is WebP for a GIF or a PNG and JPEG for anything else**, as on AWS. The Images binding was found to leave the original's IPTC and XMP blocks and most of its EXIF, GPS position included, in a JPEG whatever its `metadata` option says, three quarters of a thumbnail's bytes, and the XMP's orientation after it has turned the pixels by the EXIF one, which Safari then applies again; so the Worker drops those blocks from every JPEG it stores, as AWS's derivatives carry none of them; a photo dragged into another app therefore arrives without its capture date or caption. Its WebP carries nothing. A GIF's WebP keeps its frames and a PNG's its transparency. The media page's image of a photo stays JPEG because readers drag it into other apps, most of which cannot open a WebP. Its format comes from the original's content type, sniffed from its bytes at upload, so its derivative's name carries no format. Every browser the app supports shows WebP, so no `Accept` header is read and responses carry no `Vary`. The colo cache keys an image by its derived bucket name rather than its URL, so a renamed item's old and new URLs, and a URL with a stray query parameter, share one entry.
 - `/raw/<path>/<versionId>` is the original. A HEIC comes back as a JPEG, since only Safari shows HEIC, unless `?format=original` asks for the file itself.
 - `/v/<path>/<versionId>` is a video's MP4, with byte ranges for seeking.
 
-**The transcoder** is ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, one instance per video on the largest instance type, so a drop of several videos transcodes them side by side, each asleep once its video is done. The Worker hands it presigned URLs to read the upload from the uploads bucket and write the MP4 and poster into the derived bucket, and it answers with the video's size and duration. The signing key reaches no original, so a stored video can be transcoded again, after a change to the ffmpeg settings say, only once the Worker has copied its original back into the uploads bucket through the bindings; nothing does that yet. When the Worker stops waiting, as when its step times out, the container kills the encode, so a retry never shares the CPU with the attempt before it.
+**The transcoder** is ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, one instance per video on the largest instance type, so a drop of several videos transcodes them side by side, each asleep once its video is done. The Worker hands it presigned URLs to read the upload from the uploads bucket and write the MP4 and poster into the derived bucket, and it answers with the video's size and duration. The signing key can read an original but never write one, so a stored video could be transcoded again, after a change to the ffmpeg settings say, from a URL signed for its original; nothing does that yet. When the Worker stops waiting, as when its step times out, the container kills the encode, so a retry never shares the CPU with the attempt before it.
 
 **Why one spelling.** `shared/src/urls.ts` builds every image URL, for the app and for the pipeline's pre-made images alike, and the stored name is spelled from the same text. A stored image is found only by a URL spelled exactly the same way, so there must be one place that spells them.
 
 **Why the media routes need no login.** Knowing a version id is knowing the photo, and 64 random bits cannot be guessed. Each route reads only the objects under the version it names, in the originals and derived buckets, so nothing else, the dumps and the inbox included, is reachable through them. Checking whether the album is published would cost a database read on routes that otherwise need none.
 
-**Why originals stay as uploaded**, HEIC included: the Images binding decodes HEIC, so nothing is converted on the way in and nothing in the pipeline is specific to HEIC.
+**Why originals stay as uploaded**, HEIC included: Image Transformations decode HEIC, so nothing is converted on the way in and nothing in the pipeline is specific to HEIC.
 
 ## Authentication
 
@@ -241,7 +241,7 @@ api/src/ops/       health, and the performance measurements
 api/src/http/      request bodies, responses, cookies, the bookmark, the site's headers
 api/src/db/        the schema, and Drizzle over D1 sessions
 api/src/storage/   object keys and S3 presigning
-api/src/media/     the metadata reader, the Images binding, the transcoder
+api/src/media/     the metadata reader, image making, the transcoder
 web/               the SvelteKit app
 e2e/               Playwright journeys through the built app and a local Worker
 ```
@@ -257,7 +257,7 @@ e2e/               Playwright journeys through the built app and a local Worker
 ## Tests
 
 - D1, R2, the Queue and the Images binding run locally, so tests run real SQLite with its triggers and put real objects in real buckets.
-- Only the ffmpeg container and outside HTTP services are stood in for.
+- Only the ffmpeg container, Image Transformations and outside HTTP services are stood in for. A test of Image Transformations checks what the Worker asks of them; the pixels are checked on staging.
 - Every query has a budget of rows it may read, since a query that scans a table is slow as well as costly.
 - `docs/Testing.md` has the tiers and the rules.
 

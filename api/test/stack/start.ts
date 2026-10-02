@@ -26,9 +26,9 @@ interface StackOptions {
 }
 
 /**
- * Starts what `wrangler dev` runs, entirely local: the web app's build, the asset router, and the Worker with the test
- * secrets in place of .dev.vars. The build is a fresh one unless WEB_BUILD_READY is set, which scripts/test.sh does
- * after building once for every suite it runs.
+ * Starts what `npm run dev` runs, entirely local: the web app's build, the asset router, and the Worker with the test
+ * secrets in place of .dev.vars and its images made by the local Images binding. The build is a fresh one unless
+ * WEB_BUILD_READY is set, which scripts/test.sh does after building once for every suite it runs.
  */
 export async function startStack({ port, persistTo, vars = {}, localUpstream = false }: StackOptions): Promise<Stack> {
     if (process.env['WEB_BUILD_READY'] === undefined) {
@@ -44,7 +44,12 @@ export async function startStack({ port, persistTo, vars = {}, localUpstream = f
             ...Object.fromEntries(
                 Object.entries(TEST_SECRETS).map(([name, value]) => [name, { type: 'secret_text', value }]),
             ),
-            ...Object.fromEntries(Object.entries(vars).map(([name, value]) => [name, { type: 'plain_text', value }])),
+            ...Object.fromEntries(
+                Object.entries({ IMAGE_MODE: 'binding', ...vars }).map(([name, value]) => [
+                    name,
+                    { type: 'plain_text', value },
+                ]),
+            ),
         },
         dev: {
             server: { port },

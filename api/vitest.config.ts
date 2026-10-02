@@ -46,6 +46,8 @@ export default defineConfig({
                                 // Uploads are presigned into the bucket, whatever a developer's .dev.vars says; a test
                                 // of local uploads passes UPLOAD_MODE itself.
                                 UPLOAD_MODE: 'signed',
+                                // Image Transformations cannot run locally; a test of them passes IMAGE_MODE itself.
+                                IMAGE_MODE: 'binding',
                             },
                         },
                     })),

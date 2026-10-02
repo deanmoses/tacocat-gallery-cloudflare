@@ -32,7 +32,7 @@ Production holds the real gallery, copied from AWS on 2026-09-30 and verified (`
 
 Three npm workspaces:
 
-- `api/`: one Worker with D1, R2, a Queue, the Images binding and an ffmpeg Container, deployed as two environments, staging (the config's top level, also what tests and `wrangler dev` run) and production (`--env production`), each with its own data.
+- `api/`: one Worker with D1, R2, a Queue, Image Transformations (the Images binding locally) and an ffmpeg Container, deployed as two environments, staging (the config's top level, also what tests and `wrangler dev` run) and production (`--env production`), each with its own data.
 - `web/`: the SvelteKit front end.
 - `shared/`: code shared between `api/` and `web/`, such as the album schema and path helpers.
 

@@ -410,7 +410,7 @@ export default defineConfig(
     workerLayer(
         'media',
         [],
-        'media/ wraps ExifReader, the Images binding and the transcoder; it imports only shared/.',
+        'media/ wraps ExifReader, Image Transformations, the Images binding and the transcoder; it imports only shared/.',
     ),
     workerLayer('util', [], 'util/ is helpers with no layer; it imports nothing of the Worker.'),
     {

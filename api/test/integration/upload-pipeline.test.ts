@@ -270,7 +270,7 @@ describe('upload pipeline', () => {
         expect(detail?.httpMetadata?.contentType).toBe('image/webp');
     });
 
-    it('makes the three images at once, from the file it has already read', async () => {
+    it('makes the three images at once, from the upload rather than the original', async () => {
         const versionId = await stage(`${DAY}full_metadata`, jpg);
         const originalReads = vi.spyOn(env.ORIGINALS, 'get');
         // Each derivative's write waits until all three are being written, which only images made at once can reach.
@@ -307,23 +307,28 @@ describe('upload pipeline', () => {
         { name: 'not an image', error: 'IMAGES_TRANSFORM_ERROR 9412: Unsupported image type' },
         { name: 'too many pixels', error: 'IMAGES_TRANSFORM_ERROR 9413: Image exceeds the maximum image area' },
         { name: 'in no format it takes', error: 'IMAGES_TRANSFORM_ERROR 9520: Unsupported image format' },
-    ])('records a HEIC the Images binding says is $name as an upload error, not an item', async ({ error }) => {
-        vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
-            throw new Error(error);
-        });
-        const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
-        const [item, inbox, errors, row] = await Promise.all([
-            storedItem(DAY, 'tenbit'),
-            env.UPLOADS.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}tenbit`]),
-            uploadRow(versionId),
-        ]);
+    ])(
+        'records a HEIC the Images binding says is $name as an upload error, not an item or an original',
+        async ({ error }) => {
+            vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
+                throw new Error(error);
+            });
+            const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
+            const [item, inbox, originals, errors, row] = await Promise.all([
+                storedItem(DAY, 'tenbit'),
+                env.UPLOADS.head(inboxKey(versionId)),
+                env.ORIGINALS.list(),
+                uploadErrors([`${DAY}tenbit`]),
+                uploadRow(versionId),
+            ]);
 
-        expect(item).toBeUndefined();
-        expect(inbox).toBeNull();
-        expect(errors[`${DAY}tenbit`]).toBe(`the image cannot be decoded: ${error}`);
-        expect(row?.completedAt).toBeNull();
-    });
+            expect(item).toBeUndefined();
+            expect(inbox).toBeNull();
+            expect(originals.objects).toStrictEqual([]);
+            expect(errors[`${DAY}tenbit`]).toBe(`the image cannot be decoded: ${error}`);
+            expect(row?.completedAt).toBeNull();
+        },
+    );
 
     it.each([
         { name: 'an internal error', error: 'IMAGES_TRANSFORM_ERROR 9527: Could not resize the image: internal error' },
@@ -347,6 +352,47 @@ describe('upload pipeline', () => {
             expect(errors).toStrictEqual({});
         },
     );
+
+    it('copies the original once, though a derivative failed and its step was retried', async () => {
+        const input = env.IMAGES.input.bind(env.IMAGES);
+        vi.spyOn(env.IMAGES, 'input')
+            .mockImplementationOnce(() => {
+                throw new Error('IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy');
+            })
+            .mockImplementation(input);
+        const copies = vi.spyOn(env.ORIGINALS, 'put');
+        const versionId = await stage(`${DAY}busy`, jpg);
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+
+        expect(copies).toHaveBeenCalledExactlyOnceWith(
+            originalKey(versionId),
+            expect.anything(),
+            expect.objectContaining({ customMetadata: { path: `${DAY}busy` } }),
+        );
+        await expect(storedItem(DAY, 'busy')).resolves.toMatchObject({ versionId });
+    });
+
+    it('writes the original once when its step is retried after the copy landed, since originals are never rewritten', async () => {
+        const put = env.ORIGINALS.put.bind(env.ORIGINALS);
+        const copies = vi.spyOn(env.ORIGINALS, 'put').mockImplementationOnce(async (key, value, options) => {
+            await put(key, value, options);
+            throw new Error('the step result was lost');
+        });
+        const versionId = await stage(`${DAY}retried`, jpg);
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const [item, original] = await Promise.all([
+            storedItem(DAY, 'retried'),
+            env.ORIGINALS.head(originalKey(versionId)),
+        ]);
+
+        expect(copies).toHaveBeenCalledExactlyOnceWith(
+            originalKey(versionId),
+            expect.anything(),
+            expect.objectContaining({ customMetadata: { path: `${DAY}retried` } }),
+        );
+        expect(item?.versionId).toBe(versionId);
+        expect(original?.size).toBe(jpg.byteLength);
+    });
 
     it.each([
         { stage: 'read', hang: stallingTheFirstWholeRead },
@@ -375,23 +421,18 @@ describe('upload pipeline', () => {
         },
     );
 
-    it('logs how long each stage of the photo took', async () => {
+    it('logs how long each stage of the photo took, a line for each step', async () => {
         const logged = vi.spyOn(console, 'info');
         const versionId = await upload(`${DAY}full_metadata`, jpg);
+        const timings = (names: string[]): Record<string, number> =>
+            Object.fromEntries(names.map((name) => [name, expect.any(Number) as number]));
+        const step = { event: 'upload_stages', path: `${DAY}full_metadata`, versionId, attempt: 1, outcome: 'ready' };
 
         expect(logged).toHaveBeenCalledWith({
-            event: 'upload_stages',
-            path: `${DAY}full_metadata`,
-            versionId,
-            attempt: 1,
-            outcome: 'ready',
-            ...Object.fromEntries(
-                ['sniff', 'read', 'exif', 'original', 'thumbnail', 'thumbnail2x', 'detail'].map((name) => [
-                    name,
-                    expect.any(Number) as number,
-                ]),
-            ),
+            ...step,
+            ...timings(['sniff', 'read', 'exif', 'thumbnail', 'thumbnail2x', 'detail']),
         });
+        expect(logged).toHaveBeenCalledWith({ ...step, ...timings(['original']) });
     });
 
     it('tries the photo six times while the Images binding keeps failing, then tells the admin why', async () => {
@@ -486,7 +527,7 @@ describe('upload pipeline', () => {
             modify: async (modifier) => {
                 await modifier.disableRetryDelays();
                 await modifier.mockStepError(
-                    { name: 'read the file, and store a photo and make its derivatives' },
+                    { name: "read the file, and make a photo's derivatives" },
                     new Error('R2 unavailable'),
                     1,
                 );
