@@ -1,8 +1,13 @@
 # The tacocat.com zone, which GoDaddy's nameservers point at. Its records are the ones DreamHost served while it held
-# the zone, DNS-only and unchanged, and scripts/zone-diff.sh compares the two. Records that point at AWS stay DNS-only,
-# since proxying in front of CloudFront would stack two CDNs; the ACM validation CNAMEs keep the AWS certificates
-# renewing; the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy. DreamHost's
-# zone is the way back, so a record changed here and not there is lost on a return to its nameservers.
+# the zone, DNS-only, and scripts/zone-diff.sh compares the two. Records that point at AWS stay DNS-only, since
+# proxying in front of CloudFront would stack two CDNs; the ACM validation CNAMEs keep the AWS certificates renewing;
+# the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy. The apex, www, ftp and
+# ssh records point at DreamHost, which still hosts the landing page. DreamHost's zone is the way back, so a record
+# changed here and not there is lost on a return to its nameservers.
+#
+# Gone since 2026-10-02: prod-pix and dev-pix with their www, ftp and ssh names, gallery3 and vercel-pix, the records
+# of the gallery generations that ran on DreamHost and Vercel before AWS, removed once DreamHost stopped hosting the
+# two names. DreamHost's zone still has them.
 #
 # pix.tacocat.com and staging-pix.tacocat.com have no record here: they are the Workers' custom domains, whose records
 # Cloudflare makes when a Worker's triggers deploy, and refuses to make while another record holds the name.
@@ -64,16 +69,7 @@ resource "cloudflare_bot_management" "tacocat" {
 locals {
   tacocat_records = [
     { name = "tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "dev-pix.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "ftp.dev-pix.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "ssh.dev-pix.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "www.dev-pix.tacocat.com", type = "A", content = "205.196.220.123" },
     { name = "ftp.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "gallery3.tacocat.com", type = "A", content = "64.90.63.108" },
-    { name = "prod-pix.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "ftp.prod-pix.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "ssh.prod-pix.tacocat.com", type = "A", content = "205.196.220.123" },
-    { name = "www.prod-pix.tacocat.com", type = "A", content = "205.196.220.123" },
     { name = "ssh.tacocat.com", type = "A", content = "205.196.220.123" },
     { name = "www.tacocat.com", type = "A", content = "205.196.220.123" },
     { name = "tacocat.com", type = "MX", content = "ASPMX.L.GOOGLE.com", priority = 1 },
@@ -110,7 +106,6 @@ locals {
     { name = "_543035c6ef9268eb653c8723f3562690.auth.test-pix.tacocat.com", type = "CNAME", content = "_9312199e3792d150458d5c12bd903fa1.mhbtsbpdnt.acm-validations.aws" },
     { name = "img.test-pix.tacocat.com", type = "CNAME", content = "d3bf7cs9eq5u6r.cloudfront.net" },
     { name = "_9e17adacfa7ce4569b45c764c5d29b3b.img.test-pix.tacocat.com", type = "CNAME", content = "_09d42a662dcbae1fc4f60e4802895a7c.mhbtsbpdnt.acm-validations.aws" },
-    { name = "vercel-pix.tacocat.com", type = "CNAME", content = "cname.vercel-dns.com" },
   ]
 }
 
