@@ -31,8 +31,8 @@ resource "cloudflare_d1_database" "this" {
   }
 }
 
-# One bucket per role, because an R2 API token is scoped to whole buckets: the key the Worker signs upload and
-# transcode URLs with reaches uploads and derived, so no URL it signs can touch an original.
+# One bucket per role, because an R2 API token is scoped to whole buckets: the key the Worker signs URLs with writes
+# uploads and derived, and can only read the originals.
 
 # The originals, each under a key that never changes. Written by the Worker's binding alone.
 resource "cloudflare_r2_bucket" "originals" {
@@ -122,25 +122,40 @@ output "d1_database_id" {
   value = cloudflare_d1_database.this.id
 }
 
-# The S3 key the Worker presigns with: the browser's PUT into uploads, and the transcoder's read from uploads and
-# writes into derived. Those two buckets and nothing else, so no URL the Worker signs can touch an original or a dump.
-# An API token's id is an S3 access key id and the SHA-256 of its value the secret.
+# The S3 key the Worker presigns with: the browser's PUT into uploads, the transcoder's read from uploads and writes
+# into derived, and Image Transformations' read of the image a derivative is made from, which can be an original. It
+# can read the originals but never write or delete one, which only the Worker's binding does, so a leak of it cannot
+# lose a photo. An API token's id is an S3 access key id and the SHA-256 of its value the secret.
 data "cloudflare_account_api_token_permission_groups_list" "bucket_item_write" {
   account_id = var.account_id
   name       = "Workers R2 Storage Bucket Item Write"
 }
 
+data "cloudflare_account_api_token_permission_groups_list" "bucket_item_read" {
+  account_id = var.account_id
+  name       = "Workers R2 Storage Bucket Item Read"
+}
+
 resource "cloudflare_account_token" "signing" {
   account_id = var.account_id
   name       = "${var.prefix} signing"
-  policies = [{
-    effect            = "allow"
-    permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_write.result[0].id }]
-    resources = jsonencode({
-      for bucket in [cloudflare_r2_bucket.uploads.name, cloudflare_r2_bucket.derived.name] :
-      "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${bucket}" => "*"
-    })
-  }]
+  policies = [
+    {
+      effect            = "allow"
+      permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_write.result[0].id }]
+      resources = jsonencode({
+        for bucket in [cloudflare_r2_bucket.uploads.name, cloudflare_r2_bucket.derived.name] :
+        "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${bucket}" => "*"
+      })
+    },
+    {
+      effect            = "allow"
+      permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_read.result[0].id }]
+      resources = jsonencode({
+        "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${cloudflare_r2_bucket.originals.name}" = "*"
+      })
+    },
+  ]
 }
 
 output "signing_credentials" {

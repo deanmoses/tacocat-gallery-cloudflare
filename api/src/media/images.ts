@@ -1,17 +1,19 @@
 import { type ImageRequest, type ImageSize, THUMBNAIL_SIZE_2X, cropText, sizeText } from '@tacocat-gallery/shared';
-import { type Steps, timed } from '../util/stages';
-import { withoutMetadata } from './jpeg';
 
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
-// Every image format the Images binding can write; anything else asked for, its raw pixel formats included, gets the
-// default.
-const OUTPUT_FORMATS: readonly ImageOutputOptions['format'][] = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'image/avif',
-];
+
+/**
+ * Every format a derivative is written in, with Image Transformations' name for it; anything else asked for gets the
+ * default. GIF is not among them, since Image Transformations write a GIF only from a GIF.
+ */
+const OUTPUT_FORMATS = {
+    'image/jpeg': 'jpeg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/avif': 'avif',
+} as const;
+
+export type OutputFormat = keyof typeof OUTPUT_FORMATS;
 
 /**
  * Where a cover crop is centred when the URL brings no crop of its own: halfway across and a third of the way down,
@@ -27,7 +29,7 @@ const WEBP_SOURCES: ReadonlySet<string> = new Set(['image/gif', 'image/png']);
 export interface Derivation {
     request: ImageRequest;
     /** Null when the source's content type decides the format. */
-    format: ImageOutputOptions['format'] | null;
+    format: OutputFormat | null;
     /** The derivative, in the derived bucket. */
     key: string;
     /** The version's poster in the derived bucket, which a video has and a photo does not. */
@@ -43,61 +45,16 @@ export interface Derivative {
 }
 
 /**
- * The derivative `wanted` names: generated once with the Images binding, stored in the derived bucket, served from it
- * afterwards. The original's key when there is neither it nor a poster to generate from.
- */
-export async function derivedImage(
-    env: Pick<Env, 'ORIGINALS' | 'DERIVED' | 'IMAGES'>,
-    wanted: Derivation,
-    steps: Steps,
-): Promise<Derivative | { missing: string }> {
-    const stored = await timed(steps, 'r2', async () => env.DERIVED.get(wanted.key));
-    if (stored) {
-        const contentType = stored.httpMetadata?.contentType ?? 'application/octet-stream';
-        return { body: stored.body, contentType, how: 'stored' };
-    }
-
-    try {
-        return await generated(env, wanted);
-    } catch (error) {
-        if (isRefusal(error)) {
-            throw error;
-        }
-        // A busy binding fails a burst of first-time thumbnails, as an album's first reader asks for, and passes on
-        // a later try. The pause is spread, so a page's failures do not all come back at once.
-        console.warn({ event: 'derivative_retried', key: wanted.key, error: String(error) });
-        await scheduler.wait(RETRY_PAUSE_MS * (1 + Math.random()));
-        return generated(env, wanted);
-    }
-}
-
-/** How long a failed transformation waits before its one more try, at least. */
-const RETRY_PAUSE_MS = 250;
-
-async function generated(
-    env: Pick<Env, 'ORIGINALS' | 'DERIVED' | 'IMAGES'>,
-    wanted: Derivation,
-): Promise<Derivative | { missing: string }> {
-    // A video's stills come from the poster the transcoder wrote beside its MP4, and only a video has one, so looking
-    // for it first is what tells a video from a photo: the file name in the URL decides nothing.
-    const source = (await env.DERIVED.get(wanted.poster)) ?? (await env.ORIGINALS.get(wanted.original));
-    if (!source) {
-        return { missing: wanted.original };
-    }
-    const made = await generateDerivative(env, wanted, source.body, source.httpMetadata?.contentType);
-    return { body: made.bytes, contentType: made.format, how: 'generated' };
-}
-
-/**
- * The Images binding's codes its docs give for a fault in the file: not an image (9412), over 100 megapixels (9413),
- * and a format it does not take (9520). Any other code is taken as the binding failing to run, since taking a busy
- * binding for a bad file gives the file up, where the other mistake costs only another try: 9502, 9522, 9527 and 9529
- * all came from it while it was busy, and images that had failed with 9527 were made on a later request. A HEIC
- * written by macOS `sips` gets 9516, which the docs call internal, every time, so it is tried again in vain.
+ * The codes Cloudflare's docs give for a fault in the file: not an image (9412), over 100 megapixels (9413), and a
+ * format it does not take (9520). Image Transformations and the Images binding share them. Any other code is taken as
+ * the service failing to run, since taking a busy service for a bad file gives the file up, where the other mistake
+ * costs only another try: 9502, 9522, 9527 and 9529 all came from the binding while it was busy, and images that had
+ * failed with 9527 were made on a later request. A HEIC written by macOS `sips` gets 9516, which the docs call
+ * internal, every time, so it is tried again in vain.
  */
 const FILE_FAULTS: ReadonlySet<number> = new Set([9412, 9413, 9520]);
 
-/** Whether the Images binding refused the image itself, as against failing to run, which a later try may get past. */
+/** Whether the image itself was refused, as against the service failing to run, which a later try may get past. */
 export function isRefusal(error: unknown): error is Error {
     if (!(error instanceof Error)) {
         return false;
@@ -109,27 +66,75 @@ export function isRefusal(error: unknown): error is Error {
     return FILE_FAULTS.has(code);
 }
 
-/**
- * The derivative `wanted` names, made from `source` with the Images binding and stored in the derived bucket. Mirrors
- * generateDerivedImage's crop-then-cover semantics, and as its Sharp does, writes a JPEG with no metadata.
- */
-export async function generateDerivative(
-    env: Pick<Env, 'DERIVED' | 'IMAGES'>,
-    { request, format: asked, key }: Derivation,
-    source: ReadableStream,
-    sourceType: string | undefined,
-): Promise<{ bytes: Uint8Array<ArrayBuffer>; format: ImageOutputOptions['format'] }> {
-    const format = asked ?? formatForSource(sourceType);
-    let transformer = env.IMAGES.input(byteStream(source));
-    if (request.crop !== null) {
-        const { x: left, y: top, width: cropWidth, height: cropHeight } = request.crop;
-        transformer = transformer.transform({ trim: { left, top, width: cropWidth, height: cropHeight } });
+/** A transformation Image Transformations did not make, with the code its `cf-resized` header gave, if any. */
+class TransformationError extends Error {
+    readonly code: number | null;
+
+    constructor(code: number | null, message: string) {
+        super(message);
+        this.name = 'TransformationError';
+        this.code = code;
     }
-    const output = await transformer.transform(resize(request)).output(outputOptions(format, request.size));
-    const encoded = new Uint8Array(await output.response().arrayBuffer());
-    const bytes = format === 'image/jpeg' ? withoutMetadata(encoded) : encoded;
-    await env.DERIVED.put(key, bytes, { httpMetadata: { contentType: format, cacheControl: IMMUTABLE } });
-    return { bytes, format };
+}
+
+/** What a resize sets, in terms both engines share. */
+type Resize = Pick<ImageTransform, 'width' | 'height' | 'fit' | 'gravity'>;
+
+/** One image made from another, in the terms both engines take. */
+export interface Transformation {
+    trim: { left: number; top: number; width: number; height: number } | null;
+    resize: Resize | null;
+    output: ImageOutputOptions & { format: OutputFormat };
+}
+
+/**
+ * The image at `url` made by Image Transformations, which fetch it themselves. A response that is not the image
+ * transformed is thrown, whatever its status, since a source fetched but not transformed would otherwise be stored as
+ * its own derivative: Cloudflare marks every transformation, made or not, with a `cf-resized` header, and a failed
+ * one with its code there. `name` says which image it was in the error. The output carries no metadata, which a JPEG
+ * would otherwise keep its copyright of; WebP never carries any.
+ */
+export async function throughTransformations(
+    url: string,
+    name: string,
+    { trim, resize: resized, output }: Transformation,
+): Promise<Uint8Array<ArrayBuffer>> {
+    const image: RequestInitCfPropertiesImage = {
+        ...(trim !== null && { trim }),
+        ...resized,
+        format: OUTPUT_FORMATS[output.format],
+        metadata: 'none',
+        ...(output.quality !== undefined && { quality: output.quality }),
+        ...(output.anim !== undefined && { anim: output.anim }),
+    };
+    const response = await fetch(url, { cf: { image } });
+    const marked = response.headers.get('cf-resized');
+    const code = /err=(?<code>\d+)/v.exec(marked ?? '')?.groups?.['code'];
+    if (!response.ok || marked === null || code !== undefined) {
+        await response.body?.cancel();
+        throw new TransformationError(
+            code === undefined ? null : Number(code),
+            `Image Transformations made nothing of ${name}: HTTP ${String(response.status)}, cf-resized ${marked ?? 'missing'}`,
+        );
+    }
+    return new Uint8Array(await response.arrayBuffer());
+}
+
+/** The image `source` streams made by the Images binding. */
+export async function throughBinding(
+    images: ImagesBinding,
+    source: ReadableStream,
+    { trim, resize: resized, output }: Transformation,
+): Promise<Uint8Array<ArrayBuffer>> {
+    let transformer = images.input(byteStream(source));
+    if (trim !== null) {
+        transformer = transformer.transform({ trim });
+    }
+    if (resized !== null) {
+        transformer = transformer.transform(resized);
+    }
+    const made = await transformer.output(output);
+    return new Uint8Array(await made.response().arrayBuffer());
 }
 
 /**
@@ -137,18 +142,18 @@ export async function generateDerivative(
  * the request brought its own crop, which has chosen the frame already; one side means it is scaled to that side and
  * never enlarged.
  */
-export function resize({ size: { width, height }, crop }: ImageRequest): ImageTransform {
+export function resize({ size: { width, height }, crop }: ImageRequest): Resize {
     return width !== null && height !== null
         ? { width, height, fit: 'cover', ...(crop === null && { gravity: DEFAULT_FOCUS }) }
         : { ...(width !== null && { width }), ...(height !== null && { height }), fit: 'scale-down' };
 }
 
 /**
- * How the binding encodes a derivative. A thumbnail, which asks for both sides, is one frame whatever the source: an
- * album page of animated GIFs would be a wall of motion, and the binding animates by default. The 2x WebP thumbnail
+ * How a derivative is encoded. A thumbnail, which asks for both sides, is one frame whatever the source: an album page
+ * of animated GIFs would be a wall of motion, and both engines animate by default. The 2x WebP thumbnail
  * alone is encoded softer, for the reasons measured in https://github.com/deanmoses/tacocat-gallery-cloudflare/issues/81.
  */
-export function outputOptions(format: ImageOutputOptions['format'], size: ImageSize): ImageOutputOptions {
+export function outputOptions(format: OutputFormat, size: ImageSize): ImageOutputOptions & { format: OutputFormat } {
     const thumbnail = size.width !== null && size.height !== null;
     const softer =
         format === 'image/webp' && size.width === THUMBNAIL_SIZE_2X.width && size.height === THUMBNAIL_SIZE_2X.height;
@@ -156,31 +161,14 @@ export function outputOptions(format: ImageOutputOptions['format'], size: ImageS
 }
 
 /**
- * The image as a full-size JPEG at a quality that keeps what a viewer would notice, or null when the Images binding
- * cannot decode the file, as it cannot some HEICs.
+ * The format a URL settles: the one its `format` parameter asks for, when it is one a derivative is written in, and
+ * otherwise WebP for a thumbnail, which asks for both sides, since every browser the app supports shows it; null for an
+ * image asked for by one side, the media page's, since its source decides. A JPEG from the binding carries the
+ * original's IPTC and XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is
+ * set to, until `generateDerivative` strips them; its WebP carries nothing.
  */
-export async function asJpeg(env: Pick<Env, 'IMAGES'>, bytes: ArrayBuffer): Promise<ArrayBuffer | null> {
-    try {
-        const output = await env.IMAGES.input(byteStream(new Blob([bytes]).stream())).output({
-            format: 'image/jpeg',
-            quality: 92,
-        });
-        return await output.response().arrayBuffer();
-    } catch (error) {
-        console.warn({ event: 'jpeg_conversion_failed', error: String(error) });
-        return null;
-    }
-}
-
-/**
- * The format a URL settles: the one its `format` parameter asks for, when the binding can write it, and otherwise WebP
- * for a thumbnail, which asks for both sides, since every browser the app supports shows it; null for an image asked
- * for by one side, the media page's, since its source decides. A JPEG from the binding carries the original's IPTC and
- * XMP blocks whole and most of its EXIF, GPS position included, whatever its `metadata` option is set to, until
- * `generateDerivative` strips them; its WebP carries nothing.
- */
-export function outputFormat(requested: string | null, size: ImageSize): ImageOutputOptions['format'] | null {
-    const asked = OUTPUT_FORMATS.find((known) => known === requested);
+export function outputFormat(requested: string | null, size: ImageSize): OutputFormat | null {
+    const asked = Object.keys(OUTPUT_FORMATS).find((known): known is OutputFormat => known === requested);
     if (asked !== undefined) {
         return asked;
     }
@@ -192,7 +180,7 @@ export function outputFormat(requested: string | null, size: ImageSize): ImageOu
  * them, since it keeps a GIF's frames and a PNG's transparency; JPEG for a photo or a video's poster, since readers
  * drag the media page's image into other apps, most of which cannot open a WebP.
  */
-export function formatForSource(contentType: string | undefined): ImageOutputOptions['format'] {
+export function formatForSource(contentType: string | undefined): OutputFormat {
     return contentType !== undefined && WEBP_SOURCES.has(contentType) ? 'image/webp' : 'image/jpeg';
 }
 
@@ -201,7 +189,7 @@ export function formatForSource(contentType: string | undefined): ImageOutputOpt
  * text as the URL so that it is found again only by a URL spelled the same way. One whose source decides its format
  * has none in its name.
  */
-export function derivativeName(request: ImageRequest, format: ImageOutputOptions['format'] | null): string {
+export function derivativeName(request: ImageRequest, format: OutputFormat | null): string {
     const cropped = request.crop === null ? '' : `-${cropText(request.crop)}`;
     const typed = format === null ? '' : `-${format.split('/', 2)[1] ?? ''}`;
     return `${sizeText(request.size)}${cropped}${typed}`;

@@ -1,8 +1,8 @@
 import { parseImageRequest, parseMediaVersion } from '@tacocat-gallery/shared';
 import { pathAfter } from '../http/paths';
 import { failure, notFound } from '../http/responses';
-import { derivationFor } from '../gallery/derivatives';
-import { type Derivation, IMMUTABLE, asJpeg, derivedImage } from '../media/images';
+import { asJpeg, derivationFor, derivedImage } from '../gallery/derivatives';
+import { type Derivation, IMMUTABLE } from '../media/images';
 import { type Steps, timed } from '../util/stages';
 import { extensionForType, isHeicType } from '../media/sniff';
 import { originalKey } from '../storage/keys';
@@ -10,8 +10,8 @@ import { originalKey } from '../storage/keys';
 /**
  * `GET /raw/<media path>/<versionId>`: that version's original, as uploaded. Only Safari can show a HEIC, which the
  * original's stored content type says it is, so one comes back as a full-size JPEG made on the way out, unless
- * `?format=original` asks for the file itself or the Images binding cannot decode it, when the file itself is the
- * best answer there is. The version is the key, so a file that was renamed is still found by an old URL; the path in
+ * `?format=original` asks for the file itself or it cannot be decoded, when the file itself is the best answer there
+ * is. The version is the key, so a file that was renamed is still found by an old URL; the path in
  * the URL is for whoever reads it, and names the download, with the extension the stored type gives it.
  */
 export async function raw(request: Request, env: Env): Promise<Response> {
@@ -29,9 +29,12 @@ export async function raw(request: Request, env: Env): Promise<Response> {
     if (!isHeicType(contentType) || url.searchParams.get('format') === 'original') {
         return file(object.body, contentType, name);
     }
-    const bytes = await object.arrayBuffer();
-    const jpeg = await asJpeg(env, bytes);
-    return jpeg === null ? file(bytes, contentType, name) : file(jpeg, 'image/jpeg', `${wanted.name}.jpg`);
+    const jpeg = await asJpeg(env, { bucket: 'ORIGINALS', key: originalKey(wanted.versionId), contentType });
+    if (jpeg === null) {
+        return file(object.body, contentType, name);
+    }
+    await object.body.cancel();
+    return file(jpeg, 'image/jpeg', `${wanted.name}.jpg`);
 }
 
 /** A file to show inline, named for a download, kept for a year since its URL names one version. */

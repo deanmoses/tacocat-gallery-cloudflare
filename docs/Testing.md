@@ -22,6 +22,7 @@ D1, R2, the Queue and the Images binding are Miniflare's local versions, built f
 
 Fake only what cannot run locally or would reach outside:
 
+- **Image Transformations.** They run only on Cloudflare's edge, so tests run with `IMAGE_MODE=binding` and the local Images binding makes every image. `api/test/integration/image-transformations.test.ts` passes `IMAGE_MODE: 'transformations'` to `call` and stands them in at `fetch`, checking which object the Worker signed a URL for and which `cf.image` options it asked for.
 - **The ffmpeg container.** Code that transcodes takes a narrowed env type (`TranscodeEnv`, `UploadEnv`) whose `TRANSCODER` is anything that answers `fetch`, and a test passes a stand-in.
 - **Third-party HTTP.** `api/test/setup.ts` makes every `fetch` throw unless the test stubs it with `vi.spyOn(globalThis, 'fetch')`, so a forgotten stub fails loudly instead of calling a real service.
 - **A binding failing.** Spy on the binding's method, as in `vi.spyOn(env.ORIGINALS, 'get')`, and pass every other call through to the real one.
