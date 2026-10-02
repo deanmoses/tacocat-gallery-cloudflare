@@ -162,7 +162,7 @@ describe('admin-only endpoints', () => {
         const response = await callAsAdmin('/api/album-rename/2001/12-31/', {
             method: 'POST',
             // As a form or a text/plain fetch sends it: no preflight asks the Worker first.
-            headers: { origin: 'https://other.deanmoses.com', 'content-type': 'text/plain' },
+            headers: { origin: 'https://other.tacocat.com', 'content-type': 'text/plain' },
             body: JSON.stringify({ newName: '01-01' }),
         });
 

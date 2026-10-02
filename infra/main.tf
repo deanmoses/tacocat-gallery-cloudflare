@@ -8,58 +8,6 @@ locals {
   }
 }
 
-resource "cloudflare_zone" "deanmoses" {
-  account = { id = local.account_id }
-  name    = "deanmoses.com"
-}
-
-# Plain HTTP is answered with a redirect and TLS below 1.2 is refused, on every proxied hostname in the zone.
-resource "cloudflare_zone_setting" "deanmoses_always_use_https" {
-  zone_id    = cloudflare_zone.deanmoses.id
-  setting_id = "always_use_https"
-  value      = "on"
-}
-
-resource "cloudflare_zone_setting" "deanmoses_min_tls_version" {
-  zone_id    = cloudflare_zone.deanmoses.id
-  setting_id = "min_tls_version"
-  value      = "1.2"
-}
-
-# The Link headers an album page sends (web/static/_headers) go out as a 103 Early Hints before the page itself, so the
-# browser starts the album JSON request on the first bytes back from the edge.
-resource "cloudflare_zone_setting" "deanmoses_early_hints" {
-  zone_id    = cloudflare_zone.deanmoses.id
-  setting_id = "early_hints"
-  value      = "on"
-}
-
-# Smart Tiered Cache needs both: tiered caching on, and the smart topology that picks upper tiers near the origin.
-resource "cloudflare_argo_tiered_caching" "deanmoses" {
-  zone_id = cloudflare_zone.deanmoses.id
-  value   = "on"
-}
-
-resource "cloudflare_tiered_cache" "deanmoses" {
-  zone_id = cloudflare_zone.deanmoses.id
-  value   = "on"
-}
-
-# The per-category AI policies (training, search, agent: all "block") are not in provider v5.25.0 and were set at
-# zone onboarding; ai_bots_protection is the enforcing rule that is.
-resource "cloudflare_bot_management" "deanmoses" {
-  zone_id                     = cloudflare_zone.deanmoses.id
-  ai_bots_protection          = "block"
-  bot_preference_sync_enabled = true
-  cf_robots_variant           = "policy_only"
-  # Bot Fight Mode would challenge the Globalping probes the latency measurements depend on.
-  fight_mode = false
-  lifecycle {
-    # Provider v5.25.0 does not read these two back, so they would show a diff on every plan.
-    ignore_changes = [bot_preference_sync_enabled, cf_robots_variant]
-  }
-}
-
 # Archive crawlers, the Internet Archive's above all, are not among the AI bots Cloudflare blocks, and a page in an
 # archive is on the public web whatever its noindex says. The category is Cloudflare's list of verified archivers; the
 # user agents catch the Internet Archive's own crawlers when a request is not verified as theirs.
@@ -71,8 +19,7 @@ resource "cloudflare_bot_management" "deanmoses" {
 # up here as a change to revert: block a crawler by adding it to the expression.
 locals {
   archiver_block_hosts = {
-    deanmoses = { zone_id = cloudflare_zone.deanmoses.id, hosts = ["pix.deanmoses.com"] }
-    tacocat   = { zone_id = cloudflare_zone.tacocat.id, hosts = ["pix.tacocat.com", "staging-pix.tacocat.com"] }
+    tacocat = { zone_id = cloudflare_zone.tacocat.id, hosts = ["pix.tacocat.com", "staging-pix.tacocat.com"] }
   }
 }
 
