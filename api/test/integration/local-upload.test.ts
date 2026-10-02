@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { parsePresigned } from '@tacocat-gallery/shared';
+import { type PresignedUpload, parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
-import { inboxKey } from '../../src/storage/keys';
+import { originalKey } from '../../src/storage/keys';
 import { fixtureBytes } from '../gallery';
 import { call, callAsAdmin, parseExactly, putDay, storedItem } from '../helpers';
 import { deliver } from '../pipeline';
@@ -15,10 +15,10 @@ const LOCAL = { UPLOAD_MODE: 'local' } as const;
 const jpg = fixtureBytes(jpgDataUrl);
 
 /** Asks for one upload URL as the app does, under the given bindings. */
-async function presignOne(bindings: Partial<Env>): Promise<{ url: string; versionId: string }> {
+async function presignOne(bindings: Partial<Env>): Promise<PresignedUpload> {
     const response = await callAsAdmin(
         `/api/presigned${DAY}`,
-        { method: 'POST', body: JSON.stringify([{ path: PATH }]) },
+        { method: 'POST', body: JSON.stringify([{ path: PATH, extension: 'jpg' }]) },
         bindings,
     );
     const presigned = (await parseExactly(response, parsePresigned))[PATH];
@@ -59,18 +59,18 @@ describe('local uploads', () => {
         expect(guest.status).toBe(401);
     });
 
-    it('put the file in the inbox and raise the event R2 would, which the pipeline turns into the item', async () => {
+    it('store the file as the original, as the type the PUT came with, and raise the event R2 would, which the pipeline turns into the item', async () => {
         const sent = vi.spyOn(env.UPLOAD_EVENTS, 'send');
-        const { url, versionId } = await presignOne(LOCAL);
-        await callAsAdmin(url, { method: 'PUT', body: jpg, headers: { 'content-type': 'image/jpeg' } }, LOCAL);
-        const object = await env.UPLOADS.get(inboxKey(versionId));
+        const { url, contentType, versionId } = await presignOne(LOCAL);
+        await callAsAdmin(url, { method: 'PUT', body: jpg, headers: { 'content-type': contentType } }, LOCAL);
+        const object = await env.ORIGINALS.head(originalKey(versionId));
 
         expect(object?.httpMetadata?.contentType).toBe('image/jpeg');
         expect(object?.size).toBe(jpg.byteLength);
         expect(sent).toHaveBeenCalledExactlyOnceWith({
             action: 'PutObject',
-            bucket: env.UPLOADS_BUCKET,
-            object: { key: inboxKey(versionId), size: jpg.byteLength, eTag: expect.any(String) },
+            bucket: env.ORIGINALS_BUCKET,
+            object: { key: originalKey(versionId), size: jpg.byteLength, eTag: expect.any(String) },
             eventTime: expect.any(String),
         });
 

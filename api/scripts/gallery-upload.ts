@@ -1,7 +1,7 @@
 // What a script that adds photos to the gallery shares: the writes an admin's browser makes, through the Worker's own
 // routes. An album is made with its words, each file is presigned and PUT to R2 as a browser upload is, so the
-// pipeline sizes it and makes its derived images, and the wait reads the album until it lists every upload. A write
-// the Worker refuses throws with its reason.
+// pipeline sizes it and makes its item, and the wait reads the album until it lists every upload. A write the Worker
+// refuses throws with its reason.
 //
 // The session cookie is signed with the target Worker's SESSION_SECRET, which api/.dev.vars holds for each: as
 // SESSION_SECRET for local, and as SESSION_SECRET_STAGING and SESSION_SECRET_PRODUCTION the values `wrangler secret
@@ -36,7 +36,7 @@ const TEXT = valibot.string();
 const LISTED = valibot.object({
     children: valibot.optional(valibot.array(valibot.object({ itemName: TEXT, versionId: valibot.optional(TEXT) }))),
 });
-const PRESIGNED = valibot.record(TEXT, valibot.object({ url: TEXT, versionId: TEXT }));
+const PRESIGNED = valibot.record(TEXT, valibot.object({ url: TEXT, contentType: TEXT, versionId: TEXT }));
 const ERRORS = valibot.object({ errors: valibot.record(TEXT, TEXT) });
 
 /** The gallery at `target`, written to as `user`, who has to be one of the Worker's users: it records who uploaded. */
@@ -90,21 +90,22 @@ export async function listedVersions(gallery: Gallery, albumPath: string): Promi
 }
 
 /**
- * Sends the file to R2's inbox as the browser does: asks the Worker for a presigned URL under the item's path, as a
- * replacement when `replace` says the album already lists the name, and PUTs the file to it. Returns the version id
- * the item will carry once the Worker has processed the upload.
+ * Sends the file to R2 as the browser does: asks the Worker for a presigned URL under the item's path, for a file of
+ * its extension, as a replacement when `replace` says the album already lists the name, and PUTs the file to it as
+ * the type the URL was signed with. Returns the version id the item will carry once the Worker has processed the
+ * upload.
  */
 export async function upload(
     gallery: Gallery,
     albumPath: string,
     galleryPath: string,
-    file: { body: ArrayBuffer; contentType: string },
+    file: { body: ArrayBuffer; extension: string },
     replace: boolean,
 ): Promise<string> {
     const presigned = await fetch(`${gallery.site}/api/presigned${albumPath}`, {
         method: 'POST',
         headers: { cookie: gallery.cookie, 'content-type': 'application/json' },
-        body: JSON.stringify([replace ? { path: galleryPath, replace: true } : { path: galleryPath }]),
+        body: JSON.stringify([{ path: galleryPath, extension: file.extension, ...(replace && { replace: true }) }]),
     });
     if (!presigned.ok) {
         throw new Error(`presigning ${galleryPath} failed: ${String(presigned.status)} ${await presigned.text()}`);
@@ -120,7 +121,7 @@ export async function upload(
         const put = await fetch(url, {
             method: 'PUT',
             headers: {
-                'content-type': file.contentType,
+                'content-type': target.contentType,
                 ...(url.origin === gallery.site && { cookie: gallery.cookie }),
             },
             body: file.body,

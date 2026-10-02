@@ -1,7 +1,7 @@
 // Every object is keyed by the version id of the upload it came from and by nothing else. A gallery path is the row's
 // business, so a rename of a photo or an album touches no object, and everything a version has is found from its id.
 
-/** A media item's file as it was uploaded, in the originals bucket. */
+/** A media item's file as it was uploaded, in the originals bucket, where the browser's PUT writes it. */
 export function originalKey(versionId: string): string {
     return `originals/${versionId}`;
 }
@@ -33,11 +33,6 @@ export function derivedImageKey(versionId: string, name: string): string {
  */
 export function localUploadUrl(versionId: string): string {
     return `/upload/${versionId}`;
-}
-
-/** Where the browser puts an upload, in the uploads bucket, under the version id minted for it. */
-export function inboxKey(versionId: string): string {
-    return `inbox/${versionId}`;
 }
 
 /**

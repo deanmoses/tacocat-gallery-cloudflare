@@ -1,4 +1,4 @@
-# One environment's data: its database, its buckets and the queue its uploads arrive through. The Worker that binds
+# One environment's data: its database, its buckets and the queue its uploads are announced through. The Worker that binds
 # them is declared per environment in api/wrangler.jsonc.
 
 variable "account_id" {
@@ -31,10 +31,8 @@ resource "cloudflare_d1_database" "this" {
   }
 }
 
-# One bucket per role, because an R2 API token is scoped to whole buckets: the key the Worker signs URLs with writes
-# uploads and derived, and can only read the originals.
-
-# The originals, each under a key that never changes. Written by the Worker's binding alone.
+# The originals, each under a key that never changes. A browser's upload is PUT straight to its key with a URL the
+# Worker signed.
 resource "cloudflare_r2_bucket" "originals" {
   account_id = var.account_id
   name       = "${var.prefix}-originals"
@@ -44,36 +42,11 @@ resource "cloudflare_r2_bucket" "originals" {
   }
 }
 
-# Where a browser's upload lands, under inbox/, until the pipeline has made an original of it and dropped it.
-resource "cloudflare_r2_bucket" "uploads" {
-  account_id = var.account_id
-  name       = "${var.prefix}-uploads"
-  location   = "wnam"
-}
-
-# An upload the pipeline could not finish is kept for a replay, and a week is ample; an upload the browser never
-# completed would otherwise sit as a multipart upload forever.
-resource "cloudflare_r2_bucket_lifecycle" "uploads" {
+# The upload's PUT is a cross-origin request from the site. The one header it sends is the content type the URL was
+# signed with.
+resource "cloudflare_r2_bucket_cors" "originals" {
   account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.uploads.name
-  rules = [{
-    id         = "expire-uploads"
-    enabled    = true
-    conditions = { prefix = "" }
-    delete_objects_transition = {
-      condition = { type = "Age", max_age = 7 * local.day }
-    }
-    abort_multipart_uploads_transition = {
-      condition = { type = "Age", max_age = 7 * local.day }
-    }
-  }]
-}
-
-# The browser PUTs an upload straight to the bucket with a URL the Worker signed, which is a cross-origin request
-# from the site. The one header it sends is the file's own content type.
-resource "cloudflare_r2_bucket_cors" "uploads" {
-  account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.uploads.name
+  bucket_name = cloudflare_r2_bucket.originals.name
   rules = [{
     allowed = {
       origins = [var.site_origin]
@@ -106,12 +79,13 @@ resource "cloudflare_queue" "uploads_dlq" {
   queue_name = "${var.prefix}-uploads-dlq"
 }
 
-resource "cloudflare_r2_bucket_event_notification" "uploads" {
+# Every original written starts the upload pipeline, which leaves alone one no upload was presigned for.
+resource "cloudflare_r2_bucket_event_notification" "originals" {
   account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.uploads.name
+  bucket_name = cloudflare_r2_bucket.originals.name
   queue_id    = cloudflare_queue.uploads.queue_id
   rules = [{
-    prefix = "inbox/"
+    prefix = "originals/"
     # The API returns "" for no suffix; null would show a diff on every plan.
     suffix  = ""
     actions = ["PutObject", "CompleteMultipartUpload", "CopyObject"]
@@ -122,40 +96,26 @@ output "d1_database_id" {
   value = cloudflare_d1_database.this.id
 }
 
-# The S3 key the Worker presigns with: the browser's PUT into uploads, the transcoder's read from uploads and writes
-# into derived, and Image Transformations' read of the image a derivative is made from, which can be an original. It
-# can read the originals but never write or delete one, which only the Worker's binding does, so a leak of it cannot
-# lose a photo. An API token's id is an S3 access key id and the SHA-256 of its value the secret.
+# The S3 key the Worker presigns with: the browser's PUT of an original, the transcoder's read of it and writes into
+# derived, and Image Transformations' read of the image a derivative is made from. An R2 token covers whole buckets,
+# so signing a PUT of one original takes a key that can write and delete them all. An API token's id is an S3 access
+# key id and the SHA-256 of its value the secret.
 data "cloudflare_account_api_token_permission_groups_list" "bucket_item_write" {
   account_id = var.account_id
   name       = "Workers R2 Storage Bucket Item Write"
 }
 
-data "cloudflare_account_api_token_permission_groups_list" "bucket_item_read" {
-  account_id = var.account_id
-  name       = "Workers R2 Storage Bucket Item Read"
-}
-
 resource "cloudflare_account_token" "signing" {
   account_id = var.account_id
   name       = "${var.prefix} signing"
-  policies = [
-    {
-      effect            = "allow"
-      permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_write.result[0].id }]
-      resources = jsonencode({
-        for bucket in [cloudflare_r2_bucket.uploads.name, cloudflare_r2_bucket.derived.name] :
-        "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${bucket}" => "*"
-      })
-    },
-    {
-      effect            = "allow"
-      permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_read.result[0].id }]
-      resources = jsonencode({
-        "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${cloudflare_r2_bucket.originals.name}" = "*"
-      })
-    },
-  ]
+  policies = [{
+    effect            = "allow"
+    permission_groups = [{ id = data.cloudflare_account_api_token_permission_groups_list.bucket_item_write.result[0].id }]
+    resources = jsonencode({
+      for bucket in [cloudflare_r2_bucket.originals.name, cloudflare_r2_bucket.derived.name] :
+      "com.cloudflare.edge.r2.bucket.${var.account_id}_default_${bucket}" => "*"
+    })
+  }]
 }
 
 output "signing_credentials" {

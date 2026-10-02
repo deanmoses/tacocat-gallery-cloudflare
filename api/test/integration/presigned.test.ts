@@ -3,7 +3,7 @@ import { asc } from 'drizzle-orm';
 import { parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orm, schema } from '../../src/db';
-import { inboxKey } from '../../src/storage/keys';
+import { originalKey } from '../../src/storage/keys';
 import { IMAGE } from '../gallery';
 import { call, callAsAdmin, errorMessage, parseExactly, putDay, putItem, storedItem } from '../helpers';
 
@@ -20,7 +20,7 @@ describe('asking for upload URLs', () => {
     });
 
     it('needs an admin', async () => {
-        const response = await presign(DAY, [{ path: `${DAY}new` }], false);
+        const response = await presign(DAY, [{ path: `${DAY}new`, extension: 'jpg' }], false);
         await response.body?.cancel();
 
         expect(response.status).toBe(401);
@@ -30,69 +30,95 @@ describe('asking for upload URLs', () => {
         {
             what: 'a year album',
             albumPath: '/2024/',
-            body: [{ path: '/2024/new' }],
+            body: [{ path: '/2024/new', extension: 'jpg' }],
             message: 'Invalid day album path',
         },
         {
             what: 'an album that is not there',
             albumPath: '/2024/12-25/',
-            body: [{ path: '/2024/12-25/new' }],
+            body: [{ path: '/2024/12-25/new', extension: 'jpg' }],
             message: 'Album does not exist',
         },
         { what: 'nothing to upload', albumPath: DAY, body: [], message: 'No media to upload' },
-        { what: 'a body that is not a list', albumPath: DAY, body: { path: `${DAY}new` }, message: 'Invalid type' },
+        {
+            what: 'a body that is not a list',
+            albumPath: DAY,
+            body: { path: `${DAY}new`, extension: 'jpg' },
+            message: 'Invalid type',
+        },
         {
             what: 'a path in another album',
             albumPath: DAY,
-            body: [{ path: '/2024/06-16/new' }],
+            body: [{ path: '/2024/06-16/new', extension: 'jpg' }],
             message: 'not in album',
         },
         {
             what: 'a name with an extension',
             albumPath: DAY,
-            body: [{ path: `${DAY}felix.jpg` }],
+            body: [{ path: `${DAY}felix.jpg`, extension: 'jpg' }],
             message: 'Invalid media path',
         },
         {
             what: 'a name the sanitizer would have lowercased',
             albumPath: DAY,
-            body: [{ path: `${DAY}IMG_0001` }],
+            body: [{ path: `${DAY}IMG_0001`, extension: 'jpg' }],
             message: 'Invalid media path',
         },
         {
             what: 'a name with a hyphen',
             albumPath: DAY,
-            body: [{ path: `${DAY}my-photo` }],
+            body: [{ path: `${DAY}my-photo`, extension: 'jpg' }],
             message: 'Invalid media path',
         },
         {
             what: 'the same path twice',
             albumPath: DAY,
-            body: [{ path: `${DAY}new` }, { path: `${DAY}new` }],
+            body: [
+                { path: `${DAY}new`, extension: 'jpg' },
+                { path: `${DAY}new`, extension: 'jpg' },
+            ],
             message: 'Duplicate media path',
         },
         {
             what: 'a name an item already has',
             albumPath: DAY,
-            body: [{ path: `${DAY}existing` }],
+            body: [{ path: `${DAY}existing`, extension: 'jpg' }],
             message: 'already exists',
+        },
+        {
+            what: 'a file with no extension given',
+            albumPath: DAY,
+            body: [{ path: `${DAY}new` }],
+            message: 'Invalid key',
+        },
+        {
+            what: 'a file of a type the gallery does not take',
+            albumPath: DAY,
+            body: [{ path: `${DAY}new`, extension: 'pdf' }],
+            message: 'a type the gallery does not take: [pdf]',
+        },
+        {
+            what: 'an extension in capitals, which the app lowercases',
+            albumPath: DAY,
+            body: [{ path: `${DAY}new`, extension: 'JPG' }],
+            message: 'a type the gallery does not take: [JPG]',
         },
         {
             what: 'a replacement of nothing',
             albumPath: DAY,
-            body: [{ path: `${DAY}nothing`, replace: true }],
+            body: [{ path: `${DAY}nothing`, extension: 'jpg', replace: true }],
             message: 'Media not found',
         },
         {
             what: 'a replacement in another album',
             albumPath: DAY,
-            body: [{ path: '/2024/06-16/new', replace: true }],
+            body: [{ path: '/2024/06-16/new', extension: 'jpg', replace: true }],
             message: 'not in album',
         },
         {
             what: 'a replacement that says so with something other than a boolean',
             albumPath: DAY,
-            body: [{ path: `${DAY}existing`, replace: 'yes' }],
+            body: [{ path: `${DAY}existing`, extension: 'jpg', replace: 'yes' }],
             message: 'Invalid type',
         },
     ])('refuses $what, issuing nothing', async ({ albumPath, body, message }) => {
@@ -104,8 +130,11 @@ describe('asking for upload URLs', () => {
         expect(rows).toStrictEqual([]);
     });
 
-    it('issues a URL and a fresh version id per path, and records what each upload is for and who asked', async () => {
-        const response = await presign(DAY, [{ path: `${DAY}new` }, { path: `${DAY}existing`, replace: true }]);
+    it("issues a URL to the original's own key and a fresh version id per path, and records what each upload is for and who asked", async () => {
+        const response = await presign(DAY, [
+            { path: `${DAY}new`, extension: 'jpg' },
+            { path: `${DAY}existing`, extension: 'mov', replace: true },
+        ]);
         const uploads = await parseExactly(response, parsePresigned);
         const [day, existing] = await Promise.all([storedItem('/2024/', '06-15'), storedItem(DAY, 'existing')]);
         const rows = await orm(env.DB).select().from(schema.upload).orderBy(asc(schema.upload.itemName)).all();
@@ -117,14 +146,20 @@ describe('asking for upload URLs', () => {
         expect(response.status).toBe(200);
         expect(Object.keys(uploads)).toStrictEqual([`${DAY}new`, `${DAY}existing`]);
         expect(signed.map((url) => url.pathname)).toStrictEqual(
-            [newUpload, replacement].map((upload) => `/${env.UPLOADS_BUCKET}/${inboxKey(upload?.versionId ?? '')}`),
+            [newUpload, replacement].map(
+                (upload) => `/${env.ORIGINALS_BUCKET}/${originalKey(upload?.versionId ?? '')}`,
+            ),
         );
         expect(signed.map((url) => url.searchParams.get('X-Amz-Signature'))).toStrictEqual([
             expect.stringMatching(/^[\da-f]{64}$/v),
             expect.stringMatching(/^[\da-f]{64}$/v),
         ]);
-        // The browser sends the file's own content type, which is not part of what was signed.
-        expect(signed.map((url) => url.searchParams.get('X-Amz-SignedHeaders'))).toStrictEqual(['host', 'host']);
+        // The type the extension gives is signed, so the PUT has to carry it and the original is stored as it.
+        expect([newUpload?.contentType, replacement?.contentType]).toStrictEqual(['image/jpeg', 'video/quicktime']);
+        expect(signed.map((url) => url.searchParams.get('X-Amz-SignedHeaders'))).toStrictEqual([
+            'content-type;host',
+            'content-type;host',
+        ]);
         expect(newUpload?.versionId).not.toBe(replacement?.versionId);
         expect(rows).toStrictEqual([
             expect.objectContaining({
@@ -155,7 +190,7 @@ describe('asking for upload URLs', () => {
         const paths = Array.from({ length: 60 }, (_, index) => `${DAY}photo_${index}`);
         const response = await presign(
             DAY,
-            paths.map((path) => ({ path })),
+            paths.map((path) => ({ path, extension: 'jpg' })),
         );
         const uploads = await parseExactly(response, parsePresigned);
         const rows = await orm(env.DB).select().from(schema.upload).all();
@@ -165,7 +200,7 @@ describe('asking for upload URLs', () => {
     });
 
     it("takes a replacement under the item's own path, whatever file is coming", async () => {
-        const response = await presign(DAY, [{ path: `${DAY}existing`, replace: true }]);
+        const response = await presign(DAY, [{ path: `${DAY}existing`, extension: 'jpg', replace: true }]);
         const uploads = await parseExactly(response, parsePresigned);
 
         expect(Object.keys(uploads)).toStrictEqual([`${DAY}existing`]);

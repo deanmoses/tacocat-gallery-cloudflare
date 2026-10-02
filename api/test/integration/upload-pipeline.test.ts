@@ -14,9 +14,9 @@ import { eq } from 'drizzle-orm';
 import { imageUrl, parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
-import { CALL_LIMIT_MS } from '../../src/gallery/derivatives';
+import { WARM_LIMIT_MS } from '../../src/gallery/derivatives';
 import { UNSTARTED_ERROR } from '../../src/gallery/pipeline';
-import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
+import { derivedPrefix, originalKey, posterKey, videoKey } from '../../src/storage/keys';
 import { READ_STALL_MS } from '../../src/storage/read';
 import { fixtureBytes } from '../gallery';
 import { albumAsAdmin, call, callAsAdmin, handler, putDay, putItem, storedItem, uploadErrors, write } from '../helpers';
@@ -33,7 +33,7 @@ const png = fixtureBytes(pngDataUrl);
 // Two frames, 32 by 24.
 const gif = fixtureBytes(gifDataUrl);
 
-// A QuickTime movie's first box, which is all the sniffer reads and all the stand-in transcoder needs.
+// A QuickTime movie's first box, which is all the stand-in transcoder needs.
 const mov = Uint8Array.from([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 0, 0]);
 
 const DAY = '/2024/06-15/';
@@ -41,16 +41,17 @@ const IMAGE = { itemType: 'media', mediaType: 'image', width: 300, height: 225 }
 
 interface Staged {
     replace?: boolean;
-    contentType?: string;
+    /** The extension of the file's name, which decides the type it is stored as. */
+    extension?: string;
 }
 
 /**
- * Asks for an upload URL as the app does and puts the file in the inbox as the browser would, returning the version
- * id the upload was minted, ready for its event to be delivered.
+ * Asks for an upload URL as the app does and puts the file where the browser's PUT would, as the type the URL was
+ * signed with, returning the version id the upload was minted, ready for its event to be delivered.
  */
-async function stage(path: string, file: Uint8Array, { replace, contentType }: Staged = {}): Promise<string> {
+async function stage(path: string, file: Uint8Array, { replace, extension = 'jpg' }: Staged = {}): Promise<string> {
     const response = await write('POST', `/api/presigned${DAY}`, [
-        { path, ...(replace === undefined ? {} : { replace }) },
+        { path, extension, ...(replace === undefined ? {} : { replace }) },
     ]);
     if (!response.ok) {
         throw new Error(`presign refused: ${await response.text()}`);
@@ -59,8 +60,8 @@ async function stage(path: string, file: Uint8Array, { replace, contentType }: S
     if (presigned === undefined) {
         throw new Error(`nothing presigned for ${path}`);
     }
-    await env.UPLOADS.put(inboxKey(presigned.versionId), file, {
-        httpMetadata: { contentType: contentType ?? 'image/jpeg' },
+    await env.ORIGINALS.put(originalKey(presigned.versionId), file, {
+        httpMetadata: { contentType: presigned.contentType },
     });
     return presigned.versionId;
 }
@@ -91,21 +92,6 @@ async function transcoding(): Promise<Response> {
     return Response.json(TRANSCODED);
 }
 
-/**
- * Stands the Images binding in with one that answers every transformation with the JPEG fixture. Miniflare's local
- * binding has no HEIF decoder, where the real one decodes an 8-bit HEIC, so a HEIC's derivatives cannot be made here.
- */
-function decodingAnyImage(): void {
-    const result = {
-        response: () => new Response(jpg, { headers: { 'content-type': 'image/jpeg' } }),
-    } as ImageTransformationResult;
-    const transformer = {
-        transform: (): ImageTransformer => transformer,
-        output: async (): Promise<ImageTransformationResult> => result,
-    } as unknown as ImageTransformer;
-    vi.spyOn(env.IMAGES, 'input').mockReturnValue(transformer);
-}
-
 /** A promise nothing ever settles, as a call that hangs returns. */
 async function never<T>(): Promise<T> {
     return Promise.withResolvers<T>().promise;
@@ -114,13 +100,13 @@ async function never<T>(): Promise<T> {
 const STALLED_AFTER = 1024;
 
 /**
- * Has the pipeline's first `times` reads of an inbox object stall, of its head or of the whole object, and every later
- * one go through: before the object's body starts, or partway through it, once its first kilobyte has arrived.
+ * Has the first `times` reads of an original stall, of its start or of the whole object, and every later one go
+ * through: before the object's body starts, or partway through it, once its first kilobyte has arrived.
  */
-function stallingInboxReads(times: number, where: 'before its body' | 'partway through', of = 'its head'): void {
-    const get = env.UPLOADS.get.bind(env.UPLOADS);
+function stallingReads(times: number, where: 'before its body' | 'partway through', of = 'its start'): void {
+    const get = env.ORIGINALS.get.bind(env.ORIGINALS);
     let stalled = 0;
-    vi.spyOn(env.UPLOADS, 'get').mockImplementation(async (key: string, options?: R2GetOptions) => {
+    vi.spyOn(env.ORIGINALS, 'get').mockImplementation(async (key: string, options?: R2GetOptions) => {
         const whole = options?.range === undefined;
         if (stalled === times || whole !== (of === 'the whole file')) {
             return get(key, options);
@@ -143,29 +129,14 @@ function stallingInboxReads(times: number, where: 'before its body' | 'partway t
     });
 }
 
-/** Has the first transformation, the thumbnail's, hang, and every later one go through to the local binding. */
-function stallingTheFirstTransformation(): void {
-    const stuck = {
-        transform: (): ImageTransformer => stuck,
-        output: never,
-    } as unknown as ImageTransformer;
-    const input = env.IMAGES.input.bind(env.IMAGES);
-    vi.spyOn(env.IMAGES, 'input').mockReturnValueOnce(stuck).mockImplementation(input);
-}
-
 /**
- * Has each call's limit run out after a second, and a read's wait for its next byte after a fifth of one, three of
- * which still fit in a call's limit, by shortening every timer of exactly those lengths; the pipeline runs in this
- * isolate, so it sees the spy. Both are still far more than any local call takes.
+ * Has a read's wait for its next byte run out after a fifth of a second, by shortening every timer of exactly that
+ * length; the pipeline runs in this isolate, so it sees the spy. It is still far more than any local read takes.
  */
-function shorteningCallLimits(): void {
+function shorteningReadStalls(): void {
     const wait = setTimeout;
-    const shortened = new Map([
-        [CALL_LIMIT_MS, 1000],
-        [READ_STALL_MS, 200],
-    ]);
     vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: () => void, ms?: number) =>
-        wait(callback, shortened.get(ms ?? 0) ?? ms),
+        wait(callback, ms === READ_STALL_MS ? 200 : ms),
     );
 }
 
@@ -182,11 +153,11 @@ function paddedJpeg(jpeg: Uint8Array, count: number): Uint8Array {
     return padded;
 }
 
-/** The stages the first attempt at the photo step logged, by name. */
+/** The stages the first attempt at reading the photo logged, by name. */
 function photoStages(logged: unknown[][], versionId: string): string[] {
     const line = logged
         .map(([entry]) => entry as Record<string, unknown>)
-        .find((entry) => entry['event'] === 'upload_stages' && entry['versionId'] === versionId && 'sniff' in entry);
+        .find((entry) => entry['event'] === 'upload_stages' && entry['versionId'] === versionId && 'head' in entry);
     return Object.keys(line ?? {});
 }
 
@@ -241,11 +212,11 @@ async function mediaNames(): Promise<{ itemName: string }[]> {
 describe('upload pipeline', () => {
     beforeEach(async () => putDay(DAY));
 
-    it('moves an inbox upload to its version key, labelled with its path, and records its IPTC caption and keywords', async () => {
+    it('makes an item of an original put under its version key, with its IPTC caption and keywords, and leaves the original as it is', async () => {
         const versionId = await stage(`${DAY}full_metadata`, jpg);
+        const writes = vi.spyOn(env.ORIGINALS, 'put');
         const acks = await deliver(versionId);
-        const [inbox, item, originals, original, row] = await Promise.all([
-            env.UPLOADS.head(inboxKey(versionId)),
+        const [item, originals, original, row] = await Promise.all([
             storedItem(DAY, 'full_metadata'),
             env.ORIGINALS.list({ prefix: 'originals/' }),
             env.ORIGINALS.head(originalKey(versionId)),
@@ -253,7 +224,6 @@ describe('upload pipeline', () => {
         ]);
 
         expect(acks).toStrictEqual(['1']);
-        expect(inbox).toBeNull();
         expect(item).toMatchObject({
             itemType: 'media',
             mediaType: 'image',
@@ -267,76 +237,62 @@ describe('upload pipeline', () => {
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([originalKey(versionId)]);
         expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
-        expect(original?.customMetadata).toStrictEqual({ path: `${DAY}full_metadata` });
+        expect(writes).not.toHaveBeenCalled();
         expect(row?.completedAt).not.toBeNull();
     });
 
-    it('takes what kind of file it is from its bytes, whatever its name and the type the browser sent', async () => {
-        standInTranscoder(async () => {
-            throw new Error('a photo has no business here');
-        });
-        const versionId = await upload(`${DAY}clip`, jpg, { contentType: 'application/octet-stream' });
-        const [item, original] = await Promise.all([
-            storedItem(DAY, 'clip'),
-            env.ORIGINALS.head(originalKey(versionId)),
-        ]);
+    it('takes what kind of file it is from the type it was stored as, whatever its bytes are', async () => {
+        standInTranscoder(transcoding);
+        const versionId = await upload(`${DAY}clip`, jpg, { extension: 'mov' });
 
-        expect(item).toMatchObject({ mediaType: 'image', width: 300, height: 225, versionId });
-        expect(original?.httpMetadata?.contentType).toBe('image/jpeg');
+        await expect(storedItem(DAY, 'clip')).resolves.toMatchObject({
+            mediaType: 'video',
+            width: 1080,
+            height: 1920,
+            versionId,
+        });
     });
 
-    it('makes both thumbnails and the detail image before anyone asks, so the first reader is served what is stored', async () => {
+    it('makes the detail image before anyone asks, and leaves the thumbnails to their first reader', async () => {
         const versionId = await upload(`${DAY}full_metadata`, jpg);
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
-        const thumbnail = await call(
-            imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 200, height: 200 }, crop: null }),
-        );
-        const thumbnail2x = await call(
-            imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 400, height: 400 }, crop: null }),
-        );
         const detail = await call(
             imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 300, height: null }, crop: null }),
         );
-        await Promise.all([thumbnail.body?.cancel(), thumbnail2x.body?.cancel(), detail.body?.cancel()]);
+        const thumbnail = await call(
+            imageUrl({ path: `${DAY}full_metadata`, versionId, size: { width: 200, height: 200 }, crop: null }),
+        );
+        await Promise.all([thumbnail.body?.cancel(), detail.body?.cancel()]);
 
         // The JPEG is 300 by 225, so its detail image is its own width.
-        expect(stored.objects.map((object) => object.key).toSorted()).toStrictEqual([
-            `${derivedPrefix(versionId)}/200x200-webp`,
-            `${derivedPrefix(versionId)}/300`,
-            `${derivedPrefix(versionId)}/400x400-webp`,
-        ]);
-        expect(thumbnail.headers.get('x-derived')).toBe('stored');
-        expect(thumbnail2x.headers.get('x-derived')).toBe('stored');
+        expect(stored.objects.map((object) => object.key)).toStrictEqual([`${derivedPrefix(versionId)}/300`]);
         expect(detail.headers.get('x-derived')).toBe('stored');
+        expect(thumbnail.headers.get('x-derived')).toBe('generated');
     });
 
-    it('makes the detail image of a GIF a WebP, from what its bytes are rather than the type the browser sent', async () => {
-        const versionId = await upload(`${DAY}animated`, gif, { contentType: 'image/jpeg' });
+    it('makes the detail image of a GIF a WebP', async () => {
+        const versionId = await upload(`${DAY}animated`, gif, { extension: 'gif' });
         const detail = await env.DERIVED.head(`${derivedPrefix(versionId)}/32`);
 
         expect(detail?.httpMetadata?.contentType).toBe('image/webp');
     });
 
-    it('makes the three images at once, from the upload rather than the original', async () => {
-        const versionId = await stage(`${DAY}full_metadata`, jpg);
-        const originalReads = vi.spyOn(env.ORIGINALS, 'get');
-        // Each derivative's write waits until all three are being written, which only images made at once can reach.
-        const waiting: (() => void)[] = [];
-        const put = env.DERIVED.put.bind(env.DERIVED);
-        vi.spyOn(env.DERIVED, 'put').mockImplementation(async (key, value, options) => {
-            await new Promise<void>((resolve) => {
-                waiting.push(resolve);
-                if (waiting.length === 3) {
-                    for (const release of waiting) release();
-                }
+    it("makes a video's detail image from the poster its transcoder wrote", async () => {
+        standInTranscoder(async (init) => {
+            const job = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as { posterPut: string };
+            await env.DERIVED.put(new URL(job.posterPut).pathname.replace(`/${env.DERIVED_BUCKET}/`, ''), jpg, {
+                httpMetadata: { contentType: 'image/jpeg' },
             });
-            return put(key, value, options);
+            return transcoding();
         });
-        await deliver(versionId);
+        const versionId = await upload(`${DAY}clip`, mov, { extension: 'mov' });
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(versionId)}/` });
 
-        expect(stored.objects).toHaveLength(3);
-        expect(originalReads).not.toHaveBeenCalled();
+        // The clip is 1080 by 1920, so its detail image is 1024 tall.
+        expect(stored.objects.map((object) => object.key).toSorted()).toStrictEqual([
+            posterKey(versionId),
+            `${derivedPrefix(versionId)}/x1024`,
+        ]);
     });
 
     it('logs how long the upload event took to arrive', async () => {
@@ -351,133 +307,71 @@ describe('upload pipeline', () => {
     });
 
     it.each([
-        { name: 'not an image', error: 'IMAGES_TRANSFORM_ERROR 9412: Unsupported image type' },
-        { name: 'too many pixels', error: 'IMAGES_TRANSFORM_ERROR 9413: Image exceeds the maximum image area' },
-        { name: 'in no format it takes', error: 'IMAGES_TRANSFORM_ERROR 9520: Unsupported image format' },
+        { name: 'the file cannot be decoded', error: 'IMAGES_TRANSFORM_ERROR 9412: Unsupported image type' },
+        { name: 'the service is busy', error: 'IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy' },
     ])(
-        'records a HEIC the Images binding says is $name as an upload error, not an item or an original',
+        'writes the item though its detail image could not be made because $name, trying once and telling only the log',
         async ({ error }) => {
-            vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
+            const warned = vi.spyOn(console, 'warn');
+            const tried = vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
                 throw new Error(error);
             });
-            const versionId = await upload(`${DAY}tenbit`, heic, { contentType: 'image/heic' });
-            const [item, inbox, originals, errors, row] = await Promise.all([
+            const versionId = await upload(`${DAY}tenbit`, heic, { extension: 'heic' });
+            const [item, errors, row] = await Promise.all([
                 storedItem(DAY, 'tenbit'),
-                env.UPLOADS.head(inboxKey(versionId)),
-                env.ORIGINALS.list(),
                 uploadErrors([`${DAY}tenbit`]),
                 uploadRow(versionId),
             ]);
 
-            expect(item).toBeUndefined();
-            expect(inbox).toBeNull();
-            expect(originals.objects).toStrictEqual([]);
-            expect(errors[`${DAY}tenbit`]).toBe(`the image cannot be decoded: ${error}`);
-            expect(row?.completedAt).toBeNull();
-        },
-    );
-
-    it.each([
-        { name: 'an internal error', error: 'IMAGES_TRANSFORM_ERROR 9527: Could not resize the image: internal error' },
-        { name: 'a busy colo', error: 'IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy' },
-        { name: 'a lost connection', error: 'IMAGES_TRANSFORM_ERROR 9502: Images binding connection error' },
-        { name: 'the internal error a sips HEIC gets', error: 'IMAGES_TRANSFORM_ERROR 9516: Internal error' },
-    ])(
-        'retries the step when the Images binding fails with $name, which is no fault of the file',
-        async ({ error }) => {
-            const input = env.IMAGES.input.bind(env.IMAGES);
-            vi.spyOn(env.IMAGES, 'input')
-                .mockImplementationOnce(() => {
-                    throw new Error(error);
-                })
-                .mockImplementation(input);
-            const versionId = await stage(`${DAY}busy`, jpg);
-            await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
-            const [item, errors] = await Promise.all([storedItem(DAY, 'busy'), uploadErrors([`${DAY}busy`])]);
-
-            expect(item?.versionId).toBe(versionId);
+            expect(item).toMatchObject({ versionId, width: 4032, height: 3024 });
             expect(errors).toStrictEqual({});
+            expect(row?.completedAt).not.toBeNull();
+            expect(tried).toHaveBeenCalledExactlyOnceWith(expect.anything());
+            expect(warned).toHaveBeenCalledWith({
+                event: 'detail_not_warmed',
+                path: `${DAY}tenbit`,
+                versionId,
+                error: `Error: ${error}`,
+            });
         },
     );
 
-    it('copies the original once, though a derivative failed and its step was retried', async () => {
-        const input = env.IMAGES.input.bind(env.IMAGES);
-        vi.spyOn(env.IMAGES, 'input')
-            .mockImplementationOnce(() => {
-                throw new Error('IMAGES_TRANSFORM_ERROR 9522: The service in this colo is too busy');
-            })
-            .mockImplementation(input);
-        const copies = vi.spyOn(env.ORIGINALS, 'put');
-        const versionId = await stage(`${DAY}busy`, jpg);
-        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
-
-        expect(copies).toHaveBeenCalledExactlyOnceWith(
-            originalKey(versionId),
-            expect.anything(),
-            expect.objectContaining({ customMetadata: { path: `${DAY}busy` } }),
-        );
-        await expect(storedItem(DAY, 'busy')).resolves.toMatchObject({ versionId });
-    });
-
-    it('writes the original once when its step is retried after the copy landed, since originals are never rewritten', async () => {
-        const put = env.ORIGINALS.put.bind(env.ORIGINALS);
-        const copies = vi.spyOn(env.ORIGINALS, 'put').mockImplementationOnce(async (key, value, options) => {
-            await put(key, value, options);
-            throw new Error('the step result was lost');
-        });
-        const versionId = await stage(`${DAY}retried`, jpg);
-        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
-        const [item, original] = await Promise.all([
-            storedItem(DAY, 'retried'),
-            env.ORIGINALS.head(originalKey(versionId)),
-        ]);
-
-        expect(copies).toHaveBeenCalledExactlyOnceWith(
-            originalKey(versionId),
-            expect.anything(),
-            expect.objectContaining({ customMetadata: { path: `${DAY}retried` } }),
-        );
-        expect(item?.versionId).toBe(versionId);
-        expect(original?.size).toBe(jpg.byteLength);
-    });
-
-    it('gives up on a thumbnail that never answers, says so, and finishes on the retry', async () => {
+    it('writes the item and ends complete though making its detail image never answers', async () => {
         const warned = vi.spyOn(console, 'warn');
-        stallingTheFirstTransformation();
-        shorteningCallLimits();
-        const versionId = await stage(`${DAY}stuck`, jpg);
-        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
-        const [item, errors] = await Promise.all([storedItem(DAY, 'stuck'), uploadErrors([`${DAY}stuck`])]);
-
-        expect(warned).toHaveBeenCalledWith(
-            expect.objectContaining({
-                event: 'upload_stages',
-                versionId,
-                attempt: 1,
-                outcome: 'threw',
-                error: 'Error: thumbnail did not finish within 60 s',
-            }),
+        const stuck = { transform: (): ImageTransformer => stuck, output: never } as unknown as ImageTransformer;
+        vi.spyOn(env.IMAGES, 'input').mockReturnValue(stuck);
+        const wait = setTimeout;
+        vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: () => void, ms?: number) =>
+            wait(callback, ms === WARM_LIMIT_MS ? 200 : ms),
         );
-        expect(item?.versionId).toBe(versionId);
-        expect(errors).toStrictEqual({});
+        const versionId = await upload(`${DAY}stuck`, jpg);
+
+        await expect(storedItem(DAY, 'stuck')).resolves.toMatchObject({ versionId });
+        await expect(uploadErrors([`${DAY}stuck`])).resolves.toStrictEqual({});
+        expect(warned).toHaveBeenCalledWith({
+            event: 'detail_not_warmed',
+            path: `${DAY}stuck`,
+            versionId,
+            error: 'Error: detail did not finish within 60 s',
+        });
     });
 
     it.each([
-        { where: 'before its body' as const, of: 'its head', bytes: 0 },
-        { where: 'partway through' as const, of: 'its head', bytes: STALLED_AFTER },
+        { where: 'before its body' as const, of: 'its start', bytes: 0 },
+        { where: 'partway through' as const, of: 'its start', bytes: STALLED_AFTER },
         { where: 'before its body' as const, of: 'the whole file', bytes: 0 },
         { where: 'partway through' as const, of: 'the whole file', bytes: STALLED_AFTER },
     ])('reads again at once when a read of $of stalls $where, saying how far it got', async ({ where, of, bytes }) => {
         const warned = vi.spyOn(console, 'warn');
-        stallingInboxReads(1, where, of);
-        shorteningCallLimits();
-        // Read whole for its facts, since its metadata runs past the head.
+        stallingReads(1, where, of);
+        shorteningReadStalls();
+        // Read whole for its facts, since its metadata runs past its start.
         const versionId = await stage(`${DAY}stalled`, paddedJpeg(jpg, 5));
         await deliver(versionId);
         const item = await storedItem(DAY, 'stalled');
 
         expect(warned).toHaveBeenCalledWith(
-            expect.objectContaining({ event: 'read_stalled', key: inboxKey(versionId), tried: 1, bytes }),
+            expect.objectContaining({ event: 'read_stalled', key: originalKey(versionId), tried: 1, bytes }),
         );
         expect(warned.mock.calls.filter(([logged]) => isFailedAttempt(logged, versionId))).toStrictEqual([]);
         expect(item).toMatchObject({ title: 'My Image Title', tags: JPG_TAGS, versionId });
@@ -485,8 +379,8 @@ describe('upload pipeline', () => {
 
     it('fails the attempt on a read that ends short, rather than taking part of the file, and finishes on the retry', async () => {
         const warned = vi.spyOn(console, 'warn');
-        const get = env.UPLOADS.get.bind(env.UPLOADS);
-        vi.spyOn(env.UPLOADS, 'get').mockImplementationOnce(async (key: string, options?: R2GetOptions) => {
+        const get = env.ORIGINALS.get.bind(env.ORIGINALS);
+        vi.spyOn(env.ORIGINALS, 'get').mockImplementationOnce(async (key: string, options?: R2GetOptions) => {
             const object = await get(key, options);
             if (object === null) {
                 return null;
@@ -504,7 +398,7 @@ describe('upload pipeline', () => {
                 versionId,
                 attempt: 1,
                 outcome: 'threw',
-                error: `Error: reading ${inboxKey(versionId)} ended after ${String(STALLED_AFTER)} of ${String(jpg.length)} bytes`,
+                error: `Error: reading ${originalKey(versionId)} ended after ${String(STALLED_AFTER)} of ${String(jpg.length)} bytes`,
             }),
         );
         expect(item).toMatchObject({ title: 'My Image Title', versionId });
@@ -512,8 +406,8 @@ describe('upload pipeline', () => {
 
     it('gives up on a read that stalls three times, and finishes when the step is retried', async () => {
         const warned = vi.spyOn(console, 'warn');
-        stallingInboxReads(3, 'partway through');
-        shorteningCallLimits();
+        stallingReads(3, 'partway through');
+        shorteningReadStalls();
         const versionId = await stage(`${DAY}stalled`, jpg);
         await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
         const item = await storedItem(DAY, 'stalled');
@@ -524,7 +418,7 @@ describe('upload pipeline', () => {
                 versionId,
                 attempt: 1,
                 outcome: 'threw',
-                error: `Error: reading ${inboxKey(versionId)} stalled 3 times`,
+                error: `Error: reading ${originalKey(versionId)} stalled 3 times`,
             }),
         );
         expect(item?.versionId).toBe(versionId);
@@ -533,7 +427,7 @@ describe('upload pipeline', () => {
     it('reads a JPEG whose metadata fits in its first 256 KB no further than that, and any other photo whole', async () => {
         const logged = vi.spyOn(console, 'info');
         const jpeg = await upload(`${DAY}full_metadata`, jpg);
-        const other = await upload(`${DAY}png`, png, { contentType: 'image/png' });
+        const other = await upload(`${DAY}png`, png, { extension: 'png' });
 
         expect(photoStages(logged.mock.calls, jpeg)).not.toContain('read');
         expect(photoStages(logged.mock.calls, other)).toContain('read');
@@ -548,39 +442,35 @@ describe('upload pipeline', () => {
         expect(item).toMatchObject({ title: 'My Image Title', tags: JPG_TAGS, width: 300, height: 225 });
     });
 
-    it('logs how long each stage of the photo took, a line for each step', async () => {
+    it('logs how long each stage of reading the photo took', async () => {
         const logged = vi.spyOn(console, 'info');
         const versionId = await upload(`${DAY}full_metadata`, jpg);
-        const timings = (names: string[]): Record<string, number> =>
-            Object.fromEntries(names.map((name) => [name, expect.any(Number) as number]));
-        const step = { event: 'upload_stages', path: `${DAY}full_metadata`, versionId, attempt: 1, outcome: 'ready' };
 
         expect(logged).toHaveBeenCalledWith({
-            ...step,
-            ...timings(['sniff', 'exif', 'thumbnail', 'thumbnail2x', 'detail']),
+            event: 'upload_stages',
+            path: `${DAY}full_metadata`,
+            versionId,
+            attempt: 1,
+            outcome: 'ready',
+            head: expect.any(Number) as number,
+            start: expect.any(Number) as number,
+            exif: expect.any(Number) as number,
         });
-        expect(logged).toHaveBeenCalledWith({ ...step, ...timings(['original']) });
     });
 
-    it('tries the photo six times while the Images binding keeps failing, then tells the admin why', async () => {
+    it('tries the photo six times while the bucket keeps failing, then tells the admin why', async () => {
         const warned = vi.spyOn(console, 'warn');
-        vi.spyOn(env.IMAGES, 'input').mockImplementation(() => {
-            throw new Error('IMAGES_TRANSFORM_ERROR 9529: The image timed out while processing');
-        });
+        vi.spyOn(env.ORIGINALS, 'head').mockRejectedValue(new Error('R2 unavailable'));
         const versionId = await stage(`${DAY}busy`, jpg);
         await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
         const attempts = warned.mock.calls.filter(([logged]) => isFailedAttempt(logged, versionId));
 
         expect(attempts).toHaveLength(6);
-        await expect(uploadErrors([`${DAY}busy`])).resolves.toStrictEqual({
-            [`${DAY}busy`]: 'IMAGES_TRANSFORM_ERROR 9529: The image timed out while processing',
-        });
-        await expect(env.UPLOADS.head(inboxKey(versionId))).resolves.not.toBeNull();
+        await expect(uploadErrors([`${DAY}busy`])).resolves.toStrictEqual({ [`${DAY}busy`]: 'R2 unavailable' });
     });
 
     it('records the XMP caption and tags of a HEIC, which has no IPTC', async () => {
-        decodingAnyImage();
-        await upload(`${DAY}photo`, heic, { contentType: 'image/heic' });
+        await upload(`${DAY}photo`, heic, { extension: 'heic' });
 
         await expect(storedItem(DAY, 'photo')).resolves.toMatchObject({
             title: 'Test Image Title',
@@ -601,18 +491,13 @@ describe('upload pipeline', () => {
         expect(stale).toBeUndefined();
     });
 
-    it('becomes an upload error when its album was deleted in the meantime, and waits in the inbox for the purge', async () => {
+    it('becomes an upload error when its album was deleted in the meantime', async () => {
         const versionId = await stage(`${DAY}orphan`, jpg);
         await callAsAdmin(`/api/album${DAY}`, { method: 'DELETE' });
         await deliver(versionId);
-        const [errors, inbox, row] = await Promise.all([
-            uploadErrors([`${DAY}orphan`]),
-            env.UPLOADS.head(inboxKey(versionId)),
-            uploadRow(versionId),
-        ]);
+        const [errors, row] = await Promise.all([uploadErrors([`${DAY}orphan`]), uploadRow(versionId)]);
 
         expect(errors[`${DAY}orphan`]).toBe(`Album [${DAY}] was deleted before the upload finished`);
-        expect(inbox).not.toBeNull();
         expect(row).toMatchObject({ albumId: null, completedAt: null });
     });
 
@@ -626,17 +511,15 @@ describe('upload pipeline', () => {
         expect(item?.versionId).toBe(testVersionId('other'));
     });
 
-    it('leaves alone an inbox object nobody asked for', async () => {
-        await env.UPLOADS.put(inboxKey('stray'), jpg);
+    it('leaves alone an original nobody presigned, as a script that copies one in writes', async () => {
+        await env.ORIGINALS.put(originalKey('stray'), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const acks = await deliver('stray');
-        const [inbox, items] = await Promise.all([
-            env.UPLOADS.head(inboxKey('stray')),
-            orm(env.DB).select().from(schema.item).where(eq(schema.item.itemType, 'media')).all(),
-        ]);
+        const [original, derived] = await Promise.all([env.ORIGINALS.head(originalKey('stray')), env.DERIVED.list()]);
 
         expect(acks).toStrictEqual(['1']);
-        expect(inbox).not.toBeNull();
-        expect(items).toStrictEqual([]);
+        expect(original).not.toBeNull();
+        expect(derived.objects).toStrictEqual([]);
+        await expect(mediaNames()).resolves.toStrictEqual([]);
     });
 
     it('becomes the thumbnail of a day that has none, and leaves one that has', async () => {
@@ -653,17 +536,11 @@ describe('upload pipeline', () => {
         await deliver(versionId, {
             modify: async (modifier) => {
                 await modifier.disableRetryDelays();
-                await modifier.mockStepError(
-                    { name: "read the file, and make a photo's derivatives" },
-                    new Error('R2 unavailable'),
-                    1,
-                );
+                await modifier.mockStepError({ name: 'read the file' }, new Error('R2 unavailable'), 1);
             },
         });
-        const [item, inbox] = await Promise.all([storedItem(DAY, 'retried'), env.UPLOADS.head(inboxKey(versionId))]);
 
-        expect(item?.versionId).toBe(versionId);
-        expect(inbox).toBeNull();
+        await expect(storedItem(DAY, 'retried')).resolves.toMatchObject({ versionId });
     });
 
     it.each([
@@ -682,17 +559,15 @@ describe('upload pipeline', () => {
         const versionId = await stage(`${DAY}retried`, jpg);
         failingAfterTheWrite(between);
         await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
-        const [media, errors, row, inbox] = await Promise.all([
+        const [media, errors, row] = await Promise.all([
             mediaNames(),
             uploadErrors([`${DAY}retried`]),
             uploadRow(versionId),
-            env.UPLOADS.head(inboxKey(versionId)),
         ]);
 
         expect(media).toStrictEqual(items);
         expect(errors).toStrictEqual({});
         expect(row?.completedAt).not.toBeNull();
-        expect(inbox).toBeNull();
     });
 
     it('succeeds when the write is retried after it committed and its finished upload row was cleaned up', async () => {
@@ -788,7 +663,7 @@ describe('replacing a media item', () => {
     });
 
     it('takes a file in another format under the same name, dropping a crop cut from another size', async () => {
-        const versionId = await upload(`${DAY}felix`, png, { replace: true, contentType: 'image/png' });
+        const versionId = await upload(`${DAY}felix`, png, { replace: true, extension: 'png' });
         const [felix, original, album] = await Promise.all([
             storedItem(DAY, 'felix'),
             env.ORIGINALS.head(originalKey(versionId)),
@@ -808,7 +683,7 @@ describe('replacing a media item', () => {
     });
 
     it('keeps a name the item was given while the upload was in flight', async () => {
-        const versionId = await stage(`${DAY}felix`, png, { replace: true, contentType: 'image/png' });
+        const versionId = await stage(`${DAY}felix`, png, { replace: true, extension: 'png' });
         await write('POST', `/api/media-rename${DAY}felix`, { newName: 'cat' });
         await deliver(versionId);
         const [cat, felix] = await Promise.all([storedItem(DAY, 'cat'), storedItem(DAY, 'felix')]);
@@ -879,7 +754,7 @@ describe('replacing a media item', () => {
     });
 
     it('turns a photo into a video, with the transcoder', async () => {
-        const versionId = await stage(`${DAY}felix`, mov, { replace: true });
+        const versionId = await stage(`${DAY}felix`, mov, { replace: true, extension: 'mov' });
         standInTranscoder(transcoding);
         await deliver(versionId);
         const clip = await storedItem(DAY, 'felix');
@@ -899,33 +774,32 @@ describe('replacing a media item', () => {
 describe('image uploads', () => {
     beforeEach(async () => putDay(DAY));
 
-    it('records a file in no format the gallery takes instead of an item, and drops it', async () => {
-        const versionId = await upload(`${DAY}notes`, new TextEncoder().encode('just some notes'));
-        const [item, inbox, errors] = await Promise.all([
-            storedItem(DAY, 'notes'),
-            env.UPLOADS.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}notes`]),
-        ]);
+    it.each([
+        {
+            what: 'a file that is no image',
+            file: new TextEncoder().encode('just some notes'),
+            error: /^not a readable image/v,
+        },
+        {
+            what: 'a JPEG whose header says no size',
+            file: Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0]),
+            error: /^the image does not say its size$/v,
+        },
+    ])(
+        'records $what named as a photo as an upload error instead of an item, and keeps the file',
+        async ({ file, error }) => {
+            const versionId = await upload(`${DAY}broken`, file);
+            const [item, original, errors] = await Promise.all([
+                storedItem(DAY, 'broken'),
+                env.ORIGINALS.head(originalKey(versionId)),
+                uploadErrors([`${DAY}broken`]),
+            ]);
 
-        expect(item).toBeUndefined();
-        expect(inbox).toBeNull();
-        expect(errors[`${DAY}notes`]).toBe('not a photo or video in a format the gallery takes');
-    });
-
-    it('records a JPEG whose header says no size instead of an item, and drops it', async () => {
-        const versionId = await upload(`${DAY}broken`, Uint8Array.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0]));
-        const [item, originals, inbox, errors] = await Promise.all([
-            storedItem(DAY, 'broken'),
-            env.ORIGINALS.list({ prefix: 'originals/' }),
-            env.UPLOADS.head(inboxKey(versionId)),
-            uploadErrors([`${DAY}broken`]),
-        ]);
-
-        expect(item).toBeUndefined();
-        expect(originals.objects).toHaveLength(0);
-        expect(inbox).toBeNull();
-        expect(errors[`${DAY}broken`]).toBe('the image does not say its size');
-    });
+            expect(item).toBeUndefined();
+            expect(original).not.toBeNull();
+            expect(errors[`${DAY}broken`]).toMatch(error);
+        },
+    );
 });
 
 describe('a batch of uploads', () => {
@@ -1026,7 +900,7 @@ describe('dead-lettered uploads', () => {
         return (await getQueueResult(batch, ctx)).explicitAcks;
     }
 
-    it('tells the admin an upload whose pipeline never started must be uploaded again, and keeps its file', async () => {
+    it('tells the admin an upload whose pipeline never started must be uploaded again', async () => {
         const versionId = await stage(`${DAY}stranded`, jpg);
         const started = vi.spyOn(env.UPLOAD_PIPELINE, 'create');
 
@@ -1034,7 +908,6 @@ describe('dead-lettered uploads', () => {
         await expect(uploadErrors([`${DAY}stranded`])).resolves.toStrictEqual({
             [`${DAY}stranded`]: UNSTARTED_ERROR,
         });
-        await expect(env.UPLOADS.head(inboxKey(versionId))).resolves.not.toBeNull();
         expect(started).not.toHaveBeenCalled();
     });
 
@@ -1057,28 +930,24 @@ describe('dead-lettered uploads', () => {
 describe('video uploads', () => {
     beforeEach(async () => putDay(DAY));
 
-    it('records a file ffmpeg rejects instead of an item, and drops it', async () => {
+    it('records a file ffmpeg rejects as an upload error instead of an item', async () => {
         standInTranscoder(rejecting);
-        const versionId = await upload(`${DAY}broken`, mov);
-        const [item, originals, inbox, errors] = await Promise.all([
+        await upload(`${DAY}broken`, mov, { extension: 'mov' });
+        const [item, errors] = await Promise.all([
             storedItem(DAY, 'broken'),
-            env.ORIGINALS.list({ prefix: 'originals/' }),
-            env.UPLOADS.head(inboxKey(versionId)),
             uploadErrors([`${DAY}broken`, `${DAY}fine`]),
         ]);
 
         expect(item).toBeUndefined();
-        expect(originals.objects).toHaveLength(0);
-        expect(inbox).toBeNull();
         expect(Object.keys(errors)).toStrictEqual([`${DAY}broken`]);
         expect(errors[`${DAY}broken`]).toBe('ffmpeg exited 1: moov atom not found');
     });
 
     it('clears the error once a later upload of the same path succeeds', async () => {
         standInTranscoder(rejecting);
-        await upload(`${DAY}again`, mov);
+        await upload(`${DAY}again`, mov, { extension: 'mov' });
         standInTranscoder(transcoding);
-        await upload(`${DAY}again`, mov);
+        await upload(`${DAY}again`, mov, { extension: 'mov' });
         const { uploadError } = schema;
         const remaining = await orm(env.DB)
             .select()
@@ -1093,19 +962,18 @@ describe('video uploads', () => {
 describe('video upload retries', () => {
     beforeEach(async () => putDay(DAY));
 
-    it('leaves the upload in the inbox when the transcoder cannot be reached, once the retries are spent', async () => {
+    it('acks the event though the transcoder cannot be reached and the retries are spent', async () => {
         standInTranscoder(async () => {
             throw new Error('container unreachable');
         });
-        const versionId = await stage(`${DAY}later`, mov);
+        const versionId = await stage(`${DAY}later`, mov, { extension: 'mov' });
         const acks = await deliver(versionId, {
             until: 'errored',
             modify: async (modifier) => modifier.disableRetryDelays(),
         });
 
         expect(acks).toStrictEqual(['1']);
-        await expect(env.UPLOADS.head(inboxKey(versionId))).resolves.not.toBeNull();
-        await expect(env.ORIGINALS.list({ prefix: 'originals/' })).resolves.toMatchObject({ objects: [] });
+        await expect(storedItem(DAY, 'later')).resolves.toBeUndefined();
     });
 
     it('tries the container four times, then tells the admin why', async () => {
@@ -1114,7 +982,7 @@ describe('video upload retries', () => {
             attempts++;
             throw new Error('container unreachable');
         });
-        const versionId = await stage(`${DAY}later`, mov);
+        const versionId = await stage(`${DAY}later`, mov, { extension: 'mov' });
         await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
 
         expect(attempts).toBe(4);
@@ -1123,31 +991,15 @@ describe('video upload retries', () => {
         });
     });
 
-    it('records no upload error when only dropping the inbox object fails, since the item was written', async () => {
-        standInTranscoder(transcoding);
-        const versionId = await stage(`${DAY}clip`, mov);
-        const drop = env.UPLOADS.delete.bind(env.UPLOADS);
-        vi.spyOn(env.UPLOADS, 'delete').mockImplementation(async (keys) => {
-            if (keys === inboxKey(versionId)) {
-                throw new Error('R2 unavailable');
-            }
-            return drop(keys);
-        });
-        await deliver(versionId, { until: 'errored', modify: async (modifier) => modifier.disableRetryDelays() });
-
-        await expect(storedItem(DAY, 'clip')).resolves.toMatchObject({ mediaType: 'video' });
-        await expect(uploadErrors([`${DAY}clip`])).resolves.toStrictEqual({});
-    });
-
     it('writes nothing twice when the event is delivered again after success, as Queues may do', async () => {
         standInTranscoder(transcoding);
-        const versionId = await stage(`${DAY}clip`, mov);
+        const versionId = await stage(`${DAY}clip`, mov, { extension: 'mov' });
         await deliver(versionId);
         await deliver(versionId);
-        const [item, originals, inbox] = await Promise.all([
+        const [item, originals, media] = await Promise.all([
             storedItem(DAY, 'clip'),
             env.ORIGINALS.list({ prefix: 'originals/' }),
-            env.UPLOADS.head(inboxKey(versionId)),
+            mediaNames(),
         ]);
 
         expect(item).toMatchObject({
@@ -1158,11 +1010,11 @@ describe('video upload retries', () => {
             durationSeconds: 9.6,
         });
         expect(originals.objects.map((object) => object.key)).toStrictEqual([originalKey(versionId)]);
-        expect(inbox).toBeNull();
+        expect(media).toStrictEqual([{ itemName: 'clip' }]);
     });
 
-    it('has the container write the MP4 and poster for the version into the derived bucket', async () => {
-        const versionId = await stage(`${DAY}clip`, mov);
+    it('has the container read the original and write the MP4 and poster for the version into the derived bucket', async () => {
+        const versionId = await stage(`${DAY}clip`, mov, { extension: 'mov' });
         const jobs: Record<string, string>[] = [];
         standInTranscoder(async (init) => {
             jobs.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, string>);
@@ -1174,7 +1026,7 @@ describe('video upload retries', () => {
         );
 
         expect(paths).toStrictEqual({
-            src: `/${env.UPLOADS_BUCKET}/${inboxKey(versionId)}`,
+            src: `/${env.ORIGINALS_BUCKET}/${originalKey(versionId)}`,
             mp4Put: `/${env.DERIVED_BUCKET}/${videoKey(versionId)}`,
             posterPut: `/${env.DERIVED_BUCKET}/${posterKey(versionId)}`,
         });

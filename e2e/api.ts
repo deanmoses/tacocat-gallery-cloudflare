@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import {
     type AlbumGalleryItem,
     type ItemWrite,
+    extensionOf,
     parentPathOf,
     parseAlbum,
     parsePresigned,
@@ -66,11 +67,11 @@ export async function setThumbnail(origin: string, albumPath: string, mediaPath:
  * Uploads `file` to become the media item at `path`, as the app does under `UPLOAD_MODE=local`: a presigned URL, then
  * a PUT to it. The item is there once the pipeline has run, which this does not wait for.
  */
-export async function uploadFile(origin: string, path: string, file: string, contentType: string): Promise<void> {
+export async function uploadFile(origin: string, path: string, file: string): Promise<void> {
     const presigned = await ensureOk(
         await adminFetch(origin, `/api/presigned${parentPathOf(path)}`, {
             method: 'POST',
-            body: JSON.stringify([{ path }]),
+            body: JSON.stringify([{ path, extension: extensionOf(file) }]),
         }),
         `presigning ${path}`,
     );
@@ -81,7 +82,7 @@ export async function uploadFile(origin: string, path: string, file: string, con
     await ensureOk(
         await adminFetch(origin, upload.url, {
             method: 'PUT',
-            headers: { 'content-type': contentType },
+            headers: { 'content-type': upload.contentType },
             body: await readFile(file),
         }),
         `uploading ${path}`,

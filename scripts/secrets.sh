@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Puts the R2 signing credentials where they are used, straight from OpenTofu's outputs, so no token value passes
 # through a person. The tokens themselves are defined in infra/: one per environment that can read and write its
-# uploads and derived buckets and nothing else, one for the backup that can read production's originals bucket and
+# originals and derived buckets and nothing else, one for the backup that can read production's originals bucket and
 # nothing else, one that can reach D1 and nothing else, and the AWS key that can reach the backup bucket and nothing
 # else. Rotating one is `scripts/tofu.sh apply -replace=<its address>`, then this again.
 #

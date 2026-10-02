@@ -55,7 +55,7 @@ async function transcode(init: RequestInit = {}): Promise<Response> {
     return fetch(`${transcoderOrigin}/transcode`, {
         method: 'POST',
         body: JSON.stringify({
-            src: `${bucketOrigin}/inbox/v1`,
+            src: `${bucketOrigin}/originals/v1`,
             mp4Put: `${bucketOrigin}/derived/v1/video.mp4`,
             posterPut: `${bucketOrigin}/derived/v1/poster.jpg`,
         }),

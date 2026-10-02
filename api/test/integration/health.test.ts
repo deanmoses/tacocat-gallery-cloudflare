@@ -24,7 +24,7 @@ describe('GET /api/health', () => {
         expect(body.migration).toBe(env.TEST_MIGRATIONS.at(-1)?.name);
     });
 
-    it.each(['ORIGINALS', 'UPLOADS', 'DERIVED'] as const)(
+    it.each(['ORIGINALS', 'DERIVED'] as const)(
         'fails when the %s bucket does not answer, saying nothing of why in the body and everything in the log',
         async (bucket) => {
             vi.spyOn(env[bucket], 'head').mockRejectedValue(new Error('bucket unreachable'));

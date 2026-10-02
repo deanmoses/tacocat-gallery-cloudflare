@@ -42,15 +42,13 @@
         // localhost, another site, from writing to staging with its cookie. Production lists none, so a page on localhost
         // never gets past its Origin check.
         "LOCAL_ORIGINS": ["http://localhost:8787", "http://localhost:5173"],
-        // The buckets by their S3 names, for the URLs the Worker signs: uploads are presigned into the first, the
-        // transcoder reads its source from there and writes into the second, and Image Transformations read the image
-        // a derivative is made from out of any of the three. The S3 key the Worker signs with can read the originals but
-        // not write them, which only the Worker's binding does.
-        "UPLOADS_BUCKET": "staging-uploads",
+        // The buckets by their S3 names, for the URLs the Worker signs: the browser's PUT of an upload goes into the
+        // originals, the transcoder reads its source from there and writes into the derived bucket, and Image
+        // Transformations read the image a derivative is made from out of either.
         "DERIVED_BUCKET": "staging-derived",
         "ORIGINALS_BUCKET": "staging-originals",
-        // Where the browser puts an upload: "signed" is a presigned URL into the uploads bucket, whose event R2 sends to
-        // the queue. A local Worker can consume no real queue, so `wrangler dev` sets this to "local" in .dev.vars
+        // Where the browser puts an upload: "signed" is a presigned URL into the originals bucket, whose event R2 sends
+        // to the queue. A local Worker can consume no real queue, so `wrangler dev` sets this to "local" in .dev.vars
         // and the Worker takes the PUT itself, into its local bucket, and raises the event.
         "UPLOAD_MODE": "signed",
         // What makes the derivatives: "transformations" fetches the image from a URL the Worker signs, with `cf.image`
@@ -67,10 +65,7 @@
         },
     ],
     "r2_buckets": [
-        // One bucket per role, since an R2 token is scoped to whole buckets: the originals are written by the Worker's
-        // binding alone.
         { "binding": "ORIGINALS", "bucket_name": "staging-originals" },
-        { "binding": "UPLOADS", "bucket_name": "staging-uploads" },
         { "binding": "DERIVED", "bucket_name": "staging-derived" },
     ],
     "images": { "binding": "IMAGES" },
@@ -146,7 +141,6 @@
             "vars": {
                 "SITE_ORIGIN": "https://pix.deanmoses.com",
                 "LOCAL_ORIGINS": [],
-                "UPLOADS_BUCKET": "production-uploads",
                 "DERIVED_BUCKET": "production-derived",
                 "ORIGINALS_BUCKET": "production-originals",
                 "UPLOAD_MODE": "signed",
@@ -162,7 +156,6 @@
             ],
             "r2_buckets": [
                 { "binding": "ORIGINALS", "bucket_name": "production-originals" },
-                { "binding": "UPLOADS", "bucket_name": "production-uploads" },
                 { "binding": "DERIVED", "bucket_name": "production-derived" },
             ],
             "images": { "binding": "IMAGES" },

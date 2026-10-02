@@ -11,7 +11,7 @@
 // --resume finishes an import that stopped partway: it uploads only the photos the target album does not list yet and
 // then writes the words and thumbnails for all of them, where a plain run uploads every photo again as a new version.
 import * as valibot from 'valibot';
-import { mediaPath, parsePath } from '@tacocat-gallery/shared';
+import { extensionOf, mediaPath, parsePath } from '@tacocat-gallery/shared';
 import { renamedMedia, rewriteLinks, sanitizedPath } from './aws-names.ts';
 import {
     type SITES,
@@ -193,7 +193,6 @@ async function uploaded(photo: AwsMedia): Promise<string> {
     if (!response.ok) {
         throw new Error(`downloading ${photo.path} failed: ${String(response.status)}`);
     }
-    const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
-    const body = await response.arrayBuffer();
-    return upload(gallery, albumPath, pathOf(photo), { body, contentType }, existing.has(nameOf(photo)));
+    const file = { body: await response.arrayBuffer(), extension: extensionOf(photo.path) };
+    return upload(gallery, albumPath, pathOf(photo), file, existing.has(nameOf(photo)));
 }

@@ -114,7 +114,7 @@ async function seedGallery(database: Orm): Promise<void> {
 }
 
 const EMPTY_DAY = dayName(DAYS);
-const PRESIGN_ENV = { ...TEST_SECRETS, UPLOADS_BUCKET: 'test-uploads', UPLOAD_MODE: 'signed' };
+const PRESIGN_ENV = { ...TEST_SECRETS, ORIGINALS_BUCKET: 'test-originals', UPLOAD_MODE: 'signed' };
 
 /** What the pipeline learned from a file, as the item statements take it. */
 const FACTS: MediaFacts = {
@@ -267,7 +267,10 @@ describe('rows read on a gallery', () => {
             PRESIGN_ENV,
             database,
             dayPath(4),
-            [{ path: `${dayPath(4)}new` }, { path: `${dayPath(4)}img_3`, replace: true }],
+            [
+                { path: `${dayPath(4)}new`, extension: 'jpg' },
+                { path: `${dayPath(4)}img_3`, extension: 'jpg', replace: true },
+            ],
             'moses',
         );
 

@@ -137,7 +137,7 @@ describe('serving an original', () => {
     });
 
     it('reaches nothing but originals: a version with no original is not found, whatever the other buckets hold', async () => {
-        await env.UPLOADS.put('inbox/2024/06-15/pending', jpg);
+        await env.DERIVED.put('derived/2024/06-15/pending', jpg);
         await env.ORIGINALS.put('elsewhere/2024-06-15.json', new Uint8Array(10));
         const [pending, elsewhere, malformed] = await Promise.all([
             call(originalUrl('/2024/06-15/pending', testVersionId('v1'))),

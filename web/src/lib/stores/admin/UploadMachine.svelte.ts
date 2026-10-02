@@ -7,8 +7,10 @@ import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
 import { fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
 import {
+    type PresignRequest,
     type PresignedUpload,
     deduplicateNames,
+    extensionOf,
     isMediaPath,
     mediaPath,
     parentPathOf,
@@ -222,7 +224,7 @@ class UploadMachine {
         presigned: PresignedUpload,
     ): Promise<void> {
         this.#uploadStarted(mediaItemToUpload.path);
-        const result = await uploadToBucket(mediaItemToUpload.file, presigned.url);
+        const result = await uploadToBucket(mediaItemToUpload.file, presigned);
         if (result.success) {
             console.log(`Uploaded [${mediaItemToUpload.path}] as versionId [${presigned.versionId}]`);
             this.#uploadProcessing(mediaItemToUpload.path, presigned.versionId);
@@ -299,9 +301,9 @@ class UploadMachine {
 }
 export const uploadMachine = new UploadMachine();
 
-/** What the server is told about an upload: where it goes, and whether it replaces the item there */
-function presignEntry(item: MediaItemToUpload): { path: string; replace?: boolean } {
-    return { path: item.path, ...(item.replace === true && { replace: true }) };
+/** What the server is told about an upload: where it goes, what kind of file it is, and whether it replaces the item there */
+function presignEntry(item: MediaItemToUpload): PresignRequest[number] {
+    return { path: item.path, extension: extensionOf(item.file.name), ...(item.replace === true && { replace: true }) };
 }
 
 async function sleep(ms: number): Promise<void> {

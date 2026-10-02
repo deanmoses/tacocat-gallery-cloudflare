@@ -139,7 +139,7 @@ test.describe('an admin', () => {
         const dayPath = await seedDay(year, '08-01', { second: 'Second' });
         const photoPath = `${dayPath}photo`;
         // Uploaded rather than written as a row, since the crop step cuts the thumbnail from the original
-        await uploadFile(E2E_ORIGIN, photoPath, JPEG_FIXTURE, 'image/jpeg');
+        await uploadFile(E2E_ORIGIN, photoPath, JPEG_FIXTURE);
         await expect
             .poll(async () => (await readAlbum(E2E_ORIGIN, dayPath)).children?.map(({ path }) => path), {
                 timeout: PIPELINE_TIMEOUT,
@@ -247,7 +247,9 @@ test.describe('an admin', () => {
 
             const response = await presigned;
             expect(response.status()).toBe(200);
-            expect(response.request().postDataJSON()).toStrictEqual([{ path: target, replace: true }]);
+            expect(response.request().postDataJSON()).toStrictEqual([
+                { path: target, extension: 'png', replace: true },
+            ]);
             await expect(page).toHaveURL(target);
             // The PNG fixture's size, which the seeded row did not have, says the file behind the item changed
             await expect

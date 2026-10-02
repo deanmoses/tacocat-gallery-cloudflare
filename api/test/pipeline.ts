@@ -7,14 +7,14 @@ import {
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import type { R2EventMessage } from '../src/gallery/upload';
-import { inboxKey } from '../src/storage/keys';
+import { originalKey } from '../src/storage/keys';
 import { handler } from './helpers';
 
 function uploadEvent(versionId: string): R2EventMessage {
     return {
         action: 'PutObject',
-        bucket: env.UPLOADS_BUCKET,
-        object: { key: inboxKey(versionId) },
+        bucket: env.ORIGINALS_BUCKET,
+        object: { key: originalKey(versionId) },
         eventTime: new Date().toISOString(),
     };
 }

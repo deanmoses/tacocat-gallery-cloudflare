@@ -12,7 +12,6 @@ export async function health(env: Env): Promise<Response> {
         env.DB.prepare('SELECT name FROM d1_migrations ORDER BY name DESC LIMIT 1').first<{ name: string }>(),
         // A key that does not exist: the cheapest read R2 has, since this route is public.
         env.ORIGINALS.head('health'),
-        env.UPLOADS.head('health'),
         env.DERIVED.head('health'),
     ]);
     return json({

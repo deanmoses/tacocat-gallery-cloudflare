@@ -23,6 +23,13 @@ export type OutputFormat = keyof typeof OUTPUT_FORMATS;
  */
 const DEFAULT_FOCUS = { x: 0.5, y: 1 / 3, mode: 'box-center' } as const;
 
+const HEIC_TYPES: ReadonlySet<string> = new Set(['image/heic', 'image/heif']);
+
+/** Whether a content type is a HEIC or HEIF, which only Safari can show. */
+export function isHeicType(contentType: string): boolean {
+    return HEIC_TYPES.has(contentType);
+}
+
 const WEBP_SOURCES: ReadonlySet<string> = new Set(['image/gif', 'image/png']);
 
 /** What an image URL asks for, the format it gets, and where its derivative and the sources it is made from are. */

@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as valibot from 'valibot';
 import { mediaKey } from '@tacocat-gallery/shared';
-import { derivedPrefix, inboxKey, originalKey } from '../src/storage/keys.ts';
+import { derivedPrefix, originalKey } from '../src/storage/keys.ts';
 import { type ListedObject, listObjects } from '../src/storage/s3.ts';
 import { devVars } from './dev-vars.ts';
 import { tokenCredentials } from './r2-token.ts';
@@ -19,13 +19,11 @@ const TARGETS = {
     staging: {
         wranglerEnv: [],
         originals: 'staging-originals',
-        uploads: 'staging-uploads',
         derived: 'staging-derived',
     },
     production: {
         wranglerEnv: ['--env', 'production'],
         originals: 'production-originals',
-        uploads: 'production-uploads',
         derived: 'production-derived',
     },
 };
@@ -72,21 +70,15 @@ if (row.version_id !== null) {
     await listVersion(row.version_id);
 }
 
-/**
- * Prints what each bucket holds for the version, the inbox included, where an upload the pipeline never finished
- * still sits.
- */
+/** Prints what each bucket holds for the version. */
 async function listVersion(versionId: string): Promise<void> {
     const credentials = await tokenCredentials(token);
-    const [originals, uploads, derived] = await Promise.all([
+    const [originals, derived] = await Promise.all([
         listObjects(credentials, target.originals, originalKey(versionId)),
-        listObjects(credentials, target.uploads, inboxKey(versionId)),
         listObjects(credentials, target.derived, `${derivedPrefix(versionId)}/`),
     ]);
     console.log(`\n${target.originals}:`);
     print(originals);
-    console.log(`\n${target.uploads}:`);
-    print(uploads);
     console.log(`\n${target.derived}:`);
     print(derived);
 }

@@ -11,7 +11,7 @@
 // which is that list once read through, refusing the whole file if any key in it is not one `detail-derivatives.ts`
 // takes. It stops on a refused credential, on a request that fails three times, and at the fifth key that goes wrong.
 // Every key's outcome is a JSON line in `delete-detail-derivatives-<target>.jsonl`. It reaches R2 with the OpenTofu
-// token in api/.dev.vars, as `copy-originals.ts` does.
+// token in api/.dev.vars.
 //
 // Usage: node api/scripts/delete-detail-derivatives.ts --to staging|production [--go <key list>]
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';

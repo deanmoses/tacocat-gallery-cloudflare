@@ -1,4 +1,4 @@
-import { type ImageRequest, type Size, THUMBNAIL_SIZE, THUMBNAIL_SIZE_2X, detailSize } from '@tacocat-gallery/shared';
+import { type ImageRequest, type Size, detailSize } from '@tacocat-gallery/shared';
 import { withoutMetadata } from '../media/jpeg';
 import {
     type Derivation,
@@ -36,7 +36,7 @@ export function derivationFor(request: ImageRequest, requestedFormat: string | n
 
 /** An image a derivative is made from, in one of the Worker's buckets. */
 export interface Source {
-    bucket: 'UPLOADS' | 'ORIGINALS' | 'DERIVED';
+    bucket: 'ORIGINALS' | 'DERIVED';
     key: string;
     /** The type it was stored with, which decides the format of a derivative whose URL settles none. */
     contentType: string | undefined;
@@ -44,20 +44,9 @@ export interface Source {
 
 /** What making an image takes: each bucket a source can be in, by its binding and its S3 name, and either engine. */
 export type ImageEnv = S3Credentials &
-    Pick<
-        Env,
-        | 'IMAGE_MODE'
-        | 'IMAGES'
-        | 'UPLOADS'
-        | 'ORIGINALS'
-        | 'DERIVED'
-        | 'UPLOADS_BUCKET'
-        | 'ORIGINALS_BUCKET'
-        | 'DERIVED_BUCKET'
-    >;
+    Pick<Env, 'IMAGE_MODE' | 'IMAGES' | 'ORIGINALS' | 'DERIVED' | 'ORIGINALS_BUCKET' | 'DERIVED_BUCKET'>;
 
 const BUCKET_NAMES = {
-    UPLOADS: 'UPLOADS_BUCKET',
     ORIGINALS: 'ORIGINALS_BUCKET',
     DERIVED: 'DERIVED_BUCKET',
 } as const satisfies Record<Source['bucket'], keyof ImageEnv>;
@@ -174,45 +163,23 @@ export async function asJpeg(env: ImageEnv, source: Source): Promise<Uint8Array<
     }
 }
 
-export type Warmed = { ok: true } | { ok: false; error: string };
+/** How long warming an upload's detail image may take before it is given up as hung. */
+export const WARM_LIMIT_MS = 60_000;
 
 /**
- * How long one call an upload makes to R2 or to what makes images may take, a derivative's making and storing counting
- * as one, where a 17 MB photo's whole upload takes seconds.
+ * Makes the image the media page is about to ask for, so the admin's first look at an upload does not wait for it. One
+ * try, whose failure, or never answering, is only logged: the image's first reader makes it then, as a thumbnail's
+ * does.
  */
-export const CALL_LIMIT_MS = 60_000;
-
-/**
- * Makes the derivatives the album page and the media page are about to ask for, the thumbnail at both densities and
- * the detail image, so the first reader of an upload never waits for a transformation. Made from what the URLs will
- * ask for, so they are found again by them, and all at once from `source`, the photo or a video's poster. A file that
- * cannot be decoded, as some HEICs cannot, surfaces here rather than as a broken image in the album. Each one's time
- * goes into `steps` under the same name for every upload.
- */
-export async function warmDerivatives(
-    env: ImageEnv,
-    path: string,
-    versionId: string,
-    size: Size,
-    source: Source,
-    steps: Steps,
-): Promise<Warmed> {
-    const wanted = { thumbnail: THUMBNAIL_SIZE, thumbnail2x: THUMBNAIL_SIZE_2X, detail: detailSize(size) };
-    const made = await Promise.allSettled(
-        Object.entries(wanted).map(async ([name, imageSize]) => {
-            const request: ImageRequest = { path, versionId, size: imageSize, crop: null };
-            return bounded(steps, name, CALL_LIMIT_MS, async () =>
-                generateDerivative(env, derivationFor(request, null), source),
-            );
-        }),
-    );
-    const failures = made.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : []));
-    const refusal = failures.find(isRefusal);
-    if (refusal !== undefined) {
-        return { ok: false, error: `the image cannot be decoded: ${refusal.message}` };
+export async function warmDetail(env: ImageEnv, path: string, versionId: string, size: Size): Promise<void> {
+    const wanted = derivationFor({ path, versionId, size: detailSize(size), crop: null }, null);
+    try {
+        const source = await sourceOf(env, wanted);
+        if (source === null) {
+            throw new Error(`no source for ${wanted.original}`);
+        }
+        await bounded({}, 'detail', WARM_LIMIT_MS, async () => generateDerivative(env, wanted, source));
+    } catch (error) {
+        console.warn({ event: 'detail_not_warmed', path, versionId, error: String(error) });
     }
-    if (failures.length > 0) {
-        throw failures[0];
-    }
-    return { ok: true };
 }
