@@ -60,6 +60,25 @@ resource "cloudflare_bot_management" "deanmoses" {
   }
 }
 
+# Archive crawlers, the Internet Archive's above all, are not among the AI bots Cloudflare blocks, and a page in an
+# archive is on the public web whatever its noindex says. The category is Cloudflare's list of verified archivers; the
+# user agents catch the Internet Archive's own crawlers when a request is not verified as theirs.
+#
+# AI Crawl Control's per-crawler switches write their rule into this same ruleset, so one set in the dashboard shows
+# up here as a change to revert: block a crawler by adding it to the expression.
+resource "cloudflare_ruleset" "block_archivers" {
+  for_each = { deanmoses = cloudflare_zone.deanmoses.id, tacocat = cloudflare_zone.tacocat.id }
+  zone_id  = each.value
+  name     = "default"
+  kind     = "zone"
+  phase    = "http_request_firewall_custom"
+  rules = [{
+    description = "Block archive crawlers"
+    action      = "block"
+    expression  = "(cf.verified_bot_category eq \"Archiver\") or (lower(http.user_agent) contains \"archive.org_bot\") or (lower(http.user_agent) contains \"ia_archiver\")"
+  }]
+}
+
 module "environment" {
   source      = "./environment"
   for_each    = local.environments
