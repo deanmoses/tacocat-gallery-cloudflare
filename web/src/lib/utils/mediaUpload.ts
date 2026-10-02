@@ -1,4 +1,10 @@
-import { API, type PresignRequest, type PresignResponse, parsePresigned } from '@tacocat-gallery/shared';
+import {
+    API,
+    type PresignRequest,
+    type PresignResponse,
+    type PresignedUpload,
+    parsePresigned,
+} from '@tacocat-gallery/shared';
 import { callApi, failureMessage } from './adminApi';
 
 export type UploadResult = { success: true } | { success: false; error: string };
@@ -6,18 +12,19 @@ export type UploadResult = { success: true } | { success: false; error: string }
 export type PresignedUrlResult = { success: true; uploads: PresignResponse } | { success: false; error: string };
 
 /**
- * PUTs the file straight into the uploads bucket, at the URL the Worker signed for it.
+ * PUTs the file straight into the bucket, at the URL the Worker signed for it, as the content type the URL was signed
+ * with: the bucket refuses any other, whatever the browser takes the file for.
  *
  * @param file File to upload
- * @param presignedUrl presigned URL
+ * @param presigned Where to PUT it, and as what type
  * @returns Success, or failure with error message
  */
-export async function uploadToBucket(file: File, presignedUrl: string): Promise<UploadResult> {
+export async function uploadToBucket(file: File, presigned: PresignedUpload): Promise<UploadResult> {
     try {
-        const response = await fetch(presignedUrl, {
+        const response = await fetch(presigned.url, {
             method: 'PUT',
             headers: {
-                'Content-Type': file.type,
+                'Content-Type': presigned.contentType,
             },
             body: file,
         });
@@ -34,7 +41,7 @@ export async function uploadToBucket(file: File, presignedUrl: string): Promise<
  * the server has processed it.
  *
  * @param albumPath Album path like /2024/01-01/
- * @param uploads What each upload will be: its full media path, and for a replacement, the path it replaces
+ * @param uploads What each upload will be: its full media path, its file's extension, and whether it replaces an item
  * @returns Map of media path to its presigned URL and versionId, or failure with error message
  */
 export async function fetchPresignedUrls(albumPath: string, uploads: PresignRequest): Promise<PresignedUrlResult> {

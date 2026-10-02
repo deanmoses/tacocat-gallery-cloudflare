@@ -3,10 +3,10 @@ import jpg from '../../fixtures/FullMetadata.jpg?inline';
 import mp4 from '../../fixtures/test_video.mp4?inline';
 import png from '../../fixtures/pngFormat.png?inline';
 import { describe, expect, it } from 'vitest';
-import { SNIFF_LENGTH, isHeicType, sniffMedia } from '../../src/media/sniff';
+import { SNIFF_LENGTH, sniffMedia } from '../../scripts/sniff.ts';
 import { fixtureBytes } from '../gallery';
 
-/** The first bytes of a fixture, as the pipeline reads them. */
+/** The first bytes of a fixture, as the copy reads them. */
 function head(dataUrl: string): Uint8Array {
     return fixtureBytes(dataUrl).subarray(0, SNIFF_LENGTH);
 }
@@ -155,17 +155,5 @@ describe(sniffMedia, () => {
         },
     ])('refuses $name', ({ bytes }) => {
         expect(sniffMedia(bytes)).toBeNull();
-    });
-});
-
-describe(isHeicType, () => {
-    it('is true of the two HEIF content types and nothing else', () => {
-        expect(['image/heic', 'image/heif', 'image/jpeg', 'video/quicktime', ''].map(isHeicType)).toStrictEqual([
-            true,
-            true,
-            false,
-            false,
-            false,
-        ]);
     });
 });

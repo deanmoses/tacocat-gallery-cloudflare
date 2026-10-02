@@ -32,12 +32,7 @@ import type { RecoveredAlbum, RecoveredMedia } from './recovered-album.ts';
 
 // The published albums first, then the raw originals behind them.
 const DROPBOX_FOLDERS = ['dropbox-ro:Photos/albums', 'dropbox-ro:Photos/raw'];
-const CONTENT_TYPES = new Map([
-    ['.jpg', 'image/jpeg'],
-    ['.jpeg', 'image/jpeg'],
-    ['.png', 'image/png'],
-    ['.gif', 'image/gif'],
-]);
+const EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif']);
 const UPLOADS_AT_ONCE = 4;
 const LARGEST_FILE_BYTES = 512 * 1024 * 1024;
 
@@ -268,16 +263,16 @@ async function rclone(command: string[]): Promise<Buffer> {
 }
 
 /** The file read from Dropbox, whole, as the upload sends it. */
-async function fileOf(source: Source): Promise<{ body: ArrayBuffer; contentType: string }> {
-    const contentType = CONTENT_TYPES.get(path.extname(source.from).toLowerCase());
-    if (contentType === undefined) {
+async function fileOf(source: Source): Promise<{ body: ArrayBuffer; extension: string }> {
+    const extension = path.extname(source.from).slice(1).toLowerCase();
+    if (!EXTENSIONS.has(extension)) {
         throw new Error(`${source.from} is of a type the recovery does not upload`);
     }
     const stdout = await rclone(['cat', source.from]);
     if (stdout.byteLength !== source.bytes) {
         throw new Error(`${source.from} came as ${String(stdout.byteLength)} bytes of ${String(source.bytes)}`);
     }
-    return { body: new Uint8Array(stdout).buffer, contentType };
+    return { body: new Uint8Array(stdout).buffer, extension };
 }
 
 /** The rows of a file of JSON lines, each held to `schema`. */

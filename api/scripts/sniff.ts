@@ -10,35 +10,6 @@ export interface SniffedMedia {
 /** How much of a file the sniffer reads: enough for an EBML header to name its document type. */
 export const SNIFF_LENGTH = 64;
 
-const HEIC_TYPES = new Set(['image/heic', 'image/heif']);
-
-/** Whether a content type is a HEIC or HEIF, which only Safari can show. */
-export function isHeicType(contentType: string): boolean {
-    return HEIC_TYPES.has(contentType);
-}
-
-/** The content type of every format the sniffer knows, and the extension a download of it is named with. */
-const EXTENSIONS: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/gif': 'gif',
-    'image/heic': 'heic',
-    'image/heif': 'heif',
-    'video/mp4': 'mp4',
-    'video/quicktime': 'mov',
-    'video/x-m4v': 'm4v',
-    'video/3gpp': '3gp',
-    'video/x-msvideo': 'avi',
-    'video/webm': 'webm',
-    'video/x-matroska': 'mkv',
-    'video/mpeg': 'mpg',
-};
-
-/** The extension a download of a stored original gets, from its content type; `bin` for a type the sniffer never wrote. */
-export function extensionForType(contentType: string): string {
-    return EXTENSIONS[contentType] ?? 'bin';
-}
-
 // The brands an ISO base media file declares in its `ftyp` box, which is the one place a HEIC and an MP4 differ in
 // their first bytes: the major brand first, then the compatible ones, which is where a camera's own major brand,
 // Sony's XAVC for one, says it is also an MP4. A file whose brands are all unknown is refused rather than guessed at,

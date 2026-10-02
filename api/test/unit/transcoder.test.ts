@@ -21,8 +21,8 @@ function transcoderEnv(respond: () => Response): { env: TranscodeEnv; requests: 
 
 const JOB: TranscodeJob = {
     versionId: 'v1',
-    sourceKey: 'inbox/a',
-    src: 'https://bucket.example/inbox/a?signed',
+    sourceKey: 'originals/a',
+    src: 'https://bucket.example/originals/a?signed',
     mp4Put: 'https://bucket.example/derived/v1/video.mp4?signed',
     posterPut: 'https://bucket.example/derived/v1/poster.jpg?signed',
 };

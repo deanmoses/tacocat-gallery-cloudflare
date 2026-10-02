@@ -145,18 +145,32 @@ export const renameSchema = valibot.strictObject({ newName: valibot.string() });
 export const albumThumbnailSchema = valibot.strictObject({ mediaPath: valibot.string() });
 
 /**
- * The body of `POST /api/presigned/<albumPath>`: the media path each upload will have, and whether the item there is
- * being replaced, which presign refuses an upload under a taken name without.
+ * The body of `POST /api/presigned/<albumPath>`: the media path each upload will have, its file's extension, which
+ * says what type the file is stored as, and whether the item there is being replaced, which presign refuses an upload
+ * under a taken name without.
  */
 export const presignRequestSchema = valibot.pipe(
-    valibot.array(valibot.strictObject({ path: valibot.string(), replace: valibot.optional(valibot.boolean()) })),
+    valibot.array(
+        valibot.strictObject({
+            path: valibot.string(),
+            extension: valibot.string(),
+            replace: valibot.optional(valibot.boolean()),
+        }),
+    ),
     valibot.minLength(1, 'No media to upload'),
 );
 
 export type PresignRequest = valibot.InferOutput<typeof presignRequestSchema>;
 
-/** Where to PUT one upload, and the version id the item will carry once the upload is processed. */
-const presignedUpload = valibot.object({ url: valibot.string(), versionId: valibot.string() });
+/**
+ * Where to PUT one upload, the `Content-Type` the PUT has to carry, and the version id the item will carry once the
+ * upload is processed.
+ */
+const presignedUpload = valibot.object({
+    url: valibot.string(),
+    contentType: valibot.string(),
+    versionId: valibot.string(),
+});
 
 /** What `POST /api/presigned` returns: one presigned upload per path asked for, keyed by that path. */
 const presignResponse = valibot.record(valibot.string(), presignedUpload);

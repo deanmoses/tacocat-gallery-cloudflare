@@ -4,16 +4,16 @@ import {
     type PresignRequest,
     type PresignResponse,
     albumKey,
+    contentTypeOf,
     mediaKey,
-    mediaPath,
 } from '@tacocat-gallery/shared';
 import { type Orm, schema } from '../db';
-import { inboxKey, localUploadUrl, mintVersionId } from '../storage/keys';
+import { localUploadUrl, mintVersionId, originalKey } from '../storage/keys';
 import { type S3Credentials, presign } from '../storage/s3';
 import { isKey } from './writes';
 
 /** What issuing upload URLs takes: the credentials, the bucket the browser puts into, and whether uploads are local. */
-export type PresignEnv = S3Credentials & Pick<Env, 'UPLOADS_BUCKET' | 'UPLOAD_MODE'>;
+export type PresignEnv = S3Credentials & Pick<Env, 'ORIGINALS_BUCKET' | 'UPLOAD_MODE'>;
 
 export type Presigned = { uploads: PresignResponse; rowsRead: number } | { refused: string };
 
@@ -21,15 +21,18 @@ export type Presigned = { uploads: PresignResponse; rowsRead: number } | { refus
 interface Planned {
     path: string;
     key: ItemKey;
+    contentType: string;
     replace: boolean;
 }
 
 /**
  * Issues a presigned PUT per upload into `albumPath`, a day album, each under a freshly minted version id, and records
- * what each is for in the upload table, which is how the pipeline later knows what an inbox object is. Refuses the
- * whole request with the message for the first thing wrong: the rules are the ones the pipeline applies again when
- * the object lands, so that what is refused here is what would have failed then. Under `wrangler dev` the URL is the
- * Worker's own, which takes the PUT into its local bucket.
+ * what each is for in the upload table, which is how the pipeline later knows what the object is. The PUT goes
+ * straight to the original's own key and is signed with the content type the file's extension gives, so the original
+ * is stored as that type and a PUT claiming another fails its signature. Refuses the whole request with the message
+ * for the first thing wrong: the rules are the ones the pipeline applies again when the object lands, so that what is
+ * refused here is what would have failed then. Under `wrangler dev` the URL is the Worker's own, which takes the PUT
+ * into its local bucket.
  */
 export async function presignUploads(
     env: PresignEnv,
@@ -69,8 +72,9 @@ export async function presignUploads(
             return { refused: `A media item already exists at [${upload.path}]` };
         }
     }
-    const rows = planned.map((upload) => ({
-        versionId: mintVersionId(),
+    const minted = planned.map((upload) => ({ ...upload, versionId: mintVersionId() }));
+    const rows = minted.map((upload) => ({
+        versionId: upload.versionId,
         parentPath: upload.key.parentPath,
         itemName: upload.key.itemName,
         albumId: albumRow.id,
@@ -85,12 +89,17 @@ export async function presignUploads(
         await database.batch([first, ...rest]);
     }
     const uploads = await Promise.all(
-        rows.map(async (row) => {
+        minted.map(async ({ path, contentType, versionId }) => {
             const url =
                 env.UPLOAD_MODE === 'local'
-                    ? localUploadUrl(row.versionId)
-                    : await presign(env, { method: 'PUT', bucket: env.UPLOADS_BUCKET, key: inboxKey(row.versionId) });
-            return [mediaPath(row.parentPath, row.itemName), { url, versionId: row.versionId }] as const;
+                    ? localUploadUrl(versionId)
+                    : await presign(env, {
+                          method: 'PUT',
+                          bucket: env.ORIGINALS_BUCKET,
+                          key: originalKey(versionId),
+                          contentType,
+                      });
+            return [path, { url, contentType, versionId }] as const;
         }),
     );
     return { uploads: Object.fromEntries(uploads), rowsRead: 1 + children.length };
@@ -100,7 +109,7 @@ export async function presignUploads(
 function plan(albumPath: string, entries: PresignRequest): Planned[] | { refused: string } {
     const planned: Planned[] = [];
     const seen = new Set<string>();
-    for (const { path, replace = false } of entries) {
+    for (const { path, extension, replace = false } of entries) {
         const key = mediaKey(path);
         if (key === null) {
             return {
@@ -114,7 +123,11 @@ function plan(albumPath: string, entries: PresignRequest): Planned[] | { refused
             return { refused: `Duplicate media path [${path}]` };
         }
         seen.add(path);
-        planned.push({ path, key, replace });
+        const contentType = contentTypeOf(extension);
+        if (contentType === null) {
+            return { refused: `Media [${path}] is a file of a type the gallery does not take: [${extension}]` };
+        }
+        planned.push({ path, key, contentType, replace });
     }
     return planned;
 }

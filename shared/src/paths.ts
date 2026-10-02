@@ -8,6 +8,37 @@ export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'] as
 /** The video formats an upload may have. Which of them the transcoder can read is ffmpeg's business. */
 export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'mpg', 'mpeg'] as const;
 
+/**
+ * The content type an upload of each extension is stored with. A type's first extension names a download of it.
+ */
+const CONTENT_TYPES: Record<(typeof IMAGE_EXTENSIONS)[number] | (typeof VIDEO_EXTENSIONS)[number], string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    webm: 'video/webm',
+    m4v: 'video/x-m4v',
+    '3gp': 'video/3gpp',
+    mpg: 'video/mpeg',
+    mpeg: 'video/mpeg',
+};
+
+/** The content type of an upload whose file name has `extension`, or null for one the gallery does not take. */
+export function contentTypeOf(extension: string): string | null {
+    return Object.entries(CONTENT_TYPES).find(([known]) => known === extension)?.[1] ?? null;
+}
+
+/** The extension a download of a stored original gets, from its content type; `bin` for a type no upload has. */
+export function extensionForType(contentType: string): string {
+    return Object.entries(CONTENT_TYPES).find(([, type]) => type === contentType)?.[0] ?? 'bin';
+}
+
 const YEAR_NAME = /^\d{4}$/u;
 const DAY_NAME = /^\d{2}-\d{2}$/u;
 const MEDIA_NAME = /^[0-9a-z]+(?:_[0-9a-z]+)*$/u;
@@ -80,7 +111,7 @@ export function extensionOf(fileName: string): string {
     return fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
 }
 
-/** Whether an upload's file name says it is a video; the pipeline decides by the bytes, the app by this until then. */
+/** Whether an upload's file name says it is a video. */
 export function isVideoFile(fileName: string): boolean {
     return (VIDEO_EXTENSIONS as readonly string[]).includes(extensionOf(fileName));
 }

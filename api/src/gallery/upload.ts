@@ -7,13 +7,12 @@ import { type MediaType, type Size, mediaPath } from '@tacocat-gallery/shared';
 import { NOW, type Orm, orm, schema } from '../db';
 import { readImage } from '../media/exif';
 import { scanStart } from '../media/jpeg';
-import { type SniffedMedia, sniffMedia } from '../media/sniff';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../media/transcoder';
-import { inboxKey, originalKey, posterKey, videoKey } from '../storage/keys';
+import { originalKey, posterKey, videoKey } from '../storage/keys';
 import { readObject } from '../storage/read';
 import { type S3Credentials, presign } from '../storage/s3';
 import { type Steps, bounded, timed } from '../util/stages';
-import { CALL_LIMIT_MS, type ImageEnv, type Source, warmDerivatives } from './derivatives';
+import { type ImageEnv, warmDetail } from './derivatives';
 import { uploadErrorDelete, uploadErrorUpsert } from './errors';
 
 /** Shape of an R2 event notification delivered through a Queue. */
@@ -25,7 +24,7 @@ export interface R2EventMessage {
 }
 
 /** What signing the transcoder's URLs takes: the credentials, and which bucket is which. */
-type S3Env = S3Credentials & Pick<Env, 'UPLOADS_BUCKET' | 'DERIVED_BUCKET'>;
+type S3Env = S3Credentials & Pick<Env, 'ORIGINALS_BUCKET' | 'DERIVED_BUCKET'>;
 
 export type UploadEnv = TranscodeEnv & S3Env & ImageEnv & Pick<Env, 'DB'>;
 
@@ -43,32 +42,36 @@ export interface MediaFacts extends Size {
 const ALBUM = alias(schema.item, 'album');
 const OTHER = alias(schema.item, 'other');
 
+const ORIGINALS_PREFIX = originalKey('');
+
 /** The version id an upload event is about, or null for an event the pipeline has no work for. */
 export function uploadVersionOf(event: R2EventMessage): string | null {
     const { key } = event.object;
-    return !key.startsWith('inbox/') || event.action === 'DeleteObject' || event.action === 'LifecycleDeletion'
+    return !key.startsWith(ORIGINALS_PREFIX) || event.action === 'DeleteObject' || event.action === 'LifecycleDeletion'
         ? null
-        : key.slice('inbox/'.length);
+        : key.slice(ORIGINALS_PREFIX.length);
 }
 
+// A step whose work reports its own failure and is not worth a second try.
+const ONCE = { retries: { limit: 0, delay: 0 }, timeout: '2 minutes' } as const;
+
 /**
- * Turns an inbox object into a media item, or into an upload error the admin can read, as one Workflow instance's
- * steps. The object's key is a version id, and its upload row says what the id was minted for; an object nobody
- * presigned is left alone, and one whose upload is already complete is a redelivery, so it is dropped. A step ends
- * where the state changes in a way a retry must respect, and nowhere else, since each boundary persists its result
- * and costs time: one step reads what kind of file it is and, for a photo, its facts, and makes its first
- * derivatives, so a file that cannot be decoded is refused before anything is kept of it; one copies it to the
- * original's key, which never changes and is never written twice; one writes the item and the upload's completion in
- * one batch; one drops the inbox object last. A video's transcode is a step of its own, followed by one that makes its
- * derivatives from the poster, since the transcode is the slow one and its retries belong to the container. A step's
- * result is what the next needs and never the file, which stays inside the step that reads it.
+ * Turns an original the browser put into the bucket into a media item, or into an upload error the admin can read, as
+ * one Workflow instance's steps. The object's key is a version id, and its upload row says what the id was minted
+ * for; an object nobody presigned is left alone, and one whose upload is already complete is a redelivery, so nothing
+ * is done for it. A step ends where the state changes in a way a retry must respect, and nowhere else, since each
+ * boundary persists its result and costs time: one reads a photo's facts, or finds the file is a video, whose
+ * transcode is a step of its own, since it is the slow one and its retries belong to the container; one writes the
+ * item and the upload's completion in one batch. A step's result is what the next needs and never the file, which
+ * stays inside the step that reads it. The original stays where it is whatever happens, so an upload that failed can
+ * be replayed. The item written, the image its page shows is made ahead of its first reader, which is a favour to
+ * that reader and nothing the upload depends on.
  */
 export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, step: WorkflowStep): Promise<void> {
     const versionId = uploadVersionOf(event);
     if (versionId === null) {
         return;
     }
-    const key = inboxKey(versionId);
     const database = orm(env.DB);
     // Read outside the steps: whether the row is there, what it is named and whether it is a replacement never change
     // once presign wrote it. Its album and target, which the database clears, are read by the write itself. Its
@@ -76,16 +79,16 @@ export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, s
     // step judges it as it was.
     const upload = await database.select().from(schema.upload).where(eq(schema.upload.versionId, versionId)).get();
     if (upload === undefined) {
-        console.warn({ event: 'upload_unknown', key });
+        console.warn({ event: 'upload_unknown', versionId });
         return;
     }
     const path = mediaPath(upload.parentPath, upload.itemName);
     let written: MediaFacts | null;
     try {
-        written = await processUpload(env, step, key, upload, path);
+        written = await processUpload(env, step, upload, path);
     } catch (error) {
         // A step before the item was written spent its retries: the admin reads why, and the instance still ends
-        // errored, with the inbox object kept for a replay.
+        // errored.
         const message = error instanceof Error ? error.message : String(error);
         await step.do('record the failure', async () => {
             await uploadErrorUpsert(database, path, message).run();
@@ -96,28 +99,36 @@ export async function runUploadPipeline(event: R2EventMessage, env: UploadEnv, s
     if (written === null) {
         return;
     }
-    await step.do('drop the inbox object', async () => env.UPLOADS.delete(key));
+    const size = { width: written.width, height: written.height };
+    try {
+        await step.do('warm the detail image', ONCE, async () => warmDetail(env, path, versionId, size));
+    } catch (error) {
+        // The step itself failed, as when it timed out: the item is written, so the upload still succeeded.
+        console.warn({ event: 'detail_not_warmed', path, versionId, error: String(error) });
+    }
     console.info({ event: 'upload_processed', path, versionId, ...written });
 }
 
 async function processUpload(
     env: UploadEnv,
     step: WorkflowStep,
-    key: string,
     upload: Upload,
     path: string,
 ): Promise<MediaFacts | null> {
     const { versionId } = upload;
     const database = orm(env.DB);
-    const prepared = await prepare(env, step, key, upload, path);
-    if (prepared.outcome === 'rejected') {
-        await step.do('record the rejection', async () => reject(env, key, path, prepared.error));
+    const read = await readFacts(env, step, upload, path);
+    if (read.outcome === 'rejected') {
+        await step.do('record the rejection', async () => {
+            await uploadErrorUpsert(database, path, read.error).run();
+        });
+        console.error({ event: 'upload_rejected', path, versionId, error: read.error });
         return null;
     }
-    if (prepared.outcome !== 'ready') {
+    if (read.outcome !== 'ready') {
         return null;
     }
-    const outcome = await step.do('write the item', async () => recordUpload(database, upload, prepared.facts));
+    const outcome = await step.do('write the item', async () => recordUpload(database, upload, read.facts));
     if (!outcome.ok) {
         await step.do('record the refusal', async () => {
             await uploadErrorUpsert(database, path, outcome.error).run();
@@ -125,7 +136,7 @@ async function processUpload(
         console.error({ event: 'upload_refused', path, versionId, error: outcome.error });
         return null;
     }
-    return prepared.facts;
+    return read.facts;
 }
 
 const TRANSCODE_STEP = {
@@ -133,102 +144,44 @@ const TRANSCODE_STEP = {
     timeout: '30 minutes',
 } as const;
 
-type Prepared =
+type Read =
     | { outcome: 'redelivered' | 'gone' }
     | { outcome: 'rejected'; error: string }
-    | { outcome: 'ready'; facts: MediaFacts; contentType: string };
-
-type Sniffed =
-    | { outcome: 'redelivered' | 'gone' }
-    | { outcome: 'rejected'; error: string }
-    | ({ outcome: 'sniffed'; head: Uint8Array<ArrayBuffer> } & SniffedMedia);
+    | { outcome: 'ready'; facts: MediaFacts };
 
 // Enough for the EXIF, XMP and IPTC segments a camera or Photoshop writes ahead of a JPEG's pixels, each at most 64 KB.
-const HEAD_LENGTH = 256 * 1024;
+const START_LENGTH = 256 * 1024;
+
+/** How long the look at an original's metadata may take, where it answers in milliseconds. */
+const HEAD_LIMIT_MS = 60_000;
 
 /**
- * Everything the item needs from the file: its facts, the thumbnail and detail image, and then the original under its
- * permanent key. What kind of file it is comes from its first bytes, whatever it was named and whatever type the
- * browser sent. A photo's facts are read in the same step, since its bytes cannot cross a step and each step boundary
- * costs time the admin waits through. A video is transcoded in a step of its own, its stills coming from the
- * poster the container wrote. The original is copied last, in a step of its own, so that a file refused on the way
- * leaves nothing among the originals, and a derivative's retry never copies it again.
+ * Everything the item needs from the file. Whether it is a photo or a video is what the original was stored as, the
+ * content type presign signed its PUT with. A photo's facts are read from it; a video is transcoded, in a step of its
+ * own, and its facts are the transcoder's.
  */
-async function prepare(
-    env: UploadEnv,
-    step: WorkflowStep,
-    key: string,
-    upload: Upload,
-    path: string,
-): Promise<Prepared> {
+async function readFacts(env: UploadEnv, step: WorkflowStep, upload: Upload, path: string): Promise<Read> {
     const { versionId } = upload;
-    const read = await step.do("read the file, and make a photo's derivatives", async ({ attempt }) =>
-        staged(path, versionId, attempt, async (steps) => preparePhoto(env, key, upload, path, steps)),
+    const read = await step.do('read the file', async ({ attempt }) =>
+        staged(path, versionId, attempt, async (steps) => readPhoto(env, upload, steps)),
     );
-    const prepared =
-        read.outcome === 'video' ? await prepareVideo(env, step, key, upload, path, read.contentType) : read;
-    if (prepared.outcome !== 'ready') {
-        return prepared;
+    if (read.outcome !== 'video') {
+        return read;
     }
-    return step.do('store the original', async ({ attempt }) =>
-        staged(path, versionId, attempt, async (steps): Promise<Prepared> => {
-            // A video can be gigabytes, so its copy has no limit of its own and is bounded by the step's timeout.
-            const copy = async (): Promise<boolean> => storeOriginal(env, key, versionId, prepared.contentType, path);
-            const stored = await (prepared.facts.mediaType === 'video'
-                ? timed(steps, 'original', copy)
-                : bounded(steps, 'original', CALL_LIMIT_MS, copy));
-            return stored ? prepared : { outcome: 'rejected', error: 'the upload vanished before it could be kept' };
-        }),
-    );
-}
-
-/** A video transcoded and its derivatives made from the poster the transcoder wrote. */
-async function prepareVideo(
-    env: UploadEnv,
-    step: WorkflowStep,
-    key: string,
-    upload: Upload,
-    path: string,
-    contentType: string,
-): Promise<Prepared> {
-    const { versionId } = upload;
     // Room for a long clip, and retries spaced for a container that could not start, as when every instance is busy. A
     // file ffmpeg rejects is an outcome rather than a throw, so it is never retried.
-    const transcoded = await step.do('transcode the video', TRANSCODE_STEP, async () => {
-        const result = await transcodeVideo(env, await transcodeJob(env, key, versionId));
-        return result.ok ? { outcome: 'transcoded' as const, ...result } : { outcome: 'rejected' as const, ...result };
+    return step.do('transcode the video', TRANSCODE_STEP, async (): Promise<Read> => {
+        const result = await transcodeVideo(env, await transcodeJob(env, versionId));
+        if (!result.ok) {
+            return { outcome: 'rejected', error: result.error };
+        }
+        const { width, height, durationSeconds } = result;
+        // ExifReader has nothing to say about a video container, so the caption stays empty.
+        return {
+            outcome: 'ready',
+            facts: { mediaType: 'video', title: null, description: null, tags: null, width, height, durationSeconds },
+        };
     });
-    if (transcoded.outcome !== 'transcoded') {
-        return transcoded;
-    }
-    // ExifReader has nothing to say about a video container, so the caption stays empty.
-    return step.do("make the video's derivatives", async ({ attempt }) =>
-        staged(path, versionId, attempt, async (steps): Promise<Prepared> => {
-            const { width, height, durationSeconds } = transcoded;
-            const facts: MediaFacts = {
-                mediaType: 'video',
-                title: null,
-                description: null,
-                tags: null,
-                width,
-                height,
-                durationSeconds,
-            };
-            // Nothing makes an image of the video itself, so a video whose transcoder wrote no poster, which only a
-            // test's stand-in does, is left for its first reader.
-            const poster = await env.DERIVED.head(posterKey(versionId));
-            if (poster === null) {
-                console.warn({ event: 'derivative_not_warmed', versionId, missing: posterKey(versionId) });
-                return { outcome: 'ready', facts, contentType };
-            }
-            const source: Source = {
-                bucket: 'DERIVED',
-                key: posterKey(versionId),
-                contentType: poster.httpMetadata?.contentType,
-            };
-            return deriving(env, path, versionId, facts, contentType, source, steps);
-        }),
-    );
 }
 
 /**
@@ -261,118 +214,61 @@ async function staged<T extends { outcome: string }>(
     }
 }
 
-/** A photo made ready from the inbox object, or word that the object is a video, which the caller transcodes. */
-async function preparePhoto(
-    env: UploadEnv,
-    key: string,
-    upload: Upload,
-    path: string,
-    steps: Steps,
-): Promise<Prepared | { outcome: 'video'; contentType: string }> {
-    const kind = await bounded(steps, 'sniff', CALL_LIMIT_MS, async () => sniff(env, key, upload));
-    if (kind.outcome !== 'sniffed') {
-        return kind;
+/** A photo's facts read from its original, or word that the original is a video, which the caller transcodes. */
+async function readPhoto(env: UploadEnv, upload: Upload, steps: Steps): Promise<Read | { outcome: 'video' }> {
+    if (upload.completedAt !== null) {
+        return { outcome: 'redelivered' };
     }
-    const { contentType, head } = kind;
-    if (kind.mediaType === 'video') {
-        return { outcome: 'video', contentType };
+    const key = originalKey(upload.versionId);
+    const original = await bounded(steps, 'head', HEAD_LIMIT_MS, async () => env.ORIGINALS.head(key));
+    if (original === null) {
+        return { outcome: 'gone' };
     }
-    // A JPEG's facts all come ahead of its pixels, so one whose headers fit in the head is never read whole. A whole
-    // read has no limit of its own beyond the stall guard in `readObject`, since a 50 MB photo still arriving is not
-    // stuck, and is bounded by the step's timeout.
-    const bytes =
-        contentType === 'image/jpeg' && scanStart(head) !== null
-            ? head
-            : await timed(steps, 'read', async () => readObject(env.UPLOADS, key));
+    const contentType = original.httpMetadata?.contentType;
+    if (contentType?.startsWith('video/') === true) {
+        return { outcome: 'video' };
+    }
+    const bytes = await photoBytes(env.ORIGINALS, key, contentType, steps);
     if (bytes === null) {
         return { outcome: 'gone' };
     }
     const read = await timed(steps, 'exif', async () => readImage(bytes));
-    if (!read.ok) {
-        return { outcome: 'rejected', error: read.error };
-    }
-    const facts: MediaFacts = { mediaType: 'image', ...read.facts, durationSeconds: null };
-    return deriving(env, path, upload.versionId, facts, contentType, { bucket: 'UPLOADS', key, contentType }, steps);
+    return read.ok
+        ? { outcome: 'ready', facts: { mediaType: 'image', ...read.facts, durationSeconds: null } }
+        : { outcome: 'rejected', error: read.error };
 }
 
 /**
- * What the inbox object is, from its first bytes, once the upload is known to be still wanted and the object there,
- * and those bytes.
+ * As much of the photo as its facts are read from. A JPEG's all come ahead of its pixels, so one whose headers fit in
+ * its start is never read whole. Neither read has a limit of its own beyond the stall guard in `readObject`, since a
+ * 50 MB photo still arriving is not stuck, and both are bounded by the step's timeout.
  */
-async function sniff(env: UploadEnv, key: string, upload: Upload): Promise<Sniffed> {
-    if (await redelivered(env, key, upload)) {
-        return { outcome: 'redelivered' };
-    }
-    const head = await readObject(env.UPLOADS, key, HEAD_LENGTH);
-    if (head === null) {
-        return { outcome: 'gone' };
-    }
-    const sniffed = sniffMedia(head);
-    return sniffed === null
-        ? { outcome: 'rejected', error: 'not a photo or video in a format the gallery takes' }
-        : { outcome: 'sniffed', head, ...sniffed };
-}
-
-/** Whether the upload was already complete when this instance came to it, in which case its object is dropped. */
-async function redelivered(env: UploadEnv, key: string, upload: Upload): Promise<boolean> {
-    if (upload.completedAt === null) {
-        return false;
-    }
-    await env.UPLOADS.delete(key);
-    return true;
-}
-
-/** The facts, once the thumbnail and the detail image are made from `source`. */
-async function deriving(
-    env: UploadEnv,
-    path: string,
-    versionId: string,
-    facts: MediaFacts,
-    contentType: string,
-    source: Source,
-    steps: Steps,
-): Promise<Prepared> {
-    const warmed = await warmDerivatives(env, path, versionId, facts, source, steps);
-    return warmed.ok ? { outcome: 'ready', facts, contentType } : { outcome: 'rejected', error: warmed.error };
-}
-
-/**
- * The inbox object copied to the key it keeps for good, typed by what its bytes are, and labelled with the path it was
- * uploaded to, unless an attempt that failed after its copy already put it there: an original is never written twice.
- * False when there is neither.
- */
-async function storeOriginal(
-    env: UploadEnv,
+async function photoBytes(
+    bucket: R2Bucket,
     key: string,
-    versionId: string,
-    contentType: string,
-    path: string,
-): Promise<boolean> {
-    if (await env.ORIGINALS.head(originalKey(versionId))) {
-        return true;
+    contentType: string | undefined,
+    steps: Steps,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+    if (contentType === 'image/jpeg') {
+        const start = await timed(steps, 'start', async () => readObject(bucket, key, START_LENGTH));
+        if (start === null || scanStart(start) !== null) {
+            return start;
+        }
     }
-    const inbox = await env.UPLOADS.get(key);
-    if (inbox === null) {
-        return false;
-    }
-    await env.ORIGINALS.put(originalKey(versionId), inbox.body, {
-        httpMetadata: { contentType },
-        customMetadata: { path },
-    });
-    return true;
+    return timed(steps, 'read', async () => readObject(bucket, key));
 }
 
 /**
- * Signed URLs for the container to read the source from the uploads bucket and write the MP4 and poster for
- * `versionId` into the derived bucket, where every derivative of a version lives.
+ * Signed URLs for the container to read the version's original and write its MP4 and poster into the derived bucket,
+ * where every derivative of a version lives.
  */
-export async function transcodeJob(env: S3Env, sourceKey: string, versionId: string): Promise<TranscodeJob> {
-    const uploads = env.UPLOADS_BUCKET;
+export async function transcodeJob(env: S3Env, versionId: string): Promise<TranscodeJob> {
     const derived = env.DERIVED_BUCKET;
+    const sourceKey = originalKey(versionId);
     return {
         versionId,
         sourceKey,
-        src: await presign(env, { method: 'GET', bucket: uploads, key: sourceKey }),
+        src: await presign(env, { method: 'GET', bucket: env.ORIGINALS_BUCKET, key: sourceKey }),
         mp4Put: await presign(env, {
             method: 'PUT',
             bucket: derived,
@@ -595,11 +491,4 @@ async function explain(database: Orm, upload: Upload): Promise<Recorded> {
                 ? `Album [${upload.parentPath}] was deleted before the upload finished`
                 : `A media item already exists at [${path}]`,
     };
-}
-
-/** Records why the file could not become an item, for the admin to see, and drops it. */
-async function reject(env: UploadEnv, key: string, path: string, error: string): Promise<void> {
-    await uploadErrorUpsert(orm(env.DB), path, error).run();
-    await env.UPLOADS.delete(key);
-    console.error({ event: 'upload_rejected', path, error });
 }

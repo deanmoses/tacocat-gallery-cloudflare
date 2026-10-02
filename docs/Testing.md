@@ -10,7 +10,7 @@ A test's directory says what it touches. All but `stack/` and `transcoder/` run 
 | ----------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `api/test/unit/`        | Only the code under test: no bindings                                                    | how the transcoder's reply turns into a width and height |
 | `api/test/db/`          | D1, through the query functions in `api/src`                                             | how many rows a write reads                              |
-| `api/test/integration/` | The Worker's `fetch`, `queue` and `scheduled` handlers, with D1, R2 and the Queue behind | an upload moving from the inbox to its immutable key     |
+| `api/test/integration/` | The Worker's `fetch`, `queue` and `scheduled` handlers, with D1, R2 and the Queue behind | an original put under its key becoming an item           |
 | `api/test/stack/`       | Everything `wrangler dev` runs, from Node, the asset router included                     | which paths reach the Worker and which get the web app   |
 | `api/test/transcoder/`  | The container's server as its image runs it, from Node, with fake ffmpeg and ffprobe     | an encode stopped when the Worker hangs up               |
 

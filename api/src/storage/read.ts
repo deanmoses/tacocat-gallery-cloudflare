@@ -9,7 +9,7 @@ type Read = { outcome: 'read'; bytes: Uint8Array<ArrayBuffer> | null } | { outco
 /**
  * The object at `key`, or its first `length` bytes; null when there is none. A read that goes `READ_STALL_MS` without
  * a byte, before its body starts or partway through, is cancelled and tried again, up to three tries, each logged with
- * how far it got. Reads of the upload inbox have hung for minutes in the pipeline's Workflow, on objects that read in
+ * how far it got. Reads of an upload have hung for minutes in the pipeline's Workflow, on objects that read in
  * under a second on the tries before and after, and a stream, unlike `arrayBuffer()`, can be given up on.
  */
 export async function readObject(

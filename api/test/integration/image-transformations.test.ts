@@ -2,8 +2,8 @@ import { env } from 'cloudflare:workers';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import { imageUrl, originalUrl } from '@tacocat-gallery/shared';
 import { describe, expect, it, vi } from 'vitest';
-import { warmDerivatives } from '../../src/gallery/derivatives';
-import { derivedPrefix, inboxKey, originalKey, posterKey } from '../../src/storage/keys';
+import { warmDetail } from '../../src/gallery/derivatives';
+import { derivedPrefix, originalKey, posterKey } from '../../src/storage/keys';
 import { fixtureBytes } from '../gallery';
 import { call } from '../helpers';
 import { testVersionId } from '../version-id';
@@ -147,43 +147,15 @@ describe('derived images made by Image Transformations', () => {
         expect(served.byteLength).toBeLessThan(jpg.byteLength);
     });
 
-    it("makes an upload's three images from a signed read of the file in the inbox", async () => {
-        await env.UPLOADS.put(inboxKey(VERSION), jpg);
+    it("makes an upload's detail image from a signed read of its original", async () => {
+        await env.ORIGINALS.put(originalKey(VERSION), jpg, { httpMetadata: { contentType: 'image/jpeg' } });
         const asked = standInTransformations();
-        const warmed = await warmDerivatives(
-            { ...env, ...TRANSFORMATIONS },
-            '/2024/06-15/d',
-            VERSION,
-            { width: 300, height: 225 },
-            { bucket: 'UPLOADS', key: inboxKey(VERSION), contentType: 'image/jpeg' },
-            {},
-        );
+        await warmDetail({ ...env, ...TRANSFORMATIONS }, '/2024/06-15/d', VERSION, { width: 300, height: 225 });
         const stored = await env.DERIVED.list({ prefix: `${derivedPrefix(VERSION)}/` });
 
-        expect(warmed).toStrictEqual({ ok: true });
-        expect(new Set(asked.map(signed))).toStrictEqual(new Set([`/staging-uploads/${inboxKey(VERSION)}`]));
-        expect(asked.map((one) => one.image?.width ?? 0).toSorted((left, right) => left - right)).toStrictEqual([
-            200, 300, 400,
-        ]);
-        expect(stored.objects).toHaveLength(3);
-    });
-
-    it("says an upload's image cannot be decoded when the transformation refuses it", async () => {
-        await env.UPLOADS.put(inboxKey(VERSION), jpg);
-        standInTransformations(() => new Response('', { status: 415, headers: { 'cf-resized': 'err=9412' } }));
-        const warmed = await warmDerivatives(
-            { ...env, ...TRANSFORMATIONS },
-            '/2024/06-15/d',
-            VERSION,
-            { width: 300, height: 225 },
-            { bucket: 'UPLOADS', key: inboxKey(VERSION), contentType: 'image/heic' },
-            {},
-        );
-
-        expect(warmed).toStrictEqual({
-            ok: false,
-            error: `the image cannot be decoded: Image Transformations made nothing of ${inboxKey(VERSION)}: HTTP 415, cf-resized err=9412`,
-        });
+        expect(asked.map(signed)).toStrictEqual([`/staging-originals/${originalKey(VERSION)}`]);
+        expect(asked.map((one) => one.image?.width)).toStrictEqual([300]);
+        expect(stored.objects.map((object) => object.key)).toStrictEqual([`${derivedPrefix(VERSION)}/300`]);
     });
 });
 

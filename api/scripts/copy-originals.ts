@@ -3,7 +3,7 @@
 // bytes never leave R2: each is one `CopyObject`. For each original it asks whether the target already holds it, and
 // skips one it does, so a rerun copies only what the last run did not; then reads the source's first bytes, refuses a
 // source whose size or ETag is not that of the S3 file the id was minted for, which is what a photo replaced on AWS
-// after the import bucket was filled looks like, and judges the bytes with the Worker's own sniffer, which gives the
+// after the import bucket was filled looks like, and judges the bytes with the sniffer in sniff.ts, which gives the
 // content type as an upload's is given and refuses a file the gallery could not serve; then copies it, with the content
 // type and with its gallery path and S3 version id as metadata; then checks the copy's size against the source's.
 // Newest albums go first.
@@ -19,7 +19,7 @@
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { AwsClient } from 'aws4fetch';
-import { SNIFF_LENGTH, sniffMedia } from '../src/media/sniff.ts';
+import { SNIFF_LENGTH, sniffMedia } from './sniff.ts';
 import { originalKey } from '../src/storage/keys.ts';
 import { ACCOUNT_ID } from '../src/storage/s3.ts';
 import { devVars } from './dev-vars.ts';

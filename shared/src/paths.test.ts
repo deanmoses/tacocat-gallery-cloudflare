@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+    IMAGE_EXTENSIONS,
+    VIDEO_EXTENSIONS,
     albumDate,
     albumKey,
+    contentTypeOf,
     deduplicateNames,
+    extensionForType,
     extensionOf,
     hrefOf,
     isAlbumPath,
@@ -258,6 +262,36 @@ describe(isHeicFile, () => {
 describe(extensionOf, () => {
     it('is lowercase and without the dot', () => {
         expect(extensionOf('IMG_0001.HEIC')).toBe('heic');
+    });
+});
+
+describe(contentTypeOf, () => {
+    it.each([
+        { extension: 'jpg', type: 'image/jpeg' },
+        { extension: 'jpeg', type: 'image/jpeg' },
+        { extension: 'heic', type: 'image/heic' },
+        { extension: 'mov', type: 'video/quicktime' },
+        { extension: 'JPG', type: null },
+        { extension: 'pdf', type: null },
+        { extension: 'toString', type: null },
+        { extension: '', type: null },
+    ])('says $type for $extension', ({ extension, type }) => {
+        expect(contentTypeOf(extension)).toBe(type);
+    });
+
+    it('has a type for every extension an upload may have', () => {
+        expect([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].map(contentTypeOf)).not.toContain(null);
+    });
+});
+
+describe(extensionForType, () => {
+    it.each([
+        { type: 'image/jpeg', extension: 'jpg' },
+        { type: 'video/mpeg', extension: 'mpg' },
+        { type: 'image/heif', extension: 'heif' },
+        { type: 'application/octet-stream', extension: 'bin' },
+    ])('names a download of $type .$extension', ({ type, extension }) => {
+        expect(extensionForType(type)).toBe(extension);
     });
 });
 

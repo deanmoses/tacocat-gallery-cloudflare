@@ -26,7 +26,11 @@ export interface ListedObject {
     uploaded: string;
 }
 
-/** Presigned URL for one request, good for an hour, so upload and transcode bytes never pass through the Worker. */
+/**
+ * Presigned URL for one request, good for an hour, so upload and transcode bytes never pass through the Worker. A
+ * `contentType` is signed with it, so the request has to carry that `Content-Type` and no other, which is then the
+ * type the object is stored with.
+ */
 export async function presign(credentials: S3Credentials, request: S3Request): Promise<string> {
     const target = s3Url(request.bucket, request.key);
     target.searchParams.set('X-Amz-Expires', '3600');
@@ -34,7 +38,7 @@ export async function presign(credentials: S3Credentials, request: S3Request): P
         method: request.method,
         ...(request.contentType !== undefined && { headers: { 'content-type': request.contentType } }),
     });
-    const signed = await client(credentials).sign(unsigned, { aws: { signQuery: true } });
+    const signed = await client(credentials).sign(unsigned, { aws: { signQuery: true, allHeaders: true } });
     return signed.url;
 }
 

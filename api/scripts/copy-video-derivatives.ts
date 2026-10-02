@@ -19,7 +19,7 @@ import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { AwsClient } from 'aws4fetch';
 import * as valibot from 'valibot';
-import { SNIFF_LENGTH, sniffMedia } from '../src/media/sniff.ts';
+import { SNIFF_LENGTH, sniffMedia } from './sniff.ts';
 import { ACCOUNT_ID } from '../src/storage/s3.ts';
 import { awsPath, readScan } from './aws-scan.ts';
 import { type DerivativeCopy, derivativeCopies } from './aws-video-derivatives.ts';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatForSource, outputFormat, outputOptions, resize } from '../../src/media/images';
+import { formatForSource, isHeicType, outputFormat, outputOptions, resize } from '../../src/media/images';
 
 const PHOTO = { path: '/2001/06-15/felix', versionId: 'v1' };
 
@@ -90,5 +90,17 @@ describe(outputOptions, () => {
         },
     ] as const)('encodes $name', ({ format, size, expected }) => {
         expect(outputOptions(format, size)).toStrictEqual(expected);
+    });
+});
+
+describe(isHeicType, () => {
+    it('is true of the two HEIF content types and nothing else', () => {
+        expect(['image/heic', 'image/heif', 'image/jpeg', 'video/quicktime', ''].map(isHeicType)).toStrictEqual([
+            true,
+            true,
+            false,
+            false,
+            false,
+        ]);
     });
 });
