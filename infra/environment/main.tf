@@ -12,7 +12,7 @@ variable "prefix" {
 
 variable "site_origin" {
   type        = string
-  description = "The origin the web app runs on, such as https://pix.deanmoses.com, which browsers upload from."
+  description = "The origin the web app runs on, such as https://pix.tacocat.com, which browsers upload from."
 }
 
 locals {

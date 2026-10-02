@@ -5,7 +5,7 @@
 The whole site is one Worker per environment, serving the web app and everything behind it from the site's own hostname.
 
 ```text
-     the site's hostname (pix.deanmoses.com, staging-pix.tacocat.com)
+     the site's hostname (pix.tacocat.com, staging-pix.tacocat.com)
                                   |
                  +----------------+----------------+
                  |                                 |

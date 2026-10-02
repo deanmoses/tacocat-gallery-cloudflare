@@ -52,7 +52,7 @@ const USAGE =
 const SITES = {
     local: 'http://localhost:8787',
     staging: 'https://staging-pix.tacocat.com',
-    production: 'https://pix.deanmoses.com',
+    production: 'https://pix.tacocat.com',
 };
 const AT_ONCE = 8;
 const MAX_FAILURES = 5;

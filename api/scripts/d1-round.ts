@@ -4,7 +4,7 @@
 // D1 idle and the repeats show what the replica does next; each later location makes two reads.
 //
 // Usage: node api/scripts/d1-round.ts <host> <path> [--repeats 3] [--from paris,sanjose]
-//        node api/scripts/d1-round.ts pix.deanmoses.com /api/album/2025/09-29/
+//        node api/scripts/d1-round.ts pix.tacocat.com /api/album/2025/09-29/
 //
 // Locations: paris, marseille, sanjose, losangeles, batonrouge. Reads GLOBALPING_TOKEN from api/.dev.vars and never
 // prints it. Every read reaches the site, so a round is not idle for the round after it: leave 20 minutes or more
