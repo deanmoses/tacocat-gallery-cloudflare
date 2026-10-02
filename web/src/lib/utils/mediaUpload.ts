@@ -36,6 +36,38 @@ export async function uploadToBucket(file: File, presigned: PresignedUpload): Pr
     }
 }
 
+// How long to wait before each try after the first, when the server could not start the upload's processing.
+const ANNOUNCE_RETRY_MS = [1000, 3000];
+
+/**
+ * Tells the server the upload's PUT succeeded, so it starts processing the file at once. Once this succeeds, the
+ * upload will be processed whatever the page does next. The server answers 503 when it could not start the processing,
+ * which is worth another try, as is a request that never reached it.
+ *
+ * @param versionId The version presign minted for the upload
+ * @returns Success, or failure with error message
+ */
+export async function announceUpload(versionId: string): Promise<UploadResult> {
+    for (let attempt = 0; ; attempt++) {
+        let error: string;
+        let retryable: boolean;
+        try {
+            const response = await callApi(API.uploaded, `/${versionId}`);
+            if (response.ok) return { success: true };
+            error = await failureMessage(response);
+            retryable = response.status >= 500;
+        } catch (thrown) {
+            error = thrown instanceof Error ? thrown.message : String(thrown);
+            retryable = true;
+        }
+        const delay = ANNOUNCE_RETRY_MS[attempt];
+        if (!retryable || delay === undefined) return { success: false, error };
+        await new Promise((resolve) => {
+            setTimeout(resolve, delay);
+        });
+    }
+}
+
 /**
  * Fetch presigned upload URLs from the server. Each upload comes back with the versionId the media item will carry once
  * the server has processed it.

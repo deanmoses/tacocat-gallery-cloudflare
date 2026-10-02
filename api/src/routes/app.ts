@@ -33,6 +33,7 @@ import { derivedViaCacheApi, raw } from './images';
 import { putItem } from './items';
 import { localUploadRoute } from './upload';
 import { presignRoute } from './presigned';
+import { uploadedRoute } from './uploaded';
 import { search } from './search';
 import { media } from './video';
 
@@ -150,6 +151,7 @@ export function createApp(): Hono<App> {
     app.put('/upload/:versionId', async (context) =>
         localUploadRoute(context.req.raw, context.env, context.req.param('versionId')),
     );
+    answer(API.uploaded, async (context) => uploadedRoute(context.req.raw, context.env));
     answer(API.uploadErrors, async (context) => uploadErrors(context.req.raw, context.env));
     answer(API.createAlbum, async (context) => createAlbumRoute(context.req.raw, context.env));
     answer(API.updateAlbum, async (context) => updateAlbumRoute(context.req.raw, context.env));

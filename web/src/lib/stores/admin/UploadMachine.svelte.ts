@@ -5,7 +5,7 @@ import { albumState, getUploadsForAlbum } from '../AlbumState.svelte';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { findProcessedUploads } from '$lib/utils/uploadUtils';
 import { validateMediaBatch } from '$lib/utils/mediaValidation';
-import { fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
+import { announceUpload, fetchPresignedUrls, uploadToBucket } from '$lib/utils/mediaUpload';
 import {
     type PresignRequest,
     type PresignedUpload,
@@ -225,12 +225,17 @@ class UploadMachine {
     ): Promise<void> {
         this.#uploadStarted(mediaItemToUpload.path);
         const result = await uploadToBucket(mediaItemToUpload.file, presigned);
-        if (result.success) {
-            console.log(`Uploaded [${mediaItemToUpload.path}] as versionId [${presigned.versionId}]`);
-            this.#uploadProcessing(mediaItemToUpload.path, presigned.versionId);
-        } else {
+        if (!result.success) {
             this.#uploadErrored(mediaItemToUpload.path, result.error);
+            return;
         }
+        console.log(`Uploaded [${mediaItemToUpload.path}] as versionId [${presigned.versionId}]`);
+        const announced = await announceUpload(presigned.versionId);
+        if (!announced.success) {
+            this.#uploadErrored(mediaItemToUpload.path, `uploaded, but processing did not start: ${announced.error}`);
+            return;
+        }
+        this.#uploadProcessing(mediaItemToUpload.path, presigned.versionId);
     }
 
     /**

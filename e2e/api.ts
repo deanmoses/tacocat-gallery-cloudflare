@@ -64,8 +64,8 @@ export async function setThumbnail(origin: string, albumPath: string, mediaPath:
 }
 
 /**
- * Uploads `file` to become the media item at `path`, as the app does under `UPLOAD_MODE=local`: a presigned URL, then
- * a PUT to it. The item is there once the pipeline has run, which this does not wait for.
+ * Uploads `file` to become the media item at `path`, as the app does under `UPLOAD_MODE=local`: a presigned URL, a PUT
+ * to it, then word to the Worker that it arrived. The item is there once the pipeline has run, which this does not wait for.
  */
 export async function uploadFile(origin: string, path: string, file: string): Promise<void> {
     const presigned = await ensureOk(
@@ -86,5 +86,9 @@ export async function uploadFile(origin: string, path: string, file: string): Pr
             body: await readFile(file),
         }),
         `uploading ${path}`,
+    );
+    await ensureOk(
+        await adminFetch(origin, `/api/uploaded/${upload.versionId}`, { method: 'POST' }),
+        `announcing ${path}`,
     );
 }

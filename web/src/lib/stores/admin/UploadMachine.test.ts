@@ -24,6 +24,7 @@ describe('uploadMachine', () => {
             jsonResponse({ [PATH]: { url: '/originals/v2', contentType: 'image/heic', versionId: 'v2' } }),
         );
         server.put('/originals/v2', new Response(null, { status: 200 }));
+        server.post('/api/uploaded/v2', new Response(null, { status: 202 }));
         server.post('/api/errors', jsonResponse({ errors: {} }));
         server.get(
             '/api/album/2001/12-31/',
@@ -46,5 +47,29 @@ describe('uploadMachine', () => {
             pathname: '/api/presigned/2001/12-31/',
             body: [{ path: PATH, extension: 'heic' }],
         });
+        expect(server.calls.slice(1, 3)).toStrictEqual([
+            { method: 'PUT', pathname: '/originals/v2', body: undefined },
+            { method: 'POST', pathname: '/api/uploaded/v2', body: undefined },
+        ]);
+    });
+
+    it('reports an upload whose processing never started, and stops waiting for it', async () => {
+        const server = fakeServer();
+        server.post(
+            '/api/presigned/2001/12-31/',
+            jsonResponse({ [PATH]: { url: '/originals/v2', contentType: 'image/heic', versionId: 'v2' } }),
+        );
+        server.put('/originals/v2', new Response(null, { status: 200 }));
+        server.post('/api/uploaded/v2', jsonResponse({ errorMessage: 'Workflows unavailable' }, 503));
+        const failed = vi.spyOn(console, 'error');
+
+        uploadMachine.uploadMediaItem(PATH, new File(['bytes'], 'Felix.HEIC', { type: 'image/heic' }));
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(albumState.uploads).toStrictEqual([]);
+        expect(failed).toHaveBeenCalledWith(
+            `Error uploading [${PATH}]: uploaded, but processing did not start: Workflows unavailable`,
+        );
+        expect(server.calls.filter((call) => call.pathname === '/api/uploaded/v2')).toHaveLength(3);
     });
 });

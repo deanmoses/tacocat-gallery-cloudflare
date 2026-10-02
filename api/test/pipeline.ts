@@ -6,9 +6,41 @@ import {
     waitOnExecutionContext,
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
+import { parentPathOf, parsePresigned } from '@tacocat-gallery/shared';
 import type { R2EventMessage } from '../src/gallery/upload';
 import { originalKey } from '../src/storage/keys';
-import { handler } from './helpers';
+import { handler, write } from './helpers';
+
+export interface Staged {
+    replace?: boolean;
+    /** The extension of the file's name, which decides the type it is stored as. */
+    extension?: string;
+}
+
+/**
+ * Asks for an upload URL as the app does and puts the file where the browser's PUT would, as the type the URL was
+ * signed with, returning the version id the upload was minted, ready for its event to be delivered.
+ */
+export async function stage(
+    path: string,
+    file: Uint8Array,
+    { replace, extension = 'jpg' }: Staged = {},
+): Promise<string> {
+    const response = await write('POST', `/api/presigned${parentPathOf(path)}`, [
+        { path, extension, ...(replace === undefined ? {} : { replace }) },
+    ]);
+    if (!response.ok) {
+        throw new Error(`presign refused: ${await response.text()}`);
+    }
+    const presigned = parsePresigned(await response.json())[path];
+    if (presigned === undefined) {
+        throw new Error(`nothing presigned for ${path}`);
+    }
+    await env.ORIGINALS.put(originalKey(presigned.versionId), file, {
+        httpMetadata: { contentType: presigned.contentType },
+    });
+    return presigned.versionId;
+}
 
 function uploadEvent(versionId: string): R2EventMessage {
     return {

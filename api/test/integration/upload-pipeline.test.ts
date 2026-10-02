@@ -11,7 +11,7 @@ import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import noTagsDataUrl from '../../fixtures/NoTags.jpg?inline';
 import pngDataUrl from '../../fixtures/pngFormat.png?inline';
 import { eq } from 'drizzle-orm';
-import { imageUrl, parsePresigned } from '@tacocat-gallery/shared';
+import { imageUrl } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { WARM_LIMIT_MS } from '../../src/gallery/derivatives';
@@ -20,7 +20,7 @@ import { derivedPrefix, originalKey, posterKey, videoKey } from '../../src/stora
 import { READ_STALL_MS } from '../../src/storage/read';
 import { fixtureBytes } from '../gallery';
 import { albumAsAdmin, call, callAsAdmin, handler, putDay, putItem, storedItem, uploadErrors, write } from '../helpers';
-import { deliver, uploadBatch } from '../pipeline';
+import { type Staged, deliver, stage, uploadBatch } from '../pipeline';
 import { testVersionId } from '../version-id';
 
 const jpg = fixtureBytes(jpgDataUrl);
@@ -38,33 +38,6 @@ const mov = Uint8Array.from([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 
 
 const DAY = '/2024/06-15/';
 const IMAGE = { itemType: 'media', mediaType: 'image', width: 300, height: 225 } as const;
-
-interface Staged {
-    replace?: boolean;
-    /** The extension of the file's name, which decides the type it is stored as. */
-    extension?: string;
-}
-
-/**
- * Asks for an upload URL as the app does and puts the file where the browser's PUT would, as the type the URL was
- * signed with, returning the version id the upload was minted, ready for its event to be delivered.
- */
-async function stage(path: string, file: Uint8Array, { replace, extension = 'jpg' }: Staged = {}): Promise<string> {
-    const response = await write('POST', `/api/presigned${DAY}`, [
-        { path, extension, ...(replace === undefined ? {} : { replace }) },
-    ]);
-    if (!response.ok) {
-        throw new Error(`presign refused: ${await response.text()}`);
-    }
-    const presigned = parsePresigned(await response.json())[path];
-    if (presigned === undefined) {
-        throw new Error(`nothing presigned for ${path}`);
-    }
-    await env.ORIGINALS.put(originalKey(presigned.versionId), file, {
-        httpMetadata: { contentType: presigned.contentType },
-    });
-    return presigned.versionId;
-}
 
 /** The whole upload: staged and delivered. */
 async function upload(path: string, file: Uint8Array, staged: Staged = {}): Promise<string> {
@@ -830,7 +803,8 @@ describe('a batch of uploads', () => {
         }
     });
 
-    it('leaves an event unacked when its pipeline cannot start, so the queue delivers it again', async () => {
+    it('leaves an event unacked when its pipeline cannot start, so the queue delivers it again, and logs why', async () => {
+        const failed = vi.spyOn(console, 'error');
         vi.spyOn(env.UPLOAD_PIPELINE, 'create').mockRejectedValueOnce(new Error('Workflows unavailable'));
         const batch = uploadBatch([testVersionId('v1')]);
         const ctx = createExecutionContext();
@@ -838,6 +812,11 @@ describe('a batch of uploads', () => {
 
         await expect(consumed).rejects.toThrow('Workflows unavailable');
         await expect(getQueueResult(batch, ctx)).resolves.toHaveProperty('explicitAcks', []);
+        expect(failed).toHaveBeenCalledWith({
+            event: 'upload_event_failed',
+            versionId: testVersionId('v1'),
+            error: 'Error: Workflows unavailable',
+        });
     });
 
     it('leaves an event unacked when Workflows says its instance exists but none does, and processes it on redelivery', async () => {

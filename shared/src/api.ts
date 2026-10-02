@@ -62,6 +62,7 @@ export const API = {
 
     putItem: takes<typeof itemWriteSchema>()({ method: 'PUT', path: '/api/item', admin: true }),
     presign: takes<typeof presignRequestSchema>()({ method: 'POST', prefix: '/api/presigned', admin: true }),
+    uploaded: { method: 'POST', prefix: '/api/uploaded', admin: true },
     uploadErrors: takes<typeof uploadErrorsSchema>()({ method: 'POST', path: '/api/errors', admin: true }),
     createAlbum: takes<typeof albumWriteSchema>()({ method: 'PUT', prefix: '/api/album', admin: true }),
     updateAlbum: takes<typeof albumWriteSchema>()({ method: 'PATCH', prefix: '/api/album', admin: true }),
