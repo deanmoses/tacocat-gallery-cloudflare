@@ -78,8 +78,6 @@ locals {
     { name = "tacocat.com", type = "TXT", content = "google-site-verification=En35chboU0PBIeqQIplDlcsFlCzOa-DzCv8VMuqhyR0" },
     { name = "google._domainkey.tacocat.com", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsh1aXVm2tMG9C5nUVjuf3vkfXKMlTmfZhUFVoVqUAWBf/WZzPlTGk/g2wbBB6tCa6f/zGYAPDstHOlAgakHnv5DxyNjGXDYxlxU21xJeTdl2MiXCHfb708Oj7eXmL6Y+GMWh4Iz5z87znL+rocOKp4g2bvjheqI46RlBSatWoHn27+g719M1qFftCy0jEcDgFs+yhoYbdCcJW9HkDTQ8s3piTgOxRtdp7SqlgsDkQADat4/zTFqCHE2G3txhRTbTDEqXf5wzVhU/ZvizP8Ce8pI4/7EClehUNf/igMc3Zj7iXcCtrwg0aoHgVuJBzoOQUlIsd5vNhjjVQdJYAlRcHwIDAQAB" },
     { name = "calendar.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
-    { name = "cdn.tacocat.com", type = "CNAME", content = "ddoyrjpjw6wgp.cloudfront.net" },
-    { name = "_26dd347593264ccb1ed03eb66f7cff3f.cdn.tacocat.com", type = "CNAME", content = "_8a17baaf2779fb54d6346854639f3554.dsrmygwdhx.acm-validations.aws" },
     { name = "docs.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
     { name = "login.tacocat.com", type = "CNAME", content = "d1be9xhgy7sojj.cloudfront.net" },
     { name = "_262eb6e48ccbf73c16ce822b415468fb.login.tacocat.com", type = "CNAME", content = "_dfdec7238e68c116d40f4a803d9a1bc5.mhbtsbpdnt.acm-validations.aws" },
