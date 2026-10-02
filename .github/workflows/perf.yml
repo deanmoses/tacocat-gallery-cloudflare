@@ -1,7 +1,6 @@
 name: Browser performance runs
 
 # The album journey in DebugBear's real Chrome, on this site and the AWS one, cold and then warm, started by hand.
-# The production Worker's cron starts the scheduled runs, since GitHub started this workflow's schedule hours late.
 # `node api/scripts/debugbear.ts report` prints the results.
 on:
     workflow_dispatch:

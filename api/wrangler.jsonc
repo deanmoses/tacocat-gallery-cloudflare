@@ -31,7 +31,7 @@
     // `npm run dev:video` turns it on.
     "dev": { "enable_containers": false },
     "secrets": {
-        "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET", "DEBUGBEAR_API_KEY"],
+        "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET"],
     },
     "routes": [{ "pattern": "staging-pix.deanmoses.com", "custom_domain": true }],
     "vars": {
@@ -136,7 +136,7 @@
         "production": {
             "name": "production",
             "secrets": {
-                "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET", "DEBUGBEAR_API_KEY"],
+                "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET"],
             },
             "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
             "vars": {
@@ -182,13 +182,7 @@
                 ],
             },
             "triggers": {
-                "crons": [
-                    "17 9 * * *",
-                    // The DebugBear browser runs of every page (src/ops/browser-runs.ts), production only: a cold
-                    // round, then a warm one fifteen minutes later. src/index.ts picks each job by its exact string.
-                    "23 5,11,19,22 * * *",
-                    "38 5,11,19,22 * * *",
-                ],
+                "crons": ["17 9 * * *"],
             },
             "workflows": [
                 {
