@@ -1,10 +1,8 @@
-# The tacocat.com zone, ahead of moving its nameservers from DreamHost. Every record DreamHost serves today is declared
-# here, DNS-only and unchanged, so that the zone answers exactly as DreamHost does before the nameservers change at
-# GoDaddy; scripts/zone-diff.sh checks that. Nothing here is live until they do, and Cloudflare deletes a Free zone left
-# pending for 28 days, so this is applied again shortly before the switch. Records that point at AWS stay
-# DNS-only, since proxying in front of CloudFront would stack two CDNs; the ACM validation CNAMEs keep the AWS
-# certificates renewing; the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy.
-# Dropping the leftovers is a change for after the move, when a diff against DreamHost no longer matters.
+# The tacocat.com zone, which GoDaddy's nameservers point at. Its records are the ones DreamHost served while it held
+# the zone, DNS-only and unchanged, and scripts/zone-diff.sh compares the two. Records that point at AWS stay DNS-only,
+# since proxying in front of CloudFront would stack two CDNs; the ACM validation CNAMEs keep the AWS certificates
+# renewing; the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy. DreamHost's
+# zone is the way back, so a record changed here and not there is lost on a return to its nameservers.
 resource "cloudflare_zone" "tacocat" {
   account = { id = local.account_id }
   name    = "tacocat.com"
@@ -91,7 +89,7 @@ resource "cloudflare_dns_record" "tacocat" {
   content  = each.value.type == "TXT" ? each.value.content : lower(each.value.content)
   priority = lookup(each.value, "priority", null)
   proxied  = false
-  # DreamHost serves every record with a 60 s TTL.
+  # DreamHost served every record with a 60 s TTL.
   ttl = 60
 }
 

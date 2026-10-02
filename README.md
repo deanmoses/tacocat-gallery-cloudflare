@@ -139,7 +139,7 @@ The AWS provider takes the AWS CLI's credentials, whichever profile or session `
 
 On a new account, R2 has to be enabled once in the dashboard, and the state bucket made by hand, since a config cannot create the bucket its own state is read from: `npx wrangler r2 bucket create opentofu-state` in `api/`, then `scripts/tofu.sh init`.
 
-`infra/tacocat.tf` also declares the `tacocat.com` zone with every record DreamHost serves today, ahead of moving the nameservers; until GoDaddy points at the nameservers `scripts/tofu.sh output tacocat_name_servers` prints, nothing in it is live, and Cloudflare deletes a zone left pending 28 days, so apply again before the switch. Before switching, run the Zone diff workflow from the Actions tab with those nameservers: `scripts/zone-diff.sh` compares every record on both and must see authoritative answers, which a home network that intercepts DNS never gives it.
+`infra/tacocat.tf` also declares the `tacocat.com` zone, which has answered for the domain since GoDaddy's nameservers moved from DreamHost to Cloudflare's on 2026-10-02 (`scripts/tofu.sh output tacocat_name_servers` prints them). Its records are the ones DreamHost served, DNS-only and unchanged. To go back, set the nameservers at GoDaddy to `ns1`, `ns2` and `ns3.dreamhost.com`; the Zone diff workflow in the Actions tab says what has changed here since, which DreamHost's zone would lack: `scripts/zone-diff.sh` compares every record on both nameservers and must see authoritative answers, which a home network that intercepts DNS never gives it.
 
 Tokens scope to whole buckets, never to a prefix, which is why each role has a bucket of its own (see Secrets under Environments).
 
