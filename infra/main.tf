@@ -3,7 +3,7 @@ locals {
   # Each environment's data, named from its prefix, which is the environment's own name: resource names are per
   # account, and the account is the gallery's, so the environment is all a name has to say.
   environments = {
-    production = { prefix = "production", site_origin = "https://pix.deanmoses.com" }
+    production = { prefix = "production", site_origin = "https://pix.tacocat.com" }
     staging    = { prefix = "staging", site_origin = "https://staging-pix.tacocat.com" }
   }
 }

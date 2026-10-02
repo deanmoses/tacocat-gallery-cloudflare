@@ -4,8 +4,8 @@
 # renewing; the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy. DreamHost's
 # zone is the way back, so a record changed here and not there is lost on a return to its nameservers.
 #
-# staging-pix.tacocat.com has no record here: it is the staging Worker's custom domain, whose record Cloudflare makes
-# when the Worker's triggers deploy, and refuses to make while another record holds the name.
+# pix.tacocat.com and staging-pix.tacocat.com have no record here: they are the Workers' custom domains, whose records
+# Cloudflare makes when a Worker's triggers deploy, and refuses to make while another record holds the name.
 resource "cloudflare_zone" "tacocat" {
   account = { id = local.account_id }
   name    = "tacocat.com"
@@ -82,7 +82,6 @@ locals {
     { name = "login.tacocat.com", type = "CNAME", content = "d1be9xhgy7sojj.cloudfront.net" },
     { name = "_262eb6e48ccbf73c16ce822b415468fb.login.tacocat.com", type = "CNAME", content = "_dfdec7238e68c116d40f4a803d9a1bc5.mhbtsbpdnt.acm-validations.aws" },
     { name = "mail.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
-    { name = "pix.tacocat.com", type = "CNAME", content = "d1e0qhrql1yoqo.cloudfront.net" },
     { name = "_b1a5820fc945c5088c062d7252699084.pix.tacocat.com", type = "CNAME", content = "_b39041744b397810c04ea672579e7096.dsrmygwdhx.acm-validations.aws" },
     { name = "api.pix.tacocat.com", type = "CNAME", content = "d-pbw01cw1w4.execute-api.us-east-1.amazonaws.com" },
     { name = "_393638dd6d38bda98192026a4d429bc1.api.pix.tacocat.com", type = "CNAME", content = "_bd208acffa07d0686742504b3d24c312.mhbtsbpdnt.acm-validations.aws" },

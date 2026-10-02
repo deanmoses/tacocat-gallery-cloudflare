@@ -129,6 +129,7 @@ What touched production during the final series, so a round is read against it. 
 - **2026-10-01, 02:33 to 03:42 UTC:** the whole AWS gallery copied into production (`docs/plans/AwsDataMigration.md`), writing over both albums with new version ids, so every image URL and edge cache was new ahead of the 05:23 round, and the year albums hold every day album the AWS site's do.
 - **2026-10-01, 07:19 UTC to 2026-10-02, 03:50:** ten releases, none renaming the app's entry chunk. The one at 07:19 strips EXIF, XMP and IPTC from JPEG derivatives; the 19:23 round ran 8 minutes after a release and the 22:38 round a minute after one.
 - **2026-10-02, after the 05:38 round:** the scheduled rounds ended, with the crons removed from the production Worker.
+- **2026-10-02:** production moved from `pix.deanmoses.com` to `pix.tacocat.com`, the hostname the AWS site was measured on, so a measurement after this is on a different host from every one before it, with nothing cached at the edge for it yet, and the AWS site can no longer be measured under that name.
 
 ## Appendix: the journey script
 

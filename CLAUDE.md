@@ -6,7 +6,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This project is a re-imagining of the Tacocat photo gallery (<https://pix.tacocat.com>) on Cloudflare. The current production gallery is on AWS; this repo is to prove out that moving to Cloudflare would improve the system. The original goals, in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo, were all about performance, but we've expanded the criteria:
+This project is the Tacocat photo gallery (<https://pix.tacocat.com>) on Cloudflare, a re-imagining of the gallery that ran on AWS until 2026-10-02. It began as a way to prove out that moving to Cloudflare would improve the system. The original goals, in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo, were all about performance, but we've expanded the criteria:
 
 - **Developer ergonomics**: we find we much prefer Cloudflare's developer ergonomics. Things like:
     - **Single repo development**. We replaced AWS's four repos (sveltekit, SPA hosting, SAM, auth) with this single monorepo. So much easier to manage! AIs can make coordinated changes. Vastly speeds up development. Now when I go back to AWS I hate it, it feels agonizingly clunky.
@@ -24,9 +24,9 @@ This project is a re-imagining of the Tacocat photo gallery (<https://pix.tacoca
     - Because Cloudflare is a monorepo we're able to easily share code between the front end and back end, making whole classes of errors impossible by construction.
     - Because it's easier to write and run integration tests, we are writing more tests, and I feel more comfortable doing things like enabling Dependabot.
 
-We will make the go/no go decision by closing down all the items in `docs/Risks.md`.
+We have moved: `pix.tacocat.com` has been served from here since 2026-10-02. `docs/Risks.md` records the risks that were tested on the way, all closed to Moses' satisfaction.
 
-Production holds the real gallery, copied from AWS on 2026-09-30 and verified (`docs/plans/AwsDataMigration.md`), and is being tested before moving the `pix.tacocat.com` domain to it. Until then AWS stays live and editing is paused. Production's data now matters: never empty it or make a destructive change to it without asking in triplicate.
+Production is the real gallery, copied from AWS on 2026-09-30 and verified (`docs/plans/AwsDataMigration.md`), and the only copy that is edited: the AWS site stays up, unedited, until it is retired. Production's data matters: never empty it or make a destructive change to it without asking in triplicate.
 
 ## This repo
 
@@ -42,7 +42,7 @@ These workspaces run different Vitest majors (the Worker's tests need 4.1, `web/
 
 ## The AWS site
 
-The site this one has to beat runs on AWS from four repos, checked out beside this one (`../<repo>`, and on GitHub under `deanmoses`). `docs/Ecosystem.md` in `tacocat-gallery-sveltekit` maps how they fit together.
+The site this one replaced runs on AWS from four repos, checked out beside this one (`../<repo>`, and on GitHub under `deanmoses`). `docs/Ecosystem.md` in `tacocat-gallery-sveltekit` maps how they fit together.
 
 | Repo                          | What it is                                                                        | Read first                                                                                                                       |
 | ----------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |

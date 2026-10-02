@@ -31,7 +31,7 @@ case "${2:-} ${3:-}" in
     ;;
 '--env production')
     where=(--remote --env production)
-    base=https://pix.deanmoses.com
+    base=https://pix.tacocat.com
     ;;
 *) usage ;;
 esac

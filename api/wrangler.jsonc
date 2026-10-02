@@ -138,9 +138,9 @@
             "secrets": {
                 "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET"],
             },
-            "routes": [{ "pattern": "pix.deanmoses.com", "custom_domain": true }],
+            "routes": [{ "pattern": "pix.tacocat.com", "custom_domain": true }],
             "vars": {
-                "SITE_ORIGIN": "https://pix.deanmoses.com",
+                "SITE_ORIGIN": "https://pix.tacocat.com",
                 "LOCAL_ORIGINS": [],
                 "DERIVED_BUCKET": "production-derived",
                 "ORIGINALS_BUCKET": "production-originals",

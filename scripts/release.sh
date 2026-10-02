@@ -42,7 +42,7 @@ staging)
 production)
     env_flag=(--env production)
     worker=production
-    origin=https://pix.deanmoses.com
+    origin=https://pix.tacocat.com
     ;;
 *)
     echo "Usage: scripts/release.sh (staging | production)" >&2
