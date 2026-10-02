@@ -41,7 +41,9 @@ resource "cloudflare_tiered_cache" "tacocat" {
   value   = "on"
 }
 
-# The per-category AI policies (training, search, agent: all "block") are set by hand in the dashboard.
+# The per-category AI policies (ai_training, ai_search, ai_user: all "block") were set through the API, and the bot
+# preference sync, which puts them at the top of robots.txt, in the dashboard: the provider sets neither. A request
+# that sets the categories turns ai_bots_protection off, so it is applied again afterwards.
 resource "cloudflare_bot_management" "tacocat" {
   zone_id                     = cloudflare_zone.tacocat.id
   ai_bots_protection          = "block"
