@@ -3,13 +3,16 @@
 # since proxying in front of CloudFront would stack two CDNs; the ACM validation CNAMEs keep the AWS certificates
 # renewing; the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy. DreamHost's
 # zone is the way back, so a record changed here and not there is lost on a return to its nameservers.
+#
+# staging-pix.tacocat.com has no record here: it is the staging Worker's custom domain, whose record Cloudflare makes
+# when the Worker's triggers deploy, and refuses to make while another record holds the name.
 resource "cloudflare_zone" "tacocat" {
   account = { id = local.account_id }
   name    = "tacocat.com"
 }
 
-# The same edge settings as deanmoses.com, ready for the day the gallery's hostnames are proxied here. Nothing is
-# proxied yet, so they change nothing today.
+# The same edge settings as deanmoses.com, where infra/main.tf gives the reason for each. They apply to the proxied
+# hostnames, which are the gallery's; every record below is DNS-only.
 resource "cloudflare_zone_setting" "tacocat_always_use_https" {
   zone_id    = cloudflare_zone.tacocat.id
   setting_id = "always_use_https"
@@ -20,6 +23,34 @@ resource "cloudflare_zone_setting" "tacocat_min_tls_version" {
   zone_id    = cloudflare_zone.tacocat.id
   setting_id = "min_tls_version"
   value      = "1.2"
+}
+
+resource "cloudflare_zone_setting" "tacocat_early_hints" {
+  zone_id    = cloudflare_zone.tacocat.id
+  setting_id = "early_hints"
+  value      = "on"
+}
+
+resource "cloudflare_argo_tiered_caching" "tacocat" {
+  zone_id = cloudflare_zone.tacocat.id
+  value   = "on"
+}
+
+resource "cloudflare_tiered_cache" "tacocat" {
+  zone_id = cloudflare_zone.tacocat.id
+  value   = "on"
+}
+
+# The per-category AI policies (training, search, agent: all "block") are set by hand in the dashboard.
+resource "cloudflare_bot_management" "tacocat" {
+  zone_id                     = cloudflare_zone.tacocat.id
+  ai_bots_protection          = "block"
+  bot_preference_sync_enabled = true
+  cf_robots_variant           = "policy_only"
+  fight_mode                  = false
+  lifecycle {
+    ignore_changes = [bot_preference_sync_enabled, cf_robots_variant]
+  }
 }
 
 locals {
@@ -60,7 +91,6 @@ locals {
     { name = "img.pix.tacocat.com", type = "CNAME", content = "d1vn5u5nd1mlwb.cloudfront.net" },
     { name = "_ba116a8ca29600016f5fb962d2452b67.img.pix.tacocat.com", type = "CNAME", content = "_12cf0d0620fa964c8c708c7bcfcd69b4.mhbtsbpdnt.acm-validations.aws" },
     { name = "sites.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
-    { name = "staging-pix.tacocat.com", type = "CNAME", content = "d3s3iwe0cvrijo.cloudfront.net" },
     { name = "_d4b663a1399973ec36aa8234fb007d12.staging-pix.tacocat.com", type = "CNAME", content = "_4ef336fe2208161a29f1b4ba0305037b.fyfbssdptv.acm-validations.aws" },
     { name = "api.staging-pix.tacocat.com", type = "CNAME", content = "d-jvftjepi02.execute-api.us-east-1.amazonaws.com" },
     { name = "_da9360f808f4ea05ce297edf017b4287.api.staging-pix.tacocat.com", type = "CNAME", content = "_a69154e694f22128edbf5e5f6e518aa3.mhbtsbpdnt.acm-validations.aws" },

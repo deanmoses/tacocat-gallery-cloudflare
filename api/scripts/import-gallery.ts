@@ -51,7 +51,7 @@ const USAGE =
     'Usage: node api/scripts/import-gallery.ts prod-items.json --to local|staging|production (--only <album path> ... | --all) [--ids version-ids.json] [--go] [--paths]';
 const SITES = {
     local: 'http://localhost:8787',
-    staging: 'https://staging-pix.deanmoses.com',
+    staging: 'https://staging-pix.tacocat.com',
     production: 'https://pix.deanmoses.com',
 };
 const AT_ONCE = 8;

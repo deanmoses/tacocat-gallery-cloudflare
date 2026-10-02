@@ -33,10 +33,10 @@
     "secrets": {
         "required": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "SESSION_SECRET"],
     },
-    "routes": [{ "pattern": "staging-pix.deanmoses.com", "custom_domain": true }],
+    "routes": [{ "pattern": "staging-pix.tacocat.com", "custom_domain": true }],
     "vars": {
         // The site's own origin, the only one besides LOCAL_ORIGINS that may create or use a passkey, or write.
-        "SITE_ORIGIN": "https://staging-pix.deanmoses.com",
+        "SITE_ORIGIN": "https://staging-pix.tacocat.com",
         // Local development's origins, the Worker's own port and vite dev's, which serves the app in front of it.
         // `wrangler dev` and the tests run this top level, so staging accepts them, and only SameSite keeps a page on
         // localhost, another site, from writing to staging with its cookie. Production lists none, so a page on localhost

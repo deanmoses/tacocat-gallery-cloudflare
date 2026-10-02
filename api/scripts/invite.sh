@@ -27,7 +27,7 @@ case "${2:-} ${3:-}" in
     ;;
 '--env staging')
     where=(--remote)
-    base=https://staging-pix.deanmoses.com
+    base=https://staging-pix.tacocat.com
     ;;
 '--env production')
     where=(--remote --env production)
