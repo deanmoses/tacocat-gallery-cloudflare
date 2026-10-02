@@ -4,6 +4,8 @@ This plan copies the AWS gallery's rows and original media files into the Cloudf
 
 The stages are 1. [Check DynamoDB for data quality issues](#check-dynamodb); 2. [Copy the media](#copy-media); 3. [Copy the database](#copy-database); 4. [Verify](#verify). The whole thing was [rehearsed on staging](#rehearsal) before it ran against production. **The copy is done:** production holds the AWS gallery, verified ([Log](#log), 2026-09-30, Production copy). What the earlier moves left behind is [Recovering lost content from pre-AWS galleries](RecoverPreAwsGalleries.md), and [pre-generating the derived images](#pre-generate-derived-images) waits for it; what those galleries were is [History of the Tacocat Gallery](../HistoryOfTacocatGallery.md).
 
+`copy-originals.ts` and `copy-video-derivatives.ts`, with `aws-video-derivatives.ts` and the byte sniffer they judged each file by, were deleted on 2026-10-02, the copy being done, and the Worker no longer sniffs a file either. They are in the git history: `git log --diff-filter=D -- api/scripts/copy-originals.ts api/scripts/sniff.ts` finds the commit that deleted them, and its parent has them, the sniffer as `api/scripts/sniff.ts`.
+
 Going live and taking over the hostname afterwards is a separate decision, and is its own section of `docs/plans/AwsPort.md`.
 
 ## Check DynamoDB
