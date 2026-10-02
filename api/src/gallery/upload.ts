@@ -6,9 +6,11 @@ import * as valibot from 'valibot';
 import { type MediaType, type Size, mediaPath } from '@tacocat-gallery/shared';
 import { NOW, type Orm, orm, schema } from '../db';
 import { readImage } from '../media/exif';
-import { SNIFF_LENGTH, type SniffedMedia, sniffMedia } from '../media/sniff';
+import { scanStart } from '../media/jpeg';
+import { type SniffedMedia, sniffMedia } from '../media/sniff';
 import { type TranscodeEnv, type TranscodeJob, transcodeVideo } from '../media/transcoder';
 import { inboxKey, originalKey, posterKey, videoKey } from '../storage/keys';
+import { readObject } from '../storage/read';
 import { type S3Credentials, presign } from '../storage/s3';
 import { type Steps, bounded, timed } from '../util/stages';
 import { CALL_LIMIT_MS, type ImageEnv, type Source, warmDerivatives } from './derivatives';
@@ -139,13 +141,16 @@ type Prepared =
 type Sniffed =
     | { outcome: 'redelivered' | 'gone' }
     | { outcome: 'rejected'; error: string }
-    | ({ outcome: 'sniffed' } & SniffedMedia);
+    | ({ outcome: 'sniffed'; head: Uint8Array<ArrayBuffer> } & SniffedMedia);
+
+// Enough for the EXIF, XMP and IPTC segments a camera or Photoshop writes ahead of a JPEG's pixels, each at most 64 KB.
+const HEAD_LENGTH = 256 * 1024;
 
 /**
  * Everything the item needs from the file: its facts, the thumbnail and detail image, and then the original under its
  * permanent key. What kind of file it is comes from its first bytes, whatever it was named and whatever type the
- * browser sent. A photo is then read whole in the same step, since its bytes cannot cross a step and each step
- * boundary costs time the admin waits through. A video is transcoded in a step of its own, its stills coming from the
+ * browser sent. A photo's facts are read in the same step, since its bytes cannot cross a step and each step boundary
+ * costs time the admin waits through. A video is transcoded in a step of its own, its stills coming from the
  * poster the container wrote. The original is copied last, in a step of its own, so that a file refused on the way
  * leaves nothing among the originals, and a derivative's retry never copies it again.
  */
@@ -268,12 +273,18 @@ async function preparePhoto(
     if (kind.outcome !== 'sniffed') {
         return kind;
     }
-    const { contentType } = kind;
+    const { contentType, head } = kind;
     if (kind.mediaType === 'video') {
         return { outcome: 'video', contentType };
     }
-    const bytes = await bounded(steps, 'read', CALL_LIMIT_MS, async () => (await env.UPLOADS.get(key))?.arrayBuffer());
-    if (bytes === undefined) {
+    // A JPEG's facts all come ahead of its pixels, so one whose headers fit in the head is never read whole. A whole
+    // read has no limit of its own beyond the stall guard in `readObject`, since a 50 MB photo still arriving is not
+    // stuck, and is bounded by the step's timeout.
+    const bytes =
+        contentType === 'image/jpeg' && scanStart(head) !== null
+            ? head
+            : await timed(steps, 'read', async () => readObject(env.UPLOADS, key));
+    if (bytes === null) {
         return { outcome: 'gone' };
     }
     const read = await timed(steps, 'exif', async () => readImage(bytes));
@@ -284,19 +295,22 @@ async function preparePhoto(
     return deriving(env, path, upload.versionId, facts, contentType, { bucket: 'UPLOADS', key, contentType }, steps);
 }
 
-/** What the inbox object is, from its first bytes, once the upload is known to be still wanted and the object there. */
+/**
+ * What the inbox object is, from its first bytes, once the upload is known to be still wanted and the object there,
+ * and those bytes.
+ */
 async function sniff(env: UploadEnv, key: string, upload: Upload): Promise<Sniffed> {
     if (await redelivered(env, key, upload)) {
         return { outcome: 'redelivered' };
     }
-    const head = await env.UPLOADS.get(key, { range: { offset: 0, length: SNIFF_LENGTH } });
+    const head = await readObject(env.UPLOADS, key, HEAD_LENGTH);
     if (head === null) {
         return { outcome: 'gone' };
     }
-    const sniffed = sniffMedia(new Uint8Array(await head.arrayBuffer()));
+    const sniffed = sniffMedia(head);
     return sniffed === null
         ? { outcome: 'rejected', error: 'not a photo or video in a format the gallery takes' }
-        : { outcome: 'sniffed', ...sniffed };
+        : { outcome: 'sniffed', head, ...sniffed };
 }
 
 /** Whether the upload was already complete when this instance came to it, in which case its object is dropped. */

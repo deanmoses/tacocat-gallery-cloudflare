@@ -1,6 +1,6 @@
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import { describe, expect, it, vi } from 'vitest';
-import { withoutMetadata } from '../../src/media/jpeg';
+import { scanStart, withoutMetadata } from '../../src/media/jpeg';
 import { fixtureBytes, jpegParts } from '../gallery';
 
 const jpg = fixtureBytes(jpgDataUrl);
@@ -29,5 +29,22 @@ describe(withoutMetadata, () => {
 
         expect(withoutMetadata(bytes)).toBe(bytes);
         expect(warned).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ event: 'jpeg_metadata_kept' }));
+    });
+});
+
+describe(scanStart, () => {
+    it('finds where the scan starts, from a head of the file that reaches it', () => {
+        const scan = scanStart(jpg);
+
+        expect(scan).not.toBeNull();
+        expect(jpg.subarray(scan ?? 0, (scan ?? 0) + 2)).toStrictEqual(Uint8Array.from([0xff, 0xda]));
+        expect(scanStart(jpg.subarray(0, (scan ?? 0) + 2))).toBe(scan);
+    });
+
+    it.each([
+        { name: 'a head that ends inside the headers', bytes: jpg.subarray(0, 100) },
+        { name: 'bytes that are not a JPEG', bytes: new TextEncoder().encode('GIF89a, not a JPEG') },
+    ])('finds none in $name', ({ bytes }) => {
+        expect(scanStart(bytes)).toBeNull();
     });
 });

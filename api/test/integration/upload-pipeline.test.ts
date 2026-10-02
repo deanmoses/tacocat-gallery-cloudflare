@@ -17,6 +17,7 @@ import { orm, schema } from '../../src/db';
 import { CALL_LIMIT_MS } from '../../src/gallery/derivatives';
 import { UNSTARTED_ERROR } from '../../src/gallery/pipeline';
 import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
+import { READ_STALL_MS } from '../../src/storage/read';
 import { fixtureBytes } from '../gallery';
 import { albumAsAdmin, call, callAsAdmin, handler, putDay, putItem, storedItem, uploadErrors, write } from '../helpers';
 import { deliver, uploadBatch } from '../pipeline';
@@ -110,16 +111,35 @@ async function never<T>(): Promise<T> {
     return Promise.withResolvers<T>().promise;
 }
 
-/** Has the pipeline's first read of a whole inbox object hang, and every later read go through. */
-function stallingTheFirstWholeRead(): void {
+const STALLED_AFTER = 1024;
+
+/**
+ * Has the pipeline's first `times` reads of an inbox object stall, of its head or of the whole object, and every later
+ * one go through: before the object's body starts, or partway through it, once its first kilobyte has arrived.
+ */
+function stallingInboxReads(times: number, where: 'before its body' | 'partway through', of = 'its head'): void {
     const get = env.UPLOADS.get.bind(env.UPLOADS);
-    let stalled = false;
+    let stalled = 0;
     vi.spyOn(env.UPLOADS, 'get').mockImplementation(async (key: string, options?: R2GetOptions) => {
-        if (options === undefined && !stalled) {
-            stalled = true;
+        const whole = options?.range === undefined;
+        if (stalled === times || whole !== (of === 'the whole file')) {
+            return get(key, options);
+        }
+        stalled += 1;
+        if (where === 'before its body') {
             return never();
         }
-        return get(key, options);
+        const object = await get(key, options);
+        if (object === null) {
+            return null;
+        }
+        const start = new Uint8Array(await object.arrayBuffer()).subarray(0, STALLED_AFTER);
+        const body = new ReadableStream<Uint8Array>({
+            start: (controller) => {
+                controller.enqueue(start);
+            },
+        });
+        return { size: object.size, body } as R2ObjectBody;
     });
 }
 
@@ -134,14 +154,40 @@ function stallingTheFirstTransformation(): void {
 }
 
 /**
- * Has each call's limit run out after a second rather than a minute, by shortening every timer of exactly that length;
- * the pipeline runs in this isolate, so it sees the spy. A second is still far more than any local call takes.
+ * Has each call's limit run out after a second, and a read's wait for its next byte after a fifth of one, three of
+ * which still fit in a call's limit, by shortening every timer of exactly those lengths; the pipeline runs in this
+ * isolate, so it sees the spy. Both are still far more than any local call takes.
  */
 function shorteningCallLimits(): void {
     const wait = setTimeout;
+    const shortened = new Map([
+        [CALL_LIMIT_MS, 1000],
+        [READ_STALL_MS, 200],
+    ]);
     vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: () => void, ms?: number) =>
-        wait(callback, ms === CALL_LIMIT_MS ? 1000 : ms),
+        wait(callback, shortened.get(ms ?? 0) ?? ms),
     );
+}
+
+/** `jpeg` with `count` comment segments of 64 KB ahead of its own, pushing its metadata that much further in. */
+function paddedJpeg(jpeg: Uint8Array, count: number): Uint8Array {
+    const comment = new Uint8Array(2 + 0xff_ff).fill(0x20);
+    comment.set([0xff, 0xfe, 0xff, 0xff]);
+    const padded = new Uint8Array(jpeg.length + count * comment.length);
+    padded.set(jpeg.subarray(0, 2));
+    for (let index = 0; index < count; index += 1) {
+        padded.set(comment, 2 + index * comment.length);
+    }
+    padded.set(jpeg.subarray(2), 2 + count * comment.length);
+    return padded;
+}
+
+/** The stages the first attempt at the photo step logged, by name. */
+function photoStages(logged: unknown[][], versionId: string): string[] {
+    const line = logged
+        .map(([entry]) => entry as Record<string, unknown>)
+        .find((entry) => entry['event'] === 'upload_stages' && entry['versionId'] === versionId && 'sniff' in entry);
+    return Object.keys(line ?? {});
 }
 
 /** Whether a log line is the pipeline's word that one attempt at `versionId` threw. */
@@ -395,32 +441,112 @@ describe('upload pipeline', () => {
         expect(original?.size).toBe(jpg.byteLength);
     });
 
-    it.each([
-        { stage: 'read', hang: stallingTheFirstWholeRead },
-        { stage: 'thumbnail', hang: stallingTheFirstTransformation },
-    ])(
-        'gives up on a $stage that never answers, says so, and finishes on the retry',
-        async ({ stage: stalled, hang }) => {
-            const warned = vi.spyOn(console, 'warn');
-            hang();
-            shorteningCallLimits();
-            const versionId = await stage(`${DAY}stuck`, jpg);
-            await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
-            const [item, errors] = await Promise.all([storedItem(DAY, 'stuck'), uploadErrors([`${DAY}stuck`])]);
+    it('gives up on a thumbnail that never answers, says so, and finishes on the retry', async () => {
+        const warned = vi.spyOn(console, 'warn');
+        stallingTheFirstTransformation();
+        shorteningCallLimits();
+        const versionId = await stage(`${DAY}stuck`, jpg);
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const [item, errors] = await Promise.all([storedItem(DAY, 'stuck'), uploadErrors([`${DAY}stuck`])]);
 
-            expect(warned).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    event: 'upload_stages',
-                    versionId,
-                    attempt: 1,
-                    outcome: 'threw',
-                    error: `Error: ${stalled} did not finish within 60 s`,
-                }),
-            );
-            expect(item?.versionId).toBe(versionId);
-            expect(errors).toStrictEqual({});
-        },
-    );
+        expect(warned).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: 'upload_stages',
+                versionId,
+                attempt: 1,
+                outcome: 'threw',
+                error: 'Error: thumbnail did not finish within 60 s',
+            }),
+        );
+        expect(item?.versionId).toBe(versionId);
+        expect(errors).toStrictEqual({});
+    });
+
+    it.each([
+        { where: 'before its body' as const, of: 'its head', bytes: 0 },
+        { where: 'partway through' as const, of: 'its head', bytes: STALLED_AFTER },
+        { where: 'before its body' as const, of: 'the whole file', bytes: 0 },
+        { where: 'partway through' as const, of: 'the whole file', bytes: STALLED_AFTER },
+    ])('reads again at once when a read of $of stalls $where, saying how far it got', async ({ where, of, bytes }) => {
+        const warned = vi.spyOn(console, 'warn');
+        stallingInboxReads(1, where, of);
+        shorteningCallLimits();
+        // Read whole for its facts, since its metadata runs past the head.
+        const versionId = await stage(`${DAY}stalled`, paddedJpeg(jpg, 5));
+        await deliver(versionId);
+        const item = await storedItem(DAY, 'stalled');
+
+        expect(warned).toHaveBeenCalledWith(
+            expect.objectContaining({ event: 'read_stalled', key: inboxKey(versionId), tried: 1, bytes }),
+        );
+        expect(warned.mock.calls.filter(([logged]) => isFailedAttempt(logged, versionId))).toStrictEqual([]);
+        expect(item).toMatchObject({ title: 'My Image Title', tags: JPG_TAGS, versionId });
+    });
+
+    it('fails the attempt on a read that ends short, rather than taking part of the file, and finishes on the retry', async () => {
+        const warned = vi.spyOn(console, 'warn');
+        const get = env.UPLOADS.get.bind(env.UPLOADS);
+        vi.spyOn(env.UPLOADS, 'get').mockImplementationOnce(async (key: string, options?: R2GetOptions) => {
+            const object = await get(key, options);
+            if (object === null) {
+                return null;
+            }
+            const start = new Uint8Array(await object.arrayBuffer()).subarray(0, STALLED_AFTER);
+            return { size: object.size, body: new Blob([start]).stream() } as R2ObjectBody;
+        });
+        const versionId = await stage(`${DAY}short`, jpg);
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const item = await storedItem(DAY, 'short');
+
+        expect(warned).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: 'upload_stages',
+                versionId,
+                attempt: 1,
+                outcome: 'threw',
+                error: `Error: reading ${inboxKey(versionId)} ended after ${String(STALLED_AFTER)} of ${String(jpg.length)} bytes`,
+            }),
+        );
+        expect(item).toMatchObject({ title: 'My Image Title', versionId });
+    });
+
+    it('gives up on a read that stalls three times, and finishes when the step is retried', async () => {
+        const warned = vi.spyOn(console, 'warn');
+        stallingInboxReads(3, 'partway through');
+        shorteningCallLimits();
+        const versionId = await stage(`${DAY}stalled`, jpg);
+        await deliver(versionId, { modify: async (modifier) => modifier.disableRetryDelays() });
+        const item = await storedItem(DAY, 'stalled');
+
+        expect(warned).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: 'upload_stages',
+                versionId,
+                attempt: 1,
+                outcome: 'threw',
+                error: `Error: reading ${inboxKey(versionId)} stalled 3 times`,
+            }),
+        );
+        expect(item?.versionId).toBe(versionId);
+    });
+
+    it('reads a JPEG whose metadata fits in its first 256 KB no further than that, and any other photo whole', async () => {
+        const logged = vi.spyOn(console, 'info');
+        const jpeg = await upload(`${DAY}full_metadata`, jpg);
+        const other = await upload(`${DAY}png`, png, { contentType: 'image/png' });
+
+        expect(photoStages(logged.mock.calls, jpeg)).not.toContain('read');
+        expect(photoStages(logged.mock.calls, other)).toContain('read');
+    });
+
+    it('reads a JPEG whole when its metadata runs past its first 256 KB, and still finds its caption', async () => {
+        const logged = vi.spyOn(console, 'info');
+        const versionId = await upload(`${DAY}padded`, paddedJpeg(jpg, 5));
+        const item = await storedItem(DAY, 'padded');
+
+        expect(photoStages(logged.mock.calls, versionId)).toContain('read');
+        expect(item).toMatchObject({ title: 'My Image Title', tags: JPG_TAGS, width: 300, height: 225 });
+    });
 
     it('logs how long each stage of the photo took, a line for each step', async () => {
         const logged = vi.spyOn(console, 'info');
@@ -431,7 +557,7 @@ describe('upload pipeline', () => {
 
         expect(logged).toHaveBeenCalledWith({
             ...step,
-            ...timings(['sniff', 'read', 'exif', 'thumbnail', 'thumbnail2x', 'detail']),
+            ...timings(['sniff', 'exif', 'thumbnail', 'thumbnail2x', 'detail']),
         });
         expect(logged).toHaveBeenCalledWith({ ...step, ...timings(['original']) });
     });
