@@ -198,6 +198,18 @@ describe(forwardToContainer, () => {
         expect(received.map(({ method }) => method)).toStrictEqual(['GET', 'POST']);
     });
 
+    it.each([
+        { running: false, started: true },
+        { running: true, started: false },
+    ])('logs whether it started the container: $started', async ({ running, started }) => {
+        vi.spyOn(scheduler, 'wait').mockResolvedValue();
+        const info = vi.spyOn(console, 'info').mockReturnValue();
+        const { container } = fakeContainer({ running });
+        await forwardToContainer(container, TRANSCODE.clone());
+
+        expect(info).toHaveBeenCalledWith({ event: 'container_ready', started, readyMs: expect.any(Number) });
+    });
+
     it('leaves a running container as it is', async () => {
         vi.spyOn(scheduler, 'wait').mockResolvedValue();
         const { container, starts } = fakeContainer({ running: true });

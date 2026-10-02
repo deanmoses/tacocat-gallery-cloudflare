@@ -44,7 +44,9 @@ const PING_TIMEOUT_MS = 5000;
  * instance there is, since the admin waits through the encode and a video comes about once a month.
  */
 export async function forwardToContainer(container: ContainerControl, request: Request): Promise<Response> {
-    if (!container.running) {
+    const started = !container.running;
+    const startedAt = Date.now();
+    if (started) {
         const image = container.images[IMAGE];
         if (image === undefined) {
             throw new Error(`no image named ${IMAGE} for the container`);
@@ -56,6 +58,8 @@ export async function forwardToContainer(container: ContainerControl, request: R
     await container.setInactivityTimeout(IDLE_MS);
     const port = container.getTcpPort(PORT);
     await untilAnswering(port);
+    // The cold start, apart from the rest of the wait the Worker logs as video_transcoded.
+    console.info({ event: 'container_ready', started, readyMs: Date.now() - startedAt });
     return port.fetch(request);
 }
 
