@@ -20,9 +20,9 @@ function uploadEvent(versionId: string): R2EventMessage {
 }
 
 /** One batch of upload events, as the queue delivers them, with ids counting from 1. */
-export function uploadBatch(versionIds: string[]): MessageBatch<R2EventMessage> {
+export function uploadBatch(versionIds: string[], queue = 'staging-uploads'): MessageBatch<R2EventMessage> {
     return createMessageBatch<R2EventMessage>(
-        'staging-uploads',
+        queue,
         versionIds.map((versionId, index) => ({
             id: String(index + 1),
             timestamp: new Date(),
