@@ -99,3 +99,8 @@ D1 bills by rows read, not rows returned, and an FTS trigger that scanned the wh
 - Read an API response with `parseExactly` and its parse function from `shared/`, such as `parseAlbum`. It fails on a field the schema lacks, which parsing alone would drop.
 - Every test asserts something; `requireAssertions` fails one that doesn't.
 - Wait for the end state, never for a span of time: `expect.element`, `vi.waitFor` or Playwright's `expect`, never a `setTimeout`. A guess at how long something takes passes most runs and fails some, the hardest kind of failure to trace.
+- The test admin is `moses`, a seeded user, because a presign records who asked and `upload.username` references `user`; a cookie for a made-up name gets a foreign key error on the first write that records it.
+- Presign takes only strict media names, what the app's sanitizer makes, so a test stages an upload under a lowercase name with underscores, not a fixture file's own.
+- `api/test/db/constraints.test.ts` tries every `CHECK` by name; a new constraint gets a row there, as a new query gets a case in the rows-read test.
+- The stack tests start their Worker with no persisted storage, so D1 there has no tables at all; a route that reads D1 answers 500 there, which the routing test never looks at. List only paths that need no database in that test.
+- Wrangler's local Durable Object reset prints `Application called deleteAllDurableObjects()` as an uncaught exception during the tests. It is the Vitest Workers plugin's storage isolation, not a failing test.

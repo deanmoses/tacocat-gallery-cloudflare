@@ -14,26 +14,27 @@ The whole site is one Worker per environment, serving the web app and everything
                                                    |
        +------------+------------+-----------+-----+------+
        |            |            |           |            |
-       D1       R2 x4        Images     Container
+       D1       R2 x2        Images     Container
                                         (ffmpeg)
 
-  media upload:  browser --PUT--> R2 uploads --event--> Queue --> Worker --> Workflow
+  media upload:  browser --PUT--> R2 originals, --POST--> Worker --> Workflow
+                 (R2's event --> Queue --> Worker is the backstop)
 ```
 
-| Piece                            | What it does                                                                                |
-| -------------------------------- | ------------------------------------------------------------------------------------------- |
-| **`api/` (worker)**              | Serves the app's files, the API, login and the media; consumes upload events; runs the cron |
-| **`web/` (web app)**             | The SvelteKit single-page app, built to static files the Worker serves                      |
-| **`shared/`**                    | Code shared between the worker and web app: record shapes, path grammar, URL builders       |
-| **`infra/` (OpenTofu)**          | Creates everything outside the Worker: the zone, the database, the buckets, the queues      |
-| **Cloudflare D1**                | The database: every album and media item, the search index, uploads, login                  |
-| **Cloudflare R2, three buckets** | `originals`, `uploads` as they arrive, `derived` images and video                           |
-| **Image Transformations**        | Resizes and crops images, HEIC included, fetched by a URL the Worker signs                  |
-| **Cloudflare Queue**             | Carries R2's event for each finished upload to the Worker, the backstop for its uploader    |
-| **Cloudflare Workflow**          | Runs one upload pipeline per uploaded file                                                  |
-| **Cloudflare Container**         | ffmpeg, for transcoding video                                                               |
+| Piece                          | What it does                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| **`api/` (worker)**            | Serves the app's files, the API, login and the media; consumes upload events; runs the cron |
+| **`web/` (web app)**           | The SvelteKit single-page app, built to static files the Worker serves                      |
+| **`shared/`**                  | Code shared between the worker and web app: record shapes, path grammar, URL builders       |
+| **`infra/` (OpenTofu)**        | Creates everything outside the Worker: the zone, the database, the buckets, the queues      |
+| **Cloudflare D1**              | The database: every album and media item, the search index, uploads, login                  |
+| **Cloudflare R2, two buckets** | `originals` as uploaded, and `derived` images and video                                     |
+| **Image Transformations**      | Resizes and crops images, HEIC included, fetched by a URL the Worker signs                  |
+| **Cloudflare Queue**           | Carries R2's event for each finished upload to the Worker, the backstop for its uploader    |
+| **Cloudflare Workflow**        | Runs one upload pipeline per uploaded file                                                  |
+| **Cloudflare Container**       | ffmpeg, for transcoding video                                                               |
 
-**One origin.** There's no `api.`, `img.` or `auth.` subdomains, meaning there's no CORS between the app and the API, the session cookie needs no cross-site settings, and every URL the app builds is a root-relative path with no host. The one request that leaves the origin is the upload itself, a PUT straight to R2's S3 endpoint, so the media bucket alone carries a CORS rule, in `infra/`.
+**One origin.** There's no `api.`, `img.` or `auth.` subdomains, meaning there's no CORS between the app and the API, the session cookie needs no cross-site settings, and every URL the app builds is a root-relative path with no host. The one request that leaves the origin is the upload itself, a PUT straight to R2's S3 endpoint, so the originals bucket alone carries a CORS rule, in `infra/`.
 
 The Worker's default export in `api/src/index.ts` has three handlers:
 
@@ -88,7 +89,7 @@ An `item` row is identified by `(parent_path, item_name)`, so `felix` in `/2001/
 
 ## Storage
 
-Media is stored in Cloudflare R2, in a bucket for the originals and one for everything made from them. Each environment's buckets are named for it, `production-originals` and so on. The key the Worker signs URLs with can write both, since the browser's upload is a signed PUT of the original itself and an R2 API token is scoped to whole buckets; it reaches no other bucket, so nothing a signed URL can do touches a dump.
+Media is stored in Cloudflare R2, in a bucket for the originals and one for everything made from them. Each environment's buckets are named for it, `production-originals` and so on. The key the Worker signs URLs with can write both, since the browser's upload is a signed PUT of the original itself and an R2 API token is scoped to whole buckets; it reaches no other bucket.
 
 Take the photo `/2001/06-15/felix`, whose current version id is `01ARYZ6S41TSV4RRFFQ69G5FAV`. Everything stored for it is keyed by that id:
 
@@ -177,11 +178,11 @@ app                        Worker                          R2 / Queue / Workflow
 
 **Replacing.** Dropping a file on an existing item updates that row in place: new version, type and size, under the name the row has. Any file may replace any item, so an edited JPEG replaces the HEIC it came from, and a video may replace a photo. Captions and every album showing it are kept, and the file's tags join the row's. The thumbnail crop is kept only if the new image has exactly the old size.
 
-**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row. Whatever happens, the original stays where the browser put it, so one that never became an item is an object no row points at. An announcement whose instance does not start is answered 503, which the app tries twice more before telling the admin; the event may still start it. An event whose instance never starts is retried by the queue, 10 s apart, and once those retries are spent it reaches the dead-letter queue, whose consumer writes an `upload_error` telling the admin to upload the file again, unless an instance turns out to be running after all. A read of the original that goes 10 s without a byte, before its body starts or partway through, is cancelled and read again at once, logging `read_stalled` with how far it got, and the step fails after three; such reads have hung for minutes inside a Workflow, though nearly a thousand reads of the same kind on staging, in requests and in Workflow instances alike, never did. Each attempt at reading a photo logs `upload_stages`: how long each stage took and how the attempt ended, so a slow upload or a failed attempt says where.
+**When it fails.** A file that cannot be read or decoded, or an album or item deleted while the upload was in flight, becomes an `upload_error` row, which the app polls for after a drop. Every HEIC straight off an iPhone decodes, 863 sampled from 2023 to 2026 and all 8-bit `heic`; one another app has re-encoded may not, as a 10-bit `heix` with a gain map and an 8-bit HEIC written by macOS `sips` did not on the Images binding, and such a file becomes an upload error naming the decode failure, where exported as JPEG it goes through. Anything else throws, and the step is retried; once its retries are spent, the error's message becomes the `upload_error` row. Whatever happens, the original stays where the browser put it, so one that never became an item is an object no row points at. An announcement whose instance does not start is answered 503, which the app tries twice more before telling the admin; the event may still start it. An event whose instance never starts is retried by the queue, 10 s apart, and once those retries are spent it reaches the dead-letter queue, whose consumer writes an `upload_error` telling the admin to upload the file again, unless an instance turns out to be running after all. A read of the original that goes 10 s without a byte, before its body starts or partway through, is cancelled and read again at once, logging `read_stalled` with how far it got, and the step fails after three; such reads have hung for minutes inside a Workflow, though nearly a thousand reads of the same kind on staging, in requests and in Workflow instances alike, never did. Each attempt at reading a photo logs `upload_stages`: how long each stage took and how the attempt ended, so a slow upload or a failed attempt says where.
 
 **Locally**, a Worker cannot consume a real queue, so with `UPLOAD_MODE=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file as the original and raises the event R2 would. The pipeline runs unchanged, except that its image comes from the local Images binding (`IMAGE_MODE=binding`), since Image Transformations run only on Cloudflare's edge.
 
-**Why presign judges first.** Presign applies the rules the pipeline applies again when the file lands, so what would fail is refused while the admin is still watching, and the pipeline leaves alone an object nobody presigned, as one a script copied into the bucket is.
+**Why presign judges first.** Presign applies the rules the pipeline applies again when the file lands, so what would fail is refused while the admin is still watching, and the pipeline leaves alone an object nobody presigned, as one a script copied into the bucket is. Only a write through R2's S3 API raises the event at all: a file put through the Cloudflare REST API, `wrangler r2 object put` or the dashboard is never announced.
 
 **Why the type comes from the file's name.** The extension is all presign has before the file is sent, and signing the type it gives into the PUT is what makes the stored type one the Worker chose. Nothing reads the file's bytes to check it, as nothing did on AWS, so a file misnamed as another format becomes a broken image, or an upload error if its size cannot be read. The extension stays out of the item's name and URL.
 
@@ -205,11 +206,11 @@ Every image is cached for a year, since its URL names one version and a new uplo
 - `/raw/<path>/<versionId>` is the original. A HEIC comes back as a JPEG, since only Safari shows HEIC, unless `?format=original` asks for the file itself.
 - `/v/<path>/<versionId>` is a video's MP4, with byte ranges for seeking.
 
-**The transcoder** is ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, one instance per video on the largest instance type, so a drop of several videos transcodes them side by side, each asleep once its video is done. The Worker hands it presigned URLs to read the original and write the MP4 and poster into the derived bucket, and it answers with the video's size and duration. A stored video could be transcoded again the same way, after a change to the ffmpeg settings say; nothing does that yet. When the Worker stops waiting, as when its step times out, the container kills the encode, so a retry never shares the CPU with the attempt before it.
+**The transcoder** is ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, one instance per video on the largest instance type, so a drop of several videos transcodes them side by side, each asleep once its video is done. The Worker hands it presigned URLs to read the original and write the MP4 and poster into the derived bucket, and it answers with the video's size and duration. The output is H.264 at 1080p at most, keeping an iPhone HDR clip's HLG and BT.2020 tags, which each browser converts to its screen; only the poster is tone-mapped, since a JPEG cannot carry HLG. A file ffmpeg rejects becomes an upload error rather than a retry. A stored video could be transcoded again the same way, after a change to the ffmpeg settings say; nothing does that yet. When the Worker stops waiting, as when its step times out, the container kills the encode, so a retry never shares the CPU with the attempt before it.
 
 **Why one spelling.** `shared/src/urls.ts` builds every image URL, for the app and for the pipeline's pre-made images alike, and the stored name is spelled from the same text. A stored image is found only by a URL spelled exactly the same way, so there must be one place that spells them.
 
-**Why the media routes need no login.** Knowing a version id is knowing the photo, and 64 random bits cannot be guessed. Each route reads only the objects under the version it names, in the originals and derived buckets, so nothing else, the dumps included, is reachable through them. Checking whether the album is published would cost a database read on routes that otherwise need none.
+**Why the media routes need no login.** Knowing a version id is knowing the photo, and 64 random bits cannot be guessed. Each route reads only the objects under the version it names, in the originals and derived buckets, so nothing else is reachable through them. Checking whether the album is published would cost a database read on routes that otherwise need none.
 
 **Why originals stay as uploaded**, HEIC included: Image Transformations decode HEIC, so nothing is converted on the way in and nothing in the pipeline is specific to HEIC.
 
@@ -254,7 +255,7 @@ e2e/               Playwright journeys through the built app and a local Worker
 
 **So do the endpoints.** `API` in `shared/src/api.ts` lists every endpoint with its method, its path, whether only an admin may call it, and the schema of the body it takes, carried in the entry's type alone. The Worker registers its routes from `API` and parses bodies with `API_BODIES`, which the type check holds to the schemas the entries name; the app sends every admin request through `callApi(API.renameAlbum, path, body)`, whose path and body are typed by the entry, so a renamed route or a changed body fails the type check on both sides. Because the entries hold no schema, a guest's page can use `API` without downloading one. Three things the table cannot type are held by tests instead: every endpoint has a route (`api/test/unit/routes.test.ts`), every admin endpoint refuses a guest (`api/test/integration/auth.test.ts`), and the album preloads in `web/static/_headers` name the URLs the app reads (`api/test/stack/headers.test.ts`). The search query string and the passkey answers are checked by the Worker alone.
 
-**The web app** is the AWS SvelteKit app ported to this back end, so the API answers in the shapes it was written against; it changes wherever that makes the site faster for its readers, and `docs/Perf.md` records each difference from the AWS app. It has to load in iOS 15.6, the floor in `.browserslistrc`, which lint and the build enforce (Front end in `README.md`). Which paths reach the Worker rather than the app's files is the `run_worker_first` list in `api/wrangler.jsonc`, so a new Worker route has to be added there; any other path with no file gets the app, which routes it in the browser.
+**The web app** is the AWS SvelteKit app ported to this back end, so the API answers in the shapes it was written against; it changes wherever that makes the site faster for its readers, and `docs/plans/migration_from_aws/PerfVsAws.md` records how it had come to differ from the AWS app by the time the two stopped being compared. It has to load in iOS 15.6, the floor in `.browserslistrc`, which lint and the build enforce (Front end in `README.md`). Which paths reach the Worker rather than the app's files is the `run_worker_first` list in `api/wrangler.jsonc`, so a new Worker route has to be added there; any other path with no file gets the app, which routes it in the browser.
 
 ## Tests
 
@@ -284,6 +285,10 @@ Traffic is never split between versions, since a split would serve one version's
 - **Nightly**: delete upload errors and spent login challenges past their use. The backup is not the Worker's job: a GitHub workflow exports the database and copies the originals off-site (Backup and restore in `README.md`).
 - **`GET /api/health`** answers with the running version and the newest migration, which is what a release checks.
 - **Measurement.** The rest of `api/src/ops/`, and `/debug/`, serve the performance work in `docs/Perf.md`, not the gallery.
+
+## Logs
+
+Workers Logs, on for both Workers, keeps each request's invocation log, with the user agent, IP, colo, country, round trip, status and CPU and wall time, beside the Worker's own structured lines (`album_read`, `derived_image`, `server_exception`, the upload and login events), queried through the dashboard's query builder or the observability MCP; the `cookie` header is redacted. Two gaps: it keeps 7 days, so a question over months cannot be answered from it; and the app's own files, `index.html` and the JS chunks, are answered by the asset router without reaching the Worker, so they appear only in the zone's analytics, though every album view still reaches the Worker for its JSON and images. Logpush, free at this volume, could keep the zone's HTTP request logs and the Worker's trace events in R2 if a long question comes up.
 
 ## Invariants
 

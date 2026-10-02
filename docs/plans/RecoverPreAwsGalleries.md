@@ -1,6 +1,6 @@
 # Recovering lost content from pre-AWS galleries
 
-The AWS gallery database and media files have been copied to Cloudflare ([Migrating the AWS gallery data](AwsDataMigration.md)). However, over the decades, there's been other systems and other migrations; see [History of the Tacocat Gallery](../HistoryOfTacocatGallery.md). Some (all?) of those migrations have left photos / videos / albums behind.
+The AWS gallery database and media files have been copied to Cloudflare ([Migrating the AWS gallery data](migration_from_aws/AwsDataMigration.md)). However, over the decades, there's been other systems and other migrations; see [History of the Tacocat Gallery](../HistoryOfTacocatGallery.md). Some (all?) of those migrations have left photos / videos / albums behind.
 
 Order of work:
 
@@ -8,7 +8,7 @@ Order of work:
 - [Gallery 2](#gallery-2): one album recovered, the rest next
 - Lost photos and videos from the [static gallery](#pix) prior to Zenphoto and Gallery 2, which is more labor-intensive because Moses needs to review each video
 - [Compare originals in Dropbox with the gallery](#dropbox), which may add more; and last
-- Once everything is in, perhaps [pre-generate the derived images](AwsDataMigration.md#pre-generate-derived-images).
+- Once everything is in, perhaps [pre-generate the derived images](migration_from_aws/AwsDataMigration.md#pre-generate-derived-images).
 
 Each recovery is [its own script](#how-the-recoveries-are-built).
 
@@ -24,7 +24,7 @@ The older systems' files are at DreamHost, read over SSH as `deanmoses@tacocat.c
 
 ✅ This is DONE: the 11 unpublished albums and the one hidden photo are on staging and production, the 12 stale rows turned out to be photos the gallery has, and Zenphoto held no sub-albums. Moses publishes the albums himself.
 
-Before AWS the gallery ran at DreamHost, on Gallery 2 from about 2007 to 2014 and on Zenphoto from late 2014 to 2023, and both databases are still there ([Log](#log), 2026-09-30, DreamHost databases). The 2023 move to AWS copied Zenphoto's files into S3 on 2023-12-13 and wrote a DynamoDB row for each published album and photo, and none for an unpublished one. That left 11 albums as files in S3 with no rows, which the [S3 version check](AwsDataMigration.md#s3-version-check) found: `1977/12-31/`, `2007/01-07/`, `2008/01-10/`, `2008/12-07/`, `2009/05-16/`, `2015/03-25/`, `2015/07-12/`, `2016/08-01/`, `2019/09-14/`, `2019/09-21/` and `2023/01-10/`. Each is unpublished in Zenphoto, and their photos add up to exactly the check's 147. They are drafts, then, and some may have been held back on purpose: the caption of `/2008/01-13/` links readers to `/2008/01-10`, "Felix's class bake a king cake", yet that album stayed unpublished, and its captions name about a dozen of Felix's classmates. The move left behind the one unpublished photo in a published album the same way, `2015/01-11/a4-aceeyah-laughing.jpg`.
+Before AWS the gallery ran at DreamHost, on Gallery 2 from about 2007 to 2014 and on Zenphoto from late 2014 to 2023, and both databases are still there ([Log](#log), 2026-09-30, DreamHost databases). The 2023 move to AWS copied Zenphoto's files into S3 on 2023-12-13 and wrote a DynamoDB row for each published album and photo, and none for an unpublished one. That left 11 albums as files in S3 with no rows, which the [S3 version check](migration_from_aws/AwsDataMigration.md#s3-version-check) found: `1977/12-31/`, `2007/01-07/`, `2008/01-10/`, `2008/12-07/`, `2009/05-16/`, `2015/03-25/`, `2015/07-12/`, `2016/08-01/`, `2019/09-14/`, `2019/09-21/` and `2023/01-10/`. Each is unpublished in Zenphoto, and their photos add up to exactly the check's 147. They are drafts, then, and some may have been held back on purpose: the caption of `/2008/01-13/` links readers to `/2008/01-10`, "Felix's class bake a king cake", yet that album stayed unpublished, and its captions name about a dozen of Felix's classmates. The move left behind the one unpublished photo in a published album the same way, `2015/01-11/a4-aceeyah-laughing.jpg`.
 
 The comparison of Zenphoto with DynamoDB found nothing else the move lost ([Log](#log), 2026-09-30, Zenphoto comparison). Every published album and photo is on AWS with the same words in its title and caption, or was renamed, moved or replaced there since. Of the 18 other files the S3 check left behind, `a4-aceeyah-laughing.jpg` is the only one Zenphoto ever listed.
 
@@ -62,7 +62,7 @@ The three albums are added unpublished, for Moses to look over and publish, and 
 
 Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them, mostly 1024 pixels on the long side and about 150 KB. Dropbox has no folder for any of the three albums and none of their photos by name, so for those Gallery 2's copies are the only ones found. Of the single photos, Dropbox has `lincoln2.jpg` to `lincoln4.jpg` from `2012/06-22/` in `Photos/albums/2017/03-04/`; its `2013/07-01/` holds `paris` photos, not `046.JPG` and `056.JPG`, which makes `paris14.jpg` and `paris16.jpg` likelier to be them.
 
-Left behind: the nine TIFFs in `2008/08-21/`, Gallery 2's `2008/08-24/photoshoot/couple01.tif` to `milo01.tif`, which the [S3 version check](AwsDataMigration.md#s3-version-check) also found. The gallery has never served a TIFF, and Moses takes them for raw originals pushed to DreamHost by mistake. The other text that differs reads as Moses' later edits in Zenphoto, "Happy Birthday, America!" becoming "4th of July", or as spacing and punctuation.
+Left behind: the nine TIFFs in `2008/08-21/`, Gallery 2's `2008/08-24/photoshoot/couple01.tif` to `milo01.tif`, which the [S3 version check](migration_from_aws/AwsDataMigration.md#s3-version-check) also found. The gallery has never served a TIFF, and Moses takes them for raw originals pushed to DreamHost by mistake. The other text that differs reads as Moses' later edits in Zenphoto, "Happy Birthday, America!" becoming "4th of July", or as spacing and punctuation.
 
 The 2013 and 2014 prototypes hold nothing the gallery needs: Gallery 3's `tacocat_gallery3` has 11 photos and Piwigo's `themosii_com` and `themosii_com_1` 89 and 5, all added on the days the systems were tried.
 
