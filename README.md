@@ -2,7 +2,7 @@
 
 The pix.tacocat.com photo gallery on Cloudflare: the back end that replaces the AWS one, and the web app it serves. `docs/Architecture.md` says how it fits together, `docs/plans/AwsPort.md` why it is shaped that way and what is left to do, `docs/plans/AwsDataMigration.md` how the real gallery is copied over, `docs/Risks.md` what has been tested against the platform, and `docs/Perf.md` how performance is judged against the AWS site. The goals and the vendor comparison are in `docs/plans/Hosting.md` and `docs/plans/HostingDeepDive.md` in the `tacocat-gallery-sam` repo.
 
-The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit front end (see Front end below), and `shared/` the album schema and path helpers both import. One Worker holds everything: one D1 database, four R2 buckets (originals, uploads in flight, derived images and database dumps), an upload Queue with a dead-letter queue and the Workflow its consumer starts, the Images binding, and a Container for video transcoding. It runs in two environments (see Environments below): production on `pix.deanmoses.com` and staging on `staging-pix.deanmoses.com`, custom domains on a Cloudflare zone standing in for tacocat.com, as well as `workers.dev`, so the tacocat.com DNS move is not needed yet.
+The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit front end (see Front end below), and `shared/` the album schema and path helpers both import. One Worker holds everything: one D1 database, four R2 buckets (originals, uploads in flight, derived images and database dumps), an upload Queue with a dead-letter queue and the Workflow its consumer starts, the Images binding, and a Container for video transcoding. It runs in two environments (see Environments below): production on `pix.deanmoses.com`, a custom domain on a Cloudflare zone standing in for tacocat.com until `pix.tacocat.com` moves off AWS, and staging on `staging-pix.tacocat.com`, as well as `workers.dev`.
 
 ## Running it
 
@@ -34,7 +34,7 @@ The release ends by applying the config's triggers, the crons and the custom dom
 ## Environments
 
 - Production, on `pix.deanmoses.com`
-- Staging, on `staging-pix.deanmoses.com`
+- Staging, on `staging-pix.tacocat.com`
 
 These are two Workers from the same `api/wrangler.jsonc`, each with its own database, buckets, queues, secrets and admin passkeys. Every resource is named for its environment and its role, and nothing else: the Workers are `production` and `staging`, their databases the same, their buckets `production-originals` and `production-derived` and staging's likewise, their queues `production-uploads` and `production-uploads-dlq`, their Workflows `production-uploads`, and their container applications `production-transcoder` and `staging-transcoder`. Names are per account, and the account is the gallery's, so a project prefix would say nothing. Staging holds test albums that do not get sync'ed to prod; upload whatever a test needs. Its database is disposable: every push to a pull request branch applies that branch's migrations to it (see Deploying), so a migration amended after a push, or a branch abandoned, leaves it with something production never gets. When that happens, restore it to the bookmark the release printed, or empty it and seed it again. Both are public and both send noindex, as on AWS, so performance and SEO tools can reach either.
 
@@ -139,7 +139,7 @@ The AWS provider takes the AWS CLI's credentials, whichever profile or session `
 
 On a new account, R2 has to be enabled once in the dashboard, and the state bucket made by hand, since a config cannot create the bucket its own state is read from: `npx wrangler r2 bucket create opentofu-state` in `api/`, then `scripts/tofu.sh init`.
 
-`infra/tacocat.tf` also declares the `tacocat.com` zone, which has answered for the domain since GoDaddy's nameservers moved from DreamHost to Cloudflare's on 2026-10-02 (`scripts/tofu.sh output tacocat_name_servers` prints them). Its records are the ones DreamHost served, DNS-only and unchanged. To go back, set the nameservers at GoDaddy to `ns1`, `ns2` and `ns3.dreamhost.com`; the Zone diff workflow in the Actions tab says what has changed here since, which DreamHost's zone would lack: `scripts/zone-diff.sh` compares every record on both nameservers and must see authoritative answers, which a home network that intercepts DNS never gives it.
+`infra/tacocat.tf` also declares the `tacocat.com` zone, which has answered for the domain since GoDaddy's nameservers moved from DreamHost to Cloudflare's on 2026-10-02 (`scripts/tofu.sh output tacocat_name_servers` prints them). Its records are the ones DreamHost served, DNS-only and unchanged, except `staging-pix.tacocat.com`, which is the staging Worker's custom domain and so has no record in the config. To go back, set the nameservers at GoDaddy to `ns1`, `ns2` and `ns3.dreamhost.com`; the Zone diff workflow in the Actions tab says what has changed here since, which DreamHost's zone would lack: `scripts/zone-diff.sh` compares every record on both nameservers and must see authoritative answers, which a home network that intercepts DNS never gives it.
 
 Tokens scope to whole buckets, never to a prefix, which is why each role has a bucket of its own (see Secrets under Environments).
 

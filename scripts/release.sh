@@ -37,7 +37,7 @@ staging)
     # Staging is wrangler.jsonc's top level; an empty --env names it without Wrangler's warning that none was given.
     env_flag=(--env '')
     worker=staging
-    origin=https://staging-pix.deanmoses.com
+    origin=https://staging-pix.tacocat.com
     ;;
 production)
     env_flag=(--env production)

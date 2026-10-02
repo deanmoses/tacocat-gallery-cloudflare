@@ -4,7 +4,7 @@ locals {
   # account, and the account is the gallery's, so the environment is all a name has to say.
   environments = {
     production = { prefix = "production", site_origin = "https://pix.deanmoses.com" }
-    staging    = { prefix = "staging", site_origin = "https://staging-pix.deanmoses.com" }
+    staging    = { prefix = "staging", site_origin = "https://staging-pix.tacocat.com" }
   }
 }
 

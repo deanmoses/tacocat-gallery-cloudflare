@@ -13,7 +13,7 @@ import { devVars } from './dev-vars.ts';
 
 export const SITES = {
     local: 'http://localhost:8787',
-    staging: 'https://staging-pix.deanmoses.com',
+    staging: 'https://staging-pix.tacocat.com',
     production: 'https://pix.deanmoses.com',
 };
 
