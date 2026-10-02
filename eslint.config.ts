@@ -687,6 +687,14 @@ export default defineConfig(
         rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
     },
     {
+        // Served as it is from static/, so no tsconfig can sit beside it, and the app's program has the DOM's types
+        // where it runs in a worker's. It is linted without types.
+        name: 'retiring service worker',
+        files: ['web/static/service-worker.js'],
+        extends: [ts.configs.disableTypeChecked],
+        languageOptions: { globals: globals.serviceworker },
+    },
+    {
         // The container's main process: on the platform's stop signal it exits as soon as its current answer is sent,
         // where waiting for the event loop to drain, with the keep-alive sockets its uploads leave open, could hold the
         // instance for the 15 minutes the platform allows before it kills it.
