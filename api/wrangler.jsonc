@@ -89,8 +89,17 @@
                 "max_retries": 5,
                 // Seconds, so a short D1 or R2 outage can pass before the next attempt.
                 "retry_delay": 60,
-                // Messages that run out of retries are kept here for replay instead of being dropped.
+                // Messages that run out of retries go here, where a consumer of their own reports them to the admin.
                 "dead_letter_queue": "staging-uploads-dlq",
+            },
+            {
+                // Its consumer tells the admin an upload never started; src/index.ts tells the two queues apart by
+                // the -dlq suffix.
+                "queue": "staging-uploads-dlq",
+                "max_batch_size": 1,
+                "max_batch_timeout": 1,
+                "max_retries": 5,
+                "retry_delay": 60,
             },
         ],
     },
@@ -168,6 +177,13 @@
                         "max_retries": 5,
                         "retry_delay": 60,
                         "dead_letter_queue": "production-uploads-dlq",
+                    },
+                    {
+                        "queue": "production-uploads-dlq",
+                        "max_batch_size": 1,
+                        "max_batch_timeout": 1,
+                        "max_retries": 5,
+                        "retry_delay": 60,
                     },
                 ],
             },

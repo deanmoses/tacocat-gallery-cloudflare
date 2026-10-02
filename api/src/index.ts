@@ -1,7 +1,7 @@
 import { purgeSpentChallenges } from './auth/passkeys';
 import { orm } from './db';
 import { purgeUploadErrors } from './gallery/errors';
-import { startUploadPipeline } from './gallery/pipeline';
+import { reportUnstartedUpload, startUploadPipeline } from './gallery/pipeline';
 import type { R2EventMessage } from './gallery/upload';
 import { startBrowserRuns } from './ops/browser-runs';
 import { createApp } from './routes/app';
@@ -19,8 +19,10 @@ export default {
     fetch: app.fetch,
 
     async queue(batch, env): Promise<void> {
+        // The upload queue's dead-letter queue is named for it with this suffix in every environment.
+        const deadLetters = batch.queue.endsWith('-dlq');
         for (const message of batch.messages) {
-            await startUploadPipeline(env, message.body);
+            await (deadLetters ? reportUnstartedUpload(env, message.body) : startUploadPipeline(env, message.body));
             message.ack();
         }
     },

@@ -15,6 +15,7 @@ import { imageUrl, parsePresigned } from '@tacocat-gallery/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { orm, schema } from '../../src/db';
 import { CALL_LIMIT_MS } from '../../src/gallery/derivatives';
+import { UNSTARTED_ERROR } from '../../src/gallery/pipeline';
 import { derivedPrefix, inboxKey, originalKey, posterKey, videoKey } from '../../src/storage/keys';
 import { fixtureBytes } from '../gallery';
 import { albumAsAdmin, call, callAsAdmin, handler, putDay, putItem, storedItem, uploadErrors, write } from '../helpers';
@@ -830,13 +831,100 @@ describe('a batch of uploads', () => {
     });
 
     it('leaves an event unacked when its pipeline cannot start, so the queue delivers it again', async () => {
-        vi.spyOn(env.UPLOAD_PIPELINE, 'createBatch').mockRejectedValueOnce(new Error('Workflows unavailable'));
+        vi.spyOn(env.UPLOAD_PIPELINE, 'create').mockRejectedValueOnce(new Error('Workflows unavailable'));
         const batch = uploadBatch([testVersionId('v1')]);
         const ctx = createExecutionContext();
         const consumed = handler.queue?.(batch, env, ctx);
 
         await expect(consumed).rejects.toThrow('Workflows unavailable');
         await expect(getQueueResult(batch, ctx)).resolves.toHaveProperty('explicitAcks', []);
+    });
+
+    it('leaves an event unacked when Workflows says its instance exists but none does, and processes it on redelivery', async () => {
+        // Production once had a batch create return no instance for an id that had none, and the upload was lost. The
+        // consumer calls create now, but the batch create is stood in too, so the test reproduces that fault whichever
+        // the consumer calls.
+        vi.spyOn(env.UPLOAD_PIPELINE, 'createBatch').mockResolvedValueOnce([]);
+        vi.spyOn(env.UPLOAD_PIPELINE, 'create').mockRejectedValueOnce(new Error('instance.already_exists'));
+        const versionId = await stage(`${DAY}lost`, jpg);
+        const batch = uploadBatch([versionId]);
+        const ctx = createExecutionContext();
+        const consumed = handler.queue?.(batch, env, ctx);
+
+        await expect(consumed).rejects.toThrow('instance.already_exists');
+        await expect(getQueueResult(batch, ctx)).resolves.toHaveProperty('explicitAcks', []);
+        await expect(deliver(versionId)).resolves.toStrictEqual(['1']);
+        await expect(storedItem(DAY, 'lost')).resolves.toMatchObject(IMAGE);
+    });
+
+    it('leaves an event unacked when Workflows says it started an instance that does not exist', async () => {
+        const versionId = testVersionId('v1');
+        vi.spyOn(env.UPLOAD_PIPELINE, 'create').mockResolvedValueOnce({ id: versionId } as WorkflowInstance);
+        const batch = uploadBatch([versionId]);
+        const ctx = createExecutionContext();
+        const consumed = handler.queue?.(batch, env, ctx);
+
+        await expect(consumed).rejects.toThrow('instance.not_found');
+        await expect(getQueueResult(batch, ctx)).resolves.toHaveProperty('explicitAcks', []);
+    });
+
+    it('acks an event delivered again while its instance exists, and starts nothing', async () => {
+        const versionId = await stage(`${DAY}twice`, jpg);
+        // Held open, since disposing of it drops the instance.
+        await using instance = await introspectWorkflowInstance(env.UPLOAD_PIPELINE, versionId);
+        const consume = async (): Promise<string[]> => {
+            const batch = uploadBatch([versionId]);
+            const ctx = createExecutionContext();
+            await handler.queue?.(batch, env, ctx);
+            await waitOnExecutionContext(ctx);
+            return (await getQueueResult(batch, ctx)).explicitAcks;
+        };
+        await consume();
+        await instance.waitForStatus('complete');
+        const logged = vi.spyOn(console, 'info');
+
+        await expect(consume()).resolves.toStrictEqual(['1']);
+        expect(logged).toHaveBeenCalledWith({ event: 'upload_redelivered', versionId });
+    });
+});
+
+describe('dead-lettered uploads', () => {
+    beforeEach(async () => putDay(DAY));
+
+    /** Delivers upload events from the dead-letter queue, as the queue does once their retries are spent. */
+    async function deadLetter(versionIds: string[]): Promise<string[]> {
+        const batch = uploadBatch(versionIds, 'staging-uploads-dlq');
+        const ctx = createExecutionContext();
+        await handler.queue?.(batch, env, ctx);
+        await waitOnExecutionContext(ctx);
+        return (await getQueueResult(batch, ctx)).explicitAcks;
+    }
+
+    it('tells the admin an upload whose pipeline never started must be uploaded again, and keeps its file', async () => {
+        const versionId = await stage(`${DAY}stranded`, jpg);
+        const started = vi.spyOn(env.UPLOAD_PIPELINE, 'create');
+
+        await expect(deadLetter([versionId])).resolves.toStrictEqual(['1']);
+        await expect(uploadErrors([`${DAY}stranded`])).resolves.toStrictEqual({
+            [`${DAY}stranded`]: UNSTARTED_ERROR,
+        });
+        await expect(env.UPLOADS.head(inboxKey(versionId))).resolves.not.toBeNull();
+        expect(started).not.toHaveBeenCalled();
+    });
+
+    it('records nothing for an upload whose instance started after all, as a long transcode may still be running', async () => {
+        const versionId = await stage(`${DAY}running`, jpg);
+        vi.spyOn(env.UPLOAD_PIPELINE, 'get').mockResolvedValueOnce({ id: versionId } as WorkflowInstance);
+
+        await expect(deadLetter([versionId])).resolves.toStrictEqual(['1']);
+        await expect(uploadErrors([`${DAY}running`])).resolves.toStrictEqual({});
+    });
+
+    it('records nothing for an upload that finished, or one nobody presigned', async () => {
+        const versionId = await upload(`${DAY}done`, jpg);
+
+        await expect(deadLetter([versionId, testVersionId('v1')])).resolves.toStrictEqual(['1', '2']);
+        await expect(uploadErrors([`${DAY}done`])).resolves.toStrictEqual({});
     });
 });
 
