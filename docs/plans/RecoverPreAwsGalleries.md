@@ -18,7 +18,7 @@ Moses' originals are in two Dropbox folders: `Photos/albums`, the published albu
 
 `Photos/raw` has folders named `not_for_tacocat`, such as `raw/2020/01-02/not_for_tacocat/`, which hold what was not published to the site. That includes every video before January 2026, since no gallery played video until AWS did then, so a video recovered from the static gallery comes from one ([`pix/`](#pix)). Zenphoto's test album `2022/11-01/not_for_tacocat/` stays behind.
 
-The older systems' files are at DreamHost, read over SSH as `deanmoses@tacocat.com` with the laptop's key: Gallery 2's in `~/g2data/albums/`, 3.8 GB, the static gallery's in `~/tacocat.com/pix/`, 519 MB, and Zenphoto's in `~/tacocat.com/zenphoto/`, 121 GB. The same account serves the `tacocat.com` home page, so it is only read: anything that would write, move or delete there is asked about first.
+The older systems' files are at DreamHost, read over SSH as `deanmoses@tacocat.com` with the laptop's key: Gallery 2's in `~/g2data/albums/`, 3.8 GB, the static gallery's in `~/tacocat.com/pix/`, 519 MB, and Zenphoto's in `~/tacocat.com/zenphoto/`, 121 GB. The same account serves the `tacocat.com` home page, so it is only read: anything that would write, move or delete there is asked about first. Since 2026-10-02 Apache no longer serves the galleries, Zenphoto's `/zenphoto/` and `/p_json/` and the static `/pix/` among them, and DreamHost no longer hosts `prod-pix.tacocat.com` or `dev-pix.tacocat.com` (deanmoses/tacocat#2); the files and databases are untouched and SSH reads them as before.
 
 ## Zenphoto
 
