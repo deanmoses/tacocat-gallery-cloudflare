@@ -64,18 +64,28 @@ resource "cloudflare_bot_management" "deanmoses" {
 # archive is on the public web whatever its noindex says. The category is Cloudflare's list of verified archivers; the
 # user agents catch the Internet Archive's own crawlers when a request is not verified as theirs.
 #
+# The rule names the gallery's hostnames because a zone's rules apply to every hostname proxied in it, and whether to
+# keep archives off the rest of tacocat.com is not the gallery's to decide.
+#
 # AI Crawl Control's per-crawler switches write their rule into this same ruleset, so one set in the dashboard shows
 # up here as a change to revert: block a crawler by adding it to the expression.
+locals {
+  archiver_block_hosts = {
+    deanmoses = { zone_id = cloudflare_zone.deanmoses.id, hosts = ["pix.deanmoses.com"] }
+    tacocat   = { zone_id = cloudflare_zone.tacocat.id, hosts = ["pix.tacocat.com", "staging-pix.tacocat.com"] }
+  }
+}
+
 resource "cloudflare_ruleset" "block_archivers" {
-  for_each = { deanmoses = cloudflare_zone.deanmoses.id, tacocat = cloudflare_zone.tacocat.id }
-  zone_id  = each.value
+  for_each = local.archiver_block_hosts
+  zone_id  = each.value.zone_id
   name     = "default"
   kind     = "zone"
   phase    = "http_request_firewall_custom"
   rules = [{
     description = "Block archive crawlers"
     action      = "block"
-    expression  = "(cf.verified_bot_category eq \"Archiver\") or (lower(http.user_agent) contains \"archive.org_bot\") or (lower(http.user_agent) contains \"ia_archiver\")"
+    expression  = "(http.host in {${join(" ", formatlist("\"%s\"", each.value.hosts))}}) and ((cf.verified_bot_category eq \"Archiver\") or (lower(http.user_agent) contains \"archive.org_bot\") or (lower(http.user_agent) contains \"ia_archiver\"))"
   }]
 }
 
