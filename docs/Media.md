@@ -33,4 +33,4 @@ ffmpeg in a Container (`api/transcoder/`) behind a Durable Object, one instance 
 
 **One spelling.** `shared/src/urls.ts` builds every image URL, for the app and for the pipeline's pre-made images alike, and the stored name is spelled from the same text. A stored image is found only by a URL spelled exactly the same way, so there must be one place that spells them.
 
-**The media routes need no login.** Knowing a version id is knowing the photo, and 64 random bits cannot be guessed. Each route reads only the objects under the version it names, in the originals and derived buckets, so nothing else is reachable through them. Checking whether the album is published would cost a database read on routes that otherwise need none.
+**The media routes need no login.** Knowing a version id is knowing the photo, and its 80 random bits cannot be guessed. Each route reads only the objects under the version it names, in the originals and derived buckets, so nothing else is reachable through them. Checking whether the album is published would cost a database read on routes that otherwise need none.

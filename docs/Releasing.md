@@ -5,7 +5,7 @@ How a change reaches readers, what to do when the pipeline isn't enough, and how
 ## At a glance
 
 - A push to a pull request branch releases it to `staging-pix.tacocat.com`; a merge to `main` releases production and staging both. Both run `.github/workflows/deploy.yml`, which runs `scripts/release.sh`. A push that changes only markdown deploys nothing.
-- `/api/health` on either hostname answers with the running version and its tag, the commit it was built from.
+- `/api/health` on either hostname answers with the running version, the commit it was built from and the newest migration.
 - The repository's Environments panel lists what is on each environment, every pull request shows when its commits reached them, and the Actions tab has each release's log.
 - The undo is the `wrangler rollback` command the release prints at its end, safe as long as the migrations were additive.
 

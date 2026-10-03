@@ -49,7 +49,7 @@ The entire site is one Worker per environment, serving the web app and everythin
 
 **One origin.** There's no `api.`, `img.` or `auth.` subdomains, meaning there's no CORS between the app and the API, the session cookie needs no cross-site settings, and every URL the app builds is a root-relative path with no host. The one request that leaves the origin is the upload itself, a PUT straight to R2's S3 endpoint, so the originals bucket alone carries a CORS rule, in `infra/`.
 
-The Worker's default export in `api/src/index.ts` has three handlers: `fetch`, the Hono app in `api/src/routes/app.ts`; `queue`, which starts a Workflow instance for each upload event and turns an event that ran out of retries into an upload error; and `scheduled`, the nightly job that deletes upload errors and spent login challenges past their use. The bindings are declared in `api/wrangler.jsonc`. `GET /api/health` answers with the running version and the newest migration, which is what a release checks.
+The Worker's default export in `api/src/index.ts` has three handlers: `fetch`, the Hono app in `api/src/routes/app.ts`; `queue`, which starts a Workflow instance for each upload event and turns an event that ran out of retries into an upload error; and `scheduled`, the nightly job that deletes upload errors and spent login challenges past their use. The bindings are declared in `api/wrangler.jsonc`. `GET /api/health` answers with the running version, the commit it was built from and the newest migration, which is what a release checks (Is production okay? in [`Operations.md`](Operations.md)).
 
 ## The gallery
 
