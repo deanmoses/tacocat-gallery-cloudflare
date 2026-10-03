@@ -1,6 +1,6 @@
-// Runs the photo-album journey against both sites from every DebugBear location, and reports what the runs measured.
-// Each page in the DebugBear project is one site tested from one location, with the journey script attached as an
-// advanced setting; which site a page tests is read from its URL. A page tagged `warm-browser` has DebugBear's Warm
+// Runs the photo-album journey against the site from every DebugBear location, and reports what the runs measured.
+// Each page in the DebugBear project tests the site from one location, with the journey script attached as an
+// advanced setting. A page tagged `warm-browser` has DebugBear's Warm
 // Load setting on, so its browser has the site's files cached when the test starts, as most readers' browsers do.
 //
 // Usage: node api/scripts/debugbear.ts run                         a cold run of every page, then a warm one
@@ -9,7 +9,7 @@
 //                                                                  thumbnail and first photo requests started and
 //                                                                  ended; `report` prints the id
 //        node api/scripts/debugbear.ts pages                       every page: id, location, URL, tags and settings
-//        node api/scripts/debugbear.ts repoint /2026/09-13/        point every page at that album on its own site
+//        node api/scripts/debugbear.ts repoint /2026/09-13/        point every page at that album on its own host
 //        node api/scripts/debugbear.ts add-warm-pages              a `warm-browser` twin of every page that has none,
 //                                                                  with the same settings; Warm Load itself is then
 //                                                                  switched on in the dashboard, under Show advanced
@@ -72,7 +72,6 @@ interface Run {
     id: string;
     date: Date;
     location: string;
-    site: string;
     /** Whether the browser already held the site's files when the test started. */
     cached: boolean;
     warm: boolean;
@@ -130,15 +129,12 @@ async function report(from: Date): Promise<void> {
     const pages = await projectPages();
     const runs = (await Promise.all(pages.map(async (page) => pageRuns(page, from)))).flat();
     runs.sort((one, other) => one.date.getTime() - other.date.getTime());
-    console.info(
-        'UTC               location  site        browser  kind  TTFB   LCP  photo 1  later photos (median)  analysis',
-    );
+    console.info('UTC               location  browser  kind  TTFB   LCP  photo 1  later photos (median)  analysis');
     for (const run of runs) {
         console.info(
             [
                 run.date.toISOString().slice(0, 16).replace('T', ' '),
                 run.location.padEnd(9),
-                run.site.padEnd(10),
                 browserOf(run).padEnd(7),
                 (run.warm ? 'warm' : 'cold').padEnd(4),
                 ms(run.ttfb, 5),
@@ -149,18 +145,14 @@ async function report(from: Date): Promise<void> {
             ].join(' '),
         );
     }
-    console.info('\nMedians: location  site        browser  kind  runs  TTFB   LCP  photo 1');
-    const groups = Map.groupBy(
-        runs,
-        (run) => `${run.location} ${run.site} ${browserOf(run)} ${run.warm ? 'warm' : 'cold'}`,
-    );
+    console.info('\nMedians: location  browser  kind  runs  TTFB   LCP  photo 1');
+    const groups = Map.groupBy(runs, (run) => `${run.location} ${browserOf(run)} ${run.warm ? 'warm' : 'cold'}`);
     for (const [key, group] of [...groups].toSorted(([one], [other]) => one.localeCompare(other))) {
-        const [location = '', site = '', browser = '', kind = ''] = key.split(' ', 4);
+        const [location = '', browser = '', kind = ''] = key.split(' ', 3);
         console.info(
             [
                 ' '.repeat(8),
                 location.padEnd(9),
-                site.padEnd(10),
                 browser.padEnd(7),
                 kind.padEnd(4),
                 String(group.length).padStart(4),
@@ -176,22 +168,18 @@ async function report(from: Date): Promise<void> {
  * The page, its first script, every album request, the first thumbnail and the first photo of one run, with when each
  * started and ended in ms from the page's start, so a waterfall can be read without the dashboard: whether the album
  * JSON started with the page's headers or after the app ran, whether it was asked for once or twice, how long after it
- * arrived the browser sent the first thumbnail's request, and how long the first photo took once asked for. Both sites
- * serve their images under `/i/`, AWS on its image host.
+ * arrived the browser sent the first thumbnail's request, and how long the first photo took once asked for.
  */
 async function albumRequests(analysisId: string): Promise<void> {
     const requests = valibot.parse(REQUESTS, await debugbear(`/analysis/${analysisId}/requests`));
     const byStart = requests.toSorted((one, other) => one.startTime - other.startTime);
     const document = requests.find((request) => request.resourceType === 'document');
     const firstScript = byStart.find((request) => request.resourceType === 'script');
-    // The Worker answers albums under /api/album/; the AWS API is its own host, api.pix.tacocat.com, under /album/.
-    const albums = requests.filter((request) =>
-        /^https:\/\/(?:api\.pix\.tacocat\.com\/|[^\/]+\/api\/)album\//v.test(request.url),
-    );
+    const albums = requests.filter((request) => new URL(request.url).pathname.startsWith('/api/album/'));
     const images = byStart.filter(
         (request) => request.resourceType === 'image' && new URL(request.url).pathname.startsWith('/i/'),
     );
-    // Both apps ask for a thumbnail by both sides, as in 200x200, and a photo by its long side alone, 1024 or x768.
+    // The app asks for a thumbnail by both sides, as in 200x200, and a photo by its long side alone, 1024 or x768.
     const isThumbnail = (request: RunRequest): boolean =>
         /^\d+x\d+$/v.test(new URL(request.url).searchParams.get('size') ?? '');
     const firstThumbnail = images.find(isThumbnail);
@@ -227,7 +215,7 @@ async function listPages(): Promise<void> {
     }
 }
 
-/** Points every page at `albumPath` on the site it already tests, and says what DebugBear answered for each. */
+/** Points every page at `albumPath` on the host it already tests, and says what DebugBear answered for each. */
 async function repoint(albumPath: string): Promise<void> {
     const albumRoute = albumPath.endsWith('/') ? albumPath.slice(0, -1) : albumPath;
     if (!isDayAlbumPath(`${albumRoute}/`)) {
@@ -241,7 +229,7 @@ async function repoint(albumPath: string): Promise<void> {
 }
 
 /**
- * Creates, for every page without the warm-browser tag whose site and location have no tagged twin yet, a page with
+ * Creates, for every page without the warm-browser tag whose URL and location have no tagged twin yet, a page with
  * the same URL, location, device, schedule and settings plus the tag. DebugBear's API attaches settings by name but has no field
  * for Warm Load, so that is switched on in the dashboard afterwards.
  */
@@ -255,11 +243,12 @@ async function addWarmPages(): Promise<void> {
             continue;
         }
         const body = {
-            name: `${page.name} warm browser`,
+            // A page is named for its browser alone; the dashboard shows its location beside the name.
+            name: 'Cached Browser',
             url: page.url,
             region: page.region,
             deviceName: page.device.name,
-            // Without this DebugBear gives a new page its own daily test; the Worker's cron starts every round.
+            // Without this DebugBear gives a new page its own daily test; `run` starts every round.
             testScheduleName: page.testSchedules[0]?.name,
             advancedSettings: page.advancedSettings.map((setting) => setting.name),
             tags: [...page.tags, WARM_BROWSER_TAG],
@@ -306,7 +295,6 @@ async function pageRuns(page: Page, from: Date): Promise<Run[]> {
             id: String(row['analysis.id']),
             date,
             location: page.region,
-            site: new URL(page.url).hostname === 'pix.tacocat.com' ? 'AWS' : 'Cloudflare',
             cached: page.tags.includes(WARM_BROWSER_TAG),
             warm: previous !== undefined && date.getTime() - previous.getTime() < WARM_WITHIN_MS,
             ttfb: numeric(row['performance.ttfb']),

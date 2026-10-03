@@ -15,7 +15,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 
 ## Baseline
 
-The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 to 05:38 on the 2nd, on `/2026/09-13` with the whole gallery in production, as medians in ms; five runs make each median. A fresh browser holds nothing; a cached one holds the app's JS from a visit to another album seconds before, and nothing of this one. Cold is a site nobody had touched for hours; warm is the same page run within the half hour before. These ran against `pix.deanmoses.com`; production moved to `pix.tacocat.com` on 2026-10-02, with nothing cached at the edge for the new host, so the first rounds there will be a little slower than this until the colos have seen it.
+The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 to 05:38 on the 2nd, on `/2026/09-13` with the whole gallery in production, as medians in ms; five runs make each median. A fresh browser holds nothing; a cached one holds the app's JS from a visit to another album seconds before, and nothing of this one. Cold is a site nobody had touched for hours; warm is the same page run within the half hour before. These ran against `pix.deanmoses.com`, production's hostname until 2026-10-02.
 
 | Browser | Site | Location       | Page TTFB | Album LCP | First photo | Later photos |
 | ------- | ---- | -------------- | --------- | --------- | ----------- | ------------ |
@@ -59,7 +59,7 @@ The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 t
 ### Running a series
 
 - **The comparison album is `/2026/09-13`**, 21 photos. `node api/scripts/debugbear.ts pages` prints which album and host the pages test; `repoint` moves them to another album. The warm-browser setup flow visits `/2025/09-29`, which has to exist too.
-- **The pages** are one per location for this site and a `warm-browser` twin of each. The AWS site's pages beside them stay until it is retired.
+- **The pages** are one per location and a `warm-browser` twin of each, named `Fresh Browser` and `Cached Browser`; the dashboard shows each one's location beside its name.
 - **A round** is `node api/scripts/debugbear.ts run`, or the Browser performance runs workflow in the Actions tab: a cold run of every page, then a warm one. A series is several rounds hours apart, so each cold round finds the site quiet; the last scheduled series ran four a day, at 05:23, 11:23, 19:23 and 22:23 UTC. `node api/scripts/debugbear.ts report --from <date>` prints them. Nothing runs on a schedule now.
 - **After anything that empties or rebuilds production**, check both albums are still there; a round that finds no album records nothing, and every image URL and edge cache is new afterwards.
 - **A release** renames the app's files when the app changed, so the next cold round fetches every chunk from origin at every location; note a release that lands within a couple of hours of a round. While a series is running, hold releases or note them against it.
