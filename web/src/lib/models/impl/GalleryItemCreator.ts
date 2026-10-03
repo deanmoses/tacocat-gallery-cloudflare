@@ -1,4 +1,4 @@
-import type { Image, Video } from '../GalleryItemInterfaces';
+import type { BaseMedia, Image, Media, Video } from '../GalleryItemInterfaces';
 import type { ImageRecord, MediaRecord, VideoRecord } from './server';
 import { isImageRecord, isVideoRecord } from './server';
 import { detailImageUrl } from '$lib/utils/config';
@@ -10,7 +10,7 @@ import { originalUrl } from '@tacocat-gallery/shared';
  * The image or video a component reads, from its record
  * @param record Media record from server or stored in idb
  */
-export function toMedia(record: MediaRecord): Image | Video {
+export function toMedia(record: MediaRecord): Media {
     if (isVideoRecord(record)) return toVideo(record);
     if (isImageRecord(record)) return toImage(record);
     throw new Error(`Unknown media type: ${JSON.stringify(record)}`);
@@ -30,7 +30,7 @@ function toVideo(record: VideoRecord): Video {
     return { ...mediaFields(record), mediaType: 'video', duration: record.duration };
 }
 
-function mediaFields(record: MediaRecord): Omit<Video, 'mediaType' | 'duration'> {
+function mediaFields(record: MediaRecord): BaseMedia {
     const detail = detailDimensions(record.dimensions);
     return {
         path: record.path,
