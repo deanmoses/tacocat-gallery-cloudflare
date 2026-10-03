@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { draftMachine } from './DraftMachine.svelte';
 import { DraftStatus } from '$lib/models/draft';
 import { albumState } from '../AlbumState.svelte';
 import { clear as clearDisk, get as getFromDisk } from 'idb-keyval';
-import { fakeServer, jsonResponse } from '$lib/test-support/http';
+import { fakeServer, jsonResponse, serverError } from '$lib/test-support/http';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord } from '$lib/test-support/records';
 import type { AlbumGalleryItem } from '$lib/models/impl/server';
@@ -25,6 +25,12 @@ function album(): AlbumGalleryItem {
         description: 'Old album description',
         children: [imageRecord({ path: MEDIA_PATH, itemName: 'image', description: 'Old image description' })],
     });
+}
+
+/** A reply the spec sends when it is ready, so it can look at the store while the request is out */
+function heldReply(): { reply: () => Promise<Response>; send: (response: Response) => void } {
+    const { promise, resolve } = Promise.withResolvers<Response>();
+    return { reply: async () => promise, send: resolve };
 }
 
 describe('draftMachine', () => {
@@ -250,6 +256,152 @@ describe('draftMachine', () => {
                 expect(onDisk?.children?.find((child) => child.path === MEDIA_PATH)?.description).toBe(
                     'New image description',
                 );
+            });
+        });
+
+        it('sends the edit to the server, and holds the user on the page until it answers', async () => {
+            seedLoadedAlbum(album());
+            const server = fakeServer();
+            const held = heldReply();
+            server.patch(ALBUM_ROUTE, held.reply);
+            draftMachine.init(ALBUM_PATH);
+            draftMachine.setSummary('A Summary');
+            draftMachine.setPublished(true);
+
+            draftMachine.save();
+
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(1);
+            });
+
+            expect(server.calls[0]).toStrictEqual({
+                method: 'PATCH',
+                pathname: ALBUM_ROUTE,
+                body: { summary: 'A Summary', published: true },
+            });
+            expect(draftMachine.status).toBe(DraftStatus.SAVING);
+            expect(draftMachine.okToNavigate).toBe(false);
+
+            held.send(jsonResponse({}));
+
+            await vi.waitFor(() => {
+                expect(draftMachine.status).toBe(DraftStatus.SAVED);
+            });
+
+            expect(draftMachine.okToNavigate).toBe(true);
+        });
+
+        it.each([
+            { failure: 'the server refuses', reply: (): Response => jsonResponse({ errorMessage: 'No' }, 400) },
+            { failure: 'the server fails', reply: (): Response => serverError() },
+            {
+                failure: 'the network is down',
+                reply: (): Response => {
+                    throw new TypeError('Failed to fetch');
+                },
+            },
+        ])('keeps the edit and leaves the album alone when $failure', async ({ reply }) => {
+            const before = seedLoadedAlbum(album());
+            const server = fakeServer();
+            server.patch(ALBUM_ROUTE, reply);
+            draftMachine.init(ALBUM_PATH);
+            draftMachine.setDescription('New album description');
+
+            draftMachine.save();
+
+            await vi.waitFor(() => {
+                expect(draftMachine.status).toBe(DraftStatus.ERRORED);
+            });
+
+            expect(draftMachine.draft.content).toStrictEqual({ description: 'New album description' });
+            expect(albumState.albums.get(ALBUM_PATH)).toBe(before);
+            expect(before.album.description).toBe('Old album description');
+        });
+
+        // The server has the edit, so there is nothing for the user to retry;
+        // the copy in memory is simply not there to correct
+        it('reports the edit saved when the album has left memory', async () => {
+            const server = fakeServer();
+            server.patch(ALBUM_ROUTE, jsonResponse({}));
+            draftMachine.init(ALBUM_PATH);
+            draftMachine.setDescription('New album description');
+
+            draftMachine.save();
+
+            await vi.waitFor(() => {
+                expect(draftMachine.status).toBe(DraftStatus.SAVED);
+            });
+        });
+
+        // Only the edits made before Save went to the server, so one made
+        // while it was answering is still unsaved
+        it('holds the user on the page when they edited while it was saving', async () => {
+            seedLoadedAlbum(album());
+            const server = fakeServer();
+            const held = heldReply();
+            server.patch(ALBUM_ROUTE, held.reply);
+            draftMachine.init(ALBUM_PATH);
+            draftMachine.setSummary('A Summary');
+            draftMachine.save();
+            await vi.waitFor(() => {
+                expect(server.calls).toHaveLength(1);
+            });
+
+            draftMachine.setDescription('A Description');
+            held.send(jsonResponse({}));
+
+            await vi.waitFor(() => {
+                expect(albumState.albums.get(ALBUM_PATH)?.album?.summary).toBe('A Summary');
+            });
+
+            expect(draftMachine.status).toBe(DraftStatus.UNSAVED_CHANGES);
+            expect(draftMachine.okToNavigate).toBe(false);
+            expect(albumState.albums.get(ALBUM_PATH)?.album?.description).toBe('Old album description');
+        });
+
+        describe('after saving', () => {
+            beforeEach(() => {
+                vi.useFakeTimers({ toFake: ['setTimeout'] });
+            });
+
+            afterEach(() => {
+                vi.useRealTimers();
+            });
+
+            async function saveAnEdit(): Promise<void> {
+                seedLoadedAlbum(album());
+                fakeServer().patch(ALBUM_ROUTE, jsonResponse({}));
+                draftMachine.init(ALBUM_PATH);
+                draftMachine.setSummary('A Summary');
+                draftMachine.save();
+                // vi.waitFor would move the faked clock forward as it polls
+                for (let turn = 0; draftMachine.status !== DraftStatus.SAVED; turn++) {
+                    if (turn === 100) throw new Error(`Draft never saved: ${String(draftMachine.status)}`);
+                    await new Promise((resolve) => {
+                        setImmediate(resolve);
+                    });
+                }
+            }
+
+            it('shows the edit saved for four seconds, then has nothing to save', async () => {
+                await saveAnEdit();
+
+                vi.advanceTimersByTime(3999);
+
+                expect(draftMachine.status).toBe(DraftStatus.SAVED);
+
+                vi.advanceTimersByTime(1);
+
+                expect(draftMachine.status).toBe(DraftStatus.NO_CHANGES);
+            });
+
+            it('leaves a newer edit unsaved when the four seconds are up', async () => {
+                await saveAnEdit();
+                draftMachine.setDescription('A Description');
+
+                vi.advanceTimersByTime(4000);
+
+                expect(draftMachine.status).toBe(DraftStatus.UNSAVED_CHANGES);
             });
         });
     });

@@ -128,8 +128,12 @@ class DraftMachine {
         if (errorMessage !== undefined && errorMessage !== '') toast.push(errorMessage);
     }
 
-    #saveSuccess(): void {
-        this.#setStatus(DraftStatus.SAVED);
+    #saveSuccess(saved: Draft): void {
+        this.#updateAlbum(saved);
+        // Each edit replaces the draft's content, so content other than what
+        // was sent means the user edited while the server was answering, and
+        // that edit is still unsaved
+        if (this.#draft.content === saved.content) this.#setStatus(DraftStatus.SAVED);
     }
 
     #clearSaveSuccess(): void {
@@ -158,6 +162,28 @@ class DraftMachine {
         const newState: Draft = { ...this.#draft, status: DraftStatus.UNSAVED_CHANGES, content };
         console.log(`Update draft [${newState.path}]:`, newState.content);
         this.#draft = newState;
+    }
+
+    /**
+     * Puts the saved edit into the album in memory and on disk. The album is
+     * rebuilt from a copy of its JSON rather than edited in place: AlbumState's
+     * map signals its readers only when the entry is a new object, and the old
+     * album may still be on screen. An album no longer in memory has nothing
+     * to correct; it is read from the server when next shown.
+     */
+    #updateAlbum(saved: Draft): void {
+        const albumPath = isMediaPath(saved.path) ? parentPathOf(saved.path) : saved.path;
+        const albumEntry = albumState.albums.get(albumPath);
+        if (!albumEntry?.album) return;
+        const { children, ...json } = albumEntry.album.json;
+        const copy: AlbumGalleryItem = { ...json };
+        if (children) copy.children = children.map((child) => (child.path === saved.path ? { ...child } : child));
+        const album = toAlbum(copy);
+        const edited = isMediaPath(saved.path) ? album.getMedia(saved.path) : album;
+        if (!edited) return;
+        // The setters write the edit into the copied JSON, which is what goes to disk
+        Object.assign(edited, saved.content);
+        albumLoadMachine.updateAlbumEntry({ ...albumEntry, album });
     }
 
     //
@@ -191,26 +217,7 @@ class DraftMachine {
                 return;
             }
 
-            // UPDATE CLIENT STATE
-            // Update both the album in memory and on the browser's local filesystem
-
-            // The album is rebuilt from a copy of its JSON rather than edited
-            // in place: AlbumState's map signals its readers only when the
-            // entry is a new object, and the old album may still be on screen.
-            const albumPath = isMediaPath(draft.path) ? parentPathOf(draft.path) : draft.path;
-            const albumEntry = albumState.albums.get(albumPath);
-            if (!albumEntry?.album) throw new Error(`Did not find album [${albumPath}] in memory`);
-            const { children, ...json } = albumEntry.album.json;
-            const copy: AlbumGalleryItem = { ...json };
-            if (children) copy.children = children.map((child) => (child.path === draft.path ? { ...child } : child));
-            const album = toAlbum(copy);
-            const edited = isMediaPath(draft.path) ? album.getMedia(draft.path) : album;
-            if (!edited) throw new Error(`Did not find media item [${draft.path}] in album [${albumPath}]`);
-            // The setters write the edit into the copied JSON, which is what goes to disk
-            Object.assign(edited, draft.content);
-            albumLoadMachine.updateAlbumEntry({ ...albumEntry, album });
-
-            this.#saveSuccess();
+            this.#saveSuccess(draft);
 
             // Clear the saved status after a while
             console.log('DraftStore: before save clear timeout');
