@@ -1,169 +1,84 @@
 # tacocat-gallery-cloudflare
 
-The pix.tacocat.com photo gallery on Cloudflare: one Worker that serves the web app and everything behind it. `docs/Architecture.md` says how it fits together and why, `docs/Testing.md` how it is tested, and `docs/Perf.md` how its performance is judged. `docs/plans/` holds every plan, past and present, each frozen once its work is built; `docs/plans/migration_from_aws/` is the move from the AWS gallery this one replaced on 2026-10-02, starting with `Why.md`.
+This repo is the code for the pix.tacocat.com photo gallery.
 
-The repo is three npm workspaces: `api/` is the Worker, `web/` the SvelteKit front end (see Front end below), and `shared/` the album schema and path helpers both import. One Worker holds everything: one D1 database, two R2 buckets (originals, and derived images and video), an upload Queue with a dead-letter queue and the Workflow its consumer starts, Image Transformations, and a Container for video transcoding. It runs in two environments (see Environments below): production on `pix.tacocat.com` and staging on `staging-pix.tacocat.com`, custom domains on the `tacocat.com` zone, as well as `workers.dev`.
+This is how to get it running on your localhost. For the rest, see [`docs/README.md`](docs/README.md).
 
-## Running it
+## The stack
 
-The Worker's scripts live in `api/package.json`: run them from `api/`, or from the root with `--workspace api`, as below. So do Wrangler commands, which find `api/wrangler.jsonc` from the directory they run in. `npm run dev --workspace api` needs an `api/.dev.vars` (gitignored) holding the secrets `api/wrangler.jsonc` lists under `secrets.required`, and `UPLOAD_MODE=local`, which makes uploads complete locally: the Worker hands the browser a URL of its own instead of a presigned one, takes the file into its local bucket and raises the event R2 would have, so the pipeline runs on your machine. Without it, the browser's PUT goes to the account's staging bucket, which refuses it, since the bucket accepts uploads only from the site's own origin. Deployed, Image Transformations make the images; they run only on Cloudflare's edge, so `npm run dev` sets `IMAGE_MODE=binding` and the local Images binding makes them instead. What local dev gets wrong, all of it the local Images binding or the platform and none of it the Worker: a HEIC upload ends as an upload error, since the local binding is Sharp, whose libvips cannot decode HEIC, where the real binding can; EXIF orientation is not applied, so a phone photo shows turned and its thumbnail crop off-centre, where the real binding turns it; the encoding options are ignored, so a thumbnail weighs the same at any quality and an animated GIF's thumbnail and media page image are still frames whether or not asked, where the real binding honours both, so what a thumbnail weighs and whether a GIF moves are judged on staging; a video needs the ffmpeg container, which `npm run dev --workspace api` leaves off so it starts without Docker, and `npm run dev:video --workspace api` builds and runs with Docker up; and the nightly job, which drops old upload errors and spent challenges, never runs unless its cron is fired by hand. Tests do not need the file.
+- **The front end** is a SvelteKit single-page web app
+- **The back end** is a Cloudflare Worker that serves the web app and everything behind it
+- **The database** is Cloudflare D1, for the catalog and search
+- **The photo and video files** are stored in Cloudflare R2
+- **Derived images** like thumbnails are generated via Cloudflare Image Transformations
+- **Photo and video uploads** are handled via a Cloudflare Queue and a Cloudflare Workflow
+- **Video transcoding** via ffmpeg in a Cloudflare Container
 
-```bash
-fnm use  # or nvm use
-npm install
-npm run db:migrate:local --workspace api
-npm run dev --workspace api
-```
+## Prerequisites
 
-Every push deploys itself (see Deploying below): a pull request branch to staging, a merge to `main` to production and staging both. By hand, `scripts/release.sh staging` or `scripts/release.sh production` runs the same release. `npm run deploy --workspace api` and `npm run deploy:production --workspace api` are the plain `wrangler deploy`, which is what ships a Durable Object change; add `-- --containers-rollout=none` to leave the container to the release, since a plain deploy otherwise rolls out an image of its own, which the next release replaces.
-
-## Deploying
-
-Every push deploys itself through `.github/workflows/deploy.yml`, which runs `scripts/release.sh`, the same script as by hand. A push to a pull request branch releases the branch to staging, so it can be looked at there before it is merged. A merge to `main` releases production and staging at once, so staging is back on what production runs between pull requests. Staging does not go first: branch protection needs the branch up to date with `main`, so the tree being merged is the one its last push already released there, and for the same reason the workflow does not wait for CI. Releases to one Worker run one at a time, in the order pushed. A push that changes only markdown deploys nothing.
-
-Each run is a job against a GitHub Environment, `staging` or `production`, which is what records the history: the repository's Environments panel lists what is on each, every pull request shows when its commits reached them, and the Actions tab has each release's log. `scripts/github-setup.sh` creates the Environments, and production accepts a deploy from `main` only. The workflow can be started by hand from the Actions tab (Run workflow, choosing the environment) to release a commit again, say after a failure that was not the code's. What is live is also one request away: `/api/health` on either hostname answers with the running version and its tag, the commit it was built from.
-
-The workflow's Wrangler authenticates with the repository secret `CLOUDFLARE_API_TOKEN`, the only credential in GitHub: an account API token made in the Cloudflare dashboard (Manage account, Account API tokens, Create Token) from the Edit Cloudflare Workers template with D1 Edit and Containers Edit added, scoped to this account, and stored with `gh secret set CLOUDFLARE_API_TOKEN`. A Dependabot pull request's run reads only Dependabot's secrets, so a second token, stored with `gh secret set CLOUDFLARE_API_TOKEN --app dependabot`, lets a dependency bump reach staging before its merge releases it to production. It runs code from packages no one has reviewed, so it has only what the release uses: Workers Editor at the account scope (Workers Scripts Write before Cloudflare replaced it), D1 Write, Workers Containers Write and Account Settings Read. The account id is in `api/wrangler.jsonc`, so the token is all the workflow needs.
-
-The release is blue/green on Workers' versions and deployments. `scripts/release.sh` builds the web app and uploads a version, which serves no traffic; notes the database's Time Travel bookmark and applies the migrations, which are additive by rule so the version still serving keeps working, and checks that it does; puts the new version in the deployment at 0% and checks it on the live hostname through the `Cloudflare-Workers-Version-Overrides` header (the health route answers with the version id it expects and a migration no older than the tree's newest, the root album's JSON parses, the app shell is the app, and `/_app/version.json` is the build just uploaded); then switches it to 100%, checks again, and rolls back if that fails. A failed check leaves the previous version serving and the run red. If the migrations break the previous version, the release goes on to the new one, which was written for the new schema, but the run ends red and nothing rolls back to the broken version. The script ends by printing the `wrangler rollback` command that undoes the release, which is safe as long as the migrations were additive.
-
-The transcoder's container is not part of a Worker version, so the release ships it first, before anything else changes, when a file under `api/transcoder/` or `api/wrangler.jsonc` differs from the commit it last shipped from. `api/scripts/ship-transcoder.ts` writes that commit into each rollout's description and reads it back from the application's latest rollout, so a release that fails after this step, leaving the container ahead of the Worker, is not mistaken for no change; a rollout that names no commit in the checkout, such as a plain `wrangler deploy`'s or a dirty tree's, ships again. It builds the image, tagged with the release's tag, pushes it, and sets it by digest on the container application with the `containers` block's instance type, instance limit and grace period, then starts a rollout, the same two requests `wrangler deploy` makes. That needs Docker, which the CI runner has, and Workers Containers Write, which both tokens have. It never touches the Worker's versions, so an upload running at the time keeps its version. Nothing checks the container or rolls it back with the Worker, so, like a migration, an image has to work with both the version serving and the one being released; the rollout leaves an instance still encoding on the old image for up to its grace period anyway. `wrangler containers info` shows the previous image until the rollout finishes, a minute or so after the release.
-
-The release ends by applying the config's triggers, the crons and the custom domain, with `wrangler triggers deploy`, since a version release leaves those as they were. Three things it still does not ship, each of which goes out by hand with `npm run deploy --workspace api` or `npm run deploy:production --workspace api`, the plain `wrangler deploy`. A Durable Object class change (the `migrations` array in `api/wrangler.jsonc`), which Cloudflare accepts only through `wrangler deploy`, on its own, and which no rollback can cross. A new Workflow: a version release binds to it by name but does not create it, and until the plain deploy has, every `create` on the binding fails, which a queue consumer then retries. And a queue consumer's settings, such as its batch size, which a version release leaves as they were.
-
-## Environments
-
-- Production, on `pix.tacocat.com`
-- Staging, on `staging-pix.tacocat.com`
-
-These are two Workers from the same `api/wrangler.jsonc`, each with its own database, buckets, queues, secrets and admin passkeys. Every resource is named for its environment and its role, and nothing else: the Workers are `production` and `staging`, their databases the same, their buckets `production-originals` and `production-derived` and staging's likewise, their queues `production-uploads` and `production-uploads-dlq`, their Workflows `production-uploads`, and their container applications `production-transcoder` and `staging-transcoder`. Names are per account, and the account is the gallery's, so a project prefix would say nothing. Staging holds test albums that do not get sync'ed to prod; upload whatever a test needs. Its database is disposable: every push to a pull request branch applies that branch's migrations to it (see Deploying), so a migration amended after a push, or a branch abandoned, leaves it with something production never gets. When that happens, restore it to the bookmark the release printed, or empty it and seed it again. Both are public and both send noindex, as on AWS, so performance and SEO tools can reach either.
-
-Staging is the config's top level and production is `env.production`, so a Wrangler command without `--env` can only reach staging, and the scripts in `api/package.json` come in pairs: `deploy` and `deploy:production`, `db:migrate` and `db:migrate:production`, `logs` and `logs:production`. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. What differs between the environments beyond the bindings is four `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey, and the S3 names of the three buckets the Worker signs URLs for, `UPLOADS_BUCKET`, `DERIVED_BUCKET` and `ORIGINALS_BUCKET`. `IMAGE_MODE` is the same in both, `transformations`, and differs only under `npm run dev` and the tests. Each environment's one cron is the nightly cleanup.
-
-To seed staging, `node api/scripts/import-album.ts /2024/12-17/` copies a day album from the AWS staging gallery into it (see Copying an album from AWS), and `api/scripts/invite.sh <user> --env staging` mints an invite for a passkey there.
-
-### Standing up an environment
-
-How both environments were made, and how a third would be, in order. Each environment's resources come from `infra/` (see Infrastructure), and the Worker's first deploy has to be the plain one, since `scripts/release.sh` releases onto a Worker that already serves a version and already has its container application.
-
-1. Add the environment to `local.environments` in `infra/main.tf` and apply; `scripts/tofu.sh output d1_database_ids` prints the database id for `api/wrangler.jsonc`, which also needs the environment's block, its Worker name, hostname and resource names.
-2. Put a fresh `SESSION_SECRET_<ENVIRONMENT>` in `api/.dev.vars` (`openssl rand -hex 32`), which the import script signs with, then `scripts/secrets.sh <environment>`, which puts the Worker's secrets on it in one upload: the R2 pair from the signing token the apply just made (see Secrets below), that session secret and `DEBUGBEAR_API_KEY`. Wrangler creates the Worker as a draft to hold them.
-3. Deploy, `npm run deploy:production --workspace api` (or `deploy` for staging). Docker has to be up: the deploy builds and ships the transcoder's image. If the hostname is attached to another Worker, Wrangler asks whether to move it, and the answer moves it.
-4. Apply the migrations, `npm run db:migrate:production --workspace api` (or `db:migrate`), then `api/scripts/invite.sh <user> --env <environment>` for a passkey and `node api/scripts/import-album.ts <album> --to <environment>` for something to look at.
-
-### Secrets
-
-The Worker reaches its database, buckets and queue through bindings, which need no credentials. The one thing a binding cannot do is sign a URL, so each Worker holds an S3 key to presign the browser's upload, the transcoder's reads and writes, and Image Transformations' reads, and an S3 key on R2 is an API token: the access key is the token's id and the secret the SHA-256 of its value. The tokens are defined in `infra/`, as roles would be: each environment's signing token may read and write its `originals` and `derived` buckets and nothing else, since the browser's upload is a signed PUT of the original itself and a token is scoped to whole buckets, and the backup token may read production's `originals` bucket and nothing else. `scripts/secrets.sh` moves each token's credentials from OpenTofu's outputs to where they are used, the Worker (`staging`, `production`), the repository (`backup`) or `api/.dev.vars` (`dev`), so no value passes through a person. To rotate one, `scripts/tofu.sh apply -replace=<its address>`, then the script again. The values sit in OpenTofu's state, in the `opentofu-state` bucket (see Infrastructure), which is the cost of defining them as code.
-
-## Database schema
-
-`api/src/db/schema.ts` is the source of truth for the tables, in [Drizzle](https://orm.drizzle.team). To change one, edit the schema, run `npm run db:generate --workspace api` to write the migration into `api/migrations/`, review the SQL, then `npm run db:migrate:local --workspace api`. The release applies it to staging when the branch is pushed and to production when it is merged (see Deploying); `npm run db:migrate --workspace api` and `npm run db:migrate:production --workspace api` apply it by hand. drizzle-kit only writes migrations; Wrangler runs them and records which have been applied.
-
-The two FTS5 search tables, the view they index and their triggers are raw SQL, because Drizzle models none of them; `api/src/db/search-index.sql` defines them, every migration that makes them is a copy of it, and a test holds the file to what the migrations leave in the database. Search queries go through Drizzle's `sql` template. The migrations start from a baseline of three: one generated migration for the schema, the search index, and one that seeds the users. They have been reset to that shape three times while the databases held nothing that mattered, most recently on 2026-09-30 when the version id format changed; a reset deletes `api/migrations/`, regenerates the baseline, carries the two custom migrations over with a `-- resets: <reason>` line at the top of one, which is what lets lint accept committed migrations going, and needs every database emptied by hand before the release applies it: `npx wrangler d1 execute DB --remote --command "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"` from `api/` lists what to drop (`--env production` for production), views first, then every table including `d1_migrations`; the FTS5 tables take their shadow tables with them and the triggers go with `item`. Staging is emptied before the branch is pushed and production before it is merged, and the admins register passkeys again afterwards, since `passkey` went with the rest.
-
-A constraint, type or default on `item` changes by rebuilding the table, which drizzle-kit generates as a ``DROP TABLE `item` `` and a rename. D1 never lets a migration turn foreign keys off, so the drop deletes the rows first and every `ON DELETE SET NULL` pointing at `item` fires, clearing the album thumbnails and the uploads' album and target links. So the rebuild is three migrations, modelled by the 2026-09-27 trio `keep_links_through_item_rebuild`, `item_position_check` and `restore_links_and_search_index`, in the history at commit 38b89ea since the reset of 2026-09-30:
-
-1. A `--custom` migration that copies the link columns into keyed `rebuild_*` tables, drops the view `item_indexed` (on D1 the rebuild's rename fails while a view names the dropped table) and reshapes any row the new rule would refuse, since the rebuild's copy stops at the first such row and would leave the database between the first and second migration.
-2. The generated rebuild, with a `-- non-additive: <reason>` line added at its top, the one edit lint expects.
-3. A `--custom` migration that writes the links back with `coalesce`, so one set in between is kept, drops the scratch tables and ends with `api/src/db/search-index.sql` verbatim.
-
-Between the first and third, seconds apart within one `d1 migrations apply`, search finds nothing and an insert, a delete or an update of an indexed column fails; an upload row made then loses its links. If a step fails midway, fix forward with another migration, or restore the bookmark `scripts/release.sh` printed with `wrangler d1 time-travel restore`. `api/test/db/migrations.test.ts` migrates a database with every column filled through the whole chain and fails when any value is lost, so a new column gets a fixture there. `wrangler d1 export` cannot rehearse against a deployed database, since it refuses FTS5 tables.
-
-## Backup and restore
-
-D1's own point-in-time recovery, Time Travel, is the in-place undo: it restores `item` and `item_fts` consistently, but a restore to a timestamp can land minutes early. Before anything risky, note the current bookmark with `npx wrangler d1 time-travel info DB --env production` in `api/`, and restore to that with `npx wrangler d1 time-travel restore DB --env production --bookmark=<bookmark>`.
-
-Off-site, the Backup workflow (`.github/workflows/backup.yml`) runs nightly: it exports the `item`, `passkey` and `d1_migrations` tables with `wrangler d1 export --table`, since D1 refuses to export a database holding an FTS5 table whole, and rclone mirrors them and `production-originals` into the `tacocat-gallery-cloudflare-backup` S3 bucket in the gallery's AWS account. The bucket is versioned and keeps every previous version 35 days, and the workflow's key cannot delete a version, so a bad night, or a leaked key, is undone with `rclone copy --s3-version-at <time>`. The bucket and its key are the `backup` module in `infra/`, and `scripts/secrets.sh backup` sets the workflow's secrets. To restore the originals, rclone copy the tree back into the bucket. Every object written there raises the upload event, and each starts a Workflow instance that finds no pending upload and ends, so an upload made during a restore of the whole gallery waits behind them: restore with editing paused. To restore the database, migrate an empty one to the migration the export's `d1_migrations.sql` ends with, then `npx wrangler d1 execute DB --remote --env production --file <table>.sql` for `item` and then `passkey`; the triggers rebuild the search index as the rows go in. Untested against a deployed database: rehearse on staging first.
-
-## Development
-
-`npm run quality` formats, lints, type-checks and tests. The lint step needs `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`; without them it warns and skips those checks, where CI fails.
-
-The lint fails when workspaces that declare the same package give it different ranges or would load different copies of it, since a second copy of a package whose types cross workspaces, like `valibot`, breaks quietly. `scripts/check-dependency-versions.ts` lists the packages allowed to differ, today Vitest and its coverage plugin, each with why.
-
-Things a fresh session would otherwise find out the hard way:
-
-- Never `git stash` mid-change: new files are untracked until staged, and a stash drops them from the tree. The pre-commit hook runs every suite the staged files touch, so a commit takes about 40 seconds; commit once, when the change is green, rather than in pieces.
-- `eslint --fix` turns `expect(a > b).toBe(true)` into `toBeGreaterThan`, which throws on strings. Compare timestamps with `Date.parse`.
-- `import-x/no-cycle` sees `.ts` files only because the config names the extension; the comment there says so, so it is not a setting to tidy away.
-- Hono dispatches a `HEAD` as a `GET` before any route matches, so a handler that answers a `HEAD` differently reads the raw method, as the album and media handlers do.
-- **The write pattern is built; reuse it.** A gallery write is one statement whose cross-row rules are `EXISTS` subqueries in its `WHERE`, returning `Written`, the changes and D1's meta, from `api/src/gallery/writes.ts`. When it changed nothing, one read of subselects, `describeAlbum` or `describeMedia`, says why, and the route turns that into the 400 or 404 with its message. Routes read bodies with `parsedBody` and answer with `wrote` from `api/src/routes/requests.ts`, 204 with the bookmark cookie, which is all the app checks.
-- A Drizzle query builder is changed by what is called on it, so a builder reused for several subqueries silently gives them all the last `where`. Start each from `database.select()`.
-- Drizzle's `run()` returns rows under their SQL column names, not the builder's aliases, so name a computed column in SQL with `.as()`; its `batch()` returns rows without D1's meta, so a write whose cost is watched runs its statements one at a time.
-- A statement in a `batch()` has to come from a query builder: Drizzle's D1 driver cannot batch a raw `sql` statement, and its insert from a select takes every column of the table, in the table's order, each aliased to its column name. `insertItem` in `api/src/gallery/upload.ts` is the example.
-- D1's `meta.changes` counts what the FTS triggers wrote too, so a write tests for more than zero changes, never exactly one.
-- A `CHECK` whose expression comes out `NULL` passes, so every constraint says what must be non-null, and D1 refuses a GLOB pattern over 50 characters, so a long format is checked in pieces or by a `strftime` round trip.
-- D1 binds at most 100 parameters to one statement, so rows go in as a batch of single-row inserts, never one multi-row insert. Local D1 enforces the limit, so a test with a day's worth of rows catches it.
-
-## Claude Code on the web
-
-A cloud session starts in a container that has only this repository, an older Node than `.nvmrc` pins and none of the lint's system tools, so `.claude/hooks/session-start.sh` prepares it: Node from `.nvmrc` through nvm, `npm install`, and the lint tools through `scripts/install-lint-tools.sh` plus shellcheck from apt. It runs only when `CLAUDE_CODE_REMOTE` is set, takes about a minute on a cold image, and its `[session-start]` lines in the session banner say how long each step took and which one failed if one did.
-
-What a session can reach is set in the cloud environment (the environment menu in the session's title bar, then Edit), not in the repo:
-
-- A Cloudflare token under the environment's API credentials, a Bearer token for `api.cloudflare.com`, lets a session run `scripts/release.sh staging`, `wrangler d1 info` and `wrangler tail` as a developer would. The proxy adds it to each request, so the session never sees it, but Wrangler will not send a request without a token of its own, so the environment's variables also set `CLOUDFLARE_API_TOKEN=injected-by-proxy`, which the proxy's header replaces. Give the session its own token with the deploy token's scopes (see Deploying), so it can be revoked on its own; the account id is in `api/wrangler.jsonc`. Without it a session still deploys, through the push.
-- `DEBUGBEAR_API_KEY`, for `node api/scripts/debugbear.ts`.
-- `api/.dev.vars` is not there, so `wrangler dev` does not run; the tests do not need it (see `docs/Testing.md`).
-- Pushes and the GitHub tools use the GitHub connection of the account that started the session. `gh` is not installed, so `scripts/github-setup.sh` stays a script for a developer's machine.
-- `.mcp.json` holds only `cloudflare-docs`, which needs no login. The Cloudflare account itself is reached through claude.ai's Cloudflare Developer Platform connector, enabled for the session, which logs in once and works in a cloud session as on a developer's machine; a server needing OAuth in `.mcp.json` cannot log in from a cloud session, and one alongside the connector shows every tool twice. Servers a developer keeps outside the repo, such as Context7 with an API key, stay outside it: a project entry of the same name would win over theirs.
-
-## Continuous integration
-
-The repo is `deanmoses/tacocat-gallery-cloudflare` on GitHub. `main` is protected: every change goes through a pull request, and merging needs the `merge-ok` check of `.github/workflows/ci.yml` to pass on a branch up to date with `main`. Behind it, `npm run lint`, `npm run check`, the Worker's tests and the front end's tests run as four parallel jobs, the same scripts as `npm run quality` and the pre-commit hook, over the whole repo; a change to markdown alone runs only `scripts/lint.sh --docs`. Each job starts from `.github/actions/setup`, which installs Node and the packages with the npm and Playwright caches, and the lint job adds `scripts/install-lint-tools.sh`, which gives the runner the system tools the lint needs, each pinned to the version Homebrew has locally and verified against its release checksum; when `brew upgrade` moves one, move it there too. GitHub gives a public repo unlimited Actions minutes, so a parallel job costs nothing but the setup it repeats.
-
-The repository's own settings are applied by `scripts/github-setup.sh` with the GitHub API, so they can be read and re-applied from here: branch protection, the deploy Environments, secret scanning with push protection, Dependabot alerts and security updates, merge options and the labels the `/pr` skill uses. Run it once after creating the repository and again whenever it changes.
-
-Three things keep the supply chain honest. Dependabot (`.github/dependabot.yml`) proposes npm, GitHub Actions, Docker and OpenTofu updates weekly, grouped, after a seven-day cooldown so a version pulled within days of publication never arrives. Every GitHub Action is pinned to a full commit id with its version as a comment; the lint fails on a tag, and Dependabot moves the ids. Secrets are caught three times: gitleaks on the staged files at commit, gitleaks over the whole history in CI, and GitHub's push protection at the remote.
-
-## Front end
-
-`web/` is the SvelteKit app, an npm workspace of its own: `tacocat-gallery-sveltekit` ported, with only what the platform forces changed (the URLs in `src/lib/utils/config.ts`, the session check, the login page, the presign contract, and the naming rule, which now lives in `shared/paths.ts`). `npm run dev --workspace web` serves it on `localhost:5173` with hot reloading, passing the Worker's own routes through to `npm run dev --workspace api` on 8787; in VS Code, the task _Dev servers: Worker and web app_ (Terminal > Run Task) starts both, split side by side in one terminal. `npm run build --workspace web` writes a static single-page app to `web/build`. The Worker serves that build as static assets, so `npm run dev --workspace api` applies any migrations the local database lacks (with `CI=true`, since Wrangler otherwise stops to ask, even for a local database), rebuilds it and serves the app and the Worker's routes together on `localhost:8787`, and `npm run deploy --workspace api` rebuilds it before deploying; a bare `wrangler deploy` or `wrangler versions upload` ships whatever `web/build` holds. Those two scripts build `web/` with `--prefix ../web` after clearing `npm_config_workspace`, because npm passes a `--workspace api` flag down to nested npm commands as that variable, where it overrides a `--workspace web` flag. `run_worker_first` in `api/wrangler.jsonc` lists the Worker's routes, and a new one has to be added there.
-
-The app has to load and run on iOS 15.6, the oldest browser a reader visits from, and `.browserslistrc` at the root is that floor. `browser-floor.ts` names the language features the floor lacks as `eslint-plugin-es-x` rules, and the browser floor block in `eslint.config.ts` applies them to `web/` and `shared/`, with `eslint-plugin-compat` for Web APIs, and turns off the autofixes that would rewrite working code into one of those features. `web/vite.config.ts` builds for the floor: Rolldown lowers the syntax it can, Lightning CSS rewrites the CSS, media query ranges included, and a plugin checks every chunk of the output, dependencies included, against the same rules as untyped code, so the build fails naming the chunk and the feature. The case that matters is a regular expression the bundler cannot rewrite, which it leaves as a `RegExp()` call that throws at module load. Untyped, the check cannot tell an iterator helper from an array method, so a dependency's use of one is the gap it leaves; and it takes any `.toSorted()` or `.union()` for the real thing, so a dependency upgrade can trip it on a call that never reaches such an object. When it does, read the chunk it names: a genuine use means the upgrade waits or the feature is polyfilled, and a false one means that rule comes out of `browser-floor.ts` with the reason. Nothing runs the app in a Safari that old: Vitest's browser mode and Playwright run Chromium, so the floor is held by these checks, not by a test.
-
-A guest downloads no admin code: admin pages, stores and libraries reach a guest's page only through a dynamic import, so they load once someone logs in. `web/guest-bundle.ts` holds that on every build: it follows the static imports from each guest's route, and fails the build naming the route and the module when one reaches a module it lists as admin-only, and fails too when it finds no guest route or a listed module in no chunk, since either would let it pass without looking. It reads the chunks as the bundler emits them, before minifying, which counts on `"sideEffects": false` in `shared/package.json`: without it the bundler keeps every module `shared/` exports and leaves the unused ones to the minifier. A new admin-only module or library goes in its list, and a schema only an admin writes goes in `shared/src/item.ts`.
-
-`api/` runs Vitest 4 and `web/` Vitest 5, each from its own directory, because `@cloudflare/vitest-plugin` needs Vitest 4.1 (Vitest 5 support is in workers-sdk PR #15500). npm hoists `api/`'s Vitest 4 to the root, so a `web/` test dependency whose peer range also accepts Vitest 4 can end up resolving it; `npm ls vitest` shows which each package gets.
-
-## Admin login
-
-`api/scripts/invite.sh <user> --env staging` (or `--env production`) prints a one-time invite link for that environment's Worker; `--local` is for `npm run dev --workspace api`. The name has to be in the `user` table, which no screen edits: a migration seeds it (`api/migrations/*_seed_users.sql`), so adding a user is another migration, and every environment gets the same users. To check the whole flow without a browser, run `node api/scripts/passkey-selftest.ts "$(api/scripts/invite.sh moses --local)"` against `npm run dev --workspace api`. Deploying needs a `SESSION_SECRET` Worker secret; locally it comes from `api/.dev.vars`.
-
-## Scripts
-
-Each script in `api/scripts/` says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`.
-
-- `import-album.ts` copies one day album from the AWS gallery, staging or production, into staging, production or `npm run dev`, through the Worker's own routes: presign and the pipeline for each original, the admin write routes for the words, crops and thumbnail. Tags come from each file's XMP keywords, as on AWS; videos are not copied yet; the same album again replaces every photo under a new version.
-- `mint-version-ids.ts` and `import-gallery.ts` are what is left of the copy of the whole AWS gallery, which `docs/plans/migration_from_aws/AwsDataMigration.md` describes: they mint every original's version id, a later minting keeping the ids an earlier one gave, and write the rows through the Worker's admin routes. The scripts that copied the files themselves were deleted once the copy was done. `import-gallery.ts --to local` is also the check of the copy against `npm run dev`. Each touches only the albums named with `--only`, or everything with `--all`, and writes nothing without `--go`.
-- `recover-zenphoto.ts` brings over what the 2023 move from Zenphoto to AWS left behind, as `docs/plans/RecoverPreAwsGalleries.md` describes: each album Zenphoto never published, made unpublished here, with its words from Zenphoto's database and its files from Dropbox through the read-only rclone remote, each uploaded as a browser uploads one. It writes nothing without `--go`, and a rerun uploads only what an album lacks. `recover-gallery2.ts` does the same for the albums of Gallery 2's that the 2014 move to Zenphoto dropped. `recovery.ts` holds what the two share, and `gallery-upload.ts` the uploading they share with `import-album.ts`.
-- `check-s3-versions.ts` compares the AWS rows with the AWS originals bucket's version listing, for rows the copy would pair with the wrong file.
-- `media.ts` prints an item's row and every object stored for its version, since the buckets are keyed by version id and the dashboard cannot browse them by album.
-- `debugbear.ts` starts the browser runs, reports them, reads one run's requests, and manages the DebugBear pages; `docs/Perf.md` says what the runs measure. `.github/workflows/perf.yml` starts a run from the Actions tab.
-- `d1-round.ts` reads an album through Globalping from Paris and then San Jose and prints what each response said about the Worker and D1.
-
-## Infrastructure
-
-`infra/` holds the OpenTofu config for everything outside the Worker: the zone and its settings once, the backup token, the AWS bucket and key the backups go to, and each environment's database, buckets, the CORS rule and event notification uploads need, queues and signing token through the `environment` module, one instance per entry in `local.environments`, whose key is the environment's name and the prefix of everything in it. Its `d1_database_ids` output is what `api/wrangler.jsonc` binds. It runs through `scripts/tofu.sh`, which hands its arguments to `tofu` along with the account API token named `CLOUDFLARE_TERRAFORM_API_TOKEN` in `api/.dev.vars`, kept out of `CLOUDFLARE_API_TOKEN` because Wrangler would pick that up over the `tacocat` profile; it needs Account API Tokens Write as well as its resource permissions, since it makes the signing tokens. The state, which holds those tokens' values, is in the `opentofu-state` R2 bucket through the S3 backend, so no machine holds the only copy and a second session or a runner can plan against it; the script derives the backend's S3 key from the same token, the way any API token is one (see Secrets). A run locks the state with a lock object the backend creates only if none exists, which R2 honours, so a run started while another is under way is refused rather than writing over it; a run killed mid-way leaves its lock behind, and `scripts/tofu.sh force-unlock <id>` with the id the refusal prints removes it. R2 has no bucket versioning and the nightly backup leaves this bucket out, since its token would then read the tokens' values, so the bucket is the one copy: before a `-replace` or a destroy keep one with `scripts/tofu.sh state pull > infra/before.tfstate`, which the directory's `.gitignore` covers, and a lost state is rebuilt by importing the resources and rotating the tokens.
-
-```bash
-scripts/tofu.sh plan
-```
-
-The AWS provider takes the AWS CLI's credentials, whichever profile or session `aws configure export-credentials` resolves, so the CLI has to be signed in to the gallery's AWS account.
-
-Where the Cloudflare provider falls short: it cannot set the zone's per-category AI crawler policies or the bot preference sync, which were set through the API and the dashboard; R2 custom domains and event notifications cannot be imported; importing a D1 database needs `ignore_changes` on its location hint; and when Cloudflare's API answers 504 for the tiered cache setting, as it did for stretches of 2026-10-02, every `plan` hangs on it, and `-target` on the resources that matter is the way through.
-
-On a new account, R2 has to be enabled once in the dashboard, and the state bucket made by hand, since a config cannot create the bucket its own state is read from: `npx wrangler r2 bucket create opentofu-state` in `api/`, then `scripts/tofu.sh init`.
-
-`infra/tacocat.tf` also declares the `tacocat.com` zone, which has answered for the domain since GoDaddy's nameservers moved from DreamHost to Cloudflare's on 2026-10-02 (`scripts/tofu.sh output tacocat_name_servers` prints them). Its records are the ones DreamHost served, DNS-only, with three exceptions: `pix.tacocat.com` and `staging-pix.tacocat.com` are the Workers' custom domains and so have no record in the config; `cdn.tacocat.com` and its certificate validation record are gone, since they pointed at a CloudFront distribution that no longer exists; and the records of the gallery generations that ran on DreamHost and Vercel before AWS (`prod-pix` and `dev-pix` with their `www`, `ftp` and `ssh` names, `gallery3` and `vercel-pix`) went on 2026-10-02, once DreamHost stopped hosting them (deanmoses/tacocat#2), as did the AWS gallery's staging and test names, Cognito's `login`, their ACM validation CNAMEs and Google's dead `start` the same day (#171). The AWS production names `api.pix`, `auth.pix` and `img.pix` stay until the AWS gallery is retired (deanmoses/tacocat-gallery-sam#179). To go back, set the nameservers at GoDaddy to `ns1`, `ns2` and `ns3.dreamhost.com`; the Zone diff workflow in the Actions tab says what has changed here since, which DreamHost's zone would lack: `scripts/zone-diff.sh` compares every record on both nameservers and must see authoritative answers, which a home network that intercepts DNS never gives it.
-
-Tokens scope to whole buckets, never to a prefix, which is why each role has a bucket of its own (see Secrets under Environments).
-
-Adding `routes` to `api/wrangler.jsonc` switches off `workers.dev` unless `workers_dev` is set.
-
-A wrangler auth profile bound to the repo's directory keeps Wrangler commands here, `api/` included, from reaching any other account:
+- **Node 24**
+- **The linting tools**: `brew install actionlint gitleaks shellcheck shfmt hadolint opentofu`. Without them the lint warns and skips those checks. The linting is super strict so you'll probably fail CI if you skip this.
+- **Docker** (optional): to transcode video locally or to ship the transcoder's image. You can skip if you don't want run video uploads locally.
+- **A Cloudflare Wrangler profile bound to this directory**, for anything that reaches the Cloudflare account, such as deploying, tailing logs or reading D1. Local development local tests don't need this.
 
 ```bash
 npx wrangler auth create tacocat        # choose only the Tacocat account
 npx wrangler auth activate tacocat .
+```
+
+## Getting started
+
+### Install
+
+```bash
+fnm use  # or nvm use
+npm install
+```
+
+### Give the Worker its secrets
+
+`api/.dev.vars` (gitignored) holds the three `api/wrangler.jsonc` lists under `secrets.required`, without which `wrangler dev` refuses to start, plus `UPLOAD_MODE=local`, which makes uploads complete on your machine. Create it as:
+
+```text
+SESSION_SECRET=<the output of openssl rand -hex 32>
+UPLOAD_MODE=local
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+```
+
+then run `scripts/secrets.sh dev`, which fills the R2 pair in place with staging's signing key from OpenTofu's outputs. That needs `CLOUDFLARE_TERRAFORM_API_TOKEN` in the same file and the AWS CLI signed in to the gallery's account, as `docs/Infrastructure.md` describes. The tests need none of this file.
+
+### Create the local database
+
+```bash
+npm run db:migrate:local --workspace api
+```
+
+### Run it
+
+The Worker builds the web app and serves it with its own routes on <http://localhost:8787>:
+
+```bash
+npm run dev --workspace api
+```
+
+For hot reloading of the app, also run `npm run dev --workspace web`, which serves it on <http://localhost:5173> and passes the Worker's routes through to 8787. In VS Code, the task _Dev servers: Worker and web app_ (Terminal > Run Task) starts both side by side.
+
+### Log in
+
+Mint a one-time invite and open the link it prints to register a passkey:
+
+```bash
+api/scripts/invite.sh moses --local
+```
+
+The gallery starts empty. Drop photos onto a day album to upload them, or `node api/scripts/import-album.ts /2024/12-17/ --to local` copies one album from the AWS gallery while it is still up.
+
+### Everyday commands
+
+```bash
+npm run dev --workspace api   # the Worker and the built app on localhost:8787
+npm run dev --workspace web   # the app with hot reload on localhost:5173
+npm test                      # every workspace's tests, then e2e
+npm run quality               # format, lint, type-check, test: what CI runs
 ```
