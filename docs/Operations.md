@@ -33,13 +33,7 @@ What differs between the environments beyond the bindings is the `vars`: the sit
 Staging holds test albums that never reach production; upload whatever a test needs. Its database is disposable: every push to a pull request branch applies that branch's migrations to it, so a migration amended after a push, or a branch abandoned, leaves it with something production never gets. Either:
 
 1. Restore it to the bookmark the release printed ([Restore the database to a bookmark](#restore-the-database-to-a-bookmark), without `--env production`), or
-2. Empty it and seed it again:
-
-    ```bash
-    node api/scripts/import-album.ts /2024/12-17/
-    ```
-
-    copies a day album from the AWS staging gallery into it, and `api/scripts/invite.sh <user> --env staging` mints an invite for a passkey there.
+2. Empty it, dropping what [Reset the migrations](#reset-the-migrations) lists, then apply the migrations with `npm run db:migrate --workspace api` and mint an invite for a passkey with `api/scripts/invite.sh <user> --env staging`. It starts with no albums; upload what a test needs.
 
 ## Restore the database to a bookmark
 

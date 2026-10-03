@@ -1,6 +1,6 @@
 // Checks every AWS media row's version id against the originals bucket's version listing, and reports each row that
 // is not on its key's current version, which the copy would pair with the wrong file or none, and each current file
-// no row names. The rows come from the DynamoDB scan `import-gallery.ts` reads, and the listing from the CLI:
+// no row names. The rows come from a DynamoDB scan of the AWS gallery's table, and the listing from the CLI:
 //
 //   aws s3api list-object-versions --bucket tacocat-gallery-sam-prod-original-images --output json > s3-versions.json
 //

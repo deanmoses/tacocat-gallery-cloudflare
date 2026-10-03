@@ -76,7 +76,7 @@ How both environments were made, and how a third would be, in order. The Worker'
 1. Add the environment to `local.environments` in `infra/main.tf` and apply; `scripts/tofu.sh output d1_database_ids` prints the database id for `api/wrangler.jsonc`, which also needs the environment's block, its Worker name, hostname and resource names.
 2. Put a fresh `SESSION_SECRET_<ENVIRONMENT>` in `api/.dev.vars` (`openssl rand -hex 32`), which the import script signs with, then `scripts/secrets.sh <environment>`, which puts the Worker's secrets on it in one upload: the R2 pair from the signing token the apply just made, that session secret and `DEBUGBEAR_API_KEY`. Wrangler creates the Worker as a draft to hold them.
 3. Deploy, `npm run deploy:production --workspace api` (or `deploy` for staging). Docker has to be up: the deploy builds and ships the transcoder's image. If the hostname is attached to another Worker, Wrangler asks whether to move it, and the answer moves it.
-4. Apply the migrations, `npm run db:migrate:production --workspace api` (or `db:migrate`), then `api/scripts/invite.sh <user> --env <environment>` for a passkey and `node api/scripts/import-album.ts <album> --to <environment>` for something to look at.
+4. Apply the migrations, `npm run db:migrate:production --workspace api` (or `db:migrate`), then `api/scripts/invite.sh <user> --env <environment>` for a passkey.
 
 ## The zone
 

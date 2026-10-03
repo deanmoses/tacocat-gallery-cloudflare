@@ -100,7 +100,7 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 ## How the recoveries are built
 
-Each recovery is its own script in `api/scripts/`. What they share is writing to the gallery, in `gallery-upload.ts`, which `import-album.ts` runs on too: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
+Each recovery is its own script in `api/scripts/`. What they share is writing to the gallery, in `gallery-upload.ts`: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
 `recover-gallery2.ts` brings back the albums `gallery2.ts` names, so far Tatou's alone, each as the day album it is told, with the link its parent's description held pointed there, and `recovery.ts` holds what the scripts share. A sub-album's photos are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
 

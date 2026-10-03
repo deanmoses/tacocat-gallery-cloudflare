@@ -72,7 +72,7 @@ Mint a one-time invite and open the link it prints to register a passkey:
 api/scripts/invite.sh moses --local
 ```
 
-The gallery starts empty. Drop photos onto a day album to upload them, or `node api/scripts/import-album.ts /2024/12-17/ --to local` copies one album from the AWS gallery while it is still up.
+The gallery starts empty. Drop photos onto a day album to upload them.
 
 ### Everyday commands
 
