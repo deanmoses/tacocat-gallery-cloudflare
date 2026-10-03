@@ -3,8 +3,10 @@ import { page } from 'vitest/browser';
 import { render } from '$lib/test-support/render.svelte';
 import DayAlbumPage from './DayAlbumPage.svelte';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
-import { albumRecord, dayAlbum } from '$lib/test-support/records';
+import { albumRecord, dayAlbum, imageRecord, mediaPath, uploadEntry } from '$lib/test-support/records';
 import { shortDate } from '$lib/utils/date-utils';
+import { albumState } from '$lib/stores/AlbumState.svelte';
+import { UploadState } from '$lib/models/album';
 
 /**
  * The prev and next buttons come from the parent album's child list, read off
@@ -52,5 +54,31 @@ describe(DayAlbumPage, () => {
         await expect
             .element(page.getByRole('link', { name: OLDER, exact: true }))
             .toHaveAttribute('href', '/2001/12-30');
+    });
+
+    it('shows each upload where the album will put it', async () => {
+        const album = dayAlbum(['b', 'd'].map((name) => imageRecord({ path: mediaPath(name), itemName: name })));
+        albumState.uploads = ['c', 'a'].map((name) =>
+            uploadEntry({ path: mediaPath(name), status: UploadState.UPLOADING }),
+        );
+
+        render(DayAlbumPage, { album });
+
+        await expect
+            .poll(() =>
+                page
+                    .getByTestId('thumbnail')
+                    .elements()
+                    .map((thumbnail) => thumbnail.textContent.trim().replaceAll(/\s+/gv, ' ')),
+            )
+            .toStrictEqual([`a ${UploadState.UPLOADING}`, 'B', `c ${UploadState.UPLOADING}`, 'D']);
+    });
+
+    it("holds an upload's slot while its thumbnail's code loads", () => {
+        albumState.uploads = [uploadEntry({ path: mediaPath('a'), status: UploadState.UPLOADING })];
+
+        render(DayAlbumPage, { album: dayAlbum([]) });
+
+        expect(page.getByTestId('thumbnail').elements()).toHaveLength(1);
     });
 });
