@@ -5,8 +5,6 @@ description: Creates git branches with proper naming. Use when creating branches
 
 # Branch Naming
 
-`CONTRIBUTING.md` is the source of truth for these conventions; this skill applies them.
-
 Use `type/short-description` format.
 
 ## Types
