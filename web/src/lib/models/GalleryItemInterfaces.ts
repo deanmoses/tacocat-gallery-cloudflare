@@ -2,13 +2,10 @@
 // The interfaces used by the Sveltekit UI
 //
 
+import type { ItemType, MediaType } from '@tacocat-gallery/shared';
 import type { AlbumGalleryItem, Rectangle } from './impl/server';
 
-/** Type of gallery item */
-export type ItemType = 'album' | 'media';
-
-/** Type of media item */
-export type MediaType = 'image' | 'video';
+export type { ItemType, MediaType };
 
 /**
  * Info needed to construct a thumbnail URL
