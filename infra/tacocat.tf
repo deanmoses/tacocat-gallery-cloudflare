@@ -77,7 +77,7 @@ locals {
     { name = "tacocat.com", type = "TXT", content = "google-site-verification=En35chboU0PBIeqQIplDlcsFlCzOa-DzCv8VMuqhyR0" },
     # Google Workspace is the domain's only sender. DMARC is monitoring only, p=none, until its reports show no other.
     { name = "tacocat.com", type = "TXT", content = "v=spf1 include:_spf.google.com ~all" },
-    { name = "_dmarc.tacocat.com", type = "TXT", content = "v=DMARC1; p=none" },
+    { name = "_dmarc.tacocat.com", type = "TXT", content = "v=DMARC1; p=none; rua=mailto:ff0ce10646284ddcaa7f86272cc7682a@dmarc-reports.cloudflare.net" },
     { name = "google._domainkey.tacocat.com", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsh1aXVm2tMG9C5nUVjuf3vkfXKMlTmfZhUFVoVqUAWBf/WZzPlTGk/g2wbBB6tCa6f/zGYAPDstHOlAgakHnv5DxyNjGXDYxlxU21xJeTdl2MiXCHfb708Oj7eXmL6Y+GMWh4Iz5z87znL+rocOKp4g2bvjheqI46RlBSatWoHn27+g719M1qFftCy0jEcDgFs+yhoYbdCcJW9HkDTQ8s3piTgOxRtdp7SqlgsDkQADat4/zTFqCHE2G3txhRTbTDEqXf5wzVhU/ZvizP8Ce8pI4/7EClehUNf/igMc3Zj7iXcCtrwg0aoHgVuJBzoOQUlIsd5vNhjjVQdJYAlRcHwIDAQAB" },
     { name = "calendar.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
     { name = "docs.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
