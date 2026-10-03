@@ -37,7 +37,7 @@ A store's methods come in two kinds:
 
 A store holds its state in a `#`-private `$state` field and exposes it as a public `$derived` of it, as `SessionStore` does with `#isAdmin` and `isAdmin`; private members always use `#`, never `_` or the `private` keyword. Deriveds have been writable since Svelte 5.25, so this is a convention rather than a guarantee. A keyed collection is a `SvelteMap` from `svelte/reactivity`, with no `$state` around it, which would do nothing; a plain `Map` is not reactive.
 
-`AlbumState` is the exception: a plain container of shared state, every album and every admin operation in progress keyed by path, which the machines write to directly. An entry in one of its maps is replaced whole, never changed in place, since a `SvelteMap` does not see changes inside its values. That holds for the album inside an entry too: an album's setters write to its JSON, so an edit builds a new album from a copy of the JSON, as `DraftMachine` does on a save.
+`AlbumState` is the exception: a plain container of shared state, every album and every admin operation in progress keyed by path, which the machines write to directly. An entry in one of its maps is replaced whole, never changed in place, since a `SvelteMap` does not see changes inside its values. That holds for the album inside an entry too: an album or media item is a read-only view of its record, so an edit builds a new album from a copy of the records, as `DraftMachine` does on a save.
 
 The admin machines, for upload, create, rename, delete, reorder, album thumbnails, crop, drafts and edit mode, live in `web/src/lib/stores/admin/`, apart from the guest's stores, so that a guest page reading `AlbumState` does not pull in the code that changes it.
 

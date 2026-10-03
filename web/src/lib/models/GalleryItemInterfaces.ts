@@ -20,9 +20,9 @@ export interface ThumbnailUrlInfo {
 }
 
 export interface Album extends Thumbable {
-    published: boolean;
-    summary: string;
-    thumbnailPath: string | undefined;
+    readonly published: boolean;
+    readonly summary: string;
+    readonly thumbnailPath: string | undefined;
     /** Whether an admin has put the media in an order of their own, rather than by name */
     readonly reordered: boolean;
     readonly json: AlbumGalleryItem; // so that I can save the JSON to disk
@@ -36,7 +36,7 @@ export interface Album extends Thumbable {
 /** Base interface for all media items (images and videos) */
 export interface Media extends Nextable {
     readonly mediaType: MediaType;
-    title: string;
+    readonly title: string;
     readonly versionId: string;
     readonly thumbnail: Rectangle | undefined;
     /** Sized image for photos, poster for videos */
@@ -70,7 +70,7 @@ export interface Thumbable {
     readonly itemType: ItemType;
     readonly mediaType?: MediaType;
     readonly title: string;
-    description: string;
+    readonly description: string;
     readonly summary: string;
     readonly thumbnailUrlInfo: ThumbnailUrlInfo | undefined;
     readonly href: string;

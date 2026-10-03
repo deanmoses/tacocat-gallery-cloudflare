@@ -7,6 +7,7 @@ import { fakeServer, jsonResponse, notFound, serverError } from '$lib/test-suppo
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord, mediaPath } from '$lib/test-support/records';
 import type { AlbumGalleryItem } from '$lib/models/impl/server';
+import toAlbum from '$lib/models/impl/AlbumCreator';
 
 /**
  * Covers the album load pipeline end to end: memory, the browser's disk cache
@@ -253,8 +254,7 @@ describe('albumLoadMachine', () => {
 
     describe('updateAlbumEntry', () => {
         it('writes the album through to disk as well as memory', async () => {
-            const entry = seedLoadedAlbum(record());
-            entry.album.summary = 'Edited';
+            const entry = { ...seedLoadedAlbum(record()), album: toAlbum({ ...record(), summary: 'Edited' }) };
 
             albumLoadMachine.updateAlbumEntry(entry);
 

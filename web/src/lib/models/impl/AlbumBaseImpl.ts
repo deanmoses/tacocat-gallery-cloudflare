@@ -20,15 +20,8 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
         return this.json.published ?? false;
     }
 
-    override set published(published: boolean) {
-        this.json.published = published;
-    }
-
     override get summary(): string {
         return this.json.summary ?? '';
-    }
-    override set summary(summary: string) {
-        this.json.summary = summary;
     }
 
     get reordered(): boolean {
@@ -43,26 +36,11 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
         return this.json.thumbnail?.path;
     }
 
-    set thumbnailPath(imagePath: string | undefined) {
-        if (imagePath === undefined) {
-            this.json.thumbnail = undefined;
-            return;
-        }
-        // TODO: fix TypeScript error - thumbnail.versionId is required
-        // The Drafts system should probably not be saving to this object,
-        // but instead some intermediate object...
-        // @ts-expect-error Incomplete thumbnail - versionId set by server
-        this.json.thumbnail = {
-            path: imagePath,
-        };
-    }
-
     get thumbnailUrlInfo(): ThumbnailUrlInfo | undefined {
         const { thumbnail } = this.json;
         if (thumbnail === undefined) {
             return undefined;
         }
-        // A thumbnail the thumbnailPath setter has put here has no versionId yet, whatever its type says.
         return thumbnail.path && thumbnail.versionId
             ? {
                   imagePath: thumbnail.path,
