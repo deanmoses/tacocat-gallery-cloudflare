@@ -5,6 +5,8 @@ description: Generates commit messages and creates commits. Use when writing com
 
 # Commit Messages
 
+`CONTRIBUTING.md` is the source of truth for these conventions; this skill applies them.
+
 Use [Conventional Commits](https://www.conventionalcommits.org/) format.
 
 ## Format

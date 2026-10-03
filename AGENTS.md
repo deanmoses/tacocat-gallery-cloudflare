@@ -10,39 +10,63 @@ This project, Tacocat Gallery, <https://pix.tacocat.com>, is the multi-generatio
 
 It's hosted on Cloudflare: one Worker per environment that serves a SvelteKit single-page app and everything behind it, with D1 for the catalog and search, R2 for the media, Image Transformations for derived images, a Queue and a Workflow for the upload pipeline and an ffmpeg Container for video.
 
+## Commands
+
+```bash
+npm run dev --workspace api               # the Worker and the built app on localhost:8787
+npm run dev --workspace web               # the app with hot reload on localhost:5173
+npm test                                  # every workspace's tests, then e2e
+npm run quality                           # format, lint, type-check, test: what CI runs
+npm run db:generate --workspace api       # a migration from schema.ts
+npm run db:migrate:local --workspace api  # apply migrations to the local database
+npm run types --workspace api             # after editing api/wrangler.jsonc
+npm run logs:production --workspace api   # tail production; `logs` tails staging
+```
+
+The Worker's scripts live in `api/package.json`, so they run from `api/` or with `--workspace api`; so do Wrangler commands, which find `api/wrangler.jsonc` from the directory they run in. `api/` and `web/` run different Vitest majors, so each workspace's tests run from its own directory or with its `--workspace` flag.
+
 ## This repo
 
-Three npm workspaces:
+An npm monorepo: one `npm install` at the root, three workspaces, `api/`, `web/` and `shared/`, each with its own `package.json` and dependencies, and three plain directories beside them.
 
-- `api/`: the Worker, deployed as two environments, staging (the config's top level, also what tests and `wrangler dev` run) and production (`--env production`), each with its own data.
-- `web/`: the SvelteKit front end.
-- `shared/`: code shared between `api/` and `web/`, such as the record schemas, the path grammar and the URL builders.
-
-These workspaces run different Vitest majors (the Worker's tests need 4.1, `web/` is on 5), so run a workspace's scripts with `--workspace api` or `--workspace web`, or from its directory. The root holds the lint, format and test tooling for all three, and OpenTofu in `infra/` for everything outside the Worker.
-
-- `docs/Architecture.md` is the system as built, and its Invariants section lists the rules a change breaks without noticing. Read that section before changing the Worker.
-- `README.md` has how to run, deploy, stand up an environment, change the schema and restore, plus the gotchas under Development.
-- `docs/Testing.md` has where tests go and how one is written. Read before writing one.
+- `api/`: the Worker, with its tests, migrations, scripts and the transcoder's image.
+- `web/`: the SvelteKit app, built to static files the Worker serves.
+- `shared/`: what both import, the record schemas, the path grammar and the URL builders.
+- `infra/`: OpenTofu for everything outside the Worker.
+- `e2e/`: Playwright journeys through the built app and a local Worker.
+- `scripts/`: the lint, test, release and repository-setup scripts.
 
 ## Working here
 
-- **`npm run quality`** formats, lints, type-checks and tests the whole repo; `npm test` runs every workspace's tests and then the e2e tests. The pre-commit hook runs the suites the staged files touch and takes about 40 seconds, so commit once, when the change is green.
-- **Local dev is not the edge.** Image Transformations run only on Cloudflare, so `npm run dev --workspace api` makes images with the local Images binding, which cannot decode HEIC, ignores EXIF orientation and ignores the encoding options; what a thumbnail weighs, whether a GIF moves and whether a phone photo shows upright are judged on staging. Video needs Docker, through `npm run dev:video --workspace api`. Uploads complete locally only with `UPLOAD_MODE=local` in `api/.dev.vars`, as Running it in `README.md` explains.
-- **Every push is on staging.** A push to a pull request branch releases it to `staging-pix.tacocat.com`, and a merge to `main` releases production, through `scripts/release.sh` (Deploying in `README.md`). `/api/health` on either hostname answers with the running version and its commit. Say what went out.
-- **Logs.** `npm run logs --workspace api` and `logs:production` tail a Worker; Workers Logs keeps a week of every request and the Worker's own structured lines, queried through the observability MCP or the dashboard's query builder (Logs in `docs/Architecture.md`).
+- **The pre-commit hook** runs the suites the staged files touch and takes about 40 seconds, so commit once, when the change is green.
+- **Local dev is not the edge.** Image Transformations run only on Cloudflare, so `npm run dev --workspace api` makes images with the local Images binding, which cannot decode HEIC, ignores EXIF orientation and ignores the encoding options; what a thumbnail weighs, whether a GIF moves and whether a phone photo shows upright are judged on staging. Video needs Docker, through `npm run dev:video --workspace api`. Uploads complete locally only with `UPLOAD_MODE=local` in `api/.dev.vars`, as Local development in `docs/Development.md` explains.
+- **Two environments, and staging is the default.** `staging` is `api/wrangler.jsonc`'s top level, which is also what the tests and `wrangler dev` run; `production` is `--env production`; each has its own data.
+- **Pushing deploys.** Every push to a pull request branch releases it to `staging-pix.tacocat.com`, and a merge to `main` releases production, through `scripts/release.sh` (`docs/Releasing.md`). So push when the branch is worth looking at on staging, never to park work, and say what went out. `/api/health` on either hostname answers with the running version and its commit.
+- **Logs.** Workers Logs keeps a week of every request and the Worker's own structured lines, queried through the observability MCP or the dashboard's query builder (Is production okay? in `docs/Operations.md`).
+
+## Where to read more
+
+- `docs/Architecture.md`: arch overview. Read Invariants before changing the Worker. Subsystems: `docs/DataModel.md`, `docs/Storage.md`, `docs/Uploads.md`, `docs/Media.md`, `docs/Auth.md`.
+- `docs/Testing.md`: writing tests. Read before writing one.
+- `docs/Development.md`: writing code, changing the db schema, gotchas.
+- `CONTRIBUTING.md`: submitting a change and getting it to prod.
+- `docs/Releasing.md`: how a change ships, and how to undo one.
+- `docs/Operations.md`: managing the running system.
+- `docs/Infrastructure.md`: updating cloud resources, DNS, GitHub.
+- `docs/plans/migration_from_aws/AwsArch.md`: info on previous AWS version of the gallery, from whose code this one was derived.
 
 ## Rules
 
 - **Never print, commit or paste secrets** from `api/.dev.vars` or the Worker's secrets.
 - **Tests.** Never change production behavior without a test that fails without the change.
-- **The web app runs on iOS 15.6.** `.browserslistrc` is the floor, for Lucie's mom's phone that will not be replaced; Front end in `README.md` says how lint and the build hold it. Nothing in this repo runs the app in a browser that old, so Chromium passing says nothing about the floor.
+- **The web app runs on iOS 15.6.** `.browserslistrc` is the floor, for Lucie's mom's phone that will not be replaced; The browser floor in `docs/Development.md` says how lint and the build hold it. Nothing in this repo runs the app in a browser that old, so Chromium passing says nothing about the floor.
 - **No `eslint-disable` comments.** Fix the code, or ask the user if you can turn the rule off in `eslint.config.ts` with the reason.
 - `npm run lint:fix` fixers can change what code means; review the diff.
 - **New checks go in `scripts/lint.sh` or `scripts/test.sh`**, never only in the pre-commit hook.
-- **`main` is protected.** Every change lands through a pull request whose CI `merge-ok` check passed on a branch up to date with `main`; nobody pushes to `main`. The repository's settings are `scripts/github-setup.sh`, not the dashboard. See Continuous integration in `README.md`.
+- **`main` is protected.** Every change lands through a pull request whose CI `merge-ok` check passed on a branch up to date with `main`; nobody pushes to `main`. The repository's settings are `scripts/github-setup.sh`, not the dashboard. `CONTRIBUTING.md` has the loop and the conventions.
 - **After editing `api/wrangler.jsonc`, run `npm run types --workspace api`.**
 - **Markdown** is never hard-wrapped: one line per paragraph or list item.
-- **`docs/plans/` is the archive of plans, past, present and future.** A plan is written before its work and updated while the work runs; once built it is frozen as the record of what was decided and why, and nobody brings it up to date with the code. What the system is now belongs in `docs/Architecture.md`, `docs/Testing.md` and `README.md`, which are kept current.
+- **`docs/plans/` is the archive of plans, past, present and future.** A plan is written before its work and updated while the work runs; once built it is frozen as the record of what was decided and why, and nobody brings it up to date with the code. What the system is now belongs in `docs/Architecture.md` and the pages it links, `docs/Development.md`, `docs/Releasing.md`, `docs/Operations.md`, `docs/Infrastructure.md`, `docs/Testing.md`, `CONTRIBUTING.md` and `README.md`, which are kept current.
 
 ### Comments
 
@@ -58,97 +82,19 @@ Comments exist ONLY to explain what the code cannot. Never restate the code. See
 - **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
 - Every table change starts in `api/src/db/schema.ts`, then `npm run db:generate --workspace api`. Never hand-create a migration file or edit a generated one or its snapshot; lint fails when the migrations and `schema.ts` disagree.
 - The search index (a view of `item`, two FTS5 tables and their triggers) is raw SQL, defined in `api/src/db/search-index.sql`; Drizzle cannot see it, and a migration that touches it is a copy of that file. Start a raw SQL migration with `npm run db:generate --workspace api -- --custom --name <what_it_does>` and fill in the empty file it creates, which keeps it in drizzle-kit's journal, in order with the generated ones.
-- **A generated migration containing ``DROP TABLE `item` `` sits between two `--custom` migrations**, because dropping the table fires every `ON DELETE SET NULL` pointing at it. Database schema in `README.md` has the steps and names the trio to copy. A new column needs a fixture in `api/test/db/migrations.test.ts`, which fails when a migration loses a value.
+- **A generated migration containing ``DROP TABLE `item` `` sits between two `--custom` migrations**, because dropping the table fires every `ON DELETE SET NULL` pointing at it. Changing the database in `docs/Development.md` has the steps and names the trio to copy. A new column needs a fixture in `api/test/db/migrations.test.ts`, which fails when a migration loses a value.
 - **Check `meta.rows_read` locally** before shipping a new query or trigger, with a case in `api/test/db/rows-read.test.ts`: a query that scans a table is slow as well as costly. An FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
-
-## Measuring perf
-
-See `docs/Perf.md`.
 
 ## Spending
 
-The account is on Workers Paid ($5/month), so going past an allowance costs money rather than taking the site down, and at this site's scale that is usually cents. **Ask before anything likely to cost more than $1 beyond the plan, and always before using Stream**, whose pricing is unchecked. Anything smaller needs no approval; say what it used, from `npx wrangler d1 info DB --env production` in `api/` for D1 and the dashboard for the rest. What can cost more than $1:
+The account is on Workers Paid ($5/month). Don't do anything likely to cost more than 10 cents beyond the plan without asking first. Anything smaller needs no approval; say what it used, from `npx wrangler d1 info DB --env production` in `api/` for D1 and the dashboard for the rest. What reaches 10 cents:
 
-- **Image Transformations** past 5,000 unique a month, $0.50 per 1,000 after that, as in a backfill of derived images.
-- **A transcoder instance left running**, about $0.40 an hour; an instance stops 10 s after its last request, and the plan covers about an hour and a half of encoding a month. Tune ffmpeg in local Docker first (`docker build -t tacocat-transcoder api/transcoder`, run with `--cpus 4`), where iteration is free.
-- **Bulk copies into R2**: storage past 10 GB-month is $0.015 per GB-month, and writes past 1M a month $4.50 per million.
-
-## History
-
-The previous version of the gallery was on AWS; see `docs/plans/migration_from_aws/AwsArch.md`.
+- **Image Transformations** past 5,000 unique a month: $0.50 per 1,000 after that, so about 200 first-time derivatives, which a backfill or a sweep of an album's thumbnails reaches at once.
+- **The transcoder**, about $0.40 an hour per `standard-4` instance, so 15 minutes of one. **NEVER leave a transcoder instance running.** An instance stops itself 10 s after its last request (`sleepAfter` in `api/src/media/transcoder.ts`): never raise that, never hold an instance awake with a long-running or repeated request, and after any work that touched the transcoder check in the dashboard, under Containers, that no instance is still live. The plan covers about an hour and a half of encoding a month, so a monthly video costs nothing. Tune ffmpeg in local Docker (`docker build -t tacocat-transcoder api/transcoder`, run with `--cpus 4`), where iteration is free, never on a deployed instance.
+- **Bulk copies into R2**: storage past 10 GB-month is $0.015 per GB-month, about 7 GB-month, and writes past 1M a month $4.50 per million, about 22,000 writes.
+- **Stream** is a $5-a-month subscription per 1,000 minutes stored, from the first video uploaded, plus $1 per 1,000 minutes watched. Nothing uses it, and the transcoder does what it would; enabling it is a decision, not an experiment.
 
 ## Branch, Commit and PR Conventions
 
-Use these types for branch names, commit messages, and PR titles:
-
-- `feat`: User-facing features or behavior changes (must change production code)
-- `fix`: Bug fixes (must change production code)
-- `docs`: Documentation only
-- `style`: Code style/formatting (no logic changes)
-- `refactor`: Code restructuring without behavior change
-- `test`: Adding or updating tests
-- `chore`: CI/CD, tooling, dependency bumps, configs (no production code)
-
-### Branch Naming
-
-Use `type/short-description`:
-
-```text
-feat/album-read-api
-fix/fts-trigger-rowid
-chore/pre-commit-hooks
-```
-
-### Commit Messages
-
-Use [Conventional Commits](https://www.conventionalcommits.org/):
-
-```text
-<type>(<scope>): <description>
-
-[optional body]
-```
-
-- **Scopes:** Optional. Use when it adds clarity (e.g., `api`, `d1`, `r2`, `images`, `upload`, `video`, `auth`, `infra`).
-- **Breaking changes:** Use `!` suffix: `feat!: remove deprecated endpoint`
-
-**Examples:**
-
-```text
-feat(upload): keep failed uploads in a dead-letter queue
-fix(d1): key the FTS index by rowid
-chore: add husky pre-commit hooks
-docs: update API documentation
-```
-
-### Pull Requests
-
-**PR titles:** Use conventional commit format, same as commit messages.
-
-**PR descriptions:**
-
-```markdown
-## Summary
-
-One sentence describing the overall change.
-
-- Optional supporting details
-- If needed
-
-## Test plan
-
-- [ ] How to verify it works
-```
-
-### PR Labels
-
-Use labels on pull requests. Apply all labels that fit. Only use the following labels:
-
-- `enhancement` - User-facing features or improvements. Must change production code behavior.
-- `refactor` - Production code changes that don't alter behavior
-- `bug` - Fixes broken production code functionality
-- `test` - Changes to tests
-- `documentation` - Documentation changes
-
-**No label needed** for dependency bumps, CI/CD, tooling, or infrastructure changes.
+Follow `CONTRIBUTING.md`: branches are `type/short-description`, commits are Conventional Commits, which the commit-msg hook checks, and pull requests take its title format, description template and labels.
 

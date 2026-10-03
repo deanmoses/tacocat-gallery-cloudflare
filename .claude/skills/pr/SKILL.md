@@ -5,6 +5,8 @@ description: Creates pull requests with proper formatting. Use when creating PRs
 
 # Pull Requests
 
+`CONTRIBUTING.md` is the source of truth for these conventions; this skill applies them.
+
 ## PR Title
 
 Use the [Conventional Commit Format](https://www.conventionalcommits.org/), same as commit messages:

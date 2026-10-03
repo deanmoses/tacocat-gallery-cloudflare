@@ -1,6 +1,6 @@
 # The release
 
-How a change reaches readers: every push to a pull request branch releases it to staging, and the merge to `main` releases production, through the same script and the same blue/green sequence. `scripts/release.sh`, `.github/workflows/deploy.yml` and Deploying in `README.md` are the reference; this page records the decisions behind them, what is left to do, and what the first runs must confirm.
+How a change reaches readers: every push to a pull request branch releases it to staging, and the merge to `main` releases production, through the same script and the same blue/green sequence. `scripts/release.sh`, `.github/workflows/deploy.yml` and `docs/Releasing.md` are the reference; this page records the decisions behind them, what is left to do, and what the first runs must confirm.
 
 ## Decisions
 
