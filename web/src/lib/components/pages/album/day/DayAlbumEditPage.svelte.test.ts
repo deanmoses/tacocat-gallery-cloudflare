@@ -12,7 +12,8 @@ describe(DayAlbumEditPage, () => {
         resetAlbumState();
     });
 
-    it('shows each upload where the album will put it', async () => {
+    // An upload's tile is the height of the item it becomes, which has no summary
+    it('shows each upload where the album will put it, with no status under it', async () => {
         const album = dayAlbum(['b', 'd'].map((name) => imageRecord({ path: mediaPath(name), itemName: name })));
         albumState.uploads = ['c', 'a'].map((name) =>
             uploadEntry({ path: mediaPath(name), status: UploadState.UPLOADING }),
@@ -27,6 +28,6 @@ describe(DayAlbumEditPage, () => {
                     .elements()
                     .map((thumbnail) => thumbnail.textContent.trim().replaceAll(/\s+/gv, ' ')),
             )
-            .toStrictEqual([`a ${UploadState.UPLOADING}`, 'B', `c ${UploadState.UPLOADING}`, 'D']);
+            .toStrictEqual(['a', 'B', 'c', 'D']);
     });
 });
