@@ -48,11 +48,8 @@
 
 <style>
     p {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+        position: fixed;
+        inset: 0;
         margin: 0;
         padding: 3em;
         z-index: 5;
