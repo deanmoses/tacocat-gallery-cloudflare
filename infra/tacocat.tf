@@ -104,8 +104,9 @@ resource "cloudflare_dns_record" "tacocat" {
   content  = each.value.type == "TXT" ? each.value.content : lower(each.value.content)
   priority = lookup(each.value, "priority", null)
   proxied  = false
-  # Kept from the move off DreamHost, which served every record with a 60 s TTL.
-  ttl = 60
+  # The records change a few times a year, so an hour's caching costs little. Lower it an hour ahead of a change that may
+  # need undoing fast.
+  ttl = 3600
 }
 
 output "tacocat_name_servers" {
