@@ -15,6 +15,7 @@
     import type { Album, Media } from '$lib/models/GalleryItemInterfaces';
     import FullScreenDropZone from './MediaPageFullScreenDropZone.svelte';
     import { draftMachine } from '$lib/stores/admin/DraftMachine.svelte';
+    import { mediaNeighbours } from '$lib/utils/albumNavigation';
 
     interface Props {
         album: Album;
@@ -23,6 +24,7 @@
     let { album, media }: Props = $props();
     let mediaTitle = $derived(media.title);
     let okToNavigate = $derived(draftMachine.okToNavigate);
+    let neighbours = $derived(mediaNeighbours(album, media.path));
 </script>
 
 <MediaPageLayout title={mediaTitle}>
@@ -43,9 +45,9 @@
 
     {#snippet nav()}
         {#if okToNavigate}
-            <PrevButton href={media.prevHref} />
+            <PrevButton href={neighbours.prev?.href} />
             <UpButton href={album.href} title={album.title} />
-            <NextButton href={media.nextHref} />
+            <NextButton href={neighbours.next?.href} />
         {:else}
             <PrevButton />
             <UpButton title={album.title} />

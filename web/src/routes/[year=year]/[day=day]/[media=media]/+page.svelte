@@ -3,12 +3,13 @@
     import MediaRouting from '$lib/components/pages/media/MediaRouting.svelte';
     import MediaPage from '$lib/components/pages/media/MediaPage.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
+    import { getMedia } from '$lib/utils/albumNavigation';
 
     let { data }: PageProps = $props();
     let albumPath = $derived(data.albumPath);
     let album = $derived(albumState.albums.get(albumPath)?.album);
     let mediaPath = $derived(data.mediaPath);
-    let media = $derived(album?.getMedia(mediaPath));
+    let media = $derived(getMedia(album, mediaPath));
 </script>
 
 <MediaRouting {albumPath} {media} {mediaPath}>

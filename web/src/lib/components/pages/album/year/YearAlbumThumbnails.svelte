@@ -8,7 +8,7 @@
     import AlbumThumbnail from '$lib/components/site/AlbumThumbnail.svelte';
     import { albumTitle } from '$lib/utils/date-utils';
     import { albumDate } from '@tacocat-gallery/shared';
-    import type { Album, Thumbable } from '$lib/models/GalleryItemInterfaces';
+    import type { Album } from '$lib/models/GalleryItemInterfaces';
 
     interface Props {
         album: Album;
@@ -17,13 +17,13 @@
 
     type AlbumsByMonth = {
         monthName: string;
-        albums: Thumbable[];
+        albums: Album[];
     }[];
 
     /**
      * Group the albums by month
      */
-    function albumsByMonth(albums: Thumbable[]): AlbumsByMonth {
+    function albumsByMonth(albums: Album[]): AlbumsByMonth {
         // Sparse, indexed by month number, so the months come out in calendar order
         const months: AlbumsByMonth = [];
 

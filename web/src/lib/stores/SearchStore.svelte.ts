@@ -1,12 +1,12 @@
 import type { Search, SearchQuery, SearchResults } from '$lib/models/search';
 import { SearchLoadStatus } from '$lib/models/search';
 import toAlbum from '$lib/models/impl/AlbumCreator';
-import { ImageThumbableImpl } from '$lib/models/impl/ImageThumbableImpl';
-import { VideoThumbableImpl } from '$lib/models/impl/VideoThumbableImpl';
+import { toMedia } from '$lib/models/impl/GalleryItemCreator';
+import { albumTitle } from '$lib/utils/date-utils';
 import { searchUrl } from '$lib/utils/config';
 import type { GalleryRecord } from '$lib/models/impl/server';
-import { errorMessageOf } from '@tacocat-gallery/shared';
-import { isAlbumRecord, isImageRecord, isVideoRecord } from '$lib/models/impl/server';
+import { errorMessageOf, parentPathOf } from '@tacocat-gallery/shared';
+import { isAlbumRecord } from '$lib/models/impl/server';
 import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
 import { SvelteMap } from 'svelte/reactivity';
 
@@ -171,14 +171,9 @@ class SearchStore {
     }
 
     #toThumbable(json: GalleryRecord): Thumbable {
-        if (isAlbumRecord(json)) {
-            return toAlbum(json);
-        } else if (isVideoRecord(json)) {
-            return new VideoThumbableImpl(json);
-        } else if (isImageRecord(json)) {
-            return new ImageThumbableImpl(json);
-        }
-        throw new Error(`Unknown item type in ${JSON.stringify(json)}`);
+        if (isAlbumRecord(json)) return toAlbum(json);
+        // A match is shown away from its album, so it is captioned with the day it is from
+        return { ...toMedia(json), summary: albumTitle(parentPathOf(json.path)) };
     }
 }
 export const searchStore: SearchStore = new SearchStore();

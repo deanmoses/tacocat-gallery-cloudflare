@@ -18,6 +18,7 @@
     import TextDialog from './TextDialog.svelte';
     import { mediaRenameMachine } from '$lib/stores/admin/MediaRenameMachine.svelte';
     import { albumState } from '$lib/stores/AlbumState.svelte';
+    import { getMedia } from '$lib/utils/albumNavigation';
 
     let mediaPath: string = $derived(page.url.pathname);
     let show: boolean = $derived(isMediaPath(mediaPath)); // Show this button on media (images and videos)
@@ -38,7 +39,7 @@
         const albumPath = parentPathOf(newMediaPath);
         const album = albumState.albums.get(albumPath);
         if (!album?.album) return undefined; // album not loaded, cannot check for collision
-        const media = album.album.getMedia(newMediaPath);
+        const media = getMedia(album.album, newMediaPath);
         if (media) return 'file already exists';
         return undefined; // name is valid
     }

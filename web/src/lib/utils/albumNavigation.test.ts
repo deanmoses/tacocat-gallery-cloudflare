@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { albumNav } from './albumNavigation';
+import { albumNav, mediaNeighbours } from './albumNavigation';
 import { shortDate } from './date-utils';
 import toAlbum from '$lib/models/impl/AlbumCreator';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { albumRecord } from '$lib/test-support/records';
+import { albumRecord, dayAlbum, imageRecord, mediaPath } from '$lib/test-support/records';
 
 /**
  * A parent's child list as the server sends it: oldest first, already filtered
@@ -80,5 +80,21 @@ const CASES: Case[] = [
 describe(albumNav, () => {
     it.each(CASES)('$name', ({ albumPath, parent, prevHref, nextHref, prevTitle, nextTitle }) => {
         expect(albumNav(albumPath, parent)).toStrictEqual({ prevHref, nextHref, prevTitle, nextTitle });
+    });
+});
+
+describe(mediaNeighbours, () => {
+    const DAY = dayAlbum(['a', 'b', 'c'].map((name) => imageRecord({ path: mediaPath(name), itemName: name })));
+
+    it.each([
+        { name: 'between two others', at: 'b', prev: mediaPath('a'), next: mediaPath('c') },
+        { name: 'the first', at: 'a', prev: undefined, next: mediaPath('b') },
+        { name: 'the last', at: 'c', prev: mediaPath('b'), next: undefined },
+        // Renamed or deleted since the album was fetched
+        { name: 'one its album does not list', at: 'gone', prev: undefined, next: undefined },
+    ])('$name', ({ at, prev, next }) => {
+        const neighbours = mediaNeighbours(DAY, mediaPath(at));
+
+        expect({ prev: neighbours.prev?.path, next: neighbours.next?.path }).toStrictEqual({ prev, next });
     });
 });

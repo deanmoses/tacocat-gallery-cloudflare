@@ -1,6 +1,7 @@
 import { type MediaItemToUpload, type UploadEntry, UploadState } from '$lib/models/album';
 import type { Album } from '$lib/models/GalleryItemInterfaces';
 import { isVideoFile } from '@tacocat-gallery/shared';
+import { getMedia } from '$lib/utils/albumNavigation';
 
 /**
  * The paths of the uploads the server has made into items: the ones whose version id the album now carries. The
@@ -30,7 +31,7 @@ export function findProcessedUploads(
 export function markReplacements(files: MediaItemToUpload[], album: Album | undefined): string[] {
     const collisions: string[] = [];
     for (const file of files) {
-        const media = album?.getMedia(file.path);
+        const media = getMedia(album, file.path);
         if (media) {
             file.replace = true;
             const name = media.path.split('/').pop() ?? '';

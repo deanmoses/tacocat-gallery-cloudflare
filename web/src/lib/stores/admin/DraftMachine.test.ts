@@ -7,6 +7,7 @@ import { fakeServer, jsonResponse, serverError } from '$lib/test-support/http';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord } from '$lib/test-support/records';
 import type { AlbumGalleryItem } from '$lib/models/impl/server';
+import { getMedia } from '$lib/utils/albumNavigation';
 
 /**
  * draftMachine is a module singleton, so each test starts by initialising it
@@ -247,8 +248,8 @@ describe('draftMachine', () => {
             const after = albumState.albums.get(ALBUM_PATH);
 
             expect(after).not.toBe(before);
-            expect(after?.album?.getMedia(MEDIA_PATH)?.description).toBe('New image description');
-            expect(before.album.getMedia(MEDIA_PATH)?.description).toBe('Old image description');
+            expect(getMedia(after?.album, MEDIA_PATH)?.description).toBe('New image description');
+            expect(getMedia(before.album, MEDIA_PATH)?.description).toBe('Old image description');
 
             await vi.waitFor(async () => {
                 const onDisk = await getFromDisk<AlbumGalleryItem>(ALBUM_PATH);
