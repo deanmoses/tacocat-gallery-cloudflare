@@ -1,12 +1,18 @@
 # Scripts
 
-Each script says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`. Those that write to a gallery take `--to` for the environment, `--only <album>` or `--all` for the scope, and write nothing without `--go`.
+Each script says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`. Those that write to a gallery take `--to` for the environment, `--only <album>` or `--all` for the scope, and write nothing without `--go`, through `write-guard.ts`.
 
-- `recover-zenphoto.ts` brings over what the 2023 move from Zenphoto to AWS left behind, as `docs/plans/RecoverPreAwsGalleries.md` describes: each album Zenphoto never published, made unpublished here, with its words from Zenphoto's database and its files from Dropbox through the read-only rclone remote, each uploaded as a browser uploads one. A rerun uploads only what an album lacks. `recover-gallery2.ts` does the same for the albums of Gallery 2's that the 2014 move to Zenphoto dropped. `recovery.ts` holds what the two share, and `gallery-upload.ts` their writes to the gallery.
-- `check-s3-versions.ts` compares the AWS rows with the AWS originals bucket's version listing, for rows the copy would pair with the wrong file.
 - `media.ts` prints an item's row and every object stored for its version, since the buckets are keyed by version id and the dashboard cannot browse them by album.
 - `debugbear.ts` starts the browser runs, reports them, reads one run's requests, and manages the DebugBear pages; `docs/Perf.md` says what the runs measure. `.github/workflows/perf.yml` starts a run from the Actions tab.
 - `d1-round.ts` reads an album through Globalping from Paris and then San Jose and prints what each response said about the Worker and D1.
 - `invite.sh` mints a one-time invite link for an admin's passkey, and `passkey-selftest.ts` drives the whole login against a local Worker without a browser (Admin login in `docs/Operations.md`).
 - `ship-transcoder.ts` builds and ships the transcoder's image, which the release runs for itself (The transcoder's image in `docs/Releasing.md`).
 - `delete-detail-derivatives.ts` deletes the JPEG derivatives the Images binding wrote with the original's metadata still in them, which `detail-derivatives.ts` picks out by key, so each is made again, stripped, on its next request; purge the zone's cache after it.
+
+## `recovery/`
+
+The recovery of what earlier galleries left behind, as `docs/plans/RecoverPreAwsGalleries.md` describes. Nothing else imports from here, and the directory goes once that plan is done.
+
+- `recover-zenphoto.ts` brings over what the 2023 move from Zenphoto to AWS left behind: each album Zenphoto never published, made unpublished here, with its words from Zenphoto's database and its files from Dropbox through the read-only rclone remote, each uploaded as a browser uploads one. A rerun uploads only what an album lacks. `recover-gallery2.ts` does the same for the albums of Gallery 2's that the 2014 move to Zenphoto dropped. `recovery.ts` holds what the two share, and `gallery-upload.ts` their writes to the gallery.
+- `aws-names.ts` and `aws-crops.ts` are the rules the copy from AWS named and cropped by, so a recovered item matches the copied gallery.
+- `check-s3-versions.ts` compares the AWS rows with the AWS originals bucket's version listing, for rows the copy would pair with the wrong file.

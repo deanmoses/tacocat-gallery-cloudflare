@@ -7,17 +7,17 @@
 // It takes the directory holding Gallery 2's `items.jsonl`, and touches only the albums named with --only, by the
 // path they come back at, or with --all every one. It writes nothing without --go.
 //
-// Usage: node api/scripts/recover-gallery2.ts <gallery2 dir> --to local|staging|production
+// Usage: node api/scripts/recovery/recover-gallery2.ts <gallery2 dir> --to local|staging|production
 //            (--only <album path> ... | --all) [--go]
 import path from 'node:path';
 import * as valibot from 'valibot';
 import { LOST_ALBUMS, type MovedLink, recoveredAlbum } from './gallery2.ts';
 import { write } from './gallery-upload.ts';
-import { inScope } from './migration-run.ts';
+import { inScope } from '../write-guard.ts';
 import { type Run, jsonLines, log, parsedRun, recover } from './recovery.ts';
 
 const USAGE =
-    'Usage: node api/scripts/recover-gallery2.ts <gallery2 dir> --to local|staging|production (--only <album path> ... | --all) [--go]';
+    'Usage: node api/scripts/recovery/recover-gallery2.ts <gallery2 dir> --to local|staging|production (--only <album path> ... | --all) [--go]';
 const NULLABLE_TEXT = valibot.nullable(valibot.string());
 const NULLABLE_NUMBER = valibot.nullable(valibot.number());
 const ITEM = valibot.object({

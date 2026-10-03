@@ -8,7 +8,12 @@
         },
         "api": {
             // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
-            "entry": ["scripts/*.ts", "transcoder/server.ts"],
+            "entry": [
+                "scripts/*.ts",
+                "scripts/recovery/recover-*.ts",
+                "scripts/recovery/check-s3-versions.ts",
+                "transcoder/server.ts",
+            ],
         },
         "web": {},
         "shared": {},

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Gallery2Item, captionHtml, plainText, recoveredAlbum } from '../../scripts/gallery2.ts';
+import { type Gallery2Item, captionHtml, plainText, recoveredAlbum } from '../../../scripts/recovery/gallery2.ts';
 
 function album(fields: Partial<Gallery2Item> & { id: number; parent: number; name: string | null }): Gallery2Item {
     return { type: 'GalleryAlbumItem', title: null, desc: null, order: null, width: null, height: null, ...fields };

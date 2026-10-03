@@ -30,7 +30,7 @@ The comparison of Zenphoto with DynamoDB found nothing else the move lost ([Log]
 
 **Decided: all 11 albums come back unpublished**, and Moses publishes each by hand once he has looked at it. The AWS copy is done and verified, so the recovery is an addition to it. Each photo goes in through the Worker's own upload, so the pipeline reads its size from the file. The files come from `Photos/albums`, which holds all 147 under their own names in the album folder of the same date and `a4-aceeyah-laughing.jpg` too, but for `2015/03-25/`, whose 11 are only in `Photos/raw`. Each of the 147 is the same size in Dropbox as in S3, so they are the same files and either serves. The titles and captions come from Zenphoto as the 2023 move took them: PHP-serialized values unpacked to their `en_US` text, entities decoded, and `href="#2008/01-10"` links rewritten to `/2008/01-10`. The album summaries come from Zenphoto's `custom_data`, and the names and order come from the copy's rules (`aws-names.ts`). Zenphoto's test albums, `1993/08-15/test1/` and `2022/11-01/not_for_tacocat/` with what they hold, stay behind.
 
-**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself.
+**The 11 albums are on staging and production**, unpublished, put there by `api/scripts/recovery/recover-zenphoto.ts` ([Log](#log), 2026-10-01). Moses looked them over on staging and publishes them himself.
 
 What a name and a caption could not settle, settled on 2026-10-01:
 
@@ -100,7 +100,7 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 ## How the recoveries are built
 
-Each recovery is its own script in `api/scripts/`. What they share is writing to the gallery, in `gallery-upload.ts`: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the copy's guardrails (`migration-run.ts`): `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
+Each recovery is its own script in `api/scripts/recovery/`. What they share is writing to the gallery, in `gallery-upload.ts`: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the guardrails of `write-guard.ts`: `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
 `recover-gallery2.ts` brings back the albums `gallery2.ts` names, so far Tatou's alone, each as the day album it is told, with the link its parent's description held pointed there, and `recovery.ts` holds what the scripts share. A sub-album's photos are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
 

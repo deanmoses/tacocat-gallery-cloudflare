@@ -6,7 +6,7 @@ import {
     plainText,
     recoveryPlan,
     unserialized,
-} from '../../scripts/zenphoto.ts';
+} from '../../../scripts/recovery/zenphoto.ts';
 
 const noNames = (): null => null;
 

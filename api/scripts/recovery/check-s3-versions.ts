@@ -4,7 +4,7 @@
 //
 //   aws s3api list-object-versions --bucket tacocat-gallery-sam-prod-original-images --output json > s3-versions.json
 //
-// Usage: node api/scripts/check-s3-versions.ts prod-items.json s3-versions.json [--paths]
+// Usage: node api/scripts/recovery/check-s3-versions.ts prod-items.json s3-versions.json [--paths]
 import { readFile } from 'node:fs/promises';
 import * as valibot from 'valibot';
 import { readListing } from './aws-s3-listing.ts';
@@ -12,7 +12,7 @@ import { type Finding, compareVersions } from './aws-s3-versions.ts';
 
 const [itemsFile, versionsFile] = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 if (itemsFile === undefined || versionsFile === undefined) {
-    throw new Error('Usage: node api/scripts/check-s3-versions.ts prod-items.json s3-versions.json [--paths]');
+    throw new Error('Usage: node api/scripts/recovery/check-s3-versions.ts prod-items.json s3-versions.json [--paths]');
 }
 const showEveryPath = process.argv.includes('--paths');
 const PATHS_SHOWN = 10;

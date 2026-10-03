@@ -1,13 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-    Guard,
-    albumInScope,
-    inParallel,
-    inScope,
-    parseScope,
-    parseTarget,
-    send,
-} from '../../scripts/migration-run.ts';
+import { Guard, albumInScope, inParallel, inScope, parseScope, parseTarget, send } from '../../scripts/write-guard.ts';
 
 const noPause = async (): Promise<void> => {
     /* the tests do not wait between attempts */

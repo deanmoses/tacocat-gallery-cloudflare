@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copiedCrop } from '../../scripts/aws-crops.ts';
+import { copiedCrop } from '../../../scripts/recovery/aws-crops.ts';
 
 describe(copiedCrop, () => {
     it('keeps a crop that fits', () => {
