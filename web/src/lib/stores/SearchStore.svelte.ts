@@ -1,4 +1,3 @@
-import { produce } from 'immer';
 import type { Search, SearchQuery, SearchResults } from '$lib/models/search';
 import { SearchLoadStatus } from '$lib/models/search';
 import toAlbum from '$lib/models/impl/AlbumCreator';
@@ -142,10 +141,7 @@ class SearchStore {
      */
     #setSearch(query: SearchQuery, searchResults: SearchResults): void {
         const searchEntry = this.#getOrCreateWritableStore(query);
-        const newState = produce(searchEntry, (draftState: Search) => {
-            draftState.status = SearchLoadStatus.LOADED;
-            draftState.results = searchResults;
-        });
+        const newState: Search = { ...searchEntry, status: SearchLoadStatus.LOADED, results: searchResults };
         this.#searches.set(keyOf(query), newState);
     }
 
@@ -154,10 +150,7 @@ class SearchStore {
      */
     #setLoadStatus(query: SearchQuery, loadStatus: SearchLoadStatus, error?: string): void {
         const searchEntry = this.#getOrCreateWritableStore(query);
-        const newState = produce(searchEntry, (draftState: Search) => {
-            draftState.status = loadStatus;
-            draftState.error = error;
-        });
+        const newState: Search = { ...searchEntry, status: loadStatus, error };
         this.#searches.set(keyOf(query), newState);
     }
 

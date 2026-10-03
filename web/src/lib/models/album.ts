@@ -8,7 +8,6 @@ import type { Album } from './GalleryItemInterfaces';
  */
 export interface AlbumEntry {
     loadStatus: AlbumLoadStatus;
-    renameEntry?: RenameEntry;
     album?: Album;
 }
 

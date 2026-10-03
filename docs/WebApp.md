@@ -5,7 +5,7 @@ How `web/` is built and how its code is written. It is a SvelteKit single-page a
 ## What it values
 
 - **Speed for guests.** Most readers are guests, unauthenticated and read-only, and the app is judged by how fast an album appears for them. Svelte was chosen in part for its small download; the album cache, the preloads and keeping admin code out of a guest's download all serve this.
-- **Few dependencies.** Every runtime dependency adds download weight for guests and another thing to break on upgrade, so a library has to add a lot to get in. When one must, prefer one with no dependencies of its own and a small minified size. A guest's page loads `immer`, `idb-keyval` and a toast library; the rich text editor, the drag and crop libraries and the passkey library are an admin's alone, and `web/guest-bundle.ts` lists them so a guest's page cannot reach them.
+- **Few dependencies.** Every runtime dependency adds download weight for guests and another thing to break on upgrade, so a library has to add a lot to get in. When one must, prefer one with no dependencies of its own and a small minified size. A guest's page loads `idb-keyval` and a toast library; the rich text editor, the drag and crop libraries and the passkey library are an admin's alone, and `web/guest-bundle.ts` lists them so a guest's page cannot reach them.
 - **Not for search engines.** The gallery is public but not meant to be found, so every page carries `noindex` (`web/src/app.html`) on top of the Worker's headers (`Auth.md`), and there is no SEO work: nothing ships that only a crawler would read.
 
 ## Routes
@@ -37,7 +37,7 @@ A store's methods come in two kinds:
 
 A store holds its state in a `#`-private `$state` field and exposes it as a public `$derived` of it, as `SessionStore` does with `#isAdmin` and `isAdmin`; private members always use `#`, never `_` or the `private` keyword. Deriveds have been writable since Svelte 5.25, so this is a convention rather than a guarantee. A keyed collection is a `SvelteMap` from `svelte/reactivity`, with no `$state` around it, which would do nothing; a plain `Map` is not reactive.
 
-`AlbumState` is the exception: a plain container of shared state, every album and every admin operation in progress keyed by path, which the machines write to directly. An entry in one of its maps is replaced whole, never changed in place, since a `SvelteMap` does not see changes inside its values.
+`AlbumState` is the exception: a plain container of shared state, every album and every admin operation in progress keyed by path, which the machines write to directly. An entry in one of its maps is replaced whole, never changed in place, since a `SvelteMap` does not see changes inside its values. That holds for the album inside an entry too: an album's setters write to its JSON, so an edit builds a new album from a copy of the JSON, as `DraftMachine` does on a save.
 
 The admin machines, for upload, create, rename, delete, reorder, album thumbnails, crop, drafts and edit mode, live in `web/src/lib/stores/admin/`, apart from the guest's stores, so that a guest page reading `AlbumState` does not pull in the code that changes it.
 

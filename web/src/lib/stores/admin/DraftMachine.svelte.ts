@@ -1,9 +1,9 @@
 import type { Draft, DraftContent } from '$lib/models/draft';
 import { DraftStatus } from '$lib/models/draft';
-import { produce } from 'immer';
 import { albumLoadMachine } from '../AlbumLoadMachine.svelte';
 import { API, isMediaPath, parentPathOf, parsePath } from '@tacocat-gallery/shared';
-import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
+import toAlbum from '$lib/models/impl/AlbumCreator';
+import type { AlbumGalleryItem } from '$lib/models/impl/server';
 import { callApi, failureMessage } from '$lib/utils/adminApi';
 import { toast } from '@zerodevx/svelte-toast';
 import { albumState } from '../AlbumState.svelte';
@@ -65,10 +65,7 @@ class DraftMachine {
     init(path: string): void {
         console.log(`Init draft [${path}]`);
         if (parsePath(path) === null) throw new Error(`Invalid path [${path}]`);
-        const state = produce(initialState, (newState) => {
-            newState.path = path;
-        });
-        this.#draft = state;
+        this.#draft = { ...initialState, path, content: {} };
     }
 
     /**
@@ -112,7 +109,7 @@ class DraftMachine {
      */
     cancel(): void {
         console.log('canceling draft:', $state.snapshot(this.#draft));
-        this.#draft = initialState;
+        this.#draft = { ...initialState, content: {} };
     }
 
     /**
@@ -131,8 +128,12 @@ class DraftMachine {
         if (errorMessage !== undefined && errorMessage !== '') toast.push(errorMessage);
     }
 
-    #saveSuccess(): void {
-        this.#setStatus(DraftStatus.SAVED);
+    #saveSuccess(saved: Draft): void {
+        this.#updateAlbum(saved);
+        // Each edit replaces the draft's content, so content other than what
+        // was sent means the user edited while the server was answering, and
+        // that edit is still unsaved
+        if (this.#draft.content === saved.content) this.#setStatus(DraftStatus.SAVED);
     }
 
     #clearSaveSuccess(): void {
@@ -149,23 +150,41 @@ class DraftMachine {
      * Change the status of the draft
      */
     #setStatus(newStatus: DraftStatus): void {
-        const state = produce(this.#draft, (newState) => {
-            newState.status = newStatus;
-        });
-        this.#draft = state;
+        this.#draft = { ...this.#draft, status: newStatus };
     }
 
     /**
      * Update the content of the draft
      */
     #updateContent(applyChangesToDraftContent: (draftContent: DraftContent) => void): void {
-        const newState: Draft = produce(this.#draft, (originalState) => {
-            originalState.status = DraftStatus.UNSAVED_CHANGES;
-            if (originalState.content === undefined) throw new Error('originalState.content is undefined');
-            applyChangesToDraftContent(originalState.content);
-        });
+        const content = { ...this.#draft.content };
+        applyChangesToDraftContent(content);
+        const newState: Draft = { ...this.#draft, status: DraftStatus.UNSAVED_CHANGES, content };
         console.log(`Update draft [${newState.path}]:`, newState.content);
         this.#draft = newState;
+    }
+
+    /**
+     * Puts the saved edit into the album in memory and on disk. The album is
+     * rebuilt from a copy of its JSON rather than edited in place: AlbumState's
+     * map signals its readers only when the entry is a new object, and the old
+     * album may still be on screen. An album no longer in memory has nothing
+     * to correct; it is read from the server when next shown. The edit goes
+     * onto the record rather than through the item's setters, since not every
+     * kind of item has a setter for every field a draft holds.
+     */
+    #updateAlbum(saved: Draft): void {
+        const albumPath = isMediaPath(saved.path) ? parentPathOf(saved.path) : saved.path;
+        const albumEntry = albumState.albums.get(albumPath);
+        if (!albumEntry?.album) return;
+        const { children, ...json } = albumEntry.album.json;
+        const copy: AlbumGalleryItem = isMediaPath(saved.path) ? { ...json } : { ...json, ...saved.content };
+        if (children) {
+            copy.children = children.map((child) =>
+                child.path === saved.path ? { ...child, ...saved.content } : child,
+            );
+        }
+        albumLoadMachine.updateAlbumEntry({ ...albumEntry, album: toAlbum(copy) });
     }
 
     //
@@ -199,53 +218,7 @@ class DraftMachine {
                 return;
             }
 
-            // UPDATE CLIENT STATE
-            // Update both the album in memory and on the browser's local filesystem
-
-            // If it was a media item (image or video) that was saved...
-            if (isMediaPath(draft.path)) {
-                // Get the album in which the image resides
-                const albumPath = parentPathOf(draft.path);
-                console.log(`Image save: parent album: [${albumPath}]`);
-                const albumEntry = albumState.albums.get(albumPath);
-                if (!albumEntry) throw new Error(`Did not find album entry [${albumPath}] in memory`);
-                if (!albumEntry.album)
-                    throw new Error(`Did not find album [${albumPath}] in memory: entry exists but it has no album`);
-
-                // Make a copy of the album entry.  Apply changes to the copy
-                const updatedAlbumEntry = produce(albumEntry, (albumEntryCopy) => {
-                    const image: Thumbable | undefined = albumEntryCopy.album?.media.find(
-                        (media: Thumbable) => media.path === draft.path,
-                    );
-                    if (!image) throw new Error(`Did not find image [${draft.path}] in album [${albumPath}]`);
-                    Object.assign(image, draft.content); // Apply contents of draft to image
-                });
-
-                // Update album in store
-                // This also writes the album to the browser's local disk cache;
-                // otherwise, the next page load the value will be wrong
-                albumLoadMachine.updateAlbumEntry(updatedAlbumEntry);
-            }
-            // Else it was an album that was saved...
-            else {
-                const albumEntry = albumState.albums.get(draft.path);
-                if (!albumEntry) throw new Error(`Did not find album entry [${draft.path}] in memory`);
-                if (!albumEntry.album)
-                    throw new Error(`Did not find album [${draft.path}] in memory: entry exists but it has no album`);
-
-                // Make a copy of the album entry.  Apply changes to the copy
-                const updatedAlbumEntry = produce(albumEntry, (albumEntryCopy) => {
-                    if (!albumEntryCopy.album) throw new Error(`No album on albumEntry`);
-                    Object.assign(albumEntryCopy.album, draft.content); // Apply contents of draft to the album
-                });
-
-                // Update album in store
-                // This also writes the album to the browser's local disk cache;
-                // otherwise, the next page load the value will be wrong
-                albumLoadMachine.updateAlbumEntry(updatedAlbumEntry);
-            }
-
-            this.#saveSuccess();
+            this.#saveSuccess(draft);
 
             // Clear the saved status after a while
             console.log('DraftStore: before save clear timeout');
