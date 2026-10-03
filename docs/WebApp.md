@@ -55,7 +55,7 @@ So a revisited album shows instantly and a reader who loses the network still se
 
 ## Models
 
-`web/src/lib/models/` holds the app's own view of albums and media, pure data with no fetching or persistence. The shapes the Worker sends and IndexedDB keeps are `shared/`'s record types, re-exported by `models/impl/server.ts`; `AlbumCreator` and `GalleryItemCreator` turn a record into the class for its kind, root, year or day album, image or video. The interfaces in `GalleryItemInterfaces.ts` are what components see. Enum members are `SCREAMING_SNAKE_CASE`.
+`web/src/lib/models/` holds the app's own view of albums and media, pure data with no fetching or persistence. The shapes the Worker sends and IndexedDB keeps are `shared/`'s record types, re-exported by `models/impl/server.ts`; `AlbumCreator` turns a record into an album, one class for root, year and day, and `GalleryItemCreator` into the class for its kind, image or video. The interfaces in `GalleryItemInterfaces.ts` are what components see. Enum members are `SCREAMING_SNAKE_CASE`.
 
 ## Components
 

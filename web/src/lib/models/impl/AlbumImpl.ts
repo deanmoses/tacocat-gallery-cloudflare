@@ -1,20 +1,31 @@
-import { hrefOf } from '@tacocat-gallery/shared';
+import { hrefOf, parsePath } from '@tacocat-gallery/shared';
 import type { AlbumGalleryItem, GalleryRecord } from './server';
 import { isAlbumRecord, isMediaRecord } from './server';
 import type { Album, Media, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 import { ThumbableBaseImpl } from './ThumbableBaseImpl';
-import toAlbum from './AlbumCreator';
 import { toMedia } from './GalleryItemCreator';
+import { albumTitle } from '$lib/utils/date-utils';
 
-export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
+export class AlbumImpl extends ThumbableBaseImpl implements Album {
     override readonly json: AlbumGalleryItem;
+    readonly #kind: 'root' | 'year' | 'day';
 
     constructor(json: AlbumGalleryItem) {
         super(json);
         this.json = json;
+        const kind = parsePath(json.path)?.kind;
+        if (kind === undefined || kind === 'media') throw new Error(`Invalid album path [${json.path}]`);
+        this.#kind = kind;
     }
 
-    abstract readonly parentTitle: string;
+    get title(): string {
+        return this.#kind === 'root' ? '' : albumTitle(this.path);
+    }
+
+    /** Only a day album has a parent with a title: the root has no parent, and a year's parent is the root */
+    get parentTitle(): string {
+        return this.#kind === 'day' ? albumTitle(this.parentPath) : '';
+    }
 
     override get published(): boolean {
         return this.json.published ?? false;
@@ -55,7 +66,7 @@ export abstract class AlbumBaseImpl extends ThumbableBaseImpl implements Album {
     }
 
     get albums(): Thumbable[] {
-        return this.json.children?.filter(isAlbumRecord).map((record) => toAlbum(record)) ?? [];
+        return this.json.children?.filter(isAlbumRecord).map((record) => new AlbumImpl(record)) ?? [];
     }
 
     getMedia(mediaPath: string): Media | undefined {
