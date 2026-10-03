@@ -12,6 +12,7 @@
     import AdminToggle from '$lib/components/site/admin/toggle/AdminToggle.svelte';
     import type { Album, Media } from '$lib/models/GalleryItemInterfaces';
     import { sessionStore } from '$lib/stores/SessionStore.svelte';
+    import { mediaNeighbours } from '$lib/utils/albumNavigation';
 
     interface Props {
         album: Album;
@@ -19,10 +20,10 @@
     }
     let { album, media }: Props = $props();
     let mediaTitle = $derived(media.title);
-
-    // Preload adjacent media for smoother navigation
-    let nextMedia = $derived(media.nextHref === undefined ? undefined : album.getMedia(media.nextHref));
-    let prevMedia = $derived(media.prevHref === undefined ? undefined : album.getMedia(media.prevHref));
+    // The media on either side, which the page also preloads for smoother navigation
+    let neighbours = $derived(mediaNeighbours(album, media.path));
+    let nextMedia = $derived(neighbours.next);
+    let prevMedia = $derived(neighbours.prev);
 </script>
 
 <svelte:head>
@@ -44,9 +45,9 @@
     {/snippet}
 
     {#snippet nav()}
-        <PrevButton href={media.prevHref} />
+        <PrevButton href={prevMedia?.href} />
         <UpButton href={album.href} title={album.title} />
-        <NextButton href={media.nextHref} />
+        <NextButton href={nextMedia?.href} />
     {/snippet}
 
     {#snippet imageHtml()}

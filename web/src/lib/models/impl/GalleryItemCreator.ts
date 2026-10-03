@@ -1,20 +1,49 @@
-import type { Album, Media } from '../GalleryItemInterfaces';
-import { ImageImpl } from './ImageImpl';
-import { VideoImpl } from './VideoImpl';
-import type { MediaRecord } from './server';
+import type { Image, Video } from '../GalleryItemInterfaces';
+import type { ImageRecord, MediaRecord, VideoRecord } from './server';
 import { isImageRecord, isVideoRecord } from './server';
+import { detailImageUrl } from '$lib/utils/config';
+import { detailDimensions } from '$lib/utils/dimensionUtils';
+import { titleFromName } from '$lib/utils/titleUtils';
+import { originalUrl } from '@tacocat-gallery/shared';
 
 /**
- * Instantiate a Media (Image or Video) from the specified record
+ * The image or video a component reads, from its record
  * @param record Media record from server or stored in idb
- * @param album Parent album containing this media
  */
-export function toMedia(record: MediaRecord, album: Album): Media {
-    if (isVideoRecord(record)) {
-        return new VideoImpl(record, album);
-    }
-    if (isImageRecord(record)) {
-        return new ImageImpl(record, album);
-    }
+export function toMedia(record: MediaRecord): Image | Video {
+    if (isVideoRecord(record)) return toVideo(record);
+    if (isImageRecord(record)) return toImage(record);
     throw new Error(`Unknown media type: ${JSON.stringify(record)}`);
+}
+
+function toImage(record: ImageRecord): Image {
+    return {
+        ...mediaFields(record),
+        mediaType: 'image',
+        originalUrl: originalUrl(record.path, record.versionId),
+        originalWidth: record.dimensions.width,
+        originalHeight: record.dimensions.height,
+    };
+}
+
+function toVideo(record: VideoRecord): Video {
+    return { ...mediaFields(record), mediaType: 'video', duration: record.duration };
+}
+
+function mediaFields(record: MediaRecord): Omit<Video, 'mediaType' | 'duration'> {
+    const detail = detailDimensions(record.dimensions);
+    return {
+        path: record.path,
+        itemType: 'media',
+        title: record.title ?? titleFromName(record.itemName),
+        description: record.description ?? '',
+        summary: '',
+        thumbnailUrlInfo: { imagePath: record.path, versionId: record.versionId, crop: record.thumbnail },
+        href: record.path,
+        versionId: record.versionId,
+        thumbnail: record.thumbnail,
+        detailUrl: detailImageUrl(record.path, record.versionId, record.dimensions),
+        detailWidth: detail.width,
+        detailHeight: detail.height,
+    };
 }

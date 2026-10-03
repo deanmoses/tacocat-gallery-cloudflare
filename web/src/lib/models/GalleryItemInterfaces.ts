@@ -1,11 +1,12 @@
 //
-// The interfaces used by the Sveltekit UI
+// What components read: plain objects built from the server's records, with
+// every display default applied, so that no optional field reaches a template
 //
 
 import type { ItemType, MediaType } from '@tacocat-gallery/shared';
 import type { AlbumGalleryItem, Rectangle } from './impl/server';
 
-export type { ItemType, MediaType };
+export type { MediaType };
 
 /**
  * Info needed to construct a thumbnail URL
@@ -22,16 +23,19 @@ export interface Album extends Thumbable {
     readonly thumbnailPath: string | undefined;
     /** Whether an admin has put the media in an order of their own, rather than by name */
     readonly reordered: boolean;
-    readonly json: AlbumGalleryItem; // so that I can save the JSON to disk
+    /**
+     * The server's record, unaltered: what goes to the disk cache, and what an edit copies. The other fields were
+     * computed from it once, so a change made to it in place would not reach them.
+     */
+    readonly json: Readonly<AlbumGalleryItem>;
     readonly parentHref: string;
     readonly parentTitle: string;
     readonly media: Media[];
-    readonly albums: Thumbable[];
-    getMedia: (mediaPath: string) => Media | undefined;
+    readonly albums: Album[];
 }
 
 /** Base interface for all media items (images and videos) */
-export interface Media extends Nextable {
+export interface Media extends Thumbable {
     readonly mediaType: MediaType;
     readonly title: string;
     readonly versionId: string;
@@ -55,13 +59,6 @@ export interface Video extends Media {
     readonly duration: number;
 }
 
-interface Nextable extends Thumbable {
-    readonly prevHref: string | undefined;
-    readonly nextHref: string | undefined;
-    readonly prevTitle: string | undefined;
-    readonly nextTitle: string | undefined;
-}
-
 export interface Thumbable {
     readonly path: string;
     readonly itemType: ItemType;
@@ -71,5 +68,4 @@ export interface Thumbable {
     readonly summary: string;
     readonly thumbnailUrlInfo: ThumbnailUrlInfo | undefined;
     readonly href: string;
-    readonly published: boolean;
 }

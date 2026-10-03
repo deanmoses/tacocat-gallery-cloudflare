@@ -5,6 +5,7 @@ import { RenameStatus } from '$lib/models/album';
 import { fakeServer, jsonResponse } from '$lib/test-support/http';
 import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
 import { albumRecord, imageRecord, mediaPath } from '$lib/test-support/records';
+import { getMedia } from '$lib/utils/albumNavigation';
 
 const ALBUM_PATH = '/2001/12-31/';
 const ALBUM_ROUTE = '/api/album/2001/12-31/';
@@ -45,7 +46,7 @@ describe('mediaRenameMachine', () => {
         });
 
         expect(statusWhileReReading).toBe(RenameStatus.RENAMED);
-        expect(albumState.albums.get(ALBUM_PATH)?.album?.getMedia(NEW_PATH)).toBeDefined();
+        expect(getMedia(albumState.albums.get(ALBUM_PATH)?.album, NEW_PATH)).toBeDefined();
     });
 
     it('drops the rename, and leaves the album as it was, when the server refuses', async () => {
@@ -61,6 +62,6 @@ describe('mediaRenameMachine', () => {
             expect(albumState.mediaRenames.has(OLD_PATH)).toBe(false);
         });
 
-        expect(albumState.albums.get(ALBUM_PATH)?.album?.getMedia(OLD_PATH)).toBeDefined();
+        expect(getMedia(albumState.albums.get(ALBUM_PATH)?.album, OLD_PATH)).toBeDefined();
     });
 });

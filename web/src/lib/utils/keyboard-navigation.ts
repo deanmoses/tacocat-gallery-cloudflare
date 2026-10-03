@@ -1,5 +1,5 @@
 import type { Album } from '$lib/models/GalleryItemInterfaces';
-import { albumNav } from './albumNavigation';
+import { albumNav, mediaNeighbours } from './albumNavigation';
 import { isAlbumPath, isMediaPath, parentPathOf, pathOfUrl } from '@tacocat-gallery/shared';
 
 /**
@@ -86,14 +86,10 @@ function navigateToPeer(path: string, getAlbum: GetAlbumFunction, direction: Dir
         const albumPath = parentPathOf(path);
         const album = getAlbum(albumPath);
         if (album) {
-            const media = album.getMedia(path);
-            if (media) {
-                const newPath = direction === Direction.NEXT ? media.nextHref : media.prevHref;
-                if (newPath !== undefined && newPath !== '') {
-                    return newPath;
-                }
-            } else {
-                console.log(`Did not find media [${path}] on album [${albumPath}]`);
+            const { prev, next } = mediaNeighbours(album, path);
+            const newPath = direction === Direction.NEXT ? next?.href : prev?.href;
+            if (newPath !== undefined && newPath !== '') {
+                return newPath;
             }
         } else {
             console.log(`No album found at path: ${path}`);

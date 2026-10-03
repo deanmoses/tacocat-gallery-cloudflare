@@ -1,4 +1,4 @@
-import type { Album } from '$lib/models/GalleryItemInterfaces';
+import type { Album, Media } from '$lib/models/GalleryItemInterfaces';
 import { albumTitle } from './date-utils';
 
 /** Where an album page's prev and next buttons lead */
@@ -27,4 +27,17 @@ export function albumNav(albumPath: string, parent: Album | undefined): AlbumNav
         prevTitle: prev ? albumTitle(prev.path, 'short') : undefined,
         nextTitle: next ? albumTitle(next.path, 'short') : undefined,
     };
+}
+
+/** The media item at a path in an album, if the album is loaded */
+export function getMedia(album: Album | undefined, mediaPath: string): Media | undefined {
+    return album?.media.find((media) => media.path === mediaPath);
+}
+
+/** The media on either side of a media item, in the order its album shows them */
+export function mediaNeighbours(album: Album, mediaPath: string): { prev: Media | undefined; next: Media | undefined } {
+    const index = album.media.findIndex((media) => media.path === mediaPath);
+    return index === -1
+        ? { prev: undefined, next: undefined }
+        : { prev: album.media[index - 1], next: album.media[index + 1] };
 }
