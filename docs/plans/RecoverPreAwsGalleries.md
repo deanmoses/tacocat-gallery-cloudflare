@@ -42,25 +42,24 @@ What a name and a caption could not settle, settled on 2026-10-01:
 
 Gallery 2's database, `pictures`, holds 447 albums and 10,665 photos, the albums created from 2006-12-26 to 2014-12-28. The gallery was copied into Zenphoto in November and December 2014, the dates of Zenphoto's photo files. Comparing Gallery 2 with Zenphoto, and what Zenphoto lacks with the gallery as it is now, found that move lost three albums, a dozen photos and some text, and brought everything else across ([Log](#log), 2026-09-30, Gallery 2 comparison). Gallery 2's 35 sub-albums, such as `2009/05-17/yosemite`, became day albums of their own in Zenphoto, often a day or two off, as `2009/11-01/party` became `2009/10-30/`.
 
-**That comparison missed a fourth album**, the sub-album `2008/01-21/tatou`, which is recovered ([Log](#log), 2026-10-01, Tatou's Weekend with Felix). It had matched nine of the album's 13 photos by name alone to unrelated photos, as `tatou/totland1.jpg` to `2002/11-17/totland1.jpg`, whose captions differ. **So the next step is to check the comparison's other matches by name alone against their captions**, sub-albums first, before the list below is trusted and the rest of the recovery runs.
+**That comparison missed a fourth album**, the sub-album `2008/01-21/tatou`, which is recovered ([Log](#log), 2026-10-01, Tatou's Weekend with Felix). It had matched nine of the album's 13 photos by name alone to unrelated photos, as `tatou/totland1.jpg` to `2002/11-17/totland1.jpg`, whose captions differ. **A second pass checked every match against its words, place and time** ([Log](#log), 2026-10-03, Gallery 2 matches rechecked): it found no other lost album, but more lost photos in the three albums, fewer lost single photos, and two of the doc's Dropbox and gallery counterparts wrong. The list below is that pass's.
 
 What the gallery lacks:
 
 - **Three albums, all public in Gallery 2**:
-    - `2008/02-03/`: Lucie badged at Google. 11 photos, and 11 of its preschool sub-album `pk`.
-    - `2008/04-13/`: Felix's class play, _Le Petit Chaperon Rouge_. 22 photos.
-    - `2012/06-22/`: "Holy Allowance, Batman!". 7 of its 8 photos; `batman.jpg` is in `2011/02-27/`.
+    - `2008/02-03/`: Lucie badged at Google. 11 photos, and 20 of its preschool sub-album `pk`.
+    - `2008/04-13/`: Felix's class play, _Le Petit Chaperon Rouge_. 24 photos.
+    - `2012/06-22/`: "Holy Allowance, Batman!". All 8 photos; its `batman.jpg`, "It took 2 months of allowance…", is not `2011/02-27/batman.jpg`, "Batboat".
 - **Single photos from albums that did come across**:
     - ✅ `2008/01-21/tatou/`: listed here as four photos, `piano.jpg`, `zzzz.jpg`, `croissants.jpg` and `totland6.jpg`, and in fact the whole sub-album, 13 photos, now `/2008/01-22/` on staging and production, unpublished.
-    - `2007/07-01/kingswim4_001.jpg`, `2008/07-06/motrip/petronas2.jpg` and `2011/01-23/a-comment-system.png`.
+    - `2007/07-01/kingswim4_001.jpg` and `2011/01-23/a-comment-system.png`.
     - `2011/05-08/vincennes2.jpg` and `zzzmothersday.jpg`, which were not public in Gallery 2.
-    - `2013/07-01/046.JPG` and `056.JPG`, unless they are `paris14.jpg` and `paris16.jpg` in `/2013/07-01/`, which have their captions and size.
 - **Two photo captions**: `2009/04-19/jedi05.jpg` ("Come young padawans, experience the POWER of the DARK SIDE.") and `2012/02-26/kauai23.jpg` ("The lava rocks of Secret Beach.").
 - **13 album summaries**, still empty on AWS: `2008/07-06` "Dean in Malaysia", `2010/01-17` "Dean becomes French", `2010/01-24` "Milo's half birthday", `2010/03-07` "Little Red Riding Hood", `2010/03-14` and `2010/03-21` "Lucie in Paris", `2010/03-28` "Milo's first soccer game", `2010/05-16` "Dean in Chicago", `2010/05-23` "Milo's end-of-year class show", `2010/06-13` "Felix turns 8 and a half", `2010/07-11` "The Chloe Marie", `2010/08-08` "Health & packing" and `2014/12-10` "The Tree-ening".
 
 The three albums are added unpublished, for Moses to look over and publish, and the single photos are added to their albums, each through the Worker's upload with its title and caption from Gallery 2. The two captions and 13 summaries are written onto the copied rows. Gallery 2 stores its text entity-escaped, sometimes twice, so it is decoded until nothing changes.
 
-Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them, mostly 1024 pixels on the long side and about 150 KB. Dropbox has no folder for any of the three albums and none of their photos by name, so for those Gallery 2's copies are the only ones found. Of the single photos, Dropbox has `lincoln2.jpg` to `lincoln4.jpg` from `2012/06-22/` in `Photos/albums/2017/03-04/`; its `2013/07-01/` holds `paris` photos, not `046.JPG` and `056.JPG`, which makes `paris14.jpg` and `paris16.jpg` likelier to be them.
+Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them, mostly 1024 pixels on the long side and about 150 KB. Dropbox has no folder for any of the three albums and none of their photos by name, so for those Gallery 2's copies are the only ones found; its `2017/03-04/lincoln1.jpg` to `lincoln4.jpg` are the 2017 trip to Washington, not `2012/06-22/`'s.
 
 Left behind: the nine TIFFs in `2008/08-21/`, Gallery 2's `2008/08-24/photoshoot/couple01.tif` to `milo01.tif`, which the [S3 version check](migration_from_aws/AwsDataMigration.md#s3-version-check) also found. The gallery has never served a TIFF, and Moses takes them for raw originals pushed to DreamHost by mistake. The other text that differs reads as Moses' later edits in Zenphoto, "Happy Birthday, America!" becoming "4th of July", or as spacing and punctuation.
 
@@ -109,6 +108,17 @@ Each recovery is its own script in `api/scripts/recovery/`. What they share is w
 The Gallery 2 script has yet to write onto rows the copy made, the two captions and 13 summaries, and to add single photos to published albums. The static gallery's script runs once Moses has watched the videos.
 
 ## Log
+
+### 2026-10-03
+
+#### Gallery 2 matches rechecked
+
+The Gallery 2 comparison took each photo's first candidate, so a match by name, or by a title of one word such as "Evan", could take another photo's counterpart and push that photo onto a wrong one. `~/dev/tacocat-migration/gallery2/check-matches.mjs` matches them again, writing `matches.jsonl` and `unmatched.jsonl` beside it. Photos at the same path in Zenphoto match first; every other pairing at the same shape is scored by its name, its title and caption, an album within two weeks and a capture time within a day, and the best pairings are taken across all photos at once. A name or a one-word title alone counts only with the place or the time. A last pass takes a caption edited since, most of its words in an album within two weeks. Each photo still unmatched was also looked for on AWS by its caption, and none was there.
+
+- **89 photos unmatched**: the 9 TIFFs, Tatou's 13, and 67 to recover, which are the three albums' 63 and the four single photos in [Gallery 2](#gallery-2).
+- **Wrong before**: nine of `pk/`'s photos had matched other classes' portraits by first name, as `circletime-evan.jpg` to `2009/02-09/mk-evan.jpg`; `2008/02-03/crafty1.jpg` matched `2020/04-06/crafty1.jpg`, `2008/04-13/jeremy.jpg` and `milo.jpg` photos of 2008 and 2004, and `2012/06-22/lincoln1.jpg` `2017/03-04/lincoln1.jpg`.
+- **Found since**: `2013/07-01/002.JPG` to `088.JPG` are Zenphoto's `paris01.jpg` to `paris28.jpg`, the captions lightly edited, so `046.JPG` and `056.JPG` are `paris14.jpg` and `paris16.jpg`; `2008/07-06/motrip/petronas2.jpg` is `2008/07-04/z-national-petronas2.jpg`.
+- **Held**: the class portraits of `2008/10-26/`, `2009/02-09/`, `2009/09-13/k3/`, `2009/10-12/g2/` and `2012/10-29/eb/`, which the first run had paired across years, and `tilden-portraits/`, `photoshoot/`'s JPEGs, `trading-cards/`, `shakescene/` and `motrip/`'s Chinatown photos are all in Zenphoto. These rest on words, shape and dates, not on looking at the photos.
 
 ### 2026-10-01
 

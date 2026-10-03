@@ -1,16 +1,10 @@
-# The tacocat.com zone, which GoDaddy's nameservers point at. Its records are the ones DreamHost served while it held
-# the zone, DNS-only. Records that point at AWS stay DNS-only, since proxying in front of CloudFront would stack two
-# CDNs; the ACM validation CNAMEs keep the AWS certificates renewing; the Google records carry the mail, and the DKIM
-# key is the one most easily damaged in a copy. The apex, www, ftp and ssh records point at DreamHost, which still hosts
-# the landing page. DreamHost's zone is the way back, so a record changed here and not there is lost on a return to its
-# nameservers.
+# The tacocat.com zone, which GoDaddy's nameservers point at. Its records are DNS-only: proxying the ones that point at
+# AWS would stack two CDNs in front of CloudFront. The ACM validation CNAMEs keep the AWS certificates renewing; the
+# Google records carry the mail. The apex, www, ftp and ssh records point at DreamHost, which still hosts the landing
+# page.
 #
-# Gone since 2026-10-02: prod-pix and dev-pix with their www, ftp and ssh names, gallery3 and vercel-pix, the records
-# of the gallery generations that ran on DreamHost and Vercel before AWS, removed once DreamHost stopped hosting the
-# two names; and the AWS gallery's staging and test names (api, auth and img of staging-pix and test-pix), Cognito's
-# login, their ACM validation CNAMEs, and start, Google Apps' start page, retired in 2013. DreamHost's zone still has
-# them all. The AWS production names, api, auth and img of pix, stay until the AWS gallery is retired, since a
-# resolver that still caches the old delegation sends its readers to the AWS app, which calls them.
+# The AWS production names, api, auth and img of pix, stay until the AWS gallery is retired, since a resolver that
+# still caches the old delegation sends its readers to the AWS app, which calls them.
 #
 # pix.tacocat.com and staging-pix.tacocat.com have no record here: they are the Workers' custom domains, whose records
 # Cloudflare makes when a Worker's triggers deploy, and refuses to make while another record holds the name.
@@ -81,6 +75,9 @@ locals {
     { name = "tacocat.com", type = "MX", content = "ALT3.ASPMX.L.GOOGLE.com", priority = 10 },
     { name = "tacocat.com", type = "MX", content = "ALT4.ASPMX.L.GOOGLE.com", priority = 10 },
     { name = "tacocat.com", type = "TXT", content = "google-site-verification=En35chboU0PBIeqQIplDlcsFlCzOa-DzCv8VMuqhyR0" },
+    # Google Workspace is the domain's only sender. DMARC is monitoring only, p=none, until its reports show no other.
+    { name = "tacocat.com", type = "TXT", content = "v=spf1 include:_spf.google.com ~all" },
+    { name = "_dmarc.tacocat.com", type = "TXT", content = "v=DMARC1; p=none; rua=mailto:ff0ce10646284ddcaa7f86272cc7682a@dmarc-reports.cloudflare.net" },
     { name = "google._domainkey.tacocat.com", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsh1aXVm2tMG9C5nUVjuf3vkfXKMlTmfZhUFVoVqUAWBf/WZzPlTGk/g2wbBB6tCa6f/zGYAPDstHOlAgakHnv5DxyNjGXDYxlxU21xJeTdl2MiXCHfb708Oj7eXmL6Y+GMWh4Iz5z87znL+rocOKp4g2bvjheqI46RlBSatWoHn27+g719M1qFftCy0jEcDgFs+yhoYbdCcJW9HkDTQ8s3piTgOxRtdp7SqlgsDkQADat4/zTFqCHE2G3txhRTbTDEqXf5wzVhU/ZvizP8Ce8pI4/7EClehUNf/igMc3Zj7iXcCtrwg0aoHgVuJBzoOQUlIsd5vNhjjVQdJYAlRcHwIDAQAB" },
     { name = "calendar.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
     { name = "docs.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
@@ -101,13 +98,15 @@ resource "cloudflare_dns_record" "tacocat" {
   zone_id  = cloudflare_zone.tacocat.id
   name     = each.value.name
   type     = each.value.type
-  # Cloudflare stores a target in lower case, and would otherwise want to change the MX targets, which DreamHost serves in
-  # upper case, on every plan. TXT values are data, and the DKIM key's case is part of it.
+  # Cloudflare stores a target in lower case, and would otherwise want to change the MX targets, written above in upper
+  # case, on every plan. Writing them in lower case instead would change their keys, which replaces all five records.
+  # TXT values are data, and the DKIM key's case is part of it.
   content  = each.value.type == "TXT" ? each.value.content : lower(each.value.content)
   priority = lookup(each.value, "priority", null)
   proxied  = false
-  # DreamHost served every record with a 60 s TTL.
-  ttl = 60
+  # The records change a few times a year, so an hour's caching costs little. Lower it an hour ahead of a change that may
+  # need undoing fast.
+  ttl = 3600
 }
 
 output "tacocat_name_servers" {
