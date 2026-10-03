@@ -19,6 +19,7 @@
     import UploadThumbnail from '$lib/components/site/admin/UploadThumbnail.svelte';
     import { draftMachine } from '$lib/stores/admin/DraftMachine.svelte';
     import { albumThumbnailSetMachine } from '$lib/stores/admin/AlbumThumbnailSetMachine.svelte';
+    import { albumTiles } from '$lib/utils/albumTiles';
     import { getParentAlbum, getUploadsForAlbum, mediaActivity } from '$lib/stores/AlbumState.svelte';
 
     interface Props {
@@ -28,6 +29,7 @@
     let neighbours = $derived(albumNav(album.path, getParentAlbum(album.path)));
     let okToNavigate = $derived(draftMachine.okToNavigate);
     let uploads: UploadEntry[] = $derived(getUploadsForAlbum(album.path));
+    let tiles = $derived(albumTiles(album, uploads));
 
     function albumThumbnailSelected(newThumbnailMediaPath: string): void {
         albumThumbnailSetMachine.setAlbumThumbnail(album.path, newThumbnailMediaPath);
@@ -56,45 +58,44 @@
     {/snippet}
 
     {#snippet thumbnails()}
-        {#if album.media.length > 0}
-            {#each album.media as media (media.path)}
+        {#each tiles as tile (tile.path)}
+            {#if tile.kind === 'upload'}
+                <UploadThumbnail upload={tile.upload} />
+            {:else if tile.kind === 'media'}
                 {#if okToNavigate}
                     <MediaThumbnail
-                        activity={mediaActivity(media.path)}
-                        href={media.path}
-                        mediaType={media.mediaType}
-                        summary={media.summary}
-                        thumbnailUrlInfo={media.thumbnailUrlInfo}
-                        title={media.title}
+                        activity={mediaActivity(tile.path)}
+                        href={tile.path}
+                        mediaType={tile.media.mediaType}
+                        summary={tile.media.summary}
+                        thumbnailUrlInfo={tile.media.thumbnailUrlInfo}
+                        title={tile.media.title}
                     >
                         {#snippet selectionControls()}
                             <SelectableStar
                                 albumThumbPath={album.thumbnailPath}
                                 onSelected={albumThumbnailSelected}
-                                path={media.path}
+                                path={tile.path}
                             />
                         {/snippet}
                     </MediaThumbnail>
                 {:else}
                     <div title="💾 Save changes before navigating">
                         <MediaThumbnail
-                            activity={mediaActivity(media.path)}
-                            mediaType={media.mediaType}
-                            summary={media.summary}
-                            thumbnailUrlInfo={media.thumbnailUrlInfo}
-                            title={media.title}
+                            activity={mediaActivity(tile.path)}
+                            mediaType={tile.media.mediaType}
+                            summary={tile.media.summary}
+                            thumbnailUrlInfo={tile.media.thumbnailUrlInfo}
+                            title={tile.media.title}
                         />
                     </div>
                 {/if}
-            {/each}
-        {:else if !album.published && uploads.length === 0 && okToNavigate}
-            <p>Drop images and videos or a 📁</p>
-        {/if}
-        {#if uploads.length > 0}
-            {#each uploads as upload (upload.path)}
-                <UploadThumbnail {upload} />
-            {/each}
-        {/if}
+            {/if}
+        {:else}
+            {#if !album.published && okToNavigate}
+                <p>Drop images and videos or a 📁</p>
+            {/if}
+        {/each}
     {/snippet}
 </DayAlbumPageLayout>
 <DayAlbumFullScreenDropZone albumPath={album.path} allowDrop={okToNavigate} />

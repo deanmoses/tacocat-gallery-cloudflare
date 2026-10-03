@@ -44,7 +44,7 @@
     });
 </script>
 
-<Thumbnail src={urlForTemplate} summary={upload.status} title={upload.file.name}>
+<Thumbnail src={urlForTemplate} title={upload.file.name}>
     {#snippet selectionControls()}
         <div><WaitingIcon height="100px" width="100px" /></div>
     {/snippet}
