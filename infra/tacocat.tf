@@ -1,9 +1,9 @@
 # The tacocat.com zone, which GoDaddy's nameservers point at. Its records are the ones DreamHost served while it held
-# the zone, DNS-only, and scripts/zone-diff.sh compares the two. Records that point at AWS stay DNS-only, since
-# proxying in front of CloudFront would stack two CDNs; the ACM validation CNAMEs keep the AWS certificates renewing;
-# the Google records carry the mail, and the DKIM key is the one most easily damaged in a copy. The apex, www, ftp and
-# ssh records point at DreamHost, which still hosts the landing page. DreamHost's zone is the way back, so a record
-# changed here and not there is lost on a return to its nameservers.
+# the zone, DNS-only. Records that point at AWS stay DNS-only, since proxying in front of CloudFront would stack two
+# CDNs; the ACM validation CNAMEs keep the AWS certificates renewing; the Google records carry the mail, and the DKIM
+# key is the one most easily damaged in a copy. The apex, www, ftp and ssh records point at DreamHost, which still hosts
+# the landing page. DreamHost's zone is the way back, so a record changed here and not there is lost on a return to its
+# nameservers.
 #
 # Gone since 2026-10-02: prod-pix and dev-pix with their www, ftp and ssh names, gallery3 and vercel-pix, the records
 # of the gallery generations that ran on DreamHost and Vercel before AWS, removed once DreamHost stopped hosting the

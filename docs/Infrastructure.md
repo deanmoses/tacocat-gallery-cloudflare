@@ -80,7 +80,7 @@ How both environments were made, and how a third would be, in order. The Worker'
 
 ## The zone
 
-`infra/tacocat.tf` declares the `tacocat.com` zone, whose nameservers `scripts/tofu.sh output tacocat_name_servers` prints and GoDaddy points at. Its records are DNS-only, with two exceptions: `pix.tacocat.com` and `staging-pix.tacocat.com` are the Workers' custom domains and so have no record in the config, and the AWS gallery's production names `api.pix`, `auth.pix` and `img.pix` stay, with their certificate validation records, until the AWS gallery is retired (deanmoses/tacocat-gallery-sam#179). The Zone diff workflow in the Actions tab, `scripts/zone-diff.sh`, compares every record on two nameservers; it must see authoritative answers, which a home network that intercepts DNS never gives it, so it runs from GitHub.
+`infra/tacocat.tf` declares the `tacocat.com` zone, whose nameservers `scripts/tofu.sh output tacocat_name_servers` prints and GoDaddy points at. Its records are DNS-only, with two exceptions: `pix.tacocat.com` and `staging-pix.tacocat.com` are the Workers' custom domains and so have no record in the config, and the AWS gallery's production names `api.pix`, `auth.pix` and `img.pix` stay, with their certificate validation records, until the AWS gallery is retired (deanmoses/tacocat-gallery-sam#179).
 
 ## Github
 
