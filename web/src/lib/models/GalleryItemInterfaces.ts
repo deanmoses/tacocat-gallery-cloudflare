@@ -34,9 +34,11 @@ export interface Album extends Thumbable {
     readonly albums: Album[];
 }
 
-/** Base interface for all media items (images and videos) */
-export interface Media extends Thumbable {
-    readonly mediaType: MediaType;
+/** An image or a video, told apart by `mediaType` */
+export type Media = Image | Video;
+
+/** What images and videos share */
+export interface BaseMedia extends Thumbable {
     readonly title: string;
     readonly versionId: string;
     readonly thumbnail: Rectangle | undefined;
@@ -46,14 +48,14 @@ export interface Media extends Thumbable {
     readonly detailHeight: number;
 }
 
-export interface Image extends Media {
+export interface Image extends BaseMedia {
     readonly mediaType: 'image';
     readonly originalUrl: string;
     readonly originalWidth: number;
     readonly originalHeight: number;
 }
 
-export interface Video extends Media {
+export interface Video extends BaseMedia {
     readonly mediaType: 'video';
     /** Duration in seconds */
     readonly duration: number;
