@@ -1,6 +1,6 @@
 # Docs
 
-- [`../README.me`](../README.md): get running on localhost
+- [`../README.md`](../README.md): get running on localhost
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md): submit a change and get it to prod
 - [`Development.md`](Development.md): writing code, changing the db schema
 - [`Testing.md`](Testing.md): writing tests
@@ -10,6 +10,7 @@
     - [`Uploads.md`](Uploads.md): the upload pipeline
     - [`Media.md`](Media.md): serving images and video, the transcoder
     - [`Auth.md`](Auth.md): login, sessions, keeping crawlers out
+    - [`WebApp.md`](WebApp.md): the SvelteKit app: stores, caching, components
 - [`Releasing.md`](Releasing.md): how a change ships, and how to undo one
 - [`Operations.md`](Operations.md): managing the running system
 - [`Infrastructure.md`](Infrastructure.md): updating cloud resources, DNS, GitHub

@@ -16,4 +16,3 @@ The site is hidden from the internet. It stays out of search engines and AI trai
 - Every response says `noindex` and refuses AI training; the media routes also refuse being embedded by other sites.
 - `robots.txt` lets ordinary crawlers in so they see the `noindex`; Cloudflare's zone settings add its list of AI crawlers to it and turn those crawlers away.
 - Two places answer requests, so the headers are set twice: `api/src/http/headers.ts` for the Worker and `web/static/_headers` for the app's files. A test holds the two copies together.
-- The derived bucket's public host bypasses the Worker, so a zone rule in `infra/main.tf` gives it the same headers.

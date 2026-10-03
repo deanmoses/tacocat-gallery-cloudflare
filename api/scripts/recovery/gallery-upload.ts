@@ -8,8 +8,8 @@
 // put` gave the deployed Workers.
 import { setTimeout as sleep } from 'node:timers/promises';
 import * as valibot from 'valibot';
-import { adminCookie } from './admin-cookie.ts';
-import { devVars } from './dev-vars.ts';
+import { adminCookie } from '../admin-cookie.ts';
+import { devVars } from '../dev-vars.ts';
 
 export const SITES = {
     local: 'http://localhost:8787',

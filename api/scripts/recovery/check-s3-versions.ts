@@ -1,10 +1,10 @@
 // Checks every AWS media row's version id against the originals bucket's version listing, and reports each row that
 // is not on its key's current version, which the copy would pair with the wrong file or none, and each current file
-// no row names. The rows come from the DynamoDB scan `import-gallery.ts` reads, and the listing from the CLI:
+// no row names. The rows come from a DynamoDB scan of the AWS gallery's table, and the listing from the CLI:
 //
 //   aws s3api list-object-versions --bucket tacocat-gallery-sam-prod-original-images --output json > s3-versions.json
 //
-// Usage: node api/scripts/check-s3-versions.ts prod-items.json s3-versions.json [--paths]
+// Usage: node api/scripts/recovery/check-s3-versions.ts prod-items.json s3-versions.json [--paths]
 import { readFile } from 'node:fs/promises';
 import * as valibot from 'valibot';
 import { readListing } from './aws-s3-listing.ts';
@@ -12,7 +12,7 @@ import { type Finding, compareVersions } from './aws-s3-versions.ts';
 
 const [itemsFile, versionsFile] = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 if (itemsFile === undefined || versionsFile === undefined) {
-    throw new Error('Usage: node api/scripts/check-s3-versions.ts prod-items.json s3-versions.json [--paths]');
+    throw new Error('Usage: node api/scripts/recovery/check-s3-versions.ts prod-items.json s3-versions.json [--paths]');
 }
 const showEveryPath = process.argv.includes('--paths');
 const PATHS_SHOWN = 10;

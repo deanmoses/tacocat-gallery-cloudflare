@@ -4,11 +4,18 @@
     "workspaces": {
         ".": {
             // Run by the Playwright config's webServer command and by scripts/lint.sh, neither of which knip reads.
-            "entry": ["e2e/server.ts", "scripts/check-dependency-versions.ts"],
+            "entry": ["e2e/server.ts", "scripts/check-dependency-versions.ts", "scripts/check-doc-references.ts"],
         },
         "api": {
             // Run directly with node, and inside the transcoder image, rather than imported from anywhere.
-            "entry": ["scripts/*.ts", "transcoder/server.ts"],
+            "entry": [
+                "scripts/*.ts",
+                "scripts/recovery/recover-*.ts",
+                "scripts/recovery/check-s3-versions.ts",
+                "transcoder/server.ts",
+                // Pasted into DebugBear's dashboard, which runs it in the page it tests.
+                "scripts/debugbear-journey/journey.js",
+            ],
         },
         "web": {},
         "shared": {},

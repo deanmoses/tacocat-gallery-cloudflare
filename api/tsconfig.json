@@ -13,5 +13,5 @@
         "types": ["node"]
     },
     "include": ["*.ts", "scripts", "transcoder"],
-    "exclude": ["worker-configuration.d.ts"]
+    "exclude": ["worker-configuration.d.ts", "scripts/debugbear-journey"]
 }

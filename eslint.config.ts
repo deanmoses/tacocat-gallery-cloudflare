@@ -366,6 +366,11 @@ export default defineConfig(
         files: ['web/src/**/*'],
         languageOptions: { globals: globals.browser },
     },
+    {
+        name: 'debugbear journey',
+        files: ['api/scripts/debugbear-journey/**/*'],
+        languageOptions: { globals: { ...globals.browser, waitForElement: 'readonly' } },
+    },
     // The web app sees the Worker only through its HTTP responses, whose shapes live in shared/. A table's row type
     // reaching it would tie the pages to column names the Worker is free to change.
     webLayer('web imports no worker code', ['web/src/**/*'], []),

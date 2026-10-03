@@ -19,7 +19,7 @@ import { AwsClient } from 'aws4fetch';
 import { ACCOUNT_ID } from '../src/storage/s3.ts';
 import { isMetadataJpeg } from './detail-derivatives.ts';
 import { devVars } from './dev-vars.ts';
-import { Guard, inParallel, parseTarget, send, value } from './migration-run.ts';
+import { Guard, inParallel, parseTarget, send, value } from './write-guard.ts';
 import { tokenCredentials } from './r2-token.ts';
 
 const USAGE = 'Usage: node api/scripts/delete-detail-derivatives.ts --to staging|production [--go <key list>]';

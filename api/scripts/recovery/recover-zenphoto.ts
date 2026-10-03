@@ -15,16 +15,16 @@
 // It stops at the first thing that goes wrong. Every write's outcome is a JSON line in `recover-<target>.jsonl` in
 // the same directory.
 //
-// Usage: node api/scripts/recover-zenphoto.ts <zenphoto dir> --to local|staging|production
+// Usage: node api/scripts/recovery/recover-zenphoto.ts <zenphoto dir> --to local|staging|production
 //            (--only <album path> ... | --all) [--go]
 import path from 'node:path';
 import * as valibot from 'valibot';
-import { inScope } from './migration-run.ts';
+import { inScope } from '../write-guard.ts';
 import { jsonLines, parsedRun, recover } from './recovery.ts';
 import { recoveryPlan } from './zenphoto.ts';
 
 const USAGE =
-    'Usage: node api/scripts/recover-zenphoto.ts <zenphoto dir> --to local|staging|production (--only <album path> ... | --all) [--go]';
+    'Usage: node api/scripts/recovery/recover-zenphoto.ts <zenphoto dir> --to local|staging|production (--only <album path> ... | --all) [--go]';
 const NULLABLE_TEXT = valibot.nullable(valibot.string());
 const NULLABLE_NUMBER = valibot.nullable(valibot.number());
 const ALBUM = valibot.object({

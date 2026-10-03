@@ -15,7 +15,7 @@ So the scenario that matters most is clicking from one photo to the next, and th
 
 ## Baseline
 
-The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 to 05:38 on the 2nd, on `/2026/09-13` with the whole gallery in production, as medians in ms; five runs make each median. A fresh browser holds nothing; a cached one holds the app's JS from a visit to another album seconds before, and nothing of this one. Cold is a site nobody had touched for hours; warm is the same page run within the half hour before. These ran against `pix.deanmoses.com`; production moved to `pix.tacocat.com` on 2026-10-02, with nothing cached at the edge for the new host, so the first rounds there will be a little slower than this until the colos have seen it.
+The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 to 05:38 on the 2nd, on `/2026/09-13` with the whole gallery in production, as medians in ms; five runs make each median. A fresh browser holds nothing; a cached one holds the app's JS from a visit to another album seconds before, and nothing of this one. Cold is a site nobody had touched for hours; warm is the same page run within the half hour before. These ran against `pix.deanmoses.com`, production's hostname until 2026-10-02.
 
 | Browser | Site | Location       | Page TTFB | Album LCP | First photo | Later photos |
 | ------- | ---- | -------------- | --------- | --------- | ----------- | ------------ |
@@ -51,7 +51,7 @@ The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 t
 
 - **Locations:** France (Paris, which reaches Cloudflare there), US West CA (a Google Cloud host in Los Angeles, which reaches Cloudflare in Los Angeles or San Jose, or on some days colos across the US and Europe) and US East (South Carolina, which reaches Cloudflare in Atlanta, standing in for Louisiana). The machines are Google Cloud hosts, so they take Google's route to the site.
 - **Device:** `Desktop unthrottled`, defined in the project with no added latency, bandwidth cap or CPU slowdown; the built-in `Desktop` adds 40 ms to every round trip.
-- **Visit:** the `Vienna Journey` setting (in the appendix) waits for the page's load event and a reader's median 2.3 s on the album, records the album page's LCP as `album-lcp`, opens the first photo, then steps through seven more at 2.3 s each, recording each from click to photo decoded as `photo-01` to `photo-08`. DebugBear's own LCP measures a photo, since Chrome keeps updating LCP through a script's clicks.
+- **Visit:** the `Vienna Journey` setting, kept as `api/scripts/debugbear-journey/journey.js`, waits for the page's load event and a reader's median 2.3 s on the album, records the album page's LCP as `album-lcp`, opens the first photo, then steps through seven more at 2.3 s each, recording each from click to photo decoded as `photo-01` to `photo-08`. DebugBear's own LCP measures a photo, since Chrome keeps updating LCP through a script's clicks.
 - **Cold or warm site:** the report marks a run warm when the same page ran in the 30 minutes before it, so the second half of a round is the warm one. Creating or editing a page starts a test of its own, which the report excludes by time.
 - **Fresh or cached browser:** the `warm-browser` pages have Warm Load on with a setup flow that visits `/2025/09-29` first, so the browser holds the app's JS and nothing of the album. That visit wakes the site at that location seconds before the test, so a cached-browser run never meets a cold site; the fresh-browser cold runs keep that case. `add-warm-pages` creates the twins through the API; Warm Load and the flow are set by hand under each page's Show advanced.
 - **Background traffic:** every merge to `main` releases production, whose checks reach the site a few times. Nothing else visits the site between rounds.
@@ -59,7 +59,7 @@ The last full series of browser runs, five rounds from 05:23 UTC on 2026-10-01 t
 ### Running a series
 
 - **The comparison album is `/2026/09-13`**, 21 photos. `node api/scripts/debugbear.ts pages` prints which album and host the pages test; `repoint` moves them to another album. The warm-browser setup flow visits `/2025/09-29`, which has to exist too.
-- **The pages** are one per location for this site and a `warm-browser` twin of each. The AWS site's pages beside them stay until it is retired.
+- **The pages** are one per location and a `warm-browser` twin of each, named `Fresh Browser` and `Cached Browser`; the dashboard shows each one's location beside its name.
 - **A round** is `node api/scripts/debugbear.ts run`, or the Browser performance runs workflow in the Actions tab: a cold run of every page, then a warm one. A series is several rounds hours apart, so each cold round finds the site quiet; the last scheduled series ran four a day, at 05:23, 11:23, 19:23 and 22:23 UTC. `node api/scripts/debugbear.ts report --from <date>` prints them. Nothing runs on a schedule now.
 - **After anything that empties or rebuilds production**, check both albums are still there; a round that finds no album records nothing, and every image URL and edge cache is new afterwards.
 - **A release** renames the app's files when the app changed, so the next cold round fetches every chunk from origin at every location; note a release that lands within a couple of hours of a round. While a series is running, hold releases or note them against it.
@@ -88,61 +88,3 @@ What a number in a run usually means, from the measurements so far:
 - Whether a reader on a Californian ISP is routed to Los Angeles or San Jose or, as DebugBear's Google Cloud host in Los Angeles was on some days, to colos across the US and Europe; the `cf.colo` the Worker logs on an album read from a Globalping probe on such a network would say.
 - What the cached-browser cells look like with the site cold as well, which DebugBear cannot measure, since its warm-up visit wakes the site; the fresh-browser cold rows bound it from above.
 - Whether pre-generating the derived images of the copied gallery is worth about $36 once, so that no album's first reader since the copy waits on a burst of transformations (`docs/plans/migration_from_aws/AwsDataMigration.md`, _Pre-generate derived images_).
-
-## Appendix: the journey script
-
-The `Vienna Journey` setting in DebugBear (named for the first comparison album and kept under that name), kept here because DebugBear's API can attach a setting to a page but not create or edit one; the selector on the `firstThumbnail` line names the comparison album:
-
-```js
-// DebugBear runs this as soon as the page starts loading. Once the album page has loaded and been looked at for a
-// reader's median 2.3 s, open the first photo, then step through seven more at the same pace, timing each from the
-// click or keypress until the new photo has loaded and decoded. The album page's own LCP is recorded as album-lcp
-// before the first click, since Chrome keeps updating LCP through a script's clicks and would report the photo.
-const PHOTO = 'a[aria-label^="View full-size image"] img';
-const DWELL_MS = 2300;
-const PHOTOS = 8;
-
-async function photoShown(step, previousSrc) {
-    const deadline = Date.now() + 15000;
-    while (Date.now() < deadline) {
-        const img = document.querySelector(PHOTO);
-        if (img && img.src !== previousSrc && img.complete && img.naturalWidth > 0) {
-            await img.decode().catch(() => {});
-            performance.mark(`${step}-shown`);
-            performance.measure(step, `${step}-start`, `${step}-shown`);
-            return img.src;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    performance.mark(`${step}-timeout`);
-    return previousSrc;
-}
-
-await new Promise((resolve) => {
-    if (document.readyState === 'complete') {
-        resolve();
-    } else {
-        window.addEventListener('load', resolve, { once: true });
-    }
-});
-await new Promise((resolve) => setTimeout(resolve, DWELL_MS));
-const firstThumbnail = await waitForElement('a[href^="/2026/09-13/"]');
-const albumLcp = await new Promise((resolve) => {
-    new PerformanceObserver((list) => resolve(list.getEntries().at(-1).startTime)).observe({
-        type: 'largest-contentful-paint',
-        buffered: true,
-    });
-});
-performance.measure('album-lcp', { start: 0, end: albumLcp });
-performance.mark('photo-01-start');
-firstThumbnail.click();
-let src = await photoShown('photo-01', null);
-
-for (let n = 2; n <= PHOTOS; n++) {
-    const step = `photo-${String(n).padStart(2, '0')}`;
-    await new Promise((resolve) => setTimeout(resolve, DWELL_MS));
-    performance.mark(`${step}-start`);
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
-    src = await photoShown(step, src);
-}
-```

@@ -6,7 +6,7 @@ import {
     renamedMedia,
     rewriteLinks,
     sanitizedPath,
-} from '../../scripts/aws-names.ts';
+} from '../../../scripts/recovery/aws-names.ts';
 
 describe(renamedMedia, () => {
     it('drops the extension and sanitizes, keeping the order it was given', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type ListedVersion, compareVersions } from '../../scripts/aws-s3-versions.ts';
+import { type ListedVersion, compareVersions } from '../../../scripts/recovery/aws-s3-versions.ts';
 
 const version = (key: string, versionId: string, isLatest: boolean): ListedVersion => ({
     key,

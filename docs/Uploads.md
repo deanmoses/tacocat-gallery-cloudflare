@@ -50,7 +50,7 @@ Anything else throws, and the step is retried; once its retries are spent, the e
 
 ## Locally
 
-A Worker cannot consume a real queue, so with `UPLOAD_MODE=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file as the original and raises the event R2 would. The pipeline runs unchanged, except that its image comes from the local Images binding (`IMAGE_MODE=binding`), since Image Transformations run only on Cloudflare's edge. Local development in `Development.md` has what else differs.
+A Worker cannot consume a real queue, so with `UPLOAD_MODE=local` presign hands out the Worker's own `/upload/<versionId>`, which stores the file as the original and raises the event R2 would. The pipeline runs unchanged. Local development in `Development.md` has what else differs, the images above all.
 
 ## Why it's this way
 

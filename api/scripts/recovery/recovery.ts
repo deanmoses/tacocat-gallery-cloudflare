@@ -27,7 +27,7 @@ import {
     upload,
     write,
 } from './gallery-upload.ts';
-import { type Scope, type Target, parseScope, parseTarget } from './migration-run.ts';
+import { type Scope, type Target, parseScope, parseTarget } from '../write-guard.ts';
 import type { RecoveredAlbum, RecoveredMedia } from './recovered-album.ts';
 
 // The published albums first, then the raw originals behind them.

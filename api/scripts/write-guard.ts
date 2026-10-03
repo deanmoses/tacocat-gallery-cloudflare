@@ -1,4 +1,4 @@
-// What every script that writes the copy from AWS shares, so that none of them runs away. A script touches only the
+// What every script that writes to a gallery shares, so that none of them runs away. A script touches only the
 // albums it is named with --only, or everything when told --all, and one given neither or both stops before it
 // starts. It writes nothing without --go. It tries a request again when R2 or the Worker drops it, and stops the
 // whole run on the first sign of a fault every later request would meet too: a refused credential, or a request that

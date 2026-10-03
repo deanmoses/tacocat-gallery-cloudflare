@@ -6,7 +6,6 @@ Running the deployed system: what's live, what's wrong, and how to put data and 
 
 - **Two Workers**, `production` on `pix.tacocat.com` and `staging` on `staging-pix.tacocat.com`, each with its own database, buckets, queues, secrets and admin passkeys, every resource named `<environment>-<role>`. Both are public and both send noindex.
 - **Staging is the default.** It is `api/wrangler.jsonc`'s top level, so a Wrangler command without `--env production` touches staging, and the scripts in `api/package.json` come in pairs: `deploy` and `deploy:production`, `db:migrate` and `db:migrate:production`, `logs` and `logs:production`.
-- **What deploys when:** a push to a pull request branch is on staging, a merge is on production ([`Releasing.md`](Releasing.md)).
 - **Three undo levers:** `wrangler rollback` for a release, D1 Time Travel to a bookmark for the database, and the versioned off-site bucket for the originals.
 - **Where to look:** `/api/health`, the Actions tab and Environments panel on GitHub, and the logs below.
 
@@ -16,7 +15,7 @@ Running the deployed system: what's live, what's wrong, and how to put data and 
 curl -s https://pix.tacocat.com/api/health
 ```
 
-answers with the running version, its commit and the newest migration. To watch requests as they happen, from the repo root:
+answers 200 once D1 and both buckets respond, with the running version's id, its tag, which is the commit it was built from with `-dirty` when the tree had uncommitted changes, and the newest migration the database has, by name. To watch requests as they happen, from the repo root:
 
 ```bash
 npm run logs:production --workspace api
@@ -26,20 +25,20 @@ Workers Logs keeps a week of every request's invocation log, with the user agent
 
 ## Environments
 
-What differs between the environments beyond the bindings is the `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey, and the S3 names of the buckets the Worker signs URLs for, `DERIVED_BUCKET` and `ORIGINALS_BUCKET`. `IMAGE_MODE` is the same in both, `transformations`, and differs only under `npm run dev` and the tests. Each environment's one cron is the nightly cleanup. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. Standing up a third environment is in [`Infrastructure.md`](Infrastructure.md).
+What differs between the environments beyond the bindings is the `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey, and the S3 names of the buckets the Worker signs URLs for, `DERIVED_BUCKET` and `ORIGINALS_BUCKET`. `IMAGE_MODE` is the same in both, `transformations`, and differs only under `npm run dev --workspace api` and the tests. Each environment's one cron is the nightly cleanup. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. Standing up a third environment is in [`Infrastructure.md`](Infrastructure.md).
 
 ### Fix staging's database
 
 Staging holds test albums that never reach production; upload whatever a test needs. Its database is disposable: every push to a pull request branch applies that branch's migrations to it, so a migration amended after a push, or a branch abandoned, leaves it with something production never gets. Either:
 
 1. Restore it to the bookmark the release printed ([Restore the database to a bookmark](#restore-the-database-to-a-bookmark), without `--env production`), or
-2. Empty it and seed it again:
+2. Empty it and migrate it again. From `api/`,
 
     ```bash
-    node api/scripts/import-album.ts /2024/12-17/
+    npx wrangler d1 execute DB --remote --command "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
     ```
 
-    copies a day album from the AWS staging gallery into it, and `api/scripts/invite.sh <user> --env staging` mints an invite for a passkey there.
+    lists what to drop: drop the views first, then every table, `d1_migrations` included; the FTS5 tables take their shadow tables with them and the triggers go with `item`. Then apply the migrations with `npm run db:migrate --workspace api` and mint an invite for a passkey with `api/scripts/invite.sh <user> --env staging`, since `passkey` went with the rest. It starts with no albums; upload what a test needs.
 
 ## Restore the database to a bookmark
 
@@ -94,17 +93,7 @@ scripts/tofu.sh apply -replace=<the token's address>
 scripts/secrets.sh production
 ```
 
-`scripts/secrets.sh` takes `staging`, `production`, `backup` for the Backup workflow's repository secrets, or `dev` for `api/.dev.vars`. Secrets in [`Infrastructure.md`](Infrastructure.md) has the tokens, what each may reach, and what `api/.dev.vars` holds.
-
-## Reset the migrations
-
-A reset starts the migrations over from a baseline of three, one generated migration for the schema, the search index, and one that seeds the users, and has been done only while the databases held nothing that mattered. With the real gallery in production it is no longer cheap, and a change to the schema goes through migrations instead (Changing the database in `Development.md`). If it is ever needed again: delete `api/migrations/`, regenerate the baseline, carry the two custom migrations over with a `-- resets: <reason>` line at the top of one, which is what lets lint accept committed migrations going, and empty every database by hand before the release applies it. From `api/`:
-
-```bash
-npx wrangler d1 execute DB --remote --env production --command "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
-```
-
-lists what to drop, views first, then every table including `d1_migrations`; the FTS5 tables take their shadow tables with them and the triggers go with `item`. Staging is emptied before the branch is pushed and production before it is merged, and the admins register passkeys again afterwards, since `passkey` went with the rest.
+`scripts/secrets.sh` takes `staging`, `production`, `backup` for the Backup workflow's repository secrets, or `dev` for `api/.dev.vars`. Secrets in [`Infrastructure.md`](Infrastructure.md) has the tokens and what each may reach; Local development in [`Development.md`](Development.md) has what `api/.dev.vars` holds.
 
 ## Scripts
 

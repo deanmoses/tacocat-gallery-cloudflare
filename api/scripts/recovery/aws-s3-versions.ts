@@ -21,7 +21,7 @@ export interface RowVersion {
     versionId: string | undefined;
 }
 
-export type Standing = 'current' | 'replaced' | 'gone' | 'deleted' | 'absent' | 'unnamed';
+type Standing = 'current' | 'replaced' | 'gone' | 'deleted' | 'absent' | 'unnamed';
 
 /** A row whose version is not its key's current one, and what is current instead, when anything is. */
 export interface Finding {
@@ -75,13 +75,4 @@ function standingOf(
         return 'deleted';
     }
     return versions.some((version) => version.versionId === row.versionId) ? 'replaced' : 'gone';
-}
-
-/**
- * Each key's current version, the one a copy of the bucket takes; a key whose latest entry is a delete marker has none.
- */
-export function currentVersions(listing: readonly ListedVersion[]): Map<string, ListedVersion> {
-    return new Map(
-        listing.filter((version) => version.isLatest && !version.deleteMarker).map((version) => [version.key, version]),
-    );
 }
