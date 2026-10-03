@@ -55,7 +55,7 @@ So a revisited album shows instantly and a reader who loses the network still se
 
 ## Models
 
-`web/src/lib/models/` holds the app's own view of albums and media, pure data with no fetching or persistence. The shapes the Worker sends and IndexedDB keeps are `shared/`'s record types, re-exported by `models/impl/server.ts`; `AlbumCreator` and `GalleryItemCreator` turn a record into the plain object a component reads, shaped by the interfaces in `GalleryItemInterfaces.ts`, with every display default applied there: an untitled media item is titled by its file name, a missing summary or description is empty. What needs more than one item is a function, as `mediaNeighbours` and `albumNav` in `utils/albumNavigation.ts` are. Enum members are `SCREAMING_SNAKE_CASE`.
+`web/src/lib/models/` holds the app's own view of albums and media, pure data with no fetching or persistence. The shapes the Worker sends and IndexedDB keeps are `shared/`'s record types, re-exported by `models/impl/server.ts`; `AlbumCreator` and `GalleryItemCreator` turn a record into the plain object a component reads, shaped by the interfaces in `GalleryItemInterfaces.ts`, with every display default applied there: an untitled media item is titled by its file name unless a camera or phone named it, a missing summary or description is empty. What needs more than one item is a function, as `mediaNeighbours` and `albumNav` in `utils/albumNavigation.ts` are. Enum members are `SCREAMING_SNAKE_CASE`.
 
 ## Components
 
