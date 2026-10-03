@@ -65,7 +65,7 @@ class DraftMachine {
     init(path: string): void {
         console.log(`Init draft [${path}]`);
         if (parsePath(path) === null) throw new Error(`Invalid path [${path}]`);
-        this.#draft = { ...initialState, path };
+        this.#draft = { ...initialState, path, content: {} };
     }
 
     /**
@@ -109,7 +109,7 @@ class DraftMachine {
      */
     cancel(): void {
         console.log('canceling draft:', $state.snapshot(this.#draft));
-        this.#draft = initialState;
+        this.#draft = { ...initialState, content: {} };
     }
 
     /**
@@ -169,21 +169,22 @@ class DraftMachine {
      * rebuilt from a copy of its JSON rather than edited in place: AlbumState's
      * map signals its readers only when the entry is a new object, and the old
      * album may still be on screen. An album no longer in memory has nothing
-     * to correct; it is read from the server when next shown.
+     * to correct; it is read from the server when next shown. The edit goes
+     * onto the record rather than through the item's setters, since not every
+     * kind of item has a setter for every field a draft holds.
      */
     #updateAlbum(saved: Draft): void {
         const albumPath = isMediaPath(saved.path) ? parentPathOf(saved.path) : saved.path;
         const albumEntry = albumState.albums.get(albumPath);
         if (!albumEntry?.album) return;
         const { children, ...json } = albumEntry.album.json;
-        const copy: AlbumGalleryItem = { ...json };
-        if (children) copy.children = children.map((child) => (child.path === saved.path ? { ...child } : child));
-        const album = toAlbum(copy);
-        const edited = isMediaPath(saved.path) ? album.getMedia(saved.path) : album;
-        if (!edited) return;
-        // The setters write the edit into the copied JSON, which is what goes to disk
-        Object.assign(edited, saved.content);
-        albumLoadMachine.updateAlbumEntry({ ...albumEntry, album });
+        const copy: AlbumGalleryItem = isMediaPath(saved.path) ? { ...json } : { ...json, ...saved.content };
+        if (children) {
+            copy.children = children.map((child) =>
+                child.path === saved.path ? { ...child, ...saved.content } : child,
+            );
+        }
+        albumLoadMachine.updateAlbumEntry({ ...albumEntry, album: toAlbum(copy) });
     }
 
     //
