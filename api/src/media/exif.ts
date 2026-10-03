@@ -1,6 +1,7 @@
 import { DOMParser, onErrorStopParsing } from '@xmldom/xmldom';
 import ExifReader from 'exifreader';
 import type { Size } from '@tacocat-gallery/shared';
+import { heifSize } from './heif';
 
 interface ImageFacts extends Size {
     title: string | null;
@@ -28,7 +29,7 @@ export async function readImage(bytes: Uint8Array<ArrayBuffer>): Promise<ImageOu
     } catch (error) {
         return { ok: false, error: `not a readable image: ${String(error)}` };
     }
-    const size = imageSize(tags);
+    const size = heifSize(bytes) ?? imageSize(tags);
     if (size === null) {
         return { ok: false, error: 'the image does not say its size' };
     }
@@ -50,8 +51,8 @@ export async function readImage(bytes: Uint8Array<ArrayBuffer>): Promise<ImageOu
 
 /**
  * The size as the image is shown, from the file's own header, or the EXIF one where the file has no header ExifReader
- * reads, as HEIC. Orientations 5 to 8 turn the image a quarter turn, so it shows the other way round from how its
- * pixels are stored, and every size and crop the gallery keeps is in the shown frame.
+ * reads. Orientations 5 to 8 turn the image a quarter turn, so it shows the other way round from how its pixels are
+ * stored, and every size and crop the gallery keeps is in the shown frame.
  */
 function imageSize(tags: ExifReader.ExpandedTags): Size | null {
     const { file, exif, pngFile, gif } = tags;
