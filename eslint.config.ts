@@ -438,12 +438,13 @@ export default defineConfig(
         },
     },
     {
-        // A cycle between modules is a layering bug the rules above cannot see when it stays inside one layer. The web
-        // app is not covered: its album models cycle (AlbumBaseImpl imports AlbumCreator, which imports the subclasses
-        // of AlbumBaseImpl), as they did in the AWS app it was copied from, and untangling that is a change to the app.
+        // A cycle between modules is a layering bug the rules above cannot see when it stays inside one layer.
         name: 'no import cycles',
-        files: ['api/**/*.ts', 'shared/src/**/*.ts'],
+        files: ['api/**/*.ts', 'shared/src/**/*.ts', 'web/src/**/*.ts'],
         plugins: { 'import-x': importX },
+        // The rule reads each import with the linted file's parser, which for a .svelte.ts store is Svelte's, and that
+        // cannot read a plain .ts module's generics
+        settings: { 'import-x/parsers': { '@typescript-eslint/parser': ['.ts'] } },
         rules: { 'import-x/no-cycle': 'error' },
     },
     {
