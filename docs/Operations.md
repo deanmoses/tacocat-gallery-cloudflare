@@ -16,7 +16,7 @@ Running the deployed system: what's live, what's wrong, and how to put data and 
 curl -s https://pix.tacocat.com/api/health
 ```
 
-answers with the running version, its commit and the newest migration. To watch requests as they happen, from the repo root:
+answers 200 once D1 and both buckets respond, with the running version's id, its tag, which is the commit it was built from with `-dirty` when the tree had uncommitted changes, and the newest migration the database has, by name. To watch requests as they happen, from the repo root:
 
 ```bash
 npm run logs:production --workspace api
@@ -33,7 +33,13 @@ What differs between the environments beyond the bindings is the `vars`: the sit
 Staging holds test albums that never reach production; upload whatever a test needs. Its database is disposable: every push to a pull request branch applies that branch's migrations to it, so a migration amended after a push, or a branch abandoned, leaves it with something production never gets. Either:
 
 1. Restore it to the bookmark the release printed ([Restore the database to a bookmark](#restore-the-database-to-a-bookmark), without `--env production`), or
-2. Empty it, dropping what [Reset the migrations](#reset-the-migrations) lists, then apply the migrations with `npm run db:migrate --workspace api` and mint an invite for a passkey with `api/scripts/invite.sh <user> --env staging`. It starts with no albums; upload what a test needs.
+2. Empty it and migrate it again. From `api/`,
+
+    ```bash
+    npx wrangler d1 execute DB --remote --command "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
+    ```
+
+    lists what to drop: drop the views first, then every table, `d1_migrations` included; the FTS5 tables take their shadow tables with them and the triggers go with `item`. Then apply the migrations with `npm run db:migrate --workspace api` and mint an invite for a passkey with `api/scripts/invite.sh <user> --env staging`, since `passkey` went with the rest. It starts with no albums; upload what a test needs.
 
 ## Restore the database to a bookmark
 
@@ -89,16 +95,6 @@ scripts/secrets.sh production
 ```
 
 `scripts/secrets.sh` takes `staging`, `production`, `backup` for the Backup workflow's repository secrets, or `dev` for `api/.dev.vars`. Secrets in [`Infrastructure.md`](Infrastructure.md) has the tokens, what each may reach, and what `api/.dev.vars` holds.
-
-## Reset the migrations
-
-A reset starts the migrations over from a baseline of three, one generated migration for the schema, the search index, and one that seeds the users, and has been done only while the databases held nothing that mattered. With the real gallery in production it is no longer cheap, and a change to the schema goes through migrations instead (Changing the database in `Development.md`). If it is ever needed again: delete `api/migrations/`, regenerate the baseline, carry the two custom migrations over with a `-- resets: <reason>` line at the top of one, which is what lets lint accept committed migrations going, and empty every database by hand before the release applies it. From `api/`:
-
-```bash
-npx wrangler d1 execute DB --remote --env production --command "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
-```
-
-lists what to drop, views first, then every table including `d1_migrations`; the FTS5 tables take their shadow tables with them and the triggers go with `item`. Staging is emptied before the branch is pushed and production before it is merged, and the admins register passkeys again afterwards, since `passkey` went with the rest.
 
 ## Scripts
 

@@ -187,15 +187,6 @@ over_files stylelint --max-warnings 0 -- '*.css' '*.svelte'
 # a renamed one would run twice.
 echo -n "Migrations: committed ones are unchanged... "
 frozen=$(changed_migrations MDR)
-# A reset starts the migrations over from one baseline, after every database has been emptied by hand. A new migration
-# whose top says `-- resets: <reason>` lets the committed ones be deleted alongside it, and a new one that git pairs
-# with a deleted one as a rename, because their content is the same, counts as deleted too; a committed migration
-# still cannot be changed.
-for migration in $(changed_migrations A); do
-    if grep -qE '^--[[:space:]]*resets:[[:space:]]*[^[:space:]]' "$migration"; then
-        frozen=$(comm -23 <(sort <<<"$frozen") <(changed_migrations DR | sort) | sed '/^$/d')
-    fi
-done
 if [ -z "$frozen" ]; then
     report 0
 else
