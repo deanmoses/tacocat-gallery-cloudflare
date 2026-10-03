@@ -1,5 +1,5 @@
 # The tacocat.com zone, which GoDaddy's nameservers point at. Its records are the ones DreamHost served while it held
-# the zone, DNS-only. Records that point at AWS stay DNS-only, since proxying in front of CloudFront would stack two
+# the zone, DNS-only, plus the SPF and DMARC records, which DreamHost's zone never had. Records that point at AWS stay DNS-only, since proxying in front of CloudFront would stack two
 # CDNs; the ACM validation CNAMEs keep the AWS certificates renewing; the Google records carry the mail, and the DKIM
 # key is the one most easily damaged in a copy. The apex, www, ftp and ssh records point at DreamHost, which still hosts
 # the landing page. DreamHost's zone is the way back, so a record changed here and not there is lost on a return to its
@@ -81,6 +81,9 @@ locals {
     { name = "tacocat.com", type = "MX", content = "ALT3.ASPMX.L.GOOGLE.com", priority = 10 },
     { name = "tacocat.com", type = "MX", content = "ALT4.ASPMX.L.GOOGLE.com", priority = 10 },
     { name = "tacocat.com", type = "TXT", content = "google-site-verification=En35chboU0PBIeqQIplDlcsFlCzOa-DzCv8VMuqhyR0" },
+    # Google Workspace is the domain's only sender. DMARC is monitoring only, p=none, until its reports show no other.
+    { name = "tacocat.com", type = "TXT", content = "v=spf1 include:_spf.google.com ~all" },
+    { name = "_dmarc.tacocat.com", type = "TXT", content = "v=DMARC1; p=none" },
     { name = "google._domainkey.tacocat.com", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsh1aXVm2tMG9C5nUVjuf3vkfXKMlTmfZhUFVoVqUAWBf/WZzPlTGk/g2wbBB6tCa6f/zGYAPDstHOlAgakHnv5DxyNjGXDYxlxU21xJeTdl2MiXCHfb708Oj7eXmL6Y+GMWh4Iz5z87znL+rocOKp4g2bvjheqI46RlBSatWoHn27+g719M1qFftCy0jEcDgFs+yhoYbdCcJW9HkDTQ8s3piTgOxRtdp7SqlgsDkQADat4/zTFqCHE2G3txhRTbTDEqXf5wzVhU/ZvizP8Ce8pI4/7EClehUNf/igMc3Zj7iXcCtrwg0aoHgVuJBzoOQUlIsd5vNhjjVQdJYAlRcHwIDAQAB" },
     { name = "calendar.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
     { name = "docs.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
