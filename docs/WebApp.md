@@ -33,7 +33,7 @@ State lives in classes in `*.svelte.ts` files under `web/src/lib/stores/`, using
 A store's methods come in two kinds:
 
 - **State transition methods** are the only way its state changes. They are synchronous, return `void` and return at once; work such as a fetch they start fire-and-forget, calling an async method with `void` and no `await`. They are the store's public surface, with the state's `$derived` fields.
-- **Service methods** do the work: fetch, write to IndexedDB, call the API. They are private and async, never assign state themselves, and finish by calling a transition method. Since nothing awaits them, each catches its own errors and reports them as state, guarding with `e instanceof Error` since a caught value is `unknown`.
+- **Service methods** do the work: fetch, write to IndexedDB, call the API. They are private and async, never assign state themselves, and finish by calling a transition method. Since nothing awaits them, each catches its own errors and reports them as state, guarding with `e instanceof Error` since a caught value is `unknown`. `AlbumLoadMachine` predates the split and still has public service methods, `fetchFromServer` and `albumExists`; follow the rule, not that store.
 
 A store holds its state in a `#`-private `$state` field and exposes it as a public `$derived` of it, as `SessionStore` does with `#isAdmin` and `isAdmin`; private members always use `#`, never `_` or the `private` keyword. Deriveds have been writable since Svelte 5.25, so this is a convention rather than a guarantee. A keyed collection is a `SvelteMap` from `svelte/reactivity`, with no `$state` around it, which would do nothing; a plain `Map` is not reactive.
 
@@ -59,11 +59,10 @@ So a revisited album shows instantly and a reader who loses the network still se
 
 ## Components
 
-`web/src/lib/components/` has three kinds:
+`web/src/lib/components/` has two kinds, and no component fetches its own data: the route fetches it and passes it down.
 
 - **`pages/`**, by domain: album, media, image, video, search, auth. The routing components and the loading, error and processing views live here beside the pages they choose between; a page takes what its route hands it and composes the site's components.
 - **`site/`**: the layout, header, navigation, thumbnails and icons, composed by pages. They take everything as props and know nothing of the stores, except for those under `site/admin/`, which drive the admin machines.
-- **`data-aware/`**: components that fetch their own data. It is empty, and should stay so: data is fetched by the route and passed down.
 
 Data flows down as props and back up as callback props. Components never talk to each other directly; what two of them share goes through a store, which each reads through `$derived`. Content is passed in as a `Snippet` and rendered with `{@render children?.()}`.
 

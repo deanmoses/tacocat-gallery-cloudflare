@@ -1,6 +1,6 @@
 # Scripts
 
-Each script says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`. Those that write to a gallery take `--to` for the environment, `--only <album>` or `--all` for the scope, and write nothing without `--go`, through `write-guard.ts`.
+Each script says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`. Those that write to a gallery take `--to` for the environment and write nothing without `--go`, through `write-guard.ts`; the recovery scripts also take `--only <album>` or `--all` for the scope.
 
 - `media.ts` prints an item's row and every object stored for its version, since the buckets are keyed by version id and the dashboard cannot browse them by album.
 - `debugbear.ts` starts the browser runs, reports them, reads one run's requests, and manages the DebugBear pages; `docs/Perf.md` says what the runs measure. `.github/workflows/perf.yml` starts a run from the Actions tab.
