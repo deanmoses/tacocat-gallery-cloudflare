@@ -4,6 +4,7 @@ node_modules/
 api/fixtures/iphone-*.mov
 api/fixtures/IMG_*
 .claude/settings.local.json
+.claude/worktrees/
 web/.svelte-kit/
 web/build/
 web/.vitest/
