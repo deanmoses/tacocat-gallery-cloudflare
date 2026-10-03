@@ -64,6 +64,10 @@ npm run dev --workspace api
 
 For hot reloading of the app, also run `npm run dev --workspace web`, which serves it on <http://localhost:5173> and passes the Worker's routes through to 8787. In VS Code, the task _Dev servers: Worker and web app_ (Terminal > Run Task) starts both side by side.
 
+### The gallery starts empty
+
+The gallery starts blank. You will need to log in to create content.
+
 ### Log in
 
 Mint a one-time invite and open the link it prints to register a passkey:
@@ -71,8 +75,6 @@ Mint a one-time invite and open the link it prints to register a passkey:
 ```bash
 api/scripts/invite.sh moses --local
 ```
-
-The gallery starts empty. Drop photos onto a day album to upload them.
 
 ### Everyday commands
 
