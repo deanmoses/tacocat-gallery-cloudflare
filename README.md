@@ -2,17 +2,7 @@
 
 This repo is the code for the pix.tacocat.com photo gallery.
 
-This is how to get it running on your localhost. For the rest, see [`docs/README.md`](docs/README.md).
-
-## The stack
-
-- **The front end** is a SvelteKit single-page web app
-- **The back end** is a Cloudflare Worker that serves the web app and everything behind it
-- **The database** is Cloudflare D1, for the catalog and search
-- **The photo and video files** are stored in Cloudflare R2
-- **Derived images** like thumbnails are generated via Cloudflare Image Transformations
-- **Photo and video uploads** are handled via a Cloudflare Queue and a Cloudflare Workflow
-- **Video transcoding** via ffmpeg in a Cloudflare Container
+This is how to get it running on your localhost. What it is built on is [`docs/Architecture.md`](docs/Architecture.md), and the rest is indexed in [`docs/README.md`](docs/README.md).
 
 ## Prerequisites
 
@@ -76,11 +66,4 @@ Mint a one-time invite and open the link it prints to register a passkey:
 api/scripts/invite.sh moses --local
 ```
 
-### Everyday commands
-
-```bash
-npm run dev --workspace api   # the Worker and the built app on localhost:8787
-npm run dev --workspace web   # the app with hot reload on localhost:5173
-npm test                      # every workspace's tests, then e2e
-npm run quality               # format, lint, type-check, test: what CI runs
-```
+The everyday commands are in `CLAUDE.md`.

@@ -6,7 +6,6 @@ Running the deployed system: what's live, what's wrong, and how to put data and 
 
 - **Two Workers**, `production` on `pix.tacocat.com` and `staging` on `staging-pix.tacocat.com`, each with its own database, buckets, queues, secrets and admin passkeys, every resource named `<environment>-<role>`. Both are public and both send noindex.
 - **Staging is the default.** It is `api/wrangler.jsonc`'s top level, so a Wrangler command without `--env production` touches staging, and the scripts in `api/package.json` come in pairs: `deploy` and `deploy:production`, `db:migrate` and `db:migrate:production`, `logs` and `logs:production`.
-- **What deploys when:** a push to a pull request branch is on staging, a merge is on production ([`Releasing.md`](Releasing.md)).
 - **Three undo levers:** `wrangler rollback` for a release, D1 Time Travel to a bookmark for the database, and the versioned off-site bucket for the originals.
 - **Where to look:** `/api/health`, the Actions tab and Environments panel on GitHub, and the logs below.
 
@@ -94,7 +93,7 @@ scripts/tofu.sh apply -replace=<the token's address>
 scripts/secrets.sh production
 ```
 
-`scripts/secrets.sh` takes `staging`, `production`, `backup` for the Backup workflow's repository secrets, or `dev` for `api/.dev.vars`. Secrets in [`Infrastructure.md`](Infrastructure.md) has the tokens, what each may reach, and what `api/.dev.vars` holds.
+`scripts/secrets.sh` takes `staging`, `production`, `backup` for the Backup workflow's repository secrets, or `dev` for `api/.dev.vars`. Secrets in [`Infrastructure.md`](Infrastructure.md) has the tokens and what each may reach; Local development in [`Development.md`](Development.md) has what `api/.dev.vars` holds.
 
 ## Scripts
 

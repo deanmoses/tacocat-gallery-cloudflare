@@ -19,15 +19,15 @@ npm test                                  # every workspace's tests, then e2e
 npm run quality                           # format, lint, type-check, test: what CI runs
 npm run db:generate --workspace api       # a migration from schema.ts
 npm run db:migrate:local --workspace api  # apply migrations to the local database
-npm run types --workspace api             # after editing api/wrangler.jsonc
+npm run types --workspace api             # regenerate the Worker's binding types
 npm run logs:production --workspace api   # tail production; `logs` tails staging
 ```
 
-The Worker's scripts live in `api/package.json`, so they run from `api/` or with `--workspace api`; so do Wrangler commands, which find `api/wrangler.jsonc` from the directory they run in. `api/` and `web/` run different Vitest majors, so each workspace's tests run from its own directory or with its `--workspace` flag.
+The Worker's scripts live in `api/package.json`, so they run from `api/` or with `--workspace api`; so do Wrangler commands, which find `api/wrangler.jsonc` from the directory they run in. `api/` and `web/` run different Vitest majors (Two Vitest majors in `docs/Development.md`), so each workspace's tests run from its own directory or with its `--workspace` flag.
 
 ## This repo
 
-An npm monorepo: one `npm install` at the root, three workspaces, `api/`, `web/` and `shared/`, each with its own `package.json` and dependencies, and three plain directories beside them.
+An npm monorepo: one `npm install` at the root, three workspaces, `api/`, `web/` and `shared/`, each with its own `package.json` and dependencies, and three plain directories beside them. The Worker's layers under `api/src/` are The code in `docs/Architecture.md`.
 
 - `api/`: the Worker, with its tests, migrations, scripts and the transcoder's image.
 - `web/`: the SvelteKit app, built to static files the Worker serves.
@@ -36,25 +36,36 @@ An npm monorepo: one `npm install` at the root, three workspaces, `api/`, `web/`
 - `e2e/`: Playwright journeys through the built app and a local Worker.
 - `scripts/`: the lint, test, release and repository-setup scripts.
 
+## Read before you change
+
+Each doc below is the one home of its subject; no other doc repeats it. Before changing what the left side names, read what the right side names.
+
+- **Anything under `api/src/`**: Invariants in `docs/Architecture.md`, then the subsystem's own page below.
+- **`api/src/db/schema.ts`, `api/migrations/`, `api/src/db/search-index.sql`**: Changing the database in `docs/Development.md`, and `docs/DataModel.md`.
+- **`api/src/gallery/` reads, writes and search**: `docs/DataModel.md`, and the gotchas under The code in `docs/Development.md`.
+- **`api/src/gallery/presign.ts`, `api/src/gallery/upload.ts`, the queue consumer**: `docs/Uploads.md`.
+- **`api/src/media/`, `api/transcoder/`, `shared/src/urls.ts`, the `/i`, `/raw` and `/v` routes**: `docs/Media.md`.
+- **`api/src/storage/`, object keys, buckets, version ids**: `docs/Storage.md`.
+- **`api/src/auth/`, sessions, `api/src/http/headers.ts`, `web/static/_headers`**: `docs/Auth.md`.
+- **`web/`**: `docs/WebApp.md`, then The web app in `docs/Development.md` for the build, the browser floor and the guest bundle check.
+- **Any test**: `docs/Testing.md`.
+- **`api/wrangler.jsonc`**: Wrangler in `docs/Infrastructure.md`, and Ship what a release can't in `docs/Releasing.md`.
+- **`infra/`, DNS, tokens, `scripts/github-setup.sh`, `.github/`**: `docs/Infrastructure.md`.
+- **`scripts/release.sh`, `.github/workflows/deploy.yml`, shipping or undoing a release**: `docs/Releasing.md`.
+- **The deployed system**, health, logs, staging's database, admin access, backups, secrets rotation: `docs/Operations.md`.
+- **Performance**: `docs/Perf.md`, whose Ruled out lists what not to propose again.
+- **`api/scripts/`**: `api/scripts/README.md`, and the comment at the top of each script.
+- **Getting a machine running locally**: `README.md`; what local development gets wrong is Local development in `docs/Development.md`.
+- **Branches, commits, pull requests**: `CONTRIBUTING.md`.
+- **The AWS gallery this one was derived from**: `docs/plans/migration_from_aws/AwsArch.md`.
+
 ## Working here
 
 - **The pre-commit hook** runs the suites the staged files touch and takes about 40 seconds, so commit once, when the change is green.
-- **Local dev is not the edge.** Image Transformations run only on Cloudflare, so `npm run dev --workspace api` makes images with the local Images binding, which cannot decode HEIC, ignores EXIF orientation and ignores the encoding options; what a thumbnail weighs, whether a GIF moves and whether a phone photo shows upright are judged on staging. Video needs Docker, through `npm run dev:video --workspace api`. Uploads complete locally only with `UPLOAD_MODE=local` in `api/.dev.vars`, as Local development in `docs/Development.md` explains.
-- **Two environments, and staging is the default.** `staging` is `api/wrangler.jsonc`'s top level, which is also what the tests and `wrangler dev` run; `production` is `--env production`; each has its own data.
-- **Pushing deploys.** Every push to a pull request branch releases it to `staging-pix.tacocat.com`, and a merge to `main` releases production, through `scripts/release.sh` (`docs/Releasing.md`). So push when the branch is worth looking at on staging, never to park work, and say what went out. `/api/health` on either hostname answers with the running version, the commit it was built from and the newest migration.
-- **Logs.** Workers Logs keeps a week of every request and the Worker's own structured lines, queried through the observability MCP or the dashboard's query builder (Is production okay? in `docs/Operations.md`).
-
-## Where to read more
-
-- `docs/Architecture.md`: arch overview. Read Invariants before changing the Worker. Subsystems: `docs/DataModel.md`, `docs/Storage.md`, `docs/Uploads.md`, `docs/Media.md`, `docs/Auth.md`.
-- `docs/WebApp.md`: the SvelteKit app's stores, album cache and components. Read before changing `web/`.
-- `docs/Testing.md`: writing tests. Read before writing one.
-- `docs/Development.md`: writing code, changing the db schema, gotchas.
-- `CONTRIBUTING.md`: submitting a change and getting it to prod.
-- `docs/Releasing.md`: how a change ships, and how to undo one.
-- `docs/Operations.md`: managing the running system.
-- `docs/Infrastructure.md`: updating cloud resources, DNS, GitHub.
-- `docs/plans/migration_from_aws/AwsArch.md`: info on previous AWS version of the gallery, from whose code this one was derived.
+- **Local dev is not the edge.** Images are made by the local Images binding, which cannot decode HEIC and ignores EXIF orientation and the encoding options, so judge thumbnails, GIFs and phone photos on staging. Video needs Docker, and uploads complete only with `UPLOAD_MODE=local` (Local development in `docs/Development.md`).
+- **Staging is the default.** A Wrangler command without `--env production` touches staging, and so do the tests and `wrangler dev` (`docs/Operations.md`).
+- **Pushing deploys.** A push to a pull request branch releases it to staging and a merge releases production (`docs/Releasing.md`). So push when the branch is worth looking at on staging, never to park work, and say what went out; Is production okay? in `docs/Operations.md` says how to see what is running.
+- **Logs** are Workers Logs, a week of every request, through the observability MCP (Is production okay? in `docs/Operations.md`).
 
 ## Rules
 
@@ -67,6 +78,7 @@ An npm monorepo: one `npm install` at the root, three workspaces, `api/`, `web/`
 - **`main` is protected.** Every change lands through a pull request whose CI `merge-ok` check passed on a branch up to date with `main`; nobody pushes to `main`. The repository's settings are `scripts/github-setup.sh`, not the dashboard. `CONTRIBUTING.md` has the loop and the conventions.
 - **After editing `api/wrangler.jsonc`, run `npm run types --workspace api`.**
 - **Markdown** is never hard-wrapped: one line per paragraph or list item.
+- **A fact lives in one doc.** Change it there, and point to it from elsewhere rather than restating it, since two copies drift into a contradiction. Read before you change, above, names each doc's subject; this file holds only what every session needs.
 - **`docs/plans/` is the archive of plans, past, present and future.** A plan is written before its work and updated while the work runs; once built it is frozen as the record of what was decided and why, and nobody brings it up to date with the code. What the system is now belongs in `docs/Architecture.md` and the pages it links, `docs/Development.md`, `docs/Releasing.md`, `docs/Operations.md`, `docs/Infrastructure.md`, `docs/Testing.md`, `CONTRIBUTING.md` and `README.md`, which are kept current.
 
 ### Comments
@@ -80,11 +92,12 @@ Comments exist ONLY to explain what the code cannot. Never restate the code. See
 
 ## Database changes
 
-- **Migrations are additive.** Old and new Worker versions share one database during a deploy; remove columns in a later release.
-- Every table change starts in `api/src/db/schema.ts`, then `npm run db:generate --workspace api`. Never hand-create a migration file or edit a generated one or its snapshot; lint fails when the migrations and `schema.ts` disagree.
-- The search index (a view of `item`, two FTS5 tables and their triggers) is raw SQL, defined in `api/src/db/search-index.sql`; Drizzle cannot see it, and a migration that touches it is a copy of that file. Start a raw SQL migration with `npm run db:generate --workspace api -- --custom --name <what_it_does>` and fill in the empty file it creates, which keeps it in drizzle-kit's journal, in order with the generated ones.
-- **A generated migration containing ``DROP TABLE `item` `` sits between two `--custom` migrations**, because dropping the table fires every `ON DELETE SET NULL` pointing at it. Changing the database in `docs/Development.md` has the steps and names the trio to copy. A new column needs a fixture in `api/test/db/migrations.test.ts`, which fails when a migration loses a value.
-- **Check `meta.rows_read` locally** before shipping a new query or trigger, with a case in `api/test/db/rows-read.test.ts`: a query that scans a table is slow as well as costly. An FTS trigger that scanned the whole index on every write once read 37.7M rows in a day.
+Changing the database in `docs/Development.md` has the procedure; these are the rules a change breaks without reading it.
+
+- **Migrations are additive**: remove a column in a later release than the one that stopped using it.
+- **Start in `api/src/db/schema.ts`** and generate. Never hand-create a migration or edit a generated one or its snapshot.
+- **A rebuild of `item` is three migrations**, since dropping the table clears every link to it.
+- **A new query, trigger or index gets a case in `api/test/db/rows-read.test.ts`**, and a new column a fixture in `api/test/db/migrations.test.ts`.
 
 ## Spending
 
