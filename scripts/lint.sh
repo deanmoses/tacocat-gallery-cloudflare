@@ -168,6 +168,10 @@ over_files markdownlint-cli2 --no-globs -- '*.md'
 echo -n "Docs: CLAUDE.md and AGENTS.md match docs/AGENTS.src.md... "
 check node scripts/build-agent-instructions.ts --check
 
+# Whole repo either way, since deleting or moving a file can break a doc that names it without the doc being staged.
+echo -n "Docs: paths and npm scripts they name exist... "
+check node scripts/check-doc-references.ts
+
 if [ "$DOCS" = "1" ]; then
     finish
     exit 0

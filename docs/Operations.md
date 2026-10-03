@@ -26,7 +26,7 @@ Workers Logs keeps a week of every request's invocation log, with the user agent
 
 ## Environments
 
-What differs between the environments beyond the bindings is the `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey, and the S3 names of the buckets the Worker signs URLs for, `DERIVED_BUCKET` and `ORIGINALS_BUCKET`. `IMAGE_MODE` is the same in both, `transformations`, and differs only under `npm run dev` and the tests. Each environment's one cron is the nightly cleanup. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. Standing up a third environment is in [`Infrastructure.md`](Infrastructure.md).
+What differs between the environments beyond the bindings is the `vars`: the site's origin, which is the only origin besides local development that may create or use a passkey, and the S3 names of the buckets the Worker signs URLs for, `DERIVED_BUCKET` and `ORIGINALS_BUCKET`. `IMAGE_MODE` is the same in both, `transformations`, and differs only under `npm run dev --workspace api` and the tests. Each environment's one cron is the nightly cleanup. `wrangler dev` and the tests run the top level too, entirely locally, so their bucket and queue names are staging's. Standing up a third environment is in [`Infrastructure.md`](Infrastructure.md).
 
 ### Fix staging's database
 

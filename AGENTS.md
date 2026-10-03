@@ -47,6 +47,7 @@ An npm monorepo: one `npm install` at the root, three workspaces, `api/`, `web/`
 ## Where to read more
 
 - `docs/Architecture.md`: arch overview. Read Invariants before changing the Worker. Subsystems: `docs/DataModel.md`, `docs/Storage.md`, `docs/Uploads.md`, `docs/Media.md`, `docs/Auth.md`.
+- `docs/WebApp.md`: the SvelteKit app's stores, album cache and components. Read before changing `web/`.
 - `docs/Testing.md`: writing tests. Read before writing one.
 - `docs/Development.md`: writing code, changing the db schema, gotchas.
 - `CONTRIBUTING.md`: submitting a change and getting it to prod.
