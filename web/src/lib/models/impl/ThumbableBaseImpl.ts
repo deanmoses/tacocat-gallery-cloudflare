@@ -34,10 +34,6 @@ export abstract class ThumbableBaseImpl implements Thumbable {
         return this.json.description ?? '';
     }
 
-    set description(description: string) {
-        this.json.description = description;
-    }
-
     get parentHref(): string {
         return hrefOf(this.json.parentPath);
     }

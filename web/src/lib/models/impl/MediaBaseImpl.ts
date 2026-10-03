@@ -27,10 +27,6 @@ export abstract class MediaBaseImpl extends ThumbableBaseImpl implements Media {
         return this.json.title ?? titleFromName(this.json.itemName);
     }
 
-    set title(title: string) {
-        this.json.title = title;
-    }
-
     readonly summary = '';
 
     get href(): string {

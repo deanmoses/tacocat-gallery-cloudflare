@@ -4,9 +4,7 @@ import toAlbum from '$lib/models/impl/AlbumCreator';
 import { ImageThumbableImpl } from '$lib/models/impl/ImageThumbableImpl';
 import { VideoThumbableImpl } from '$lib/models/impl/VideoThumbableImpl';
 import { searchUrl } from '$lib/utils/config';
-import { albumTitle } from '$lib/utils/date-utils';
-import { parentPathOf } from '@tacocat-gallery/shared';
-import type { GalleryRecord, ImageRecord, VideoRecord } from '$lib/models/impl/server';
+import type { GalleryRecord } from '$lib/models/impl/server';
 import { errorMessageOf } from '@tacocat-gallery/shared';
 import { isAlbumRecord, isImageRecord, isVideoRecord } from '$lib/models/impl/server';
 import type { Thumbable } from '$lib/models/GalleryItemInterfaces';
@@ -176,27 +174,11 @@ class SearchStore {
         if (isAlbumRecord(json)) {
             return toAlbum(json);
         } else if (isVideoRecord(json)) {
-            return this.#toVideo(json);
+            return new VideoThumbableImpl(json);
         } else if (isImageRecord(json)) {
-            return this.#toImage(json);
+            return new ImageThumbableImpl(json);
         }
         throw new Error(`Unknown item type in ${JSON.stringify(json)}`);
-    }
-
-    #toImage(json: ImageRecord): ImageThumbableImpl {
-        const image = new ImageThumbableImpl(json);
-        image.summary = this.#dateFromPath(image.path);
-        return image;
-    }
-
-    #toVideo(json: VideoRecord): VideoThumbableImpl {
-        const video = new VideoThumbableImpl(json);
-        video.summary = this.#dateFromPath(video.path);
-        return video;
-    }
-
-    #dateFromPath(mediaPath: string): string {
-        return albumTitle(parentPathOf(mediaPath));
     }
 }
 export const searchStore: SearchStore = new SearchStore();

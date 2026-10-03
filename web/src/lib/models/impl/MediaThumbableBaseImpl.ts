@@ -2,6 +2,8 @@ import type { MediaRecord } from './server';
 import type { MediaType, Thumbable, ThumbnailUrlInfo } from '../GalleryItemInterfaces';
 import { ThumbableBaseImpl } from './ThumbableBaseImpl';
 import { titleFromName } from '$lib/utils/titleUtils';
+import { albumTitle } from '$lib/utils/date-utils';
+import { parentPathOf } from '@tacocat-gallery/shared';
 
 /**
  * Base class for media thumbables (search results context).
@@ -9,8 +11,6 @@ import { titleFromName } from '$lib/utils/titleUtils';
  */
 export abstract class MediaThumbableBaseImpl extends ThumbableBaseImpl implements Thumbable {
     protected override readonly json: MediaRecord;
-
-    #summary: string | undefined;
 
     constructor(json: MediaRecord) {
         super(json);
@@ -23,16 +23,9 @@ export abstract class MediaThumbableBaseImpl extends ThumbableBaseImpl implement
         return this.json.title ?? titleFromName(this.json.itemName);
     }
 
-    set title(title: string) {
-        this.json.title = title;
-    }
-
+    /** The day the item is from, since a search result is shown away from its album */
     get summary(): string {
-        return this.#summary ?? '';
-    }
-
-    set summary(summary: string) {
-        this.#summary = summary;
+        return albumTitle(parentPathOf(this.path));
     }
 
     get href(): string {
