@@ -3,7 +3,7 @@
 Each script says how to run it in the comment at its top, and the secrets it needs come from `api/.dev.vars`. Those that write to a gallery take `--to` for the environment and write nothing without `--go`, through `write-guard.ts`; the recovery scripts also take `--only <album>` or `--all` for the scope.
 
 - `media.ts` prints an item's row and every object stored for its version, since the buckets are keyed by version id and the dashboard cannot browse them by album.
-- `debugbear.ts` starts the browser runs, reports them, reads one run's requests, and manages the DebugBear pages; `docs/Perf.md` says what the runs measure. `.github/workflows/perf.yml` starts a run from the Actions tab.
+- `debugbear.ts` starts the browser runs, reports them, reads one run's requests, and manages the DebugBear pages; `docs/Perf.md` says what the runs measure. `.github/workflows/perf.yml` starts a run from the Actions tab. `debugbear-journey/journey.js` is the visit each run makes, which DebugBear runs in the page; its API cannot change it, so an edit is pasted into the dashboard.
 - `d1-round.ts` reads an album through Globalping from Paris and then San Jose and prints what each response said about the Worker and D1.
 - `invite.sh` mints a one-time invite link for an admin's passkey, and `passkey-selftest.ts` drives the whole login against a local Worker without a browser (Admin login in `docs/Operations.md`).
 - `ship-transcoder.ts` builds and ships the transcoder's image, which the release runs for itself (The transcoder's image in `docs/Releasing.md`).

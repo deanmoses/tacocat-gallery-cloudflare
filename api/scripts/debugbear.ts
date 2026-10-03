@@ -1,6 +1,6 @@
 // Runs the photo-album journey against the site from every DebugBear location, and reports what the runs measured.
-// Each page in the DebugBear project tests the site from one location, with the journey script attached as an
-// advanced setting. A page tagged `warm-browser` has DebugBear's Warm
+// Each page in the DebugBear project tests the site from one location, with the journey script,
+// debugbear-journey/journey.js, attached as an advanced setting. A page tagged `warm-browser` has DebugBear's Warm
 // Load setting on, so its browser has the site's files cached when the test starts, as most readers' browsers do.
 //
 // Usage: node api/scripts/debugbear.ts run                         a cold run of every page, then a warm one

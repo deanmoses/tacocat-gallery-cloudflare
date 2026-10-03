@@ -1,0 +1,11 @@
+{
+    // The journey script runs in the page DebugBear tests, not in Node, and DebugBear runs it as a module body, with
+    // top-level await.
+    "extends": "../../../tsconfig.base.json",
+    "compilerOptions": {
+        "lib": ["es2025", "dom"],
+        "types": [],
+        "moduleDetection": "force"
+    },
+    "include": ["*.js", "*.d.ts"]
+}
