@@ -1,21 +1,31 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { draftMachine } from './DraftMachine.svelte';
 import { DraftStatus } from '$lib/models/draft';
+import { albumState } from '../AlbumState.svelte';
+import { clear as clearDisk, get as getFromDisk } from 'idb-keyval';
+import { fakeServer, jsonResponse } from '$lib/test-support/http';
+import { resetAlbumState, seedLoadedAlbum } from '$lib/test-support/albumState';
+import { albumRecord, imageRecord } from '$lib/test-support/records';
+import type { AlbumGalleryItem } from '$lib/models/impl/server';
 
 /**
- * Covers the state transition methods: the synchronous half of the store,
- * which is the only way its state changes.
- *
- * save() is deliberately not covered here. It is a service method that talks
- * to the API and then reaches into AlbumState and AlbumLoadMachine, and
- * standing all three up needs album fixtures that belong with a broader pass
- * over the stores rather than with this one.
- *
  * draftMachine is a module singleton, so each test starts by initialising it
  * rather than by constructing one.
  */
 const ALBUM_PATH = '/2001/12-31/';
 const MEDIA_PATH = '/2001/12-31/image';
+const ALBUM_ROUTE = '/api/album/2001/12-31/';
+const MEDIA_ROUTE = '/api/media/2001/12-31/image';
+
+function album(): AlbumGalleryItem {
+    return albumRecord({
+        path: ALBUM_PATH,
+        parentPath: '/2001/',
+        itemName: '12-31',
+        description: 'Old album description',
+        children: [imageRecord({ path: MEDIA_PATH, itemName: 'image', description: 'Old image description' })],
+    });
+}
 
 describe('draftMachine', () => {
     beforeEach(() => {
@@ -181,6 +191,66 @@ describe('draftMachine', () => {
             draftMachine.cancel();
 
             expect(draftMachine.okToNavigate).toBe(true);
+        });
+    });
+
+    // AlbumState's map signals its readers only when an entry is replaced by a
+    // different object, so a save has to leave the entry it found untouched and
+    // put a new one in its place.
+    describe('save', () => {
+        beforeEach(async () => {
+            await clearDisk();
+            resetAlbumState();
+        });
+
+        it("replaces the album's entry with one carrying an album's edit", async () => {
+            const before = seedLoadedAlbum(album());
+            const server = fakeServer();
+            server.patch(ALBUM_ROUTE, jsonResponse({}));
+            draftMachine.init(ALBUM_PATH);
+            draftMachine.setDescription('New album description');
+
+            draftMachine.save();
+
+            await vi.waitFor(() => {
+                expect(draftMachine.status).toBe(DraftStatus.SAVED);
+            });
+            const after = albumState.albums.get(ALBUM_PATH);
+
+            expect(after).not.toBe(before);
+            expect(after?.album?.description).toBe('New album description');
+            expect(before.album.description).toBe('Old album description');
+
+            await vi.waitFor(async () => {
+                expect((await getFromDisk<AlbumGalleryItem>(ALBUM_PATH))?.description).toBe('New album description');
+            });
+        });
+
+        it("replaces the album's entry with one carrying a media item's edit", async () => {
+            const before = seedLoadedAlbum(album());
+            const server = fakeServer();
+            server.patch(MEDIA_ROUTE, jsonResponse({}));
+            draftMachine.init(MEDIA_PATH);
+            draftMachine.setDescription('New image description');
+
+            draftMachine.save();
+
+            await vi.waitFor(() => {
+                expect(draftMachine.status).toBe(DraftStatus.SAVED);
+            });
+            const after = albumState.albums.get(ALBUM_PATH);
+
+            expect(after).not.toBe(before);
+            expect(after?.album?.getMedia(MEDIA_PATH)?.description).toBe('New image description');
+            expect(before.album.getMedia(MEDIA_PATH)?.description).toBe('Old image description');
+
+            await vi.waitFor(async () => {
+                const onDisk = await getFromDisk<AlbumGalleryItem>(ALBUM_PATH);
+
+                expect(onDisk?.children?.find((child) => child.path === MEDIA_PATH)?.description).toBe(
+                    'New image description',
+                );
+            });
         });
     });
 });

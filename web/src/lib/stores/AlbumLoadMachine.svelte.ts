@@ -1,4 +1,3 @@
-import { produce } from 'immer';
 import { del as delFromIdb, get as getFromIdb, set as setToIdb } from 'idb-keyval';
 import { type AlbumEntry, AlbumLoadStatus, ReloadStatus } from '$lib/models/album';
 import toAlbum from '$lib/models/impl/AlbumCreator';
@@ -69,10 +68,7 @@ class AlbumLoadMachine {
     #found(path: string, jsonAlbum: AlbumRecord): void {
         const album = toAlbum(jsonAlbum);
         const albumEntry = this.#getOrCreateWritableStore(path);
-        const newAlbumEntry = produce(albumEntry, (draftState: AlbumEntry) => {
-            draftState.loadStatus = AlbumLoadStatus.LOADED;
-            draftState.album = album;
-        });
+        const newAlbumEntry: AlbumEntry = { ...albumEntry, loadStatus: AlbumLoadStatus.LOADED, album };
         albumState.albums.set(path, newAlbumEntry);
         this.setUpdateStatus(path, ReloadStatus.NOT_RELOADING);
     }
@@ -84,12 +80,7 @@ class AlbumLoadMachine {
      */
     #notFound(path: string): void {
         console.warn(`Album [${path}] not found on server`);
-        const albumEntry = this.#getOrCreateWritableStore(path);
-        const newAlbumEntry = produce(albumEntry, (draftState: AlbumEntry) => {
-            draftState.loadStatus = AlbumLoadStatus.DOES_NOT_EXIST;
-            delete draftState.album;
-        });
-        albumState.albums.set(path, newAlbumEntry);
+        albumState.albums.set(path, { loadStatus: AlbumLoadStatus.DOES_NOT_EXIST });
         this.setUpdateStatus(path, ReloadStatus.NOT_RELOADING);
     }
 
@@ -263,9 +254,7 @@ class AlbumLoadMachine {
      */
     #setLoadStatus(path: string, loadStatus: AlbumLoadStatus): void {
         const albumEntry = this.#getOrCreateWritableStore(path);
-        const newAlbumEntry = produce(albumEntry, (draftState: AlbumEntry) => {
-            draftState.loadStatus = loadStatus;
-        });
+        const newAlbumEntry: AlbumEntry = { ...albumEntry, loadStatus };
         albumState.albums.set(path, newAlbumEntry);
     }
 

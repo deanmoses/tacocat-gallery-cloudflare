@@ -17,7 +17,6 @@
         "@simplewebauthn/browser": "^14.0.0",
         "@tacocat-gallery/shared": "*",
         "idb-keyval": "^6.3.0",
-        "immer": "^11.1.18",
         "quill": "^2.0.3",
         "svelte-dnd-action": "^0.9.79",
         "svelte-easy-crop": "^5.0.1"
