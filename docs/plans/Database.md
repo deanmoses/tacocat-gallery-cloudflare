@@ -27,7 +27,7 @@ Some findings undercut parts of that choice:
 
 ### The read replicas never answer
 
-Every album read logged on 2026-09-25, 49 of them, went to the primary in San Jose (`docs/Perf.md`). A replica wakes only when the same region reads again within seconds, and is inactive again 22 minutes later, while this site's normal reader arrives after an hour or more in which nobody has touched it. What a cold reader in Paris pays instead is the first contact between their Cloudflare location and D1, 355 to 652 ms, which behaves like a handshake of several round trips; a second read costs one round trip, 180 to 237 ms.
+Every album read logged on 2026-09-25, 49 of them, went to the primary in San Jose (`docs/plans/migration_from_aws/PerfVsAws.md`). A replica wakes only when the same region reads again within seconds, and is inactive again 22 minutes later, while this site's normal reader arrives after an hour or more in which nobody has touched it. What a cold reader in Paris pays instead is the first contact between their Cloudflare location and D1, 355 to 652 ms, which behaves like a handshake of several round trips; a second read costs one round trip, 180 to 237 ms.
 
 ### Some table changes lose data on D1
 
@@ -74,13 +74,13 @@ On D1, then, a rebuild is a hand-written migration: the view dropped, the refere
 
 DynamoDB had no rules of its own; the Lambdas validated what they wrote, and nothing checked beneath them. Here the rules are checked twice: by `shared/`'s valibot schemas at the API, and by the constraints underneath. The constraints catch whatever goes around the API: an import or restore script, SQL run by hand, a new code path that forgets a rule.
 
-There is no known bad data in DynamoDB. The copy from AWS translates shape rather than repairing damage: the video support of January 2026 left every media row `itemType: 'image'` with only videos carrying `mediaType`, and the copy finishes that migration. The one recorded repair on AWS, in `docs/Migrations.md` in `tacocat-gallery-sam`, fixed dimensions stored in the wrong orientation and tags that disagreed with their files, none unfixable; those rows disagreed with their files rather than with any rule a `CHECK` could state. `api/scripts/import-gallery.ts` runs every DynamoDB row through this Worker's rules; what its runs against production's rows found is in the Log of `docs/plans/AwsDataMigration.md`.
+There is no known bad data in DynamoDB. The copy from AWS translates shape rather than repairing damage: the video support of January 2026 left every media row `itemType: 'image'` with only videos carrying `mediaType`, and the copy finishes that migration. The one recorded repair on AWS, in `docs/Migrations.md` in `tacocat-gallery-sam`, fixed dimensions stored in the wrong orientation and tags that disagreed with their files, none unfixable; those rows disagreed with their files rather than with any rule a `CHECK` could state. `api/scripts/import-gallery.ts` runs every DynamoDB row through this Worker's rules; what its runs against production's rows found is in the Log of `docs/plans/migration_from_aws/AwsDataMigration.md`.
 
 So the constraints are insurance, not a response to damage. A rule also need not be a `CHECK` to be enforced: a `BEFORE INSERT` and `BEFORE UPDATE` trigger that calls `RAISE(ABORT, …)` enforces the same rule and can be changed without a rebuild, as the search triggers can. Drizzle cannot see a trigger, so the lint that holds the migrations to `schema.ts` would not cover it.
 
 ### Transactions
 
-D1's one atomic unit is a batch of statements fixed before any runs, and Drizzle's `transaction()` sends a `BEGIN` that D1 refuses. The pattern that follows, conditions inside each statement and a second read to explain a write that changed nothing, is in `docs/plans/AwsPort.md`; six routes use it. It works and is tested, but it is more thought per write than `BEGIN … COMMIT`.
+D1's one atomic unit is a batch of statements fixed before any runs, and Drizzle's `transaction()` sends a `BEGIN` that D1 refuses. The pattern that follows, conditions inside each statement and a second read to explain a write that changed nothing, is in `docs/plans/migration_from_aws/AwsPort.md`; six routes use it. It works and is tested, but it is more thought per write than `BEGIN … COMMIT`.
 
 Postgres has interactive transactions. From a Worker far from the database each statement in one is a round trip, about 150 ms from Paris to Oregon, so they would have to stay short, or run in a Worker placed beside the database.
 
@@ -92,7 +92,7 @@ Timestamps are text held to one format by a constraint, and tags are JSON text h
 
 With replicas out of the picture, D1 and a single-region Postgres both send every read to one place. What differs is the cost of the first contact. D1's is measured: 355 to 652 ms from Paris. Hyperdrive exists to remove exactly that kind of handshake, by keeping pooled connections open next to the database, so Postgres behind Hyperdrive might answer a cold Paris read faster. That is a guess from how Hyperdrive works, not a measurement. Hyperdrive closes a pooled connection after 10 idle minutes, so a cold reader would also pay for it reconnecting to the database. No Postgres host offers San Jose; Oregon, the nearest, is about 20 ms further from the Bay Area.
 
-`docs/Perf.md` has an open question that attacks the same gap from D1's side: running the album reads in a Worker placed beside D1, so the first contact is local.
+`docs/plans/migration_from_aws/PerfVsAws.md` has an open question that attacks the same gap from D1's side: running the album reads in a Worker placed beside D1, so the first contact is local.
 
 ### Search
 
