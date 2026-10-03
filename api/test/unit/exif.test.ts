@@ -1,3 +1,6 @@
+import croppedAvifDataUrl from '../../fixtures/CroppedAvif.avif?inline';
+import croppedHeicDataUrl from '../../fixtures/CroppedHeic.heic?inline';
+import croppedPortraitHeicDataUrl from '../../fixtures/CroppedPortraitHeic.heic?inline';
 import heicDataUrl from '../../fixtures/FullMetadataHeic.heic?inline';
 import jpgDataUrl from '../../fixtures/FullMetadata.jpg?inline';
 import noDescriptionDataUrl from '../../fixtures/NoDescription.jpg?inline';
@@ -58,7 +61,7 @@ describe(readImage, () => {
             facts: { width: 220, height: 212, title: 'Taylor Swift', description: swift.description, tags: null },
         },
         {
-            name: 'a HEIC, whose caption is only in XMP and whose size is only in EXIF',
+            name: 'a HEIC, whose caption is only in XMP',
             file: heicDataUrl,
             facts: {
                 width: 4032,
@@ -72,6 +75,40 @@ describe(readImage, () => {
             name: 'a HEIC with only a title and a headline',
             file: bareHeicDataUrl,
             facts: { width: 4032, height: 3024, title: 'Test Image Title', description: null, tags: null },
+        },
+        // Cropped with sips, which leaves the camera's 4032x3024 in EXIF, so the size is the image's own.
+        {
+            name: 'a cropped HEIC whose EXIF still has the size it was taken at',
+            file: croppedHeicDataUrl,
+            facts: {
+                width: 1000,
+                height: 600,
+                title: 'Test Image Title',
+                description: 'Test description',
+                tags: ['test1', 'test2', 'test3'],
+            },
+        },
+        {
+            name: 'a cropped HEIC shown turned a quarter, its EXIF size stale',
+            file: croppedPortraitHeicDataUrl,
+            facts: {
+                width: 600,
+                height: 1000,
+                title: 'Test Image Title',
+                description: 'Test description',
+                tags: ['test1', 'test2', 'test3'],
+            },
+        },
+        {
+            name: 'a cropped AVIF whose EXIF still has the size it was taken at',
+            file: croppedAvifDataUrl,
+            facts: {
+                width: 1000,
+                height: 600,
+                title: 'Test Image Title',
+                description: 'Test description',
+                tags: ['test1', 'test2', 'test3'],
+            },
         },
         {
             name: 'a PNG with no caption',
