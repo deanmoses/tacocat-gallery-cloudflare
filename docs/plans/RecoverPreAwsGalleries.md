@@ -1,13 +1,16 @@
-# Recovering lost content from pre-AWS galleries
+# Recovering lost stuff from pre-AWS galleries
 
-The AWS gallery database and media files have been copied to Cloudflare ([Migrating the AWS gallery data](migration_from_aws/AwsDataMigration.md)). However, over the decades, there's been other systems and other migrations; see [History of the Tacocat Gallery](../HistoryOfTacocatGallery.md). Some (all?) of those migrations have left photos / videos / albums behind.
+Over the decades, Tacocat Gallery has been on multiple systems; see [History of Tacocat Gallery](../HistoryOfTacocatGallery.md). The immediate predecessor to this Cloudflare version was on [AWS](./migration_from_aws/AwsArch.md). The AWS gallery database and media files were the [first thing migrated](migration_from_aws/AwsDataMigration.md) and done losslessly. However, the prior migrations from other systems were not so lossless; they left photos / videos / albums / thumbnail crops / album thumbs / broken links behind.
 
-Order of work:
+Let's recover everything from all iterations of Tacocat gallery and fix all broken links.
+
+## Order of work
 
 - ✅ [Zenphoto](#zenphoto): done, 11 albums and one photo recovered
 - ✅ [Gallery 2](#gallery-2): done, four albums published, one photo and the lost words recovered
 - ✅ [Gallery 2's hand orders](#gallery-2s-hand-orders): done, 50 albums back in the order they were given by hand
 - ✅ [Gallery 2's thumbnails](#gallery-2s-thumbnails): done, 241 hand-cut thumbnail crops and 10 albums' thumbnails back on staging and production
+- ✅ [Broken links](#broken-links) in album and photo descriptions to the older galleries' addresses (deanmoses/tacocat-gallery-cloudflare#196): done, 85 pointed on staging and production; the 29 left wait for the static gallery or for where the files outside the gallery live
 - Lost photos and videos from the [static gallery](#pix) prior to Zenphoto and Gallery 2, which is more labor-intensive because Moses needs to review each video
 - [Compare originals in Dropbox with the gallery](#dropbox), which may add more; and last
 - Once everything is in, perhaps [pre-generate the derived images](migration_from_aws/AwsDataMigration.md#pre-generate-derived-images).
@@ -110,6 +113,30 @@ The copy that goes in is the best one. 15 have a larger original in Dropbox, mos
 
 Two folders beside `pix/` on the site were never part of the gallery and add nothing to it: `felix/`, a page of Felix's books in 2002, his first birthday's invitation and his school and coding projects of 2012 to 2015; and `giraffe/`, two recordings of August 2011, `Chapter 1.mov` and `Chapter 2.mov`, which are sound alone, 3 and 37 minutes.
 
+## Broken links
+
+Descriptions link to other albums and photos, and to files beside them, in whatever address the gallery of the day used. Each move rewrote some of them, as the 2023 move made Zenphoto's `#2008/01-10` into `/2008/01-10`, and left the rest. Of the 389 links into the gallery in production's descriptions, 274 resolve, one is an image on `tacocat.com` that still loads, and 114 are broken ([Log](#log), 2026-10-04, Broken links found). None is in a summary. Since Apache stopped serving the old galleries on 2026-10-02, a link to `tacocat.com/p/`, `/pictures/` or `/pix/` is a 404, and a relative link that is not a gallery path loads the app, which finds nothing.
+
+- **Zenphoto's viewer, `tacocat.com/p/#2015/09-06`**, 20 links. The part after `#` is the path: 19 resolve by name, with the move's renames, `.jpg` dropped and `-` made `_`, as `#2013/08-12/dean-birthday1.jpg` is `/2013/08-12/dean_birthday1`. The 20th, `#2016/02-28/bathroom_demolition1.jpg` from `/2016/05-22/bathroom3`, is `/2016/02-27/bathroom_demolition1`, a day off.
+- **Gallery 2, `/pictures/v/2010/06-30/yosemite1.jpg.html`**, 29 links, 13 to `tacocat.com` and 16 relative, and 11 more relative ones in Gallery 2's albums such as `yosemite/`, `motrip/` and `../11-04/`. Its 35 sub-albums became day albums a day or two off ([Gallery 2](#gallery-2)), so a sub-album's link is followed through `matches.jsonl` rather than by name: `motrip/` is `/2008/07-04/`, `2009/11-01/party/party46.jpg` is `/2009/10-30/party46`, `2009/10-12/g2/` is `/2009/10-07/`, `2007/12-31/ironchef/` is `/2008/01-01/`, and `2010/03-01/4girlz.JPG`, renamed in the 2014 move, is `/2010/03-01/thegirls`.
+- **The static gallery**, 42 links. 37 are relative, in albums of 2002 to 2006: 15 to a `video/` folder, two to a video by name, three to sounds, `audio/RowYourBoat.wav`, `audio/SupperRocketShip.wav` and `audio/milo_abc.wma`, and 17 to pages, sub-albums such as `swim/index.html`, `sods/` and `snuggery/`, and the old week folders, such as `../../2003.02.03-09/images/move07.jpg`. The other five are to `tacocat.com/pix/`: three MPEGs in `/2003/03-16`, `/2004/02-09` and `/2004/05-01`, `milo_vocabulary.htm` in `/2006/01-29/a_milo_vocabulary`, and `kitten.gif` in `/2001`'s description, which is in `pix/img/` with 46 other images of the old site's pages.
+- **`/img/2012/10/matrix-*.jpg`**, 10 images in `/2012/10-29/`'s photos, written relative so they ask the gallery for them. All 10 are at `tacocat.com/img/2012/10/`, beside the 11th, which is written absolute and loads.
+- **`pix.tacocat.com/edit/2024/09-05/old_albums1.jpg`**, from `/2024/09-19/albums1`: no such address exists any more. The photo is `/2024/09-05/old_albums1`.
+- **`/2018/06-29`**, from `/2018/07-01/a_nana_birthday1`: no album has that date, and none of June 27 to 30.
+
+A link is rewritten only to a target that exists, and the static gallery's videos, sounds and sub-albums do not yet: those wait for its recovery, which makes each video an item in its album, so a link to `video/` points at the album or the video.
+
+**Decided on 2026-10-04**, from a contact sheet of each link's source beside its candidate targets ([Log](#log), 2026-10-04, Broken links picked). 85 of the 114 change, and the other 29 are left as they are for now:
+
+- **74 are pointed at a gallery path**: every Zenphoto and Gallery 2 link, 13 of the static gallery's, the old week folders and the sub-albums the gallery has as day albums among them, and the `/edit/` link.
+- **10 Matrix images are pointed at `https://tacocat.com/img/2012/10/…`**, where they are.
+- **One is taken off**: `/2002/10-26`'s `<a href="../index.htm"></a>`, which has no text, so a reader never saw it.
+- **Left**: the 20 links to the static gallery's videos and sounds, the three `tacocat.com/pix/` MPEGs, `swim/` and the 2004 house tour's `../08/index.htm`, until the static gallery's recovery gives them a target; `milo_vocabulary.htm`, `felix.html` from `/2006/11-19`, `/2018/06-29`, and `kitten.gif`.
+
+**To follow up: where the files outside the gallery live for good.** The gallery's descriptions will still reach `tacocat.com` for the 11 Matrix images in `/img/2012/10/`, and the links left above reach files that only DreamHost's `pix/` holds and Apache no longer serves: `kitten.gif` and the rest of `pix/img/`, `milo_vocabulary.htm`, and the three sounds, which the static gallery's recovery does not list and the gallery cannot play. Each could come into the gallery as an item, into R2 beside it, or stay at `tacocat.com`, whose own hosting would then have to keep serving them.
+
+`relink-descriptions.ts` makes the 85 changes from `picks.txt` ([How the recoveries are built](#how-the-recoveries-are-built)). ✅ **The 85 are on staging and production** ([Log](#log), 2026-10-04, Broken links on staging and production): 84 descriptions, `/2003/02-23/cherry_trees` holding two of the links.
+
 ## Dropbox
 
 We should compare the originals in Dropbox with the gallery. Every comparison so far started from what was published; this one starts from what went into publishing, so it finds an album or photo that only Dropbox holds, and it has 25 years of renames, culls, re-edits and moved albums to see past. So it is narrowed before it compares anything:
@@ -124,7 +151,7 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 Each recovery is its own script in `api/scripts/recovery/`. What they share is writing to the gallery, in `gallery-upload.ts`: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the guardrails of `write-guard.ts`: `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
-`recover-gallery2.ts` brings back what `gallery2.ts` names: the lost albums, each as the day album it is told, with the link its parent's description held pointed there; the single photos, into their published albums; and the summaries, titles and captions, onto the rows where the field is still empty. `recovery.ts` holds what the scripts share, and reads a file Dropbox lacks from the old gallery's copies under `files/` in the run's directory, which for Gallery 2 are its `~/g2data/albums/` files copied there by their Gallery 2 paths with `rsync --files-from`. A sub-album's photos from Dropbox are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry. `reorder-gallery2.ts` reads only the gallery and Gallery 2's `items.jsonl` and `matches.jsonl`, and writes only orders, which `gallery2-order.ts` decides and tests hold. `rethumb-gallery2.ts` reads those and `derivatives.jsonl`, Gallery 2's `g2_Derivative` rows with each one's owner from `g2_ChildEntity`, and writes only crops, which `gallery2-thumbnails.ts` decides and tests hold.
+`recover-gallery2.ts` brings back what `gallery2.ts` names: the lost albums, each as the day album it is told, with the link its parent's description held pointed there; the single photos, into their published albums; and the summaries, titles and captions, onto the rows where the field is still empty. `recovery.ts` holds what the scripts share, and reads a file Dropbox lacks from the old gallery's copies under `files/` in the run's directory, which for Gallery 2 are its `~/g2data/albums/` files copied there by their Gallery 2 paths with `rsync --files-from`. A sub-album's photos from Dropbox are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry. `reorder-gallery2.ts` reads only the gallery and Gallery 2's `items.jsonl` and `matches.jsonl`, and writes only orders, which `gallery2-order.ts` decides and tests hold. `rethumb-gallery2.ts` reads those and `derivatives.jsonl`, Gallery 2's `g2_Derivative` rows with each one's owner from `g2_ChildEntity`, and writes only crops, which `gallery2-thumbnails.ts` decides and tests hold. `relink-descriptions.ts` reads the contact sheet's `picks.txt` and writes only descriptions, each read from the target first; `description-links.ts` applies a pick, and tests hold it. A pick names a link by the address in its `href` or `src`, and changes every link in the description holding that address and nothing else; one whose link is gone, or already points where it says, is left alone, so an edit since stands and a rerun writes nothing. Each description written is logged with what it was in `relink-<target>.jsonl`.
 
 `recover-zenphoto.ts` was the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again until the album is published, and after that only those of the photos it uploads. It writes an album's thumbnail and order until the album is published.
 
@@ -133,6 +160,27 @@ The static gallery's script runs once Moses has watched the videos.
 ## Log
 
 ### 2026-10-04
+
+#### Broken links found
+
+Moses asked whether any links in descriptions point back at tacocat and are broken. Moses exported from production's D1 every album and photo whose description or summary holds `href`, `src` or `tacocat`, 681 rows, and every path, 40,089, into `~/dev/tacocat-migration/links/`, with `links-extracted.json` the links pulled from them. Every `href` and `src` was read, quoted, single-quoted or bare, and every `tacocat` address in the text; links to other sites were dropped, leaving 389 to the gallery or `tacocat.com`.
+
+- **Gallery paths**, relative or on `pix.tacocat.com`, were looked up among the paths: 274 are there, and `/2018/06-29` is not.
+- **`tacocat.com`'s 22 distinct addresses** were fetched: each is a 404 but `tacocat.com/img/2012/10/matrix-trinity-kick.jpg`. The 10 relative Matrix images are each at `tacocat.com/img/2012/10/`, and `pix.tacocat.com` answers a path it does not know with the app and a 200, so a relative link's failure shows only in the page.
+- **Old addresses** were turned into paths and looked up, trying `.jpg` and `.jpg.html` dropped, lower case and `-` as `_`, and where that failed the name was looked for in every album. That found the sub-albums a day or two off, and `matches.jsonl` the two it could not, `ironchef/` and `4girlz.JPG`; Moses found `bathroom_demolition1` at `/2016/02-27/`.
+- Nothing was written to staging or production.
+
+#### Broken links on staging and production
+
+`relink-descriptions.ts` dry-ran against staging, finding every pick's link, then Moses ran `--to staging --all --go`: 84 descriptions, logged in `relink-staging.jsonl`. A rerun writes nothing: 84 picks already point where they say, and the 85th, the empty link taken off `/2002/10-26`, is no longer there. Moses looked the pages over on staging and ran `--to production --all --go` the same way, with the same 84 descriptions, logged in `relink-production.jsonl`, and the same rerun. A guest's read of production shows `/2015/01-26/fenetre` linking to `/2015/01-22`, `/2002/10-26` with no link, `/2003/02-23/cherry_trees` linking to `/2003/02-09/move07` and `/2003/02-16/cherry_trees`, and `/2012/10-29`'s images loading from `https://tacocat.com/img/2012/10/`. Each write set a description alone, no Images transformations and no R2.
+
+#### Broken links picked
+
+A contact sheet showed each of the 114 broken links as a row: the description holding it, with the link marked and its item's thumbnail; the link as it is and where it resolves in Gallery 2 or `pix/`; and each candidate target with its thumbnail and words. The thumbnails were a guest's reads of production at the app's own URLs, 189 of them, 31 cached, so at most 158 Images transformations. `pix/`'s and `tacocat.com`'s images were embedded from their files. The page, `resolve.py`, `fetch.py` and `render.py` that build it, and Moses' picks, `picks.txt`, are in `~/dev/tacocat-migration/links/sheet/`.
+
+- **Sub-albums of the static gallery** were resolved against their album's folder in `pix/`, and offered as the day albums that hold their photos by the static gallery comparison's `diffs.jsonl`. The old week folders, such as `2002.7.12-21/`, moved to the folder of their last day, `2002/07/21/`, which is how `jules`'s `../../2002.7.12-21/html/2_courtine3.htm` is `/2002/07-21/2_courtine3`.
+- **Moses picked 85**, as [Broken links](#broken-links) lists, and left 29. The links that reach no file in the gallery are a follow-up of their own.
+- Nothing was written to staging or production.
 
 #### Gallery 2's album thumbnails picked
 

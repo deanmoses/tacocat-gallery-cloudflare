@@ -13,6 +13,7 @@
                 "scripts/recovery/recover-*.ts",
                 "scripts/recovery/reorder-*.ts",
                 "scripts/recovery/rethumb-*.ts",
+                "scripts/recovery/relink-*.ts",
                 "scripts/recovery/check-s3-versions.ts",
                 "transcoder/server.ts",
                 // Pasted into DebugBear's dashboard, which runs it in the page it tests.
