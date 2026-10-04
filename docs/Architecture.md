@@ -49,7 +49,7 @@ The entire site is one Worker per environment, serving the web app and everythin
 
 **One origin.** There's no `api.`, `img.` or `auth.` subdomains, meaning there's no CORS between the app and the API, the session cookie needs no cross-site settings, and every URL the app builds is a root-relative path with no host. The one request that leaves the origin is the upload itself, a PUT straight to R2's S3 endpoint, so the originals bucket alone carries a CORS rule, in `infra/`.
 
-The Worker's default export in `api/src/index.ts` has three handlers: `fetch`, the Hono app in `api/src/routes/app.ts`; `queue`, which starts a Workflow instance for each upload event and turns an event that ran out of retries into an upload error; and `scheduled`, the nightly job that deletes upload errors and spent login challenges past their use. The bindings are declared in `api/wrangler.jsonc`, and `GET /api/health` is what a release checks (Is production okay? in [`Operations.md`](Operations.md)).
+The Worker's default export in `api/src/index.ts` has three handlers: `fetch`, the Hono app in `api/src/routes/app.ts`; `queue`, which starts a Workflow instance for each upload event and turns an event that ran out of retries into an upload error; and `scheduled`, the nightly job that deletes upload errors and spent login challenges past their use. The bindings are declared in `api/wrangler.jsonc`, and `GET /api/health` is what a release checks (Is production okay? in [`Observability.md`](Observability.md)).
 
 ## The gallery
 
@@ -88,4 +88,4 @@ api/src/media/     the metadata reader, image making, the transcoder
 
 **The web app** started as the AWS gallery's SvelteKit app, so the API answers in the shapes it was written against; it changes wherever that makes the site faster for its readers, and `docs/plans/migration_from_aws/PerfVsAws.md` records how it had come to differ from the AWS app by the time the two stopped being compared. It has to load in iOS 15.6 (The browser floor in `Development.md`). Which paths reach the Worker rather than the app's files is the `run_worker_first` list in `api/wrangler.jsonc`, so a new Worker route has to be added there; any other path with no file gets the app, which routes it in the browser.
 
-**Beyond this page:** the web app's stores, cache and components are `WebApp.md`; how it is tested is `Testing.md`; how a change ships, `Releasing.md`; the environments, logs and the running system, `Operations.md`; everything outside the Worker, `Infrastructure.md`; and the measurements `api/src/ops/` and `/debug/` serve, `Perf.md`.
+**Beyond this page:** the web app's stores, cache and components are `WebApp.md`; how it is tested is `Testing.md`; how a change ships, `Releasing.md`; the running system, `Operations.md`; its logs, alerts and uptime checks, `Observability.md`; everything outside the Worker, `Infrastructure.md`; and the measurements `api/src/ops/` and `/debug/` serve, `Perf.md`.
