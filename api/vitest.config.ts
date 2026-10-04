@@ -57,7 +57,7 @@ export default defineConfig({
                 // as in `vitest run test/db`.
                 test: {
                     name: 'worker',
-                    include: ['test/{unit,db,integration}/*.test.ts'],
+                    include: ['test/{unit,db,integration}/**/*.test.ts'],
                     setupFiles: ['./test/setup.ts'],
                 },
             },

@@ -5,7 +5,7 @@ The AWS gallery database and media files have been copied to Cloudflare ([Migrat
 Order of work:
 
 - ✅ [Zenphoto](#zenphoto): done, 11 albums and one photo recovered
-- [Gallery 2](#gallery-2): one album recovered, the rest next
+- ✅ [Gallery 2](#gallery-2): done, four albums published, one photo and the lost words recovered
 - Lost photos and videos from the [static gallery](#pix) prior to Zenphoto and Gallery 2, which is more labor-intensive because Moses needs to review each video
 - [Compare originals in Dropbox with the gallery](#dropbox), which may add more; and last
 - Once everything is in, perhaps [pre-generate the derived images](migration_from_aws/AwsDataMigration.md#pre-generate-derived-images).
@@ -46,20 +46,20 @@ Gallery 2's database, `pictures`, holds 447 albums and 10,665 photos, the albums
 
 What the gallery lacks:
 
-- **Three albums, all public in Gallery 2**:
-    - `2008/02-03/`: Lucie badged at Google. 11 photos, and 20 of its preschool sub-album `pk`.
+- ✅ **Three albums, all public in Gallery 2**, on staging and production, and published on production by Moses on 2026-10-04 with `pk`'s:
+    - `2008/02-03/`: Lucie badged at Google. 11 photos, and 20 of its preschool sub-album `pk`, which is `/2008/02-02/`, the day before the album that held it.
     - `2008/04-13/`: Felix's class play, _Le Petit Chaperon Rouge_. 24 photos.
     - `2012/06-22/`: "Holy Allowance, Batman!". All 8 photos; its `batman.jpg`, "It took 2 months of allowance…", is not `2011/02-27/batman.jpg`, "Batboat".
 - **Single photos from albums that did come across**:
     - ✅ `2008/01-21/tatou/`: listed here as four photos, `piano.jpg`, `zzzz.jpg`, `croissants.jpg` and `totland6.jpg`, and in fact the whole sub-album, 13 photos, now `/2008/01-22/` on staging and production, unpublished.
-    - `2007/07-01/kingswim4_001.jpg` and `2011/01-23/a-comment-system.png`.
-    - `2011/05-08/vincennes2.jpg` and `zzzmothersday.jpg`, which were not public in Gallery 2.
-- **Two photo captions**: `2009/04-19/jedi05.jpg` ("Come young padawans, experience the POWER of the DARK SIDE.") and `2012/02-26/kauai23.jpg` ("The lava rocks of Secret Beach.").
-- **13 album summaries**, still empty on AWS: `2008/07-06` "Dean in Malaysia", `2010/01-17` "Dean becomes French", `2010/01-24` "Milo's half birthday", `2010/03-07` "Little Red Riding Hood", `2010/03-14` and `2010/03-21` "Lucie in Paris", `2010/03-28` "Milo's first soccer game", `2010/05-16` "Dean in Chicago", `2010/05-23` "Milo's end-of-year class show", `2010/06-13` "Felix turns 8 and a half", `2010/07-11` "The Chloe Marie", `2010/08-08` "Health & packing" and `2014/12-10` "The Tree-ening".
+    - ✅ `2011/05-08/zzzmothersday.jpg`, which was not public in Gallery 2, on staging and production. Moses kept it after looking at it on staging.
+    - Left behind after Moses looked at them on staging: `2007/07-01/kingswim4_001.jpg`, a duplicate of `kingswim4`, though its caption, "Decca flies the friendly skies.", Moses put onto the gallery's `kingswim4` by hand; `2011/01-23/a-comment-system.png`; and `2011/05-08/vincennes2.jpg`.
+- ✅ **Two photo titles and captions**, on staging and production: `2009/04-19/jedi05.jpg`, "Jedi 5", "Come young padawans, experience the POWER of the DARK SIDE.", and `2012/02-26/kauai23.jpg`, "Secret Beach", "The lava rocks of Secret Beach.". The titles turned up when the captions were written: they are the only two of the 154 titles that differ that Zenphoto has none of.
+- ✅ **11 album summaries**, on staging and production: `2010/01-17` "Dean becomes French", `2010/01-24` "Milo's half birthday", `2010/03-07` "Little Red Riding Hood", `2010/03-14` and `2010/03-21` "Lucie in Paris", `2010/03-28` "Milo's first soccer game", `2010/05-23` "Milo's end-of-year class show", `2010/06-13` "Felix turns 8 and a half", `2010/07-11` "The Chloe Marie", `2010/08-08` "Health & packing" and `2014/12-10` "The Tree-ening". Two more the comparison found were not lost: `2008/07-06`'s "Dean in Malaysia" and `2010/05-16`'s "Dean in Chicago" named the day album's sub-album, `motrip` and `chicago`, which the move made `/2008/07-04/` and `/2010/05-17/`, and those have the summary. The other 11 albums held no sub-album.
 
-The three albums are added unpublished, for Moses to look over and publish, and the single photos are added to their albums, each through the Worker's upload with its title and caption from Gallery 2. The two captions and 13 summaries are written onto the copied rows. Gallery 2 stores its text entity-escaped, sometimes twice, so it is decoded until nothing changes.
+The three albums are added unpublished, for Moses to look over and publish, as he did, and the single photos are added to their albums, each through the Worker's upload with its title and caption from Gallery 2. The two titles and captions and 11 summaries are written onto the copied rows, where the field is still empty. Gallery 2 stores its text entity-escaped, sometimes twice, so it is decoded until nothing changes.
 
-Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them, mostly 1024 pixels on the long side and about 150 KB. Dropbox has no folder for any of the three albums and none of their photos by name, so for those Gallery 2's copies are the only ones found; its `2017/03-04/lincoln1.jpg` to `lincoln4.jpg` are the 2017 trip to Washington, not `2012/06-22/`'s.
+Each file comes from Dropbox where it has the original, and otherwise from Gallery 2's own copy in `~/g2data/albums/`, which holds every one of them; Moses accepted the copies, which for `2008/04-13/` are 1024 pixels on the long side and about 150 KB, and for the others mostly the camera's size. Dropbox has no folder for any of the three albums and none of their photos by name, nor any of the four single photos, so all 67 are Gallery 2's copies; its `2017/03-04/lincoln1.jpg` to `lincoln4.jpg` are the 2017 trip to Washington, not `2012/06-22/`'s.
 
 Left behind: the nine TIFFs in `2008/08-21/`, Gallery 2's `2008/08-24/photoshoot/couple01.tif` to `milo01.tif`, which the [S3 version check](migration_from_aws/AwsDataMigration.md#s3-version-check) also found. The gallery has never served a TIFF, and Moses takes them for raw originals pushed to DreamHost by mistake. The other text that differs reads as Moses' later edits in Zenphoto, "Happy Birthday, America!" becoming "4th of July", or as spacing and punctuation.
 
@@ -101,15 +101,33 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 Each recovery is its own script in `api/scripts/recovery/`. What they share is writing to the gallery, in `gallery-upload.ts`: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the guardrails of `write-guard.ts`: `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
-`recover-gallery2.ts` brings back the albums `gallery2.ts` names, so far Tatou's alone, each as the day album it is told, with the link its parent's description held pointed there, and `recovery.ts` holds what the scripts share. A sub-album's photos are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
+`recover-gallery2.ts` brings back what `gallery2.ts` names: the lost albums, each as the day album it is told, with the link its parent's description held pointed there; the single photos, into their published albums; and the summaries, titles and captions, onto the rows where the field is still empty. `recovery.ts` holds what the scripts share, and reads a file Dropbox lacks from the old gallery's copies under `files/` in the run's directory, which for Gallery 2 are its `~/g2data/albums/` files copied there by their Gallery 2 paths with `rsync --files-from`. A sub-album's photos from Dropbox are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
 
-`recover-zenphoto.ts` was the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again. It writes an album's thumbnail and order until the album is published.
+`recover-zenphoto.ts` was the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again until the album is published, and after that only those of the photos it uploads. It writes an album's thumbnail and order until the album is published.
 
-The Gallery 2 script has yet to write onto rows the copy made, the two captions and 13 summaries, and to add single photos to published albums. The static gallery's script runs once Moses has watched the videos.
+The static gallery's script runs once Moses has watched the videos.
 
 ## Log
 
+### 2026-10-04
+
+#### The rest of Gallery 2 on production
+
+Moses looked the albums, the single photos and the summaries over on staging and said to run production. `recover-gallery2.ts --to production`: a dry run, `/2012/06-22/` alone with `--go`, then `--all --go`, from 00:06 to 00:20 UTC. The same 63 photos in four unpublished albums, `zzzmothersday` in `/2011/05-08/`, 11 summaries and the titles and captions of `jedi05` and `kauai23`, about 190 Images transformations and 112 MB of R2. Verified through the API as staging was, with the same results; `/2008/07-06/` and `/2010/05-16/` still have no summary.
+
+- **Published.** Moses published `/2008/02-02/`, `/2008/02-03/`, `/2008/04-13/` and `/2012/06-22/`; a guest's read of each is a 200.
+- **Tatou's photos got their words again.** The script wrote every photo's title and caption on each run, and Tatou's album, published since, was in `--all`. Workers Logs show no edit to its photos between its recovery on 2026-10-01 and this run, so the same words went back on and nothing was lost. The script now writes words in a published album only for the photos it uploads; a rerun for `/2008/01-22/` and `/2011/05-08/` wrote nothing.
+
 ### 2026-10-03
+
+#### The rest of Gallery 2 on staging
+
+`recover-gallery2.ts` ran `--to staging`: `/2012/06-22/` alone with `--go`, looked at through the API, then `--all --go`. The three albums and `pk`, 63 photos, and the four single photos, 112 MB, all from Gallery 2's copies, each checked before the run to have the pixel size Gallery 2 recorded. About 200 Images transformations.
+
+- **Verified through the API.** `/2008/02-02/`, `/2008/02-03/`, `/2008/04-13/` and `/2012/06-22/` are unpublished and a guest's read of each is a 404; they hold 20, 11, 24 and 8 photos with Gallery 2's titles, captions and sizes. `/2008/02-02/` is in Gallery 2's order with "PK with Andrea" as its summary, and `/2008/02-03/`'s link to `pk/` is now `/2008/02-02`. The day albums are in name order, by their first photo, with Gallery 2's summary: "Holy Allowance, Batman!" for `/2012/06-22/` and none for the other two. The four single photos are in their published albums, the 13 summaries and two captions and titles on their rows.
+- **Two summaries were wrong.** Moses found `/2008/07-06/`'s "Dean in Malaysia" had nothing to do with its photos: it named Gallery 2's sub-album `motrip`, now `/2008/07-04/`, which has it, and `/2010/05-16/`'s "Dean in Chicago" named `chicago`, now `/2010/05-17/`. Both summaries are blank again on staging and off the list. Moses kept `zzzmothersday` and left out `kingswim4_001`, a duplicate of `kingswim4`, whose caption he put on production's `kingswim4` himself, `a_comment_system` and `vincennes2`, which stay on staging.
+- **A rerun uploads nothing twice**: the `--all` run found `/2012/06-22/` and Tatou's album holding every photo and uploaded none, and a run for the two captioned photos found their captions there and wrote only their titles, which the first run had not known to.
+- **The recovery tests had stopped running.** Moving them to `api/test/unit/recovery/` on 2026-10-02 put them outside the worker project's `test/unit/*.test.ts`, so `npm test` passed without them; the project now takes `test/unit/**/*.test.ts`.
 
 #### Gallery 2 matches rechecked
 
