@@ -14,6 +14,7 @@
 import path from 'node:path';
 import * as valibot from 'valibot';
 import {
+    GALLERY2_ITEM,
     LOST_ALBUMS,
     LOST_PHOTOS,
     LOST_WORDS,
@@ -29,21 +30,6 @@ import { type Run, jsonLines, log, parsedRun, recover } from './recovery.ts';
 
 const USAGE =
     'Usage: node api/scripts/recovery/recover-gallery2.ts <gallery2 dir> --to local|staging|production (--only <album path> ... | --all) [--go]';
-const NULLABLE_TEXT = valibot.nullable(valibot.string());
-const NULLABLE_NUMBER = valibot.nullable(valibot.number());
-const ITEM = valibot.object({
-    id: valibot.number(),
-    parent: valibot.number(),
-    type: valibot.string(),
-    name: NULLABLE_TEXT,
-    title: NULLABLE_TEXT,
-    summary: NULLABLE_TEXT,
-    desc: NULLABLE_TEXT,
-    order: NULLABLE_NUMBER,
-    albumOrder: NULLABLE_TEXT,
-    width: NULLABLE_NUMBER,
-    height: NULLABLE_NUMBER,
-});
 const DESCRIBED = valibot.object({ description: valibot.optional(valibot.string()) });
 const WORDED = valibot.object({
     summary: valibot.optional(valibot.string()),
@@ -59,7 +45,7 @@ const WORDED = valibot.object({
 });
 
 const run = await parsedRun(process.argv.slice(2), USAGE);
-const items = await jsonLines(path.join(run.directory, 'items.jsonl'), ITEM);
+const items = await jsonLines(path.join(run.directory, 'items.jsonl'), GALLERY2_ITEM);
 const lost = LOST_ALBUMS.filter((album) => inScope(run.scope, album.to));
 const photos = recoveredPhotos(items, LOST_PHOTOS).filter((album) => inScope(run.scope, album.path));
 const words = lostWords(items, LOST_WORDS).filter((lostWord) => inScope(run.scope, lostWord.path));

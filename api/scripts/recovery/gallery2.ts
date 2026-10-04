@@ -5,8 +5,27 @@
 // tags and all, and showed a sub-album in the order of its items' weights, so the text is unescaped and that order
 // kept. Nothing here touches the network, so a test can hold it still.
 import { mediaPath } from '@tacocat-gallery/shared';
+import * as valibot from 'valibot';
 import { renamedMedia } from './aws-names.ts';
 import type { RecoveredAlbum, RecoveredMedia } from './recovered-album.ts';
+
+const NULLABLE_TEXT = valibot.nullable(valibot.string());
+const NULLABLE_NUMBER = valibot.nullable(valibot.number());
+
+/** An item row of Gallery 2's as `items.jsonl` holds it, as far as the recovery reads it. */
+export const GALLERY2_ITEM = valibot.object({
+    id: valibot.number(),
+    parent: valibot.number(),
+    type: valibot.string(),
+    name: NULLABLE_TEXT,
+    title: NULLABLE_TEXT,
+    summary: NULLABLE_TEXT,
+    desc: NULLABLE_TEXT,
+    order: NULLABLE_NUMBER,
+    albumOrder: NULLABLE_TEXT,
+    width: NULLABLE_NUMBER,
+    height: NULLABLE_NUMBER,
+});
 
 /** An item row of Gallery 2's, album or photo, as far as the recovery reads it. The root album has no name. */
 export interface Gallery2Item {
@@ -223,7 +242,7 @@ function recoveredMedia(photo: Gallery2Item, albumPath: string, name: string, co
 }
 
 /** Gallery 2's items by id, and the path of each, which its own and its parents' names make. */
-function treeOf(items: readonly Gallery2Item[]): {
+export function treeOf(items: readonly Gallery2Item[]): {
     byId: Map<number, Gallery2Item>;
     pathOf: (item: Gallery2Item) => string;
 } {

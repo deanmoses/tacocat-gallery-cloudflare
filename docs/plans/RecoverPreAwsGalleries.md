@@ -6,6 +6,7 @@ Order of work:
 
 - ✅ [Zenphoto](#zenphoto): done, 11 albums and one photo recovered
 - ✅ [Gallery 2](#gallery-2): done, four albums published, one photo and the lost words recovered
+- ✅ [Gallery 2's hand orders](#gallery-2s-hand-orders): done, 50 albums back in the order they were given by hand
 - Lost photos and videos from the [static gallery](#pix) prior to Zenphoto and Gallery 2, which is more labor-intensive because Moses needs to review each video
 - [Compare originals in Dropbox with the gallery](#dropbox), which may add more; and last
 - Once everything is in, perhaps [pre-generate the derived images](migration_from_aws/AwsDataMigration.md#pre-generate-derived-images).
@@ -65,6 +66,14 @@ Left behind: the nine TIFFs in `2008/08-21/`, Gallery 2's `2008/08-24/photoshoot
 
 The 2013 and 2014 prototypes hold nothing the gallery needs: Gallery 3's `tacocat_gallery3` has 11 photos and Piwigo's `themosii_com` and `themosii_com_1` 89 and 5, all added on the days the systems were tried.
 
+## Gallery 2's hand orders
+
+Gallery 2 showed an album in name order unless an admin dragged its photos into an order of their own, and 59 of its 447 albums were, between 2007 and 2014. Zenphoto had the same feature and it was used twice, on `/2010/01-24/`, which Gallery 2 had ordered too, and `/2015/08-16/`. The 2014 move to Zenphoto carried names and not orders, and Zenphoto sorted by name, so an order survived it only where the move renamed the files to match, as `2013/07-01/`'s `002.JPG` to `088.JPG` became `paris01.jpg` to `paris28.jpg`. The 2023 move to AWS did the same for Zenphoto's two, renaming `epiphanieg8-1.jpg` to `epiphanieng8_1.jpg` and `samance21.jpg` to `samance24.jpg`, and AWS and this gallery sorted by name after it. So 50 albums show their photos in name order where Moses had arranged them, 233 of their 1,442 photos somewhere other than where he put them ([Log](#log), 2026-10-04, Gallery 2's hand orders traced). Most are a series swapped with another or one photo moved to the front; `/2013/06-24/`, the Lost Coast trip, has 36 of 54 out of place, `/2012/09-28/` 18 of 37 and `/2010/04-18/` 12 of 22. `/2010/10-10/`'s order, which the copy from AWS kept for the story its captions tell, is itself name order: Gallery 2 had `eiffel` second, not tenth.
+
+Every photo traces by name from Gallery 2 through the Zenphoto photo the comparison matched it to, and the AWS copy's renaming, to a row on production, so `reorder-gallery2.ts` writes each album's order through the Worker's own order write and uploads nothing. `/2010/01-24/` keeps Zenphoto's order, the later decision. A photo culled since is left out, as `2007/07-01/kingswim4_001.jpg` was; one added since follows in name order, as the gallery shows an ordered album's additions. The six albums the copy gave AWS's order, to keep it through sanitizing, get Gallery 2's instead, which is what their order was before the 2014 move lost it, each named with `--only`: under `--all` the script leaves an album shown in an order of its own alone, since nothing tells the copy's order from one an admin set here since. A photo an album seems to hold under `_n`, the name the copy gave a collision, stops that album's write; none does.
+
+✅ This is DONE: **all 50 are on staging and production** in Gallery 2's order ([Log](#log), 2026-10-04, Gallery 2's orders on staging and production).
+
 ## `pix/`
 
 From 2001 to 2006 the gallery was static HTML served from `~/tacocat.com/pix/` at DreamHost, where it still is: 519 MB, folders for 1968ish, 1969, 1973, 1999 and 2001 to 2006. LView Pro's web gallery generated the albums of 2001 to 2004, each a folder `YYYY/MM/DD/` with an album page, a page per photo in `html/` and the images in `images/`; JAlbum, with a skin of Moses' own, made those of 2005 and 2006, with a page and image per photo in `slides/` ([History of the Tacocat Gallery](../HistoryOfTacocatGallery.md)). Comparing it with the gallery ([Log](#log), 2026-09-30, Static gallery comparison) found its photos almost all came across, and its videos almost none.
@@ -101,7 +110,7 @@ We should compare the originals in Dropbox with the gallery. Every comparison so
 
 Each recovery is its own script in `api/scripts/recovery/`. What they share is writing to the gallery, in `gallery-upload.ts`: making an album unpublished, uploading a file through the Worker's presigned PUT as a browser does, so the pipeline sizes it, reads its tags, transcodes a video and makes its derived images, waiting for the pipeline, and writing a title, caption or summary. Each script has the guardrails of `write-guard.ts`: `--only` or `--all`, `--to`, nothing written without `--go`; and each runs on staging before production.
 
-`recover-gallery2.ts` brings back what `gallery2.ts` names: the lost albums, each as the day album it is told, with the link its parent's description held pointed there; the single photos, into their published albums; and the summaries, titles and captions, onto the rows where the field is still empty. `recovery.ts` holds what the scripts share, and reads a file Dropbox lacks from the old gallery's copies under `files/` in the run's directory, which for Gallery 2 are its `~/g2data/albums/` files copied there by their Gallery 2 paths with `rsync --files-from`. A sub-album's photos from Dropbox are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry.
+`recover-gallery2.ts` brings back what `gallery2.ts` names: the lost albums, each as the day album it is told, with the link its parent's description held pointed there; the single photos, into their published albums; and the summaries, titles and captions, onto the rows where the field is still empty. `recovery.ts` holds what the scripts share, and reads a file Dropbox lacks from the old gallery's copies under `files/` in the run's directory, which for Gallery 2 are its `~/g2data/albums/` files copied there by their Gallery 2 paths with `rsync --files-from`. A sub-album's photos from Dropbox are checked after the upload by their shape against Gallery 2's copies, since a file in Dropbox may carry another name. The scripts wait 15 minutes for an album's uploads, past the Workflow's 10-minute step timeout and its retry. `reorder-gallery2.ts` reads only the gallery and Gallery 2's `items.jsonl` and `matches.jsonl`, and writes only orders, which `gallery2-order.ts` decides and tests hold.
 
 `recover-zenphoto.ts` was the first. What it writes is decided by `zenphoto.ts`, which reads Zenphoto's exported rows and touches no network, so tests hold it. A rerun is a resume: it uploads only the photos an album lacks, leaves the words of an album that is already there as they are, and writes each photo's title and caption again until the album is published, and after that only those of the photos it uploads. It writes an album's thumbnail and order until the album is published.
 
@@ -110,6 +119,18 @@ The static gallery's script runs once Moses has watched the videos.
 ## Log
 
 ### 2026-10-04
+
+#### Gallery 2's orders on staging and production
+
+Moses looked at `/2010/04-18/` on staging against production and said it looks right, and the script had two rounds of review, which added the collision and hand-order guards. `reorder-gallery2.ts` then ran `--to staging --all --go`, 43 orders, and the six albums shown in an order of their own each with `--only`, 6 more: 50 with the first, every one logged with the order it had in `reorder-staging.jsonl`. A rerun of `--all` finds nothing to write. Moses compared the most changed albums on staging with production and called them improvements, and production ran the same way: 44 with `--all --go`, `kingswim4_001` left out of `/2007/07-01/` as culled, then the six by name, logged in `reorder-production.jsonl`; a rerun finds nothing to write, and a guest's read of `/2010/04-18/` and `/2013/06-24/` is in Gallery 2's order. Each write set positions alone, no Images transformations and no R2.
+
+#### Gallery 2's hand orders traced
+
+Moses asked whether Gallery 2 or Zenphoto let him order photos by hand, whether he had, and whether the order came through. Both databases say. Gallery 2's `g2_ItemAttributesMap` holds a weight for every item, and `orderBy = orderWeight` on the 59 albums shown by it, against a site default of `pathComponent`; Zenphoto's `image_sorttype` option is `filename`, two albums have `sort_type = manual` and their 39 images a `sort_order`. Each hand-ordered album's photos were followed through `matches.jsonl` to Zenphoto, through the Zenphoto comparison's renames to AWS, and by name to production's rows, read from D1 with their positions, and the album's order today compared with Gallery 2's.
+
+- **Gallery 2**: 59 albums by hand, 58 in an order other than their names'. Zenphoto kept 6 of the 58, by renames; today 50 of the 56 the gallery has are out of it, 233 of 1,442 photos, 6 of them under the order the copy from AWS wrote to keep AWS's through sanitizing.
+- **Zenphoto**: `/2010/01-24/` and `/2015/08-16/`, both kept on AWS by the 2023 move's renames, whose rows carry the dates Zenphoto gave the photos.
+- **`reorder-gallery2.ts`** dry-ran against production and staging with the same result but for `/2007/07-01/`, where staging still has `kingswim4_001`, then wrote `/2010/04-18/` on staging: a guest's read lists dnd, soccer, frisbee, bocce and clubpenguin in Gallery 2's order where production lists them by name, and a rerun writes nothing.
 
 #### The rest of Gallery 2 on production
 
