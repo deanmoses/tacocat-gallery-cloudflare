@@ -7,6 +7,7 @@
 // SESSION_SECRET for local, and as SESSION_SECRET_STAGING and SESSION_SECRET_PRODUCTION the values `wrangler secret
 // put` gave the deployed Workers.
 import { setTimeout as sleep } from 'node:timers/promises';
+import { type Rectangle, rectangleSchema } from '@tacocat-gallery/shared';
 import * as valibot from 'valibot';
 import { adminCookie } from '../admin-cookie.ts';
 import { devVars } from '../dev-vars.ts';
@@ -36,6 +37,19 @@ const TEXT = valibot.string();
 // under the version presign minted for it.
 const LISTED = valibot.object({
     children: valibot.optional(valibot.array(valibot.object({ itemName: TEXT, versionId: valibot.optional(TEXT) }))),
+});
+// This Worker's album, as far as a script that recuts thumbnails reads it.
+const CROPPED = valibot.object({
+    children: valibot.optional(
+        valibot.array(
+            valibot.object({
+                itemType: TEXT,
+                itemName: TEXT,
+                dimensions: valibot.optional(valibot.object({ width: valibot.number(), height: valibot.number() })),
+                thumbnail: valibot.optional(valibot.nullable(rectangleSchema)),
+            }),
+        ),
+    ),
 });
 const PRESIGNED = valibot.record(TEXT, valibot.object({ url: TEXT, contentType: TEXT, versionId: TEXT }));
 const ERRORS = valibot.object({ errors: valibot.record(TEXT, TEXT) });
@@ -88,6 +102,39 @@ export async function listedVersions(gallery: Gallery, albumPath: string): Promi
     }
     const listed = valibot.parse(LISTED, await response.json());
     return new Map((listed.children ?? []).map((child) => [child.itemName, child.versionId ?? '']));
+}
+
+/**
+ * Each media item of the album by name, with its size and the crop its thumbnail is cut from, or null when there is no
+ * such album. Any other refusal throws, so an expired cookie stops a run rather than passing for an album that is not
+ * there.
+ */
+export async function listedCrops(
+    gallery: Gallery,
+    albumPath: string,
+): Promise<Map<string, { width: number | null; height: number | null; crop: Rectangle | null }> | null> {
+    const response = await fetch(`${gallery.site}/api/album${albumPath}?consistency=primary`, {
+        headers: { cookie: gallery.cookie },
+    });
+    if (response.status === 404) {
+        await response.body?.cancel();
+        return null;
+    }
+    if (!response.ok) {
+        throw new Error(`reading ${albumPath} failed: ${String(response.status)} ${await response.text()}`);
+    }
+    const listed = valibot.parse(CROPPED, await response.json());
+    const media = (listed.children ?? []).filter((child) => child.itemType === 'media');
+    return new Map(
+        media.map((child) => [
+            child.itemName,
+            {
+                width: child.dimensions?.width ?? null,
+                height: child.dimensions?.height ?? null,
+                crop: child.thumbnail ?? null,
+            },
+        ]),
+    );
 }
 
 /**
