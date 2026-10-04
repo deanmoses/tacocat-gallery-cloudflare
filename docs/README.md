@@ -13,6 +13,7 @@
     - [`WebApp.md`](WebApp.md): the SvelteKit app: stores, caching, components
 - [`Releasing.md`](Releasing.md): how a change ships, and how to undo one
 - [`Operations.md`](Operations.md): managing the running system
+- [`Observability.md`](Observability.md): logs, alerts, uptime checks
 - [`Infrastructure.md`](Infrastructure.md): updating cloud resources, DNS, GitHub
 - [`Perf.md`](Perf.md): measuring perf
 - [`CodeComments.md`](CodeComments.md): code commenting guidelines

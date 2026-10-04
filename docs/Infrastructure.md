@@ -43,7 +43,7 @@ scripts/tofu.sh force-unlock <id>
 - **The bindings** to what OpenTofu made: the D1 database by the id `scripts/tofu.sh output d1_database_ids` prints, the two R2 buckets by name, the upload queue as producer and consumer with its dead-letter queue, and the Images binding local development uses.
 - **What Wrangler itself creates:** the Workflow, `UploadPipeline`; the Durable Object class, `Transcoder`, whose `migrations` array is the record of its lifecycle; and the container application behind it, with its image, `standard-4` instance type, instance limit and rollout settings.
 - **The triggers**, the nightly cron and the custom domain, and the `vars`, the site's origin, the bucket names the Worker signs URLs for, and the upload and image modes.
-- **Observability**: Workers Logs, and Workers Issues, which groups the Worker's failures for the dashboard's automations to alert on. Both are on in both environments; a deploy from a config without them turns them off.
+- **Observability**: Workers Logs and Workers Issues, which a deploy from a config without them turns off.
 - **The secrets it requires**, `secrets.required`, which Wrangler refuses to run without ([Secrets](#secrets)).
 
 Every release applies it: a version upload carries the bindings and vars, `wrangler triggers deploy` the crons and domain, and `api/scripts/ship-transcoder.ts` the container's image and settings. A Durable Object lifecycle change, a new Workflow and a queue consumer's settings go out only through the plain `wrangler deploy`, as Ship what a release can't in [`Releasing.md`](Releasing.md) says. After editing the file, run `npm run types --workspace api`, which regenerates the Worker's binding types; the type check fails until it has.
@@ -65,6 +65,17 @@ These cannot be configured via code:
 - **Image Transformations left off on both zones**, since enabling them would open `/cdn-cgi/image/` URLs to anyone ([`Media.md`](Media.md)).
 - **The nameservers at GoDaddy**, pointed at the zone's ([The zone](#the-zone)).
 - **The AWS CLI signed in** to the gallery's AWS account, for the backup bucket's provider ([OpenTofu](#opentofu)).
+- **The monitoring and alerting**, in the Cloudflare and Grafana dashboards ([Monitoring and alerting](#monitoring-and-alerting)).
+
+## Monitoring and alerting
+
+The dashboards' record: change it here when you change them. Reading what they report is [`Observability.md`](Observability.md).
+
+Alerts go to the Tacocat Discord server's [`#general`](https://discord.com/channels/1547715867851366460/1547715868379586582) through a webhook each dashboard holds as `Tacocat Discord`: a notification destination in Cloudflare and a contact point in Grafana. The budget alert, which can only email, is the exception.
+
+- **Workers Issues**, automations in each Worker's Issues tab, sent to `Tacocat Discord`; when they post is [Workers Issues](Observability.md#workers-issues) in `Observability.md`.
+- **Grafana Cloud**, `tacocorp.grafana.net`, on the free plan, with two Synthetic Monitoring HTTP checks, each every 10 minutes from the `NorthCalifornia`, `Ohio` and `Paris` probes: `Tacocat SPA` on `https://pix.tacocat.com/` and `Tacocat Album API` on `https://pix.tacocat.com/api/album/`. The alert rule `ProbeFailedExecutionsTooHigh [10m]`, in the Synthetic Monitoring folder, sends a check failing too often to `Tacocat Discord`; it names no check, so a new one is covered.
+- **The budget alert**, Cloudflare's default, created with the account, under Billing, Billable Usage, Budget alerts: it emails Moses once a billing period when usage-based spend beyond the Workers Paid plan passes $10.
 
 ## Secrets
 

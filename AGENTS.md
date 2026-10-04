@@ -50,9 +50,10 @@ Each doc below is the one home of its subject; no other doc repeats it. Before c
 - **`web/`**: `docs/WebApp.md`, then The web app in `docs/Development.md` for the build, the browser floor and the guest bundle check.
 - **Any test**: `docs/Testing.md`.
 - **`api/wrangler.jsonc`**: Wrangler in `docs/Infrastructure.md`, and Ship what a release can't in `docs/Releasing.md`.
-- **`infra/`, DNS, tokens, `scripts/github-setup.sh`, `.github/`**: `docs/Infrastructure.md`.
+- **`infra/`, DNS, tokens, `scripts/github-setup.sh`, `.github/`, the alerting set in the Cloudflare and Grafana dashboards**: `docs/Infrastructure.md`.
 - **`scripts/release.sh`, `.github/workflows/deploy.yml`, shipping or undoing a release**: `docs/Releasing.md`.
-- **The deployed system**, health, logs, staging's database, admin access, backups, secrets rotation: `docs/Operations.md`.
+- **The deployed system**, staging's database, admin access, backups, secrets rotation: `docs/Operations.md`.
+- **Health, logs, and reading alerts and uptime checks**: `docs/Observability.md`.
 - **Performance**: `docs/Perf.md`, whose Ruled out lists what not to propose again.
 - **`api/scripts/`**: `api/scripts/README.md`, and the comment at the top of each script.
 - **Getting a machine running locally**: `README.md`; what local development gets wrong is Local development in `docs/Development.md`.
@@ -64,8 +65,8 @@ Each doc below is the one home of its subject; no other doc repeats it. Before c
 - **The pre-commit hook** runs the suites the staged files touch and takes about 40 seconds, so commit once, when the change is green.
 - **Local dev is not the edge.** Images are made by the local Images binding, which cannot decode HEIC and ignores EXIF orientation and the encoding options, so judge thumbnails, GIFs and phone photos on staging. Video needs Docker, and uploads complete only with `UPLOAD_MODE=local` (Local development in `docs/Development.md`).
 - **Staging is the default.** A Wrangler command without `--env production` touches staging, and so do the tests and `wrangler dev` (`docs/Operations.md`).
-- **Pushing deploys.** A push to a pull request branch releases it to staging and a merge releases production (`docs/Releasing.md`). So push when the branch is worth looking at on staging, never to park work, and say what went out; Is production okay? in `docs/Operations.md` says how to see what is running.
-- **Logs** are Workers Logs, a week of every request, through the observability MCP (Is production okay? in `docs/Operations.md`).
+- **Pushing deploys.** A push to a pull request branch releases it to staging and a merge releases production (`docs/Releasing.md`). So push when the branch is worth looking at on staging, never to park work, and say what went out; Is production okay? in `docs/Observability.md` says how to see what is running.
+- **Logs** are Workers Logs, a week of every request, through the observability MCP (Workers Logs in `docs/Observability.md`).
 
 ## Rules
 
@@ -79,7 +80,7 @@ Each doc below is the one home of its subject; no other doc repeats it. Before c
 - **After editing `api/wrangler.jsonc`, run `npm run types --workspace api`.**
 - **Markdown** is never hard-wrapped: one line per paragraph or list item.
 - **A fact lives in one doc.** Change it there, and point to it from elsewhere rather than restating it, since two copies drift into a contradiction. Read before you change, above, names each doc's subject; this file holds only what every session needs.
-- **`docs/plans/` is the archive of plans, past, present and future.** A plan is written before its work and updated while the work runs; once built it is frozen as the record of what was decided and why, and nobody brings it up to date with the code. What the system is now belongs in `docs/Architecture.md` and the pages it links, `docs/Development.md`, `docs/Releasing.md`, `docs/Operations.md`, `docs/Infrastructure.md`, `docs/Testing.md`, `CONTRIBUTING.md` and `README.md`, which are kept current.
+- **`docs/plans/` is the archive of plans, past, present and future.** A plan is written before its work and updated while the work runs; once built it is frozen as the record of what was decided and why, and nobody brings it up to date with the code. What the system is now belongs in `docs/Architecture.md` and the pages it links, `docs/Development.md`, `docs/Releasing.md`, `docs/Operations.md`, `docs/Observability.md`, `docs/Infrastructure.md`, `docs/Testing.md`, `CONTRIBUTING.md` and `README.md`, which are kept current.
 
 ### Comments
 

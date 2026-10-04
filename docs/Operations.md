@@ -1,27 +1,13 @@
 # Operations
 
-Running the deployed system: what's live, what's wrong, and how to put data and access right. Shipping and rolling back are in [`Releasing.md`](Releasing.md); changing the infrastructure is in [`Infrastructure.md`](Infrastructure.md). Anything here that reaches the Cloudflare account needs the Wrangler profile from Prerequisites in `README.md`, and the scripts need `api/.dev.vars`.
+Running the deployed system: what's live, and how to put data and access right. Shipping and rolling back are in [`Releasing.md`](Releasing.md); changing the infrastructure is in [`Infrastructure.md`](Infrastructure.md). Anything here that reaches the Cloudflare account needs the Wrangler profile from Prerequisites in `README.md`, and the scripts need `api/.dev.vars`.
 
 ## At a glance
 
 - **Two Workers**, `production` on `pix.tacocat.com` and `staging` on `staging-pix.tacocat.com`, each with its own database, buckets, queues, secrets and admin passkeys, every resource named `<environment>-<role>`. Both are public and both send noindex.
 - **Staging is the default.** It is `api/wrangler.jsonc`'s top level, so a Wrangler command without `--env production` touches staging, and the scripts in `api/package.json` come in pairs: `deploy` and `deploy:production`, `db:migrate` and `db:migrate:production`, `logs` and `logs:production`.
 - **Three undo levers:** `wrangler rollback` for a release, D1 Time Travel to a bookmark for the database, and the versioned off-site bucket for the originals.
-- **Where to look:** `/api/health`, the Actions tab and Environments panel on GitHub, and the logs below.
-
-## Is production okay?
-
-```bash
-curl -s https://pix.tacocat.com/api/health
-```
-
-answers 200 once D1 and both buckets respond, with the running version's id, its tag, which is the commit it was built from with `-dirty` when the tree had uncommitted changes, and the newest migration the database has, by name. To watch requests as they happen, from the repo root:
-
-```bash
-npm run logs:production --workspace api
-```
-
-Workers Logs keeps a week of every request's invocation log, with the user agent, IP, colo, country, round trip, status and CPU and wall time, beside the Worker's own structured lines (`album_read`, `derived_image`, `server_exception`, the upload and login events), queried through the dashboard's query builder or the observability MCP; the `cookie` header is redacted. Two gaps: a question over months cannot be answered from it, and the app's own files, `index.html` and the JS chunks, are answered by the asset router without reaching the Worker, so they appear only in the zone's analytics, though every album view still reaches the Worker for its JSON and images. Logpush, free at this volume, could keep the zone's HTTP request logs and the Worker's trace events in R2 if a long question comes up.
+- **Where to look:** `/api/health` and the logs ([`Observability.md`](Observability.md)), and the Actions tab and Environments panel on GitHub.
 
 ## Environments
 
