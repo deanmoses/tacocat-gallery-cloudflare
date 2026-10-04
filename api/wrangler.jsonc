@@ -8,7 +8,9 @@
     "main": "src/index.ts",
     "compatibility_date": "2026-09-01",
     "compatibility_flags": ["nodejs_compat"],
-    "observability": { "enabled": true },
+    // Issues groups exceptions, 5xx responses and console.error lines; its automations, which alert, are set in the
+    // dashboard. A deploy without `issues` here turns it off.
+    "observability": { "enabled": true, "issues": { "enabled": true } },
     // Stack traces in logs and `wrangler tail` point at the TypeScript source instead of the bundle.
     "upload_source_maps": true,
     "assets": {
