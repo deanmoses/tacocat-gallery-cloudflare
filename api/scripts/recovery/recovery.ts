@@ -1,19 +1,21 @@
 // What the recoveries from the old galleries share: an album a recovery describes is made unpublished with its words,
 // each of its files is read from Dropbox through the read-only rclone remote, from the album's folder under
-// `Photos/albums` or, failing that, `Photos/raw`, and uploaded as a browser uploads one, so the pipeline sizes it,
+// `Photos/albums` or, failing that, `Photos/raw`, or where neither holds the album's files, from the old gallery's own
+// copies under `files/` in the run's directory, and uploaded as a browser uploads one, so the pipeline sizes it,
 // reads its tags and makes its derived images, and then each photo's words, the album's thumbnail and its order are
 // written.
 //
 // A run takes the directory holding the old gallery's exported rows, names its target with --to and its albums with
 // --only or --all, and writes nothing without --go: without it, it finds every file and says what it would write. A
 // rerun is a resume: it uploads only the photos the album does not list yet, leaves the words of an album that is
-// already there as they are, and writes each photo's words again. An album's thumbnail and order are written until
-// it is published, which is an admin having looked it over, and again only when the run adds photos to it. It stops
+// already there as they are, and writes each photo's words again until the album is published, which is an admin
+// having looked it over and perhaps edited it; after that, only the words of the photos it uploads. An album's
+// thumbnail and order are written until it is published, and again only when the run adds photos to it. It stops
 // at the first thing that goes wrong. Every write's outcome is a JSON line in `recover-<target>.jsonl` in the
 // directory.
 import { execFile } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import * as valibot from 'valibot';
 import {
@@ -45,10 +47,11 @@ export interface Run {
     to: Gallery;
 }
 
-/** A photo's file in Dropbox: the rclone path to read it from, and its size there. */
+/** A photo's file: the rclone path in Dropbox or the local path to read it from, and its size there. */
 interface Source {
     from: string;
     bytes: number;
+    local: boolean;
 }
 
 /** The run the arguments ask for, or `usage` when they name no directory. */
@@ -70,12 +73,12 @@ export async function parsedRun(args: readonly string[], usage: string): Promise
 /** Says what the album's recovery writes, and with --go writes it. */
 export async function recover(run: Run, album: RecoveredAlbum): Promise<void> {
     const { to, target, go } = run;
-    const sources = await sourcesOf(album);
+    const sources = await sourcesOf(album, run.directory);
     const listed = await listedVersions(to, album.path);
     const missing = album.media.filter((item) => listed?.has(item.name) !== true);
     const total = album.media.reduce((sum, item) => sum + (sources.get(item.file)?.bytes ?? 0), 0);
     console.log(
-        `\n${album.path}: ${album.draft ? 'unpublished album' : 'photos hidden in a published album'}, ${String(album.media.length)} photos, ${(total / 1e6).toFixed(1)} MB from ${folderOf(sources)}`,
+        `\n${album.path}: ${album.draft ? 'unpublished album' : 'photos added to an album the gallery has'}, ${String(album.media.length)} photos, ${(total / 1e6).toFixed(1)} MB from ${folderOf(sources)}`,
     );
     console.log(
         `    on ${target}: ${listed === null ? 'no such album' : `the album is there, with ${String(album.media.length - missing.length)} of them`}; ${String(missing.length)} to upload`,
@@ -102,11 +105,12 @@ export async function recover(run: Run, album: RecoveredAlbum): Promise<void> {
         console.log(`    uploaded ${item.path}`);
     });
     await untilProcessed(to, album.path, versions);
-    for (const item of album.media) {
+    const published = await isPublished(to, album.path);
+    for (const item of album.media.filter(({ name }) => !published || versions.has(name))) {
         await writeWords(run, item);
     }
     // A published album the run added nothing to keeps the thumbnail and order an admin may have given it since.
-    if (versions.size === 0 && (await isPublished(to, album.path))) {
+    if (versions.size === 0 && published) {
         console.log(`    done, the published album left as it is: ${to.site}${album.path.slice(0, -1)}`);
         return;
     }
@@ -193,10 +197,11 @@ async function writeWords(run: Run, item: RecoveredMedia): Promise<void> {
 }
 
 /**
- * Where each of the album's photos is in Dropbox, by its file: in the first of the folders that holds the album's
- * whole set. A photo no folder holds, or one whose size is not the size the old gallery recorded, stops the run.
+ * Where each of the album's photos is, by its file: in the first of the Dropbox folders that holds the album's whole
+ * set, or else the old gallery's own copies, when the recovery names one for every photo. A photo nowhere, or one
+ * whose size is not the size the old gallery recorded, stops the run.
  */
-async function sourcesOf(album: RecoveredAlbum): Promise<Map<string, Source>> {
+async function sourcesOf(album: RecoveredAlbum, directory: string): Promise<Map<string, Source>> {
     const day = album.path.slice(1, -1);
     const lacking: string[] = [];
     for (const folder of DROPBOX_FOLDERS) {
@@ -215,11 +220,25 @@ async function sourcesOf(album: RecoveredAlbum): Promise<Map<string, Source>> {
                     `${folder}/${day}/${name} is ${String(bytes)} bytes, and the old gallery's was ${String(item.bytes)}`,
                 );
             }
-            sources.set(item.file, { from: `${folder}/${day}/${name}`, bytes });
+            sources.set(item.file, { from: `${folder}/${day}/${name}`, bytes, local: false });
         }
         return sources;
     }
+    if (album.media.every((item) => item.copy !== undefined)) {
+        return copiesOf(album, directory);
+    }
     throw new Error(`No Dropbox folder holds ${album.path}: ${lacking.join('; ')}`);
+}
+
+/** The old gallery's own copy of each of the album's photos, which have to be there, every one. */
+async function copiesOf(album: RecoveredAlbum, directory: string): Promise<Map<string, Source>> {
+    const sources = new Map<string, Source>();
+    for (const item of album.media) {
+        const from = path.join(directory, 'files', item.copy ?? '');
+        const { size } = await stat(from);
+        sources.set(item.file, { from, bytes: size, local: true });
+    }
+    return sources;
 }
 
 function folderOf(sources: Map<string, Source>): string {
@@ -262,13 +281,13 @@ async function rclone(command: string[]): Promise<Buffer> {
     });
 }
 
-/** The file read from Dropbox, whole, as the upload sends it. */
+/** The file read from Dropbox or the disk, whole, as the upload sends it. */
 async function fileOf(source: Source): Promise<{ body: ArrayBuffer; extension: string }> {
     const extension = path.extname(source.from).slice(1).toLowerCase();
     if (!EXTENSIONS.has(extension)) {
         throw new Error(`${source.from} is of a type the recovery does not upload`);
     }
-    const stdout = await rclone(['cat', source.from]);
+    const stdout = source.local ? await readFile(source.from) : await rclone(['cat', source.from]);
     if (stdout.byteLength !== source.bytes) {
         throw new Error(`${source.from} came as ${String(stdout.byteLength)} bytes of ${String(source.bytes)}`);
     }

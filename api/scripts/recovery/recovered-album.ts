@@ -16,6 +16,11 @@ export interface RecoveredMedia {
     /** The file's size as the old gallery recorded it, where the file to upload is the one it held. */
     bytes: number | null;
     tags: string[];
+    /**
+     * The old gallery's own copy of the file, under `files/` in the run's directory, such as
+     * `2008/02-03/pk/collin.jpg`, uploaded when Dropbox holds no original.
+     */
+    copy?: string;
 }
 
 /** One day album's share of the recovery. */
