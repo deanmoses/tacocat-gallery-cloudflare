@@ -36,6 +36,18 @@ describe('the asset router', () => {
             expect(body).toContain('<meta name="robots" content="noindex" />');
         },
     );
+
+    it.each([
+        ['/images/years/2001/kitten.gif', 'image/gif'],
+        ['/images/years/2012/10-29/matrix-cover.jpg', 'image/jpeg'],
+    ])("serves %s, an image in a description, from the app's files", async (path, type) => {
+        const response = await fetch(new URL(path, inject('stackOrigin')));
+        await response.body?.cancel();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.has('x-worker-colo')).toBe(false);
+        expect(response.headers.get('content-type')).toBe(type);
+    });
 });
 
 describe('preloading the album JSON', () => {
@@ -68,6 +80,7 @@ describe('preloading the album JSON', () => {
         '/robots.txt',
         '/images/favicons/favicon_32x32',
         '/_app/version.json',
+        '/images/years/2001/kitten.gif',
     ])('preloads nothing for %s', async (path) => {
         const response = await navigate(path);
         await response.body?.cancel();
