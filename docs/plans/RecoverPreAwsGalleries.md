@@ -12,6 +12,7 @@ Let's recover everything from all iterations of Tacocat gallery and fix all brok
 - ✅ [Gallery 2's thumbnails](#gallery-2s-thumbnails): done, 241 hand-cut thumbnail crops and 10 albums' thumbnails back on staging and production
 - ✅ [Broken links](#broken-links) in album and photo descriptions to the older galleries' addresses (deanmoses/tacocat-gallery-cloudflare#196): done, 85 pointed on staging and production and one by Moses; the 28 left wait for the static gallery or for where the files outside the gallery live
 - ✅ Lost photos from the [static gallery](#pix) prior to Zenphoto and Gallery 2: done, 44 photos on staging and production and the four new albums published; 84 scans of 1968 and 1969 and 40 photos of 1999 are left to compare by picture
+- ✅ [Sideways photos](#sideways-photos): done, nine photos whose files said to turn them after they had been turned fixed in their originals and upright on staging and production; the photos tagged to turn a half are left to look at
 - Where the [files outside the gallery](#broken-links) live for good
 - The [older galleries' markup](#legacy-markup) in descriptions, such as the static gallery's styled conversations
 - Lost videos from the [static gallery](#pix), last, since Moses watches each original, may re-cut it, and chooses it or the snippet
@@ -150,6 +151,18 @@ A link is rewritten only to a target that exists, and the static gallery's video
 
 `relink-descriptions.ts` makes the 85 changes from `picks.txt` ([How the recoveries are built](#how-the-recoveries-are-built)). ✅ **The 85 are on staging and production** ([Log](#log), 2026-10-04, Broken links on staging and production): 84 descriptions, `/2003/02-23/cherry_trees` holding two of the links.
 
+## Sideways photos
+
+Moses noticed `/2008/04-13/chaperon04`, `/2008/04-13/doors02` and `/2011/05-08/acrobuddy` lying on their sides. Each file's pixels had been turned upright in an editor that left the camera's EXIF orientation alone, so the file still said to turn it a quarter. The older galleries showed the pixels as stored, as browsers of their day did, and the photos looked right; AWS and this gallery honour the tag, as browsers and Image Transformations now do, and turned them a second time. The recovery did not cause it: `chaperon04` and `doors02` were already so in Gallery 2's copies, and `acrobuddy` is the file that came through Zenphoto and AWS, which recorded it sideways too.
+
+A camera stores its pixels landscape, so a photo whose pixels are portrait and whose tag says to turn it a quarter is suspect. Every original on production was read to its first 256 KB, 38,166 images, which flagged 58; each was looked at as the gallery shows it, and 9 are sideways ([Log](#log), 2026-10-04, Sideways photos found): `/2004/03-07/squrrel2`, `/2004/04-11/park5`, `/2005/02-12/jurassic`, `/2005/02-13/whales`, `/2005/03-20/kora2`, `/2008/04-13/chaperon04`, `/2008/04-13/doors02`, `/2011/02-20/laluge4` and `/2011/05-08/acrobuddy`. The other 49, mostly the scans of family prints and recent phone photos, are upright, their tag doing its job.
+
+**The originals are fixed, not just the gallery**, since the files were as sideways in Dropbox and Finder. Moses turned each upright in Adobe Bridge, which for a JPEG writes the orientation and leaves the image data alone: each file's EXIF orientation is now 1, its XMP holds none, and its compressed image data is byte for byte the gallery's. Seven are in Dropbox's `Photos/albums`; `chaperon04` and `doors02` have no Dropbox original, and were fixed in Gallery 2's copies under `~/dev/tacocat-migration/gallery2/files/`. Each fixed file then replaced its photo through the Worker's upload, so the pipeline read the portrait size and made the images again; none had a crop or was an album's thumbnail.
+
+The 7 square originals tagged to turn a quarter, whose shape cannot say either, were looked at too, and Moses found them all upright ([Log](#log), 2026-10-04, Square photos looked at).
+
+Left to look at: 906 originals tagged to turn a half, which a stale tag would show upside down and which their shape cannot tell from right; and files in Dropbox the gallery does not show, which the [Dropbox](#dropbox) comparison may bring in with the same fault.
+
 ## Dropbox
 
 We should compare the originals in Dropbox with the gallery. Every comparison so far started from what was published; this one starts from what went into publishing, so it finds an album or photo that only Dropbox holds, and it has 25 years of renames, culls, re-edits and moved albums to see past. So it is narrowed before it compares anything:
@@ -181,6 +194,20 @@ The static gallery's photos come first; its videos come once Moses has watched t
 ## Log
 
 ### 2026-10-04
+
+#### Square photos looked at
+
+The scan's 7 square originals with a quarter-turn tag, all phone photos of 2016 and 2019, were put on a contact sheet as the gallery shows them: `/2016/08-08/no_nats`, `/2016/05-19/bath140_may11_1`, `_4` and `_5`, `/2019/07-24/austin10` and `austin11`, and `/2019/07-28/kitsch_cuisine16`. Moses found all seven upright, their tags right, so nothing was written.
+
+#### Sideways photos on staging and production
+
+A one-off script, not kept, replaced each of the nine through `gallery-upload.ts`'s `upload` as a replacement, from its fixed file, reading the album first and skipping a photo already portrait. Staging: `squrrel2` alone, then the other eight; each row went from landscape to portrait, as 2592×1944 to 1944×2592, and each media page's image, fetched and looked at, is upright. Moses looked at them on staging and said to run production, where a dry run found the same nine landscape and without crops, and the same run replaced them, with the same result; `acrobuddy` kept its title and caption. Moses looked at the photos and their albums on production. About 18 Images transformations on each.
+
+#### Sideways photos found
+
+Moses reported three photos sideways. Their files' EXIF orientation said 6 or 8 over pixels already portrait: `chaperon04` and `doors02`, 1024-pixel copies from a Nikon D70 whose EXIF still gave the camera's 3008×2000, and `acrobuddy`, from a Panasonic DMC-LZ8, the 3,486,408 bytes Gallery 2 held. Gallery 2 had no turned version of any of the three. The other 22 photos of `2008/04-13/` say 1.
+
+Every image on production was listed from D1 with its version and read through `/raw` to its first 256 KB, 8 at a time, with no errors and no Images transformations: 28,160 with orientation 1, 8,155 with none, 906 with 3, 651 with 6, 263 with 8, a few others, 177 PNGs and 3 GIFs. 58 had a quarter-turn tag over portrait pixels: 30 scans from a Canon MP800 through Apple Image Capture, 13 phone photos of 2025 and 2026, and 15 others. A contact sheet of the 58 as the gallery shows them, turned by their tags, found the 9 sideways. Seven are in Dropbox's `Photos/albums` under their names; five are the gallery's bytes, and `jurassic` and `whales` 4 KB more.
 
 #### Static gallery photos on production
 
