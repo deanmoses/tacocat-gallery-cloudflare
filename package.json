@@ -34,7 +34,7 @@
         "@playwright/test": "1.63.0",
         "@tacocat-gallery/api": "*",
         "@tacocat-gallery/shared": "*",
-        "@types/node": "^24.13.6",
+        "@types/node": "^26.6.3",
         "@vitest/eslint-plugin": "^1.6.27",
         "eslint": "^10.11.0",
         "eslint-config-prettier": "^10.1.8",
