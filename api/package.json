@@ -29,13 +29,13 @@
     },
     "dependencies": {
         "@cloudflare/containers": "^0.3.7",
-        "@simplewebauthn/server": "^14.0.2",
+        "@simplewebauthn/server": "^14.0.3",
         "@tacocat-gallery/shared": "*",
         "@xmldom/xmldom": "^0.9.12",
         "aws4fetch": "^1.0.20",
         "drizzle-orm": "^0.45.3",
-        "exifreader": "^4.45.2",
-        "hono": "^4.13.9",
+        "exifreader": "^4.46.0",
+        "hono": "^4.13.10",
         "valibot": "^1.5.0"
     },
     "devDependencies": {
