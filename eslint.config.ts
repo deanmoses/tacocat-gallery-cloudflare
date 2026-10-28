@@ -360,6 +360,12 @@ export default defineConfig(
         files: ['api/src/**/*.ts', 'api/test/**/*.ts'],
         ignores: ['api/test/stack/**', 'api/test/transcoder/**'],
         languageOptions: { globals: globals.serviceworker },
+        rules: {
+            // Drizzle takes only a D1Database, so a D1 session is wrapped in one, and that object has to list dump()
+            // to satisfy the interface. Naming a deprecated member to implement it is not using it. The rule matches
+            // the whole type, and dump() is the only deprecated member D1Database has.
+            '@typescript-eslint/no-deprecated': ['error', { allow: ['D1Database'] }],
+        },
     },
     {
         name: 'web',
