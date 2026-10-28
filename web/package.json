@@ -18,26 +18,26 @@
         "@tacocat-gallery/shared": "*",
         "idb-keyval": "^6.3.0",
         "quill": "^2.0.3",
-        "svelte-dnd-action": "^0.9.79",
+        "svelte-dnd-action": "^0.9.80",
         "svelte-easy-crop": "^5.0.1"
     },
     "devDependencies": {
         "@sveltejs/adapter-static": "^3.0.10",
         "@sveltejs/kit": "^2.70.3",
-        "@sveltejs/vite-plugin-svelte": "^7.3.0",
-        "@vitest/browser-playwright": "^5.0.1",
-        "@vitest/coverage-istanbul": "^5.0.1",
+        "@sveltejs/vite-plugin-svelte": "^7.3.1",
+        "@vitest/browser-playwright": "^5.0.5",
+        "@vitest/coverage-istanbul": "^5.0.5",
         "@zerodevx/svelte-toast": "^0.9.6",
         "browserslist-to-esbuild": "^2.1.1",
-        "eslint": "^10.11.0",
-        "eslint-plugin-es-x": "^10.0.1",
-        "fake-indexeddb": "^6.2.5",
-        "playwright": "1.63.0",
-        "svelte": "^5.57.1",
-        "svelte-check": "^4.7.6",
+        "eslint": "^10.13.0",
+        "eslint-plugin-es-x": "^10.1.0",
+        "fake-indexeddb": "^6.2.6",
+        "playwright": "1.64.1",
+        "svelte": "^5.57.3",
+        "svelte-check": "^4.7.7",
         "typescript": "~6.0.3",
-        "vite": "^8.3.0",
-        "vitest": "^5.0.1"
+        "vite": "^8.3.5",
+        "vitest": "^5.0.5"
     },
     "engines": {
         "node": ">=24.2.0 <25"
