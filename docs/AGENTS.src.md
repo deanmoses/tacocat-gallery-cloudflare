@@ -48,7 +48,7 @@ npm run types --workspace api             # regenerate the Worker's binding type
 npm run logs:production --workspace api   # tail production; `logs` tails staging
 ```
 
-The Worker's scripts live in `api/package.json`, so they run from `api/` or with `--workspace api`; so do Wrangler commands, which find `api/wrangler.jsonc` from the directory they run in. `api/` and `web/` run different Vitest majors (Two Vitest majors in `docs/Development.md`), so each workspace's tests run from its own directory or with its `--workspace` flag.
+The Worker's scripts live in `api/package.json`, so they run from `api/` or with `--workspace api`; so do Wrangler commands, which find `api/wrangler.jsonc` from the directory they run in. Each workspace has its own Vitest config, so its tests run from its own directory or with its `--workspace` flag.
 
 ## This repo
 

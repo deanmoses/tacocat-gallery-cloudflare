@@ -17,10 +17,7 @@ const ROOT = path.resolve(import.meta.dirname, '..');
  * Packages whose workspaces are allowed their own versions, with why. Listing one that has come back together fails
  * too, so the exception does not outlive its reason.
  */
-const SPLIT: ReadonlyMap<string, string> = new Map([
-    ['vitest', "@cloudflare/vitest-plugin, which runs api/'s tests in workerd, supports Vitest 4 only; web/ is on 5"],
-    ['@vitest/coverage-istanbul', 'must match the Vitest major of the workspace that runs it'],
-]);
+const SPLIT: ReadonlyMap<string, string> = new Map();
 
 const RANGES = valibot.optional(valibot.record(valibot.string(), valibot.string()), {});
 const MANIFEST = valibot.object({

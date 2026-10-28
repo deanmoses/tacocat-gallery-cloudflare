@@ -8,8 +8,8 @@ export interface Rendered<Props> {
 
 /**
  * Mounts a component into the test page, removed again when the test finishes. Query it with `page` from
- * `vitest/browser`. Written here rather than taken from vitest-browser-svelte, whose peer range accepts Vitest 4, so npm
- * hoists it to the repo root beside the Worker's Vitest 4 and its types lose the locators.
+ * `vitest/browser`. Written here rather than taken from vitest-browser-svelte, whose render and rerender are async: the
+ * tests need only these two, and synchronous, a plain expect() can follow either.
  */
 export function render<Props extends Record<string, unknown>>(
     component: Component<Props>,
