@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The tests of every workspace: shared/'s in Node and api/'s inside workerd, both on the Vitest 4 hoisted to the root,
-# and web/'s in a browser on its own Vitest 5. Each runs from its own directory with the Vitest it resolves there. `npm
+# The tests of every workspace: shared/'s in Node, api/'s inside workerd and web/'s in a browser, each from its own
+# directory with its own Vitest config. `npm
 # test` runs all of them and then the e2e tests; CI runs the suites on separate runners; .husky/pre-commit runs this with
 # --staged, which runs only the tests whose imports reach a staged file, and no e2e tests, since building and starting
 # the site takes seconds.
