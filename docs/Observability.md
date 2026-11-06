@@ -18,7 +18,7 @@ npm run logs:production --workspace api
 
 ## Workers Logs
 
-Workers Logs keeps a week of every request's invocation log, with the user agent, IP, colo, country, round trip, status and CPU and wall time, beside the Worker's own structured lines; the `cookie` header is redacted. Read them in the dashboard's [Observability](https://dash.cloudflare.com/ed3ca575118099486baeb129959697c8/workers-and-pages/observability) page, whose query builder filters, groups and charts on any field, or through the observability MCP, which is how a Claude session reads them. Each environment is its own Worker, `production` or `staging`, so filter on the service first.
+Workers Logs keeps a week of every request's invocation log, with the user agent, IP, colo, country, round trip, status and CPU and wall time, beside the Worker's own structured lines; the `cookie` header is redacted. Read them in the dashboard's [Observability](https://dash.cloudflare.com/ed3ca575118099486baeb129959697c8/workers-and-pages/observability) page, whose query builder filters, groups and charts on any field, or through the Cloudflare API MCP, which is how a Claude session reads them. Each environment is its own Worker, `production` or `staging`, so filter on the service first.
 
 The Worker's own lines carry an `event` field, which is what to filter on:
 
