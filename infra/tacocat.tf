@@ -1,10 +1,5 @@
-# The tacocat.com zone, which GoDaddy's nameservers point at. Its records are DNS-only: proxying the ones that point at
-# AWS would stack two CDNs in front of CloudFront. The ACM validation CNAMEs keep the AWS certificates renewing; the
-# Google records carry the mail. The apex, www, ftp and ssh records point at DreamHost, which still hosts the landing
-# page.
-#
-# The AWS production names, api, auth and img of pix, stay until the AWS gallery is retired, since a resolver that
-# still caches the old delegation sends its readers to the AWS app, which calls them.
+# The tacocat.com zone, which GoDaddy's nameservers point at. Its records are DNS-only. The Google records carry the
+# mail. The apex, www, ftp and ssh records point at DreamHost, which still hosts the landing page.
 #
 # pix.tacocat.com and staging-pix.tacocat.com have no record here: they are the Workers' custom domains, whose records
 # Cloudflare makes when a Worker's triggers deploy, and refuses to make while another record holds the name.
@@ -82,13 +77,6 @@ locals {
     { name = "calendar.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
     { name = "docs.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
     { name = "mail.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
-    { name = "_b1a5820fc945c5088c062d7252699084.pix.tacocat.com", type = "CNAME", content = "_b39041744b397810c04ea672579e7096.dsrmygwdhx.acm-validations.aws" },
-    { name = "api.pix.tacocat.com", type = "CNAME", content = "d-pbw01cw1w4.execute-api.us-east-1.amazonaws.com" },
-    { name = "_393638dd6d38bda98192026a4d429bc1.api.pix.tacocat.com", type = "CNAME", content = "_bd208acffa07d0686742504b3d24c312.mhbtsbpdnt.acm-validations.aws" },
-    { name = "auth.pix.tacocat.com", type = "CNAME", content = "d-pzj5ol8pj0.execute-api.us-east-1.amazonaws.com" },
-    { name = "_60f04a93910b2b667861aca98143a538.auth.pix.tacocat.com", type = "CNAME", content = "_1a539e72bf9a205b49e31133c1907757.smwfzlpyzn.acm-validations.aws" },
-    { name = "img.pix.tacocat.com", type = "CNAME", content = "d1vn5u5nd1mlwb.cloudfront.net" },
-    { name = "_ba116a8ca29600016f5fb962d2452b67.img.pix.tacocat.com", type = "CNAME", content = "_12cf0d0620fa964c8c708c7bcfcd69b4.mhbtsbpdnt.acm-validations.aws" },
     { name = "sites.tacocat.com", type = "CNAME", content = "ghs.googlehosted.com" },
   ]
 }

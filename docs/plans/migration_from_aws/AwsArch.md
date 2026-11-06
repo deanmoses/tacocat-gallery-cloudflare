@@ -1,6 +1,6 @@
 # The AWS site
 
-The gallery this repo replaced ran on AWS from December 2023 to 2026-10-02, and stays up, unedited, until it is retired (deanmoses/tacocat-gallery-sam#179). This page is where a comparison with it starts: what it was made of, which repo holds each part, and how each part maps to this Worker. The repos are checked out beside this one (`../<repo>`, and on GitHub under `deanmoses`), and `docs/Ecosystem.md` in `tacocat-gallery-sveltekit` maps how they fit together.
+The gallery this repo replaced ran on AWS from December 2023 to 2026-10-02, and its production stacks and DNS names were removed in November 2026 (deanmoses/tacocat-gallery-sam#179). This page is where a comparison with it starts: what it was made of, which repo holds each part, and how each part maps to this Worker. The repos are checked out beside this one (`../<repo>`, and on GitHub under `deanmoses`), and `docs/Ecosystem.md` in `tacocat-gallery-sveltekit` maps how they fit together.
 
 ## How it works
 
@@ -39,4 +39,4 @@ The web app is a SvelteKit single-page app, built to static files on S3 and serv
 
 ## What is still there
 
-The AWS production names `api.pix`, `auth.pix` and `img.pix` and their certificate validation records stay in the `tacocat.com` zone (`infra/tacocat.tf`) for the readers a stale delegation still sends to the AWS app, until it is retired. The gallery's AWS account also holds the `tacocat-gallery-cloudflare-backup` bucket this site's nightly backup writes to, which outlives the AWS site.
+The gallery's AWS account still holds the `tacocat-gallery-cloudflare-backup` bucket this site's nightly backup writes to, which outlives the AWS site.

@@ -66,7 +66,7 @@ Each doc below is the one home of its subject; no other doc repeats it. Before c
 - **Local dev is not the edge.** Images are made by the local Images binding, which cannot decode HEIC and ignores EXIF orientation and the encoding options, so judge thumbnails, GIFs and phone photos on staging. Video needs Docker, and uploads complete only with `UPLOAD_MODE=local` (Local development in `docs/Development.md`).
 - **Staging is the default.** A Wrangler command without `--env production` touches staging, and so do the tests and `wrangler dev` (`docs/Operations.md`).
 - **Pushing deploys.** A push to a pull request branch releases it to staging and a merge releases production (`docs/Releasing.md`). So push when the branch is worth looking at on staging, never to park work, and say what went out; Is production okay? in `docs/Observability.md` says how to see what is running.
-- **Logs** are Workers Logs, a week of every request, through the observability MCP (Workers Logs in `docs/Observability.md`).
+- **Logs** are Workers Logs, a week of every request, through the Cloudflare API MCP (Workers Logs in `docs/Observability.md`).
 
 ## Rules
 
